@@ -183,7 +183,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         last_characters[chat_id] = character
         first_correct_guesses.pop(chat_id, None)
 
-        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀꜱ ᴀᴘᴘᴇᴀʀᴇᴅ!\n✨ᴜꜱᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ɪɴ ʏᴏᴜʀ ʜᴀʀᴇᴍ.</b>"
+        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀꜱ ᴀᴘᴘᴇᴀʀᴇᴅ!✨\nᴜꜱᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ɪɴ ʏᴏᴜʀ ʜᴀʀᴇᴍ.</b>"
         timeouts = dict(read_timeout=300, write_timeout=300, connect_timeout=60, pool_timeout=60)
         spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
 
@@ -275,14 +275,14 @@ async def guess(update: Update, context: CallbackContext) -> None:
         r_emoji, r_name = (rarity.split(' ', 1) + [''])[:2] if isinstance(rarity, str) and ' ' in rarity else (rarity, '')
 
         success_message = (
-    f"✅ {escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs 🎉\n"
-    "ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧\n\n"
+    f"<b>✅ {escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs 🎉\n"
+    "ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧</b>\n\n"
     f"🌸 𝗡𝗔𝗠𝗘: {escape(character.get('name', 'Unknown'))}\n"
     f"💮 𝗥𝗔𝗥𝗜𝗧𝗬: {escape(r_emoji)} {escape(r_name)}\n"
     f"❇️ 𝗔𝗡𝗜𝗠𝗘: {escape(character.get('anime', 'Unknown'))}\n\n"
-    "⛩ Check your /harem Now"
+    "<b>⛩ Check your /harem Now</b>"
 )
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🪼 ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
         await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
         spawn_message_links.pop(chat_id, None)
 
