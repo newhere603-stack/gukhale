@@ -174,7 +174,7 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     code = await generate_unique_code()
     data = {
-        'code': code,'type': 'tokens' 'amount': amount, 'quantity': quantity,
+        'code': code,'type': 'tokens', 'amount': amount, 'quantity': quantity,
         'claimed_by': [], 'created_at': datetime.now(UTC),'created_by': msg.from_user.id,
     }
     if not await save_code(msg, data):
@@ -294,15 +294,15 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             log_detail = f"Amount: {fa}"
             
         elif code_info['type'] == 'tokens':
-    amount = float(code_info['amount'])
-    await user_collection.update_one({'id': user_id}, {'$inc': {'tokens': amount}},upsert=True)
-    fa = fmt_amount(amount)
-    await msg.reply_text(
-        f"🎉 <b>Successfully Redeemed!</b>\n\n"
-        f"🪙 <b>Received:</b> {fa} Tokens",
-        parse_mode=ParseMode.HTML
-    )
-    log_detail = f"Tokens: {fa}"
+            amount = float(code_info['amount'])
+            await user_collection.update_one({'id': user_id}, {'$inc': {'tokens': amount}}, upsert=True)
+            fa = fmt_amount(amount)
+            await msg.reply_text(
+                f"🎉 <b>Successfully Redeemed!</b>\n\n"
+                f"🪙 <b>Received:</b> {fa} Tokens",
+                parse_mode=ParseMode.HTML
+            )
+            log_detail = f"Tokens: {fa}"
         
         elif code_info['type'] == 'character':
             w = code_info['waifu_data']
