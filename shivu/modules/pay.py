@@ -21,11 +21,11 @@ async def pay_cmd(update: Update, context: CallbackContext):
 
     kb = [[
     InlineKeyboardButton(
-        "ᴄᴏɴꜰɪʀᴍ ✅",
+        "ᴄᴏɴꜰɪʀᴍ",
         callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}_{receiver.first_name}"
     ),
     InlineKeyboardButton(
-        "ᴄᴀɴᴄᴇʟ ❌",
+        "ᴄᴀɴᴄᴇʟ",
         callback_data=f"pay_no_{sender.id}"
     )
 ]]
