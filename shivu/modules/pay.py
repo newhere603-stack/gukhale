@@ -62,14 +62,8 @@ async def pay_callback(update: Update, context: CallbackContext):
     except:
         receiver_name = f"User ({receiver_id})"
 
-    await q.edit_message_text(
-        f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!\n\n"
-        f"ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ.\n"
-        f"ᴛᴏ: {receiver_name}"
-    )
+    await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ ᴛᴏ {receiver_name}")
     await q.answer()
 
 application.add_handler(CommandHandler("pay", pay_cmd, block=False))
-application.add_handler(
-    CallbackQueryHandler(pay_callback, pattern="^pay_", block=False)
-)
+application.add_handler(CallbackQueryHandler(pay_callback, pattern="^pay_", block=False))
