@@ -106,7 +106,7 @@ async def credits_view(context: CallbackContext):
     for name, username, user_id in CREDITS_USERS:
         url = f'tg://user?id={user_id}'
         kb.append([InlineKeyboardButton(f"{name}", url=url)])
-    kb.append([InlineKeyboardButton("BACK", callback_data='sxc_back')])
+    kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data='sxc_back')])
     return "𝗦𝘂𝗱𝗼:", InlineKeyboardMarkup(kb)
 def _new_user_doc(user_id, first_name, username):
     return {
