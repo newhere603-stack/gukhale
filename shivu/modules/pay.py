@@ -51,16 +51,11 @@ async def pay_callback(update: Update, context: CallbackContext):
         await q.edit_message_text("ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.")
         return await q.answer()
 
-    await user_collection.update_one(
-        {"id": receiver_id},
-        {"$inc": {"balance": amount}}, upsert=True
-    )
+    await user_collection.update_one({"id": receiver_id},{"$inc": {"balance": amount}}, upsert=True)
 
     try:
-        chat = await context.bot.get_chat(receiver_id)
-        receiver_name = chat.full_name
-    except:
-        receiver_name = f"User ({receiver_id})"
+    chat = await context.bot.get_chat(receiver_id) receiver_name = chat.full_name
+    except:receiver_name = f"User ({receiver_id})"
 
     await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ ᴛᴏ {receiver_id}")
     await q.answer()
