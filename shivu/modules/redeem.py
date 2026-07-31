@@ -25,7 +25,7 @@ _auth_cache: Dict[int, tuple] = {}
 AUTH_TTL = 300
 
 CHAR_CAPTION = (
-    "🎉 ᴄʜᴀʀᴀᴄᴛᴇʀ ᴜɴʟᴏᴄᴋᴇᴅ!\n\n"
+    "🎉 <b>ᴄʜᴀʀᴀᴄᴛᴇʀ ᴜɴʟᴏᴄᴋᴇᴅ!</b>\n\n"
     "👤 𝙉𝙖𝙢𝙚: {name}\n"
     "💮 𝙍𝙖𝙧𝙞𝙩𝙮: {rarity}\n"
     "🎞 𝘼𝙣𝙞𝙢𝙚: {anime}"
@@ -239,8 +239,8 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await user_collection.update_one({'id': user_id}, {'$inc': {'balance': amount}}, upsert=True)
             fa = fmt_amount(amount)
             await msg.reply_text(
-                f"🎉 <b>Successfully Redeemed!</b>\n\n💰 <b>Received:</b> {fa} tokens\n"
-                f"🔗 <b>Powered by:</b> <a href='https://t.me/AlisaWaifusBot'>AlisaWaifusBot</a>",
+                f"🎉 <b>Successfully Redeemed!</b>\n\n💰 <b>Received:</b> {fa} Coins\n"
+                f"🔗 <b>Powered by:</b> <a href='https://t.me/AlisaWaifusBot'>˹ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ˼</a>",
                 parse_mode=ParseMode.HTML, disable_web_page_preview=True
             )
             log_detail = f"Amount: {fa}"
@@ -323,7 +323,7 @@ async def list_codes_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ctype = c.get('type', 'unknown')
         claimed, total = len(c.get('claimed_by', [])), c.get('quantity', 0)
         if ctype == 'currency':
-            reward = f"💰 {fmt_amount(c.get('amount', 0))} tokens"
+            reward = f"💰 {fmt_amount(c.get('amount', 0))} coins"
         elif ctype == 'character':
             reward = f"👤 {html.escape(c.get('waifu_data', {}).get('name', 'Unknown'))}"
         else:
