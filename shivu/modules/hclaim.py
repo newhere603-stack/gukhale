@@ -144,7 +144,7 @@ def rate_limit(func):
                 return await asyncio.wait_for(func(update, context), timeout=CONFIG.CLAIM_TIMEOUT)
         except asyncio.TimeoutError:
             logger.warning(f"Timeout for user {user_id}")
-            await update.message.reply_text("⏱️ <b>ᴛɪᴍᴇᴏᴜᴛ</b>\nTry again.", parse_mode=ParseMode.HTML)
+            await update.message.reply_text("⏱️ <b>ᴛɪᴍᴇᴏᴜᴛ</b>\n<b>ᴛʀʏ ᴀɢᴀɪɴ.</b>", parse_mode=ParseMode.HTML)
         finally:
             active_claims.discard(user_id)
     return wrapper
