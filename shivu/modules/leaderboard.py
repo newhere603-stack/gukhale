@@ -49,7 +49,7 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"🏆 {sc('select the top list')} 🏆"
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")],
-        [InlineKeyboardButton("🎴 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ", callback_data="lb_chars")],
+        [InlineKeyboardButton("🎴 ᴄᴛᴏᴘ", callback_data="lb_chars")],
         [InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")],
         [InlineKeyboardButton("👤 sᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile")],
     ])
