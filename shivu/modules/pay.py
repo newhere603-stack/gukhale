@@ -20,7 +20,9 @@ async def pay_cmd(update: Update, context: CallbackContext):
         return await update.message.reply_text("ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.")
 
     kb = [[
-        InlineKeyboardButton("ᴄᴏɴғɪʀᴍ", callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}"),
+        InlineKeyboardButton(
+    "ᴄᴏɴꜰɪʀᴍ",
+    callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}_{receiver.first_name}")
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pay_no_{sender.id}")
     ]]
     await update.message.reply_text(
@@ -52,7 +54,11 @@ async def pay_callback(update: Update, context: CallbackContext):
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
-    await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ.")
+    await q.edit_message_text(
+    f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!\n"
+    f"ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ.\n"
+    f"ᴛᴏ: {receiver_name}"
+)
     await q.answer()
 
 application.add_handler(CommandHandler("pay", pay_cmd, block=False))
