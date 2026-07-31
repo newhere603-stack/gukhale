@@ -76,10 +76,10 @@ class DisplayOptions:
 
 
 DEFAULT_STYLE = {
-    'header': "<b>✨ {user_name}'s ʜᴀʀᴇᴍ</b> — ᴘᴀɢᴇ {page}/{total_pages}\n\n",
+    'header': "<b>✨ {user_name}'s ʜᴀʀᴇᴍ</b> — ᴘᴀɢᴇ <b>{page}/{total_pages}</b>\n\n",
     'anime_header': "<b>🎞 {anime}</b> ({user_count}/{total_count})\n",
     'separator': "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n",
-    'character': "{rarity} {id} • {name} x{count}{fav}\n",
+    'character': "<b>{rarity} {id} • {name} x{count}{fav}</b>\n",
     'footer': "\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
@@ -244,7 +244,7 @@ class HaremHandler:
         if nav:
             keyboard.append(nav)
 
-        keyboard.append([InlineKeyboardButton("▶ 5x", callback_data=f"harem_5x:{user_id}")])
+        keyboard.append([InlineKeyboardButton("⭆ 5x", callback_data=f"harem_5x:{user_id}")])
         keyboard.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"harem_close:{user_id}")])
         return InlineKeyboardMarkup(keyboard)
 
