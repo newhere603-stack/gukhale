@@ -8,7 +8,7 @@ START_VIDEO = "https://graph.org/file/e668451eba24048fe880c-8cefbbe834e0f673d8.m
 FORCE_SUB_CHAT = "anime_group_hai"
 
 MAIN_CAPTION = (
-    f"<b>✨ ʜᴇʏ ᴛʜᴇʀᴇ! ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b> "
+    f"<b>✨ ʜᴇʏ ᴛʜᴇʀᴇ! ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ,\nʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b> "
     f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!</b>"
 )
 MAIN_KEYBOARD = InlineKeyboardMarkup([
@@ -170,7 +170,7 @@ async def start(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Critical error in start command: {e}", exc_info=True)
         try:
-            await update.message.reply_text("**⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.**")
+            await update.message.reply_text("⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.")
         except Exception:
             pass
 
@@ -189,7 +189,7 @@ async def button_callback(update: Update, context: CallbackContext):
 
         if data == 'sxc_checksub':
             if not await is_force_sub_member(user_id, context):
-                await query.answer("**⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!**", show_alert=True)
+                await query.answer("⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True)
                 return
             first_name = query.from_user.first_name or "User"
             username = query.from_user.username or ""
@@ -202,11 +202,11 @@ async def button_callback(update: Update, context: CallbackContext):
             return
 
         if not await is_force_sub_member(user_id, context):
-            await query.answer("**⚠️ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!**", show_alert=True)
+            await query.answer("⚠️ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!", show_alert=True)
             return
 
         if not await user_collection.find_one({"id": user_id}):
-            await query.answer("**⚠️ sᴛᴀʀᴛ ʙᴏᴛ ғɪʀsᴛ**", show_alert=True)
+            await query.answer("⚠️ sᴛᴀʀᴛ ʙᴏᴛ ғɪʀsᴛ", show_alert=True)
             return
 
         if data == 'sxc_credits':
@@ -235,7 +235,7 @@ async def button_callback(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Error in button callback: {e}", exc_info=True)
         try:
-            await query.answer("**⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.**", show_alert=True)
+            await query.answer("⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.", show_alert=True)
         except Exception:
             pass
 
