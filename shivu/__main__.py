@@ -275,8 +275,8 @@ async def guess(update: Update, context: CallbackContext) -> None:
         r_emoji, r_name = (rarity.split(' ', 1) + [''])[:2] if isinstance(rarity, str) and ' ' in rarity else (rarity, '')
 
         success_message = (
-    f"<b>✅ {escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs 🎉\n"
-    "ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧</b>\n\n"
+    f"<b>✅ {escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs</b> 🎉\n"
+    "<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧</b>\n\n"
     f"🌸 𝗡𝗔𝗠𝗘: {escape(character.get('name', 'Unknown'))}\n"
     f"💮 𝗥𝗔𝗥𝗜𝗧𝗬: {escape(r_emoji)} {escape(r_name)}\n"
     f"❇️ 𝗔𝗡𝗜𝗠𝗘: {escape(character.get('anime', 'Unknown'))}\n\n"
@@ -293,7 +293,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
     lines = ["<b>🎯 Rarity Spawn Status</b>\n"]
     for key, (emoji, name) in RARITIES.items():
-        state = "✅ ON" if rarity_status_cache.get(key, True) else "❌ OFF"
+        state = "✅ ᴏɴ" if rarity_status_cache.get(key, True) else "❌ ᴏғғ"
         lines.append(f"{emoji} <b>{escape(name)}</b> (<code>{key}</code>) — {state}")
     lines.append("\nUse /rarity_on <key> or /rarity_off <key> to change.")
     await update.message.reply_html("\n".join(lines))
@@ -363,7 +363,7 @@ async def main():
         await application.start()
         await application.updater.start_polling(drop_pending_updates=True)
 
-        LOGGER.info("✅ ʏᴏɪᴄʜɪ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
+        LOGGER.info("✅ ᴡᴀɪғᴜ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
         await asyncio.Event().wait()
 
     except Exception:
