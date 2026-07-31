@@ -76,8 +76,8 @@ class DisplayOptions:
 
 
 DEFAULT_STYLE = {
-    'header': "<b>✨ {user_name}'s Harem</b> — Page {page}/{total_pages}\n\n",
-    'anime_header': "<b>📺 {anime}</b> ({user_count}/{total_count})\n",
+    'header': "<b>✨ {user_name}'s ʜᴀʀᴇᴍ</b> — ᴘᴀɢᴇ {page}/{total_pages}\n\n",
+    'anime_header': "<b>🎞 {anime}</b> ({user_count}/{total_count})\n",
     'separator': "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n",
     'character': "{rarity} {id} • {name} x{count}{fav}\n",
     'footer': "\n",
@@ -197,7 +197,7 @@ class HaremMessageBuilder:
             line = self.style['character'].replace('{id}', '').format(
                 id='', rarity=rarity, name=escape(char.name), fav=fav, count=count
             )
-            return line + f"    └─ ID: <code>{char.id}</code>\n"
+            return line + f"    └─ ɪᴅ: <code>{char.id}</code>\n"
 
         return self.style['character'].format(
             id=char.id, rarity=rarity, name=escape(char.name), fav=fav, count=count
@@ -254,17 +254,17 @@ class HaremHandler:
 
         collection = await self.load_user_collection(user_id)
         if not collection:
-            await message.reply_text("⚠️ You need to grab a character first using /grab command!")
+            await message.reply_text("<b>⚠️ ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!</b>")
             return
         if not collection.characters:
-            await message.reply_text("📭 You don't have any characters yet! Use /grab to catch some.")
+            await message.reply_text("<b>📭 ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>")
             return
 
         filtered = collection.get_filtered_characters()
         if not filtered:
             await message.reply_text(
-                f"❌ You don't have any characters with rarity: {rarity_display(collection.filter_mode)}\n"
-                f"💡 Change mode using /smode"
+                f"<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ʀᴀʀɪᴛʏ:</b> {rarity_display(collection.filter_mode)}\n"
+                f"<b>💡 ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /smode</b>"
             )
             return
 
@@ -293,7 +293,7 @@ class HaremHandler:
                 await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
                 return
             except TelegramError as e:
-                LOGGER.warning(f"Edit failed, resending: {e}")
+                LOGGER.warning(f"<b> ᴇᴅɪᴛ ғᴀɪʟᴇᴅ, ʀᴇsᴇɴᴅɪɴɢ: {e}</b>")
 
         if media_url:
             await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
@@ -308,7 +308,7 @@ class ModeHandler:
     ✅ marking whichever mode is currently active for the user."""
 
     IMG = "https://files.catbox.moe/sgo9in.png"
-    LABELS = {"default": "DEFAULT", "latest": "LATEST", "animes": "ANIMES", "waifus": "WAIFUS"}
+    LABELS = {"default": "ᴅᴇғᴀᴜʟᴛ", "latest": "ʟᴀᴛᴇsᴛ", "animes": "ᴀɴɪᴍᴇs", "waifus": "ᴡᴀɪғᴜs"}
 
     def __init__(self):
         self.user_db = db['user_collection_lmaoooo']
@@ -323,18 +323,18 @@ class ModeHandler:
 
         rarity_label = label("rarity", "RARITY") if current in RARITIES else "RARITY"
         rows = [
-            [InlineKeyboardButton(label("default", "DEFAULT"), callback_data="harem_mode_default"),
+            [InlineKeyboardButton(label("default", "ᴅᴇғᴀᴜʟᴛ"), callback_data="harem_mode_default"),
              InlineKeyboardButton(rarity_label, callback_data="harem_mode_rarity")],
-            [InlineKeyboardButton(label("latest", "LATEST"), callback_data="harem_mode_latest"),
-             InlineKeyboardButton(label("animes", "ANIMES"), callback_data="harem_mode_animes")],
-            [InlineKeyboardButton(label("waifus", "WAIFUS"), callback_data="harem_mode_waifus"),
+            [InlineKeyboardButton(label("latest", "ʟᴀᴛᴇsᴛ"), callback_data="harem_mode_latest"),
+             InlineKeyboardButton(label("animes", "ᴀɴɪᴍᴇs"), callback_data="harem_mode_animes")],
+            [InlineKeyboardButton(label("waifus", "ᴡᴀɪғᴜs"), callback_data="harem_mode_waifus"),
              InlineKeyboardButton("🗑", callback_data="harem_mode_close")],
         ]
         return InlineKeyboardMarkup(rows)
 
     async def show_mode_menu(self, update: Update, user_id: int):
         markup = self._keyboard(await self._current_mode(user_id))
-        caption = "<b>CHOOSE ONE OF WAYS TO SORT YOUR HAREM</b>"
+        caption = "<b> ᴄʜᴏᴏsᴇ ᴏɴᴇ ᴏғ ᴡᴀʏs ᴛᴏ sᴏʀᴛ ʏᴏᴜʀ ʜᴀʀᴇᴍ</b>"
         if update.callback_query:
             await update.callback_query.edit_message_caption(caption=caption, reply_markup=markup, parse_mode='HTML')
         else:
@@ -342,9 +342,9 @@ class ModeHandler:
 
     async def show_rarity_menu(self, query):
         buttons = [InlineKeyboardButton(emoji, callback_data=f"harem_mode_{key}") for key, (emoji, _) in RARITIES.items()]
-        keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("🔙 Back", callback_data="harem_mode_back")]]
+        keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="harem_mode_back")]]
         await query.edit_message_caption(
-            caption="🪄 <b>Select a rarity to filter your harem</b>",
+            caption="🪄 <b> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ ʏᴏᴜʀ ʜᴀʀᴇᴍ</b>",
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
         )
 
@@ -386,12 +386,12 @@ class UnfavHandler:
         user = await self.user_db.find_one({'id': user_id})
 
         if not user:
-            await update.message.reply_text('⚠️ 𝙔𝙤𝙪 𝙝𝙖𝙫𝙚 𝙣𝙤𝙩 𝙂𝙤𝙩 𝘼𝙣𝙮 𝙒𝘼𝙄𝙁𝙐 𝙮𝙚𝙩...')
+            await update.message.reply_text('⚠️<b>ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ɢᴏᴛ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴇᴛ!</b>')
             return
 
         fav = Character.from_dict(user.get('favorites'))
         if not fav:
-            await update.message.reply_text("💔 You don't have a favorite character set!")
+            await update.message.reply_text("💔 </b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!</b>")
             return
 
         buttons = [[
@@ -401,7 +401,7 @@ class UnfavHandler:
         caption = (
             f"<b>💔 ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʀᴇᴍᴏᴠᴇ ᴛʜɪs ғᴀᴠᴏʀɪᴛᴇ?</b>\n\n"
             f"✨ <b>ɴᴀᴍᴇ:</b> <code>{escape(fav.name)}</code>\n"
-            f"📺 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(fav.anime)}</code>\n"
+            f"🎞 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(fav.anime)}</code>\n"
             f"🆔 <b>ɪᴅ:</b> <code>{fav.id}</code>"
         )
         await MediaHelper.send_media_message(
@@ -428,23 +428,23 @@ class UnfavHandler:
                 caption=(
                     f"<b>💔 ғᴀᴠᴏʀɪᴛᴇ ʀᴇᴍᴏᴠᴇᴅ!</b>\n\n"
                     f"✨ <b>ɴᴀᴍᴇ:</b> <code>{escape(fav.name)}</code>\n"
-                    f"📺 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(fav.anime)}</code>\n\n"
+                    f"🎞 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(fav.anime)}</code>\n\n"
                     f"<i>💖 ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ɴᴇᴡ ғᴀᴠᴏʀɪᴛᴇ ᴜsɪɴɢ /fav</i>"
                 ),
                 parse_mode='HTML'
             )
         elif action == 'harem_unfav_no':
-            await query.edit_message_caption(caption="❌ ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.", parse_mode='HTML')
+            await query.edit_message_caption(caption="❌<b> ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.</b>", parse_mode='HTML')
 
 
 async def verify_owner(query, user_id_str: str) -> Optional[int]:
     try:
         owner_id = int(user_id_str)
     except ValueError:
-        await query.answer("❌ Invalid data!", show_alert=True)
+        await query.answer("❌ <b>ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ!</b>", show_alert=True)
         return None
     if query.from_user.id != owner_id:
-        await query.answer("⚠️ This is not your collection!", show_alert=True)
+        await query.answer("⚠️<b> ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ!</b>", show_alert=True)
         return None
     return owner_id
 
@@ -459,7 +459,7 @@ async def harem_command(update: Update, context: CallbackContext):
         await harem_handler.show_harem(update, context)
     except TelegramError as e:
         LOGGER.error(f"Error in harem_command: {e}", exc_info=True)
-        await update.message.reply_text("⚠️ Error loading harem. Please try again.")
+        await update.message.reply_text("⏳</b> ʟᴏᴀᴅɪɴɢ ʜᴀʀᴇᴍ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>")
 
 
 async def harem_page_callback(update: Update, context: CallbackContext):
@@ -473,7 +473,7 @@ async def harem_page_callback(update: Update, context: CallbackContext):
         await harem_handler.show_harem(update, context, int(page_str), edit=True)
     except (ValueError, TelegramError) as e:
         LOGGER.error(f"Error in harem_page_callback: {e}", exc_info=True)
-        await query.answer("❌ Error loading page", show_alert=True)
+        await query.answer("❌<b> ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴘᴀɢᴇ</b>", show_alert=True)
 
 
 async def smode_command(update: Update, context: CallbackContext):
@@ -481,7 +481,7 @@ async def smode_command(update: Update, context: CallbackContext):
         await mode_handler.show_mode_menu(update, update.effective_user.id)
     except TelegramError as e:
         LOGGER.error(f"Error in smode_command: {e}", exc_info=True)
-        await update.message.reply_text("⚠️ Error loading mode menu.")
+        await update.message.reply_text("⚠️<b> ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴍᴏᴅᴇ ᴍᴇɴᴜ.</b>")
 
 
 async def mode_callback(update: Update, context: CallbackContext):
@@ -496,7 +496,7 @@ async def unfav_command(update: Update, context: CallbackContext):
         await unfav_handler.show_unfav_prompt(update)
     except TelegramError as e:
         LOGGER.error(f"Error in unfav_command: {e}", exc_info=True)
-        await update.message.reply_text("⚠️ Error processing unfav command.")
+        await update.message.reply_text("⚠️ <b>ᴇʀʀᴏʀ ᴘʀᴏᴄᴇssɪɴɢ ᴜɴғᴀᴠ ᴄᴏᴍᴍᴀɴᴅ.</b>")
 
 
 async def unfav_callback(update: Update, context: CallbackContext):
@@ -511,7 +511,7 @@ async def harem_5x_callback(update: Update, context: CallbackContext):
     _, _, user_id_str = query.data.partition(':')
     if await verify_owner(query, user_id_str) is None:
         return
-    await query.answer("🔜 5x view coming soon", show_alert=True)
+    await query.answer("🔜<b> 5x ᴠɪᴇᴡ ᴄᴏᴍɪɴɢ sᴏᴏɴ</b>", show_alert=True)
 
 
 async def harem_close_callback(update: Update, context: CallbackContext):
