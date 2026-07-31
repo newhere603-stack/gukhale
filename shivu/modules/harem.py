@@ -238,14 +238,14 @@ class HaremHandler:
 
         nav = []
         if page > 0:
-            nav.append(InlineKeyboardButton("Previous", callback_data=f"harem_page:{page - 1}:{user_id}"))
+            nav.append(InlineKeyboardButton("ᴘʀᴇᴠɪᴏᴜs", callback_data=f"harem_page:{page - 1}:{user_id}"))
         if page < total_pages - 1:
-            nav.append(InlineKeyboardButton("Next", callback_data=f"harem_page:{page + 1}:{user_id}"))
+            nav.append(InlineKeyboardButton("ɴᴇxᴛ", callback_data=f"harem_page:{page + 1}:{user_id}"))
         if nav:
             keyboard.append(nav)
 
         keyboard.append([InlineKeyboardButton("▶ 5x", callback_data=f"harem_5x:{user_id}")])
-        keyboard.append([InlineKeyboardButton("Close", callback_data=f"harem_close:{user_id}")])
+        keyboard.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"harem_close:{user_id}")])
         return InlineKeyboardMarkup(keyboard)
 
     async def show_harem(self, update: Update, context: CallbackContext, page: int = 0, edit: bool = False):
@@ -342,7 +342,7 @@ class ModeHandler:
 
     async def show_rarity_menu(self, query):
         buttons = [InlineKeyboardButton(emoji, callback_data=f"harem_mode_{key}") for key, (emoji, _) in RARITIES.items()]
-        keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("🔙 ʙᴀᴄᴋ", callback_data="harem_mode_back")]]
+        keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data="harem_mode_back")]]
         await query.edit_message_caption(
             caption="🪄 <b> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ ʏᴏᴜʀ ʜᴀʀᴇᴍ</b>",
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
