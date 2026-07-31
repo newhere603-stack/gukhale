@@ -46,7 +46,7 @@ def back_close_buttons(refresh_cb, extra_row=None):
 # ---------- /tops menu ----------
 
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
-    text = f"🏆 𝗦𝗘𝗟𝗘𝗖𝗧 𝗧𝗛𝗘 𝗧𝗢𝗣 𝗟𝗜𝗦𝗧 🏆"
+    text = f"🏆 {sc('select the top list')} 🏆"
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")],
         [InlineKeyboardButton("🎴 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ", callback_data="lb_chars")],
