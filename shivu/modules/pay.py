@@ -20,9 +20,8 @@ async def pay_cmd(update: Update, context: CallbackContext):
         return await update.message.reply_text("ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.")
 
     kb = [[
-        InlineKeyboardButton(
-    "ᴄᴏɴꜰɪʀᴍ",
-    callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}_{receiver.first_name}")
+        InlineKeyboardButton("ᴄᴏɴꜰɪʀᴍ",callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}_{receiver.first_name}"
+                            )                     
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pay_no_{sender.id}")
     ]]
     await update.message.reply_text(
@@ -44,7 +43,8 @@ async def pay_callback(update: Update, context: CallbackContext):
         return await q.answer()
 
     receiver_id, amount = int(rest[0]), int(rest[1])
-
+receiver_id, amount = int(rest[0]), int(rest[1])
+receiver_name = "_".join(rest[2:]) if len(rest) > 2 else f"User ({receiver_id})"
     res = await user_collection.find_one_and_update(
         {'id': sender_id, 'balance': {'$gte': amount}},
         {'$inc': {'balance': -amount}}
