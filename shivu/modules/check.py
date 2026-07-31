@@ -116,7 +116,7 @@ def card_caption(char: Char, gcount: int) -> str:
         f"◈𝗡𝗔𝗠𝗘: {escape(char.name)}\n"
         f"◈𝗥𝗔𝗥𝗜𝗧𝗬: {emoji} {text}\n"
         f"◈𝗔𝗡𝗜𝗠𝗘: {escape(char.anime)}\n\n"
-        f"🌍 ɢʟᴏʙᴀʟʟʏ ɢʀᴀʙʙᴇᴅ {gcount}x"
+        f"<b>🌍 ɢʟᴏʙᴀʟʟʏ ɢʀᴀʙʙᴇᴅ {gcount}x</b>"
     )
 
 
@@ -163,10 +163,10 @@ def pagination_kb(cid: str, page: int, total: int, back=False) -> InlineKeyboard
     kb = []
     if total > 1:
         row = []
-        if page > 0: row.append(InlineKeyboardButton("⬅️", callback_data=f"owners_{cid}_{page-1}"))
-        if page < total - 1: row.append(InlineKeyboardButton("➡️", callback_data=f"owners_{cid}_{page+1}"))
+        if page > 0: row.append(InlineKeyboardButton("≼", callback_data=f"owners_{cid}_{page-1}"))
+        if page < total - 1: row.append(InlineKeyboardButton("≽", callback_data=f"owners_{cid}_{page+1}"))
         if row: kb.append(row)
-    kb.append([InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data=f"back_{cid}")] if back
+    kb.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"back_{cid}")] if back
               else [InlineKeyboardButton("🏆 ᴏᴡɴᴇʀs", callback_data=f"owners_{cid}_0")])
     return InlineKeyboardMarkup(kb)
 
@@ -175,9 +175,9 @@ def find_kb(query: str, page: int, total: int) -> Optional[InlineKeyboardMarkup]
     if total <= 1:
         return None
     row = []
-    if page > 0: row.append(InlineKeyboardButton("⬅️", callback_data=f"find_{query}_{page-1}"))
+    if page > 0: row.append(InlineKeyboardButton("≼", callback_data=f"find_{query}_{page-1}"))
     row.append(InlineKeyboardButton(f"{page+1}/{total}", callback_data="noop"))
-    if page < total - 1: row.append(InlineKeyboardButton("➡️", callback_data=f"find_{query}_{page+1}"))
+    if page < total - 1: row.append(InlineKeyboardButton("≽", callback_data=f"find_{query}_{page+1}"))
     return InlineKeyboardMarkup([row])
 
 
@@ -187,7 +187,7 @@ async def send_media(update: Update, char: Char, caption: str, kb) -> None:
         kwargs = {'caption': caption, 'reply_markup': kb, 'parse_mode': ParseMode.HTML}
         await method(video=char.img_url, **kwargs) if char.is_video else await method(photo=char.img_url, **kwargs)
     except TelegramError as e:
-        await update.message.reply_text(f"{caption}\n\n⚠️ media error: {escape(str(e))}",
+        await update.message.reply_text(f"{caption}\n\n⚠️ ᴍᴇᴅɪᴀ ᴇʀʀᴏʀ: {escape(str(e))}",
                                          reply_markup=kb, parse_mode=ParseMode.HTML)
 
 
@@ -196,21 +196,21 @@ async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return await update.message.reply_text("Usage: /check <id>")
     char = await get_char(context.args[0])
     if not char:
-        return await update.message.reply_text("❌ Character not found.")
+        return await update.message.reply_text("<b>❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ.</b>")
     gcount = await global_count(char.id)
     await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, 1))
 
 
 async def find_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("Usage: /find <name> [--all]")
+        return await update.message.reply_text("<b>ᴜsᴀɢᴇ:</b> `/find` <b><name> [--all]</b>")
     args = context.args.copy()
     show_all = '--all' in args
     if show_all: args.remove('--all')
     name = ' '.join(args)
     chars = await find_by_name(name)
     if not chars:
-        return await update.message.reply_text(f"❌ No results for {escape(name)}")
+        return await update.message.reply_text(f"<b>❌ ɴᴏ ʀᴇsᴜʟᴛs ғᴏʀ </b>{escape(name)}")
     r = process_search(chars)
     text, total = find_caption(name, r, 0, show_all)
     kb = None if show_all else find_kb(name, 0, total)
@@ -219,11 +219,11 @@ async def find_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("Usage: /anime <name>")
+        return await update.message.reply_text("</b>ᴜsᴀɢᴇ: </b>`/anime` <b><name></b>")
     name = ' '.join(context.args)
     chars = await find_by_anime(name)
     if not chars:
-        return await update.message.reply_text(f"❌ No characters found from {escape(name)}")
+        return await update.message.reply_text(f"<b>❌ ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ғᴏᴜɴᴅ ғʀᴏᴍ </b>{escape(name)}")
     r = process_search(chars)
     text, _ = find_caption(name, r, 0, True)
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
@@ -231,14 +231,14 @@ async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def find_users_with_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("Usage: /pfind <id>")
+        return await update.message.reply_text("<b>ᴜsᴀɢᴇ:</b> `/pfine` <b><id></b>")
     cid = context.args[0]
     char = await get_char(cid)
     if not char:
-        return await update.message.reply_text("❌ Character not found.")
+        return await update.message.reply_text("❌ <b>ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ.</b>")
     owners = await get_owners(cid)
     if not owners:
-        return await update.message.reply_text("No users own this character.")
+        return await update.message.reply_text("<b>ɴᴏ ᴜsᴇʀs ᴏᴡɴ ᴛʜɪs ᴄʜᴀʀᴀᴄᴛᴇʀ.</b>")
     gcount = await global_count(cid)
     total = (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE
     await send_media(update, char, owners_caption(char, owners, 0, gcount), pagination_kb(cid, 0, total, back=True))
