@@ -49,8 +49,8 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"🏆 {sc('select the top list')} 🏆"
     kb = InlineKeyboardMarkup([
     [
-        InlineKeyboardButton("👤 sᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"),
-        InlineKeyboardButton("🪙 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
+        InlineKeyboardButton("👤 ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"),
+        InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
     ],
     [
         InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
@@ -91,7 +91,7 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
     for i, u in enumerate(data, 1):
         name = u.get("first_name", "Unknown")
         link = mention_html(u["id"], name)
-        rows.append(f"{i}. {link} - 🪙 {u.get('tokens', 0):,}")
+        rows.append(f"{i}. {link} - 💠 {u.get('tokens', 0):,}")
 
     text = format_list("users by tokens", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
@@ -154,7 +154,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     link = update.effective_user.mention_html()
 
     text = (
-        f"👤 {sc('profile')} 👤\n\n"
+        f"✨ {sc('profile')} ✨\n\n"
         f"{link}\n\n"
         f"{sc('rank')}: <b>#{rank:,}</b>/{total:,}\n"
         f"{sc('characters')}: <b>{char_count:,}</b>\n"
