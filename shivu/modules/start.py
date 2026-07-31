@@ -8,8 +8,8 @@ START_VIDEO = "https://graph.org/file/e668451eba24048fe880c-8cefbbe834e0f673d8.m
 FORCE_SUB_CHAT = "anime_group_hai"
 
 MAIN_CAPTION = (
-    f"✨ ʜᴇʏ ᴛʜᴇʀᴇ! ɪ'ᴍ {BOT_USERNAME}, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ. "
-    f"ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!"
+    f"<b>✨ ʜᴇʏ ᴛʜᴇʀᴇ! ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b> "
+    f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!</b>"
 )
 MAIN_KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("sᴜᴘᴘᴏʀᴛ", url=f'https://t.me/{SUPPORT_CHAT}'),
@@ -19,10 +19,10 @@ MAIN_KEYBOARD = InlineKeyboardMarkup([
      InlineKeyboardButton("ᴄʀᴇᴅɪᴛs", callback_data='sxc_credits')]
 ])
 
-FORCE_SUB_TEXT = "🔒 <b>Join our updates channel to use this bot!</b>"
+FORCE_SUB_TEXT = "🔒 <b>ʟᴇᴛ's ɢᴏ ʙᴀʙʏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴍᴇ!</b>"
 FORCE_SUB_KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("Join Channel", url=f'https://t.me/{FORCE_SUB_CHAT}')],
-    [InlineKeyboardButton("Try Again", callback_data='sxc_checksub')]
+    [InlineKeyboardButton("ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ", url=f'https://t.me/{FORCE_SUB_CHAT}')],
+    [InlineKeyboardButton("ᴛʀʏ ᴀɢᴀɪɴ", callback_data='sxc_checksub')]
 ])
 
 PAGE_SIZE = 6
@@ -31,20 +31,20 @@ CATEGORIES = {
         ("/start", "Start the bot"),
         ("/grab", "Grab the character"),
         ("/fav", "Add a character to your favourite"),
-        ("/swaifu", "claim your daily waifu"),
-        ("/pay", "Give cash💸 to other users"),
+        ("/claim", "claim your daily reward"),
+        ("/pay", "Give coins💸 to other users"),
         ("/bal", "See your balence"),
         ("/harem", "See your character's collection"),
         ("/gift", "Gift your waifu to someone 🎀"),
         ("/trade", "Trade characters between users"),
-        ("/tops", "View the leaderboard"),
+        ("/top", "View the leaderboard"),
         ("/sprofile", "View your profile"),
         ("/changetime", "Change the spawn time of characters [Owner/Admins]"),
     ]),
     "interactive": ("Interactive Commands", [
         ("/claim", "Claim your daily reward"),
         ("/roll", "Gamble your gold"),
-        ("/refer", "Invite friends and earn rewards"),
+        ("/games", "Play games"),
     ]),
     "sudo": ("Sudo Commands", [
         ("/broadcast", "Broadcast a message to all users"),
@@ -170,7 +170,7 @@ async def start(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Critical error in start command: {e}", exc_info=True)
         try:
-            await update.message.reply_text("⚠️ An error occurred. Please try again later.")
+            await update.message.reply_text("⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>")
         except Exception:
             pass
 
@@ -189,7 +189,7 @@ async def button_callback(update: Update, context: CallbackContext):
 
         if data == 'sxc_checksub':
             if not await is_force_sub_member(user_id, context):
-                await query.answer("⚠️ You haven't joined yet!", show_alert=True)
+                await query.answer("<b>⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!</b>", show_alert=True)
                 return
             first_name = query.from_user.first_name or "User"
             username = query.from_user.username or ""
@@ -202,11 +202,11 @@ async def button_callback(update: Update, context: CallbackContext):
             return
 
         if not await is_force_sub_member(user_id, context):
-            await query.answer("⚠️ Join our channel first!", show_alert=True)
+            await query.answer("⚠️<b> ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!</b>", show_alert=True)
             return
 
         if not await user_collection.find_one({"id": user_id}):
-            await query.answer("⚠️ sᴛᴀʀᴛ ʙᴏᴛ ғɪʀsᴛ", show_alert=True)
+            await query.answer("⚠️<b> sᴛᴀʀᴛ ʙᴏᴛ ғɪʀsᴛ</b>", show_alert=True)
             return
 
         if data == 'sxc_credits':
@@ -235,7 +235,7 @@ async def button_callback(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Error in button callback: {e}", exc_info=True)
         try:
-            await query.answer("⚠️ An error occurred. Please try again.", show_alert=True)
+            await query.answer("⚠️<b> ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>", show_alert=True)
         except Exception:
             pass
 
