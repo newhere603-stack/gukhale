@@ -238,9 +238,9 @@ class HaremHandler:
 
         nav = []
         if page > 0:
-            nav.append(InlineKeyboardButton("⤆ ᴘʀᴇᴠ", callback_data=f"harem_page:{page - 1}:{user_id}"))
+            nav.append(InlineKeyboardButton("⋞ ᴘʀᴇᴠ", callback_data=f"harem_page:{page - 1}:{user_id}"))
         if page < total_pages - 1:
-            nav.append(InlineKeyboardButton("ɴᴇxᴛ ⤇", callback_data=f"harem_page:{page + 1}:{user_id}"))
+            nav.append(InlineKeyboardButton("ɴᴇxᴛ ⋟", callback_data=f"harem_page:{page + 1}:{user_id}"))
         if nav:
             keyboard.append(nav)
 
