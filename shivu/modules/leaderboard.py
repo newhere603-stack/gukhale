@@ -48,11 +48,12 @@ def back_close_buttons(refresh_cb, extra_row=None):
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"🏆 {sc('select the top list')} 🏆"
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")],
-        [InlineKeyboardButton("🎴 ᴄᴛᴏᴘ", callback_data="lb_chars")],
-        [InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")],
-        [InlineKeyboardButton("👤 sᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile")],
-    ])
+    [InlineKeyboardButton("👤 sᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile")],
+    [InlineKeyboardButton("🪙 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")],
+    [InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")],
+    [InlineKeyboardButton("🎴 ᴄᴛᴏᴘ", callback_data="lb_chars")],
+    [InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")],
+])
     await send_or_edit(update, context, text, kb, edit)
 
 
@@ -231,10 +232,11 @@ async def export_groups(update: Update, context: CallbackContext):
 
 CALLBACKS = {
     "lb_menu": tops_menu,
+    "lb_profile": my_profile,
+    "lb_tokens": top_tokens,
     "lb_bal": top_balance,
     "lb_chars": top_characters,
     "lb_gtop": top_groups,
-    "lb_profile": my_profile,
     "lb_stats": stats,
 }
 
