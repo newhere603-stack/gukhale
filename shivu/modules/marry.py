@@ -13,7 +13,7 @@ from shivu.modules.harem import RARITIES, rarity_display
 
 # ---------------- CONFIG ----------------
 OWNER_ID = 7657218453
-SUDO_USERS = {8949956998}
+SUDO_USERS = {7657218453}
 
 PROPOSAL_COST = 2000
 DICE_COOLDOWN = 1800
@@ -22,7 +22,7 @@ PROPOSE_SUCCESS_RATE = 0.5  # 1/6 win chance (half of dice's 2/6)
 
 UPDATE_CHANNEL = "@Anime_Group_hai"
 UPDATE_CHANNEL_URL = "https://t.me/Anime_Group_hai"  # must be SAME channel as above
-LOG_GROUP_ID = -1003139865857
+LOG_GROUP_ID = -1003893927065
 
 PROPOSE_IMAGES = ["https://files.catbox.moe/nvx2um.jpg", "https://files.catbox.moe/vaz41p.jpg", "https://files.catbox.moe/a0ybe8.jpg", "https://files.catbox.moe/5z3vgb.jpg"]
 REJECT_IMAGES = ["https://files.catbox.moe/b9l3ot.jpg", "https://files.catbox.moe/yjygaj.jpg", "https://files.catbox.moe/8ezqu8.jpg"]
@@ -110,16 +110,16 @@ async def dice_marry(update: Update, context: CallbackContext):
     await asyncio.sleep(3.5)
 
     if val not in (1, 6):
-        return await update.message.reply_text(f"🎲 ᴅɪᴄᴇ: <b>{val}</b>\nʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏꜱᴀʟ ᴡᴀꜱ ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ ꜱʜᴇ ʀᴀɴ ᴀᴡᴀʏ!", parse_mode="HTML")
+        return await update.message.reply_text(f"<b>ʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏꜱᴀʟ ᴡᴀꜱ ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ ꜱʜᴇ ʀᴀɴ ᴀᴡᴀʏ!", parse_mode="HTML")
 
     char = await get_unique_char(user.id, DICE_RARITIES)
     if not char:
-        return await update.message.reply_text("🎲 ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!")
+        return await update.message.reply_text("<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>")
 
     await add_char_to_user(user.id, user.username, user.first_name, char)
     caption = (
-        f"<b>🎲 ᴅɪᴄᴇ ʀᴇsᴜʟᴛ: {val}</b>\nᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs <a href='tg://user?id={user.id}'>{user.first_name}</a>!\n"
-        f"ɴᴀᴍᴇ: <b>{char['name']}</b>\nʀᴀʀɪᴛʏ: <b>{char['rarity']}</b>"
+        f"<b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs </b><a href='tg://user?id={user.id}'>{user.first_name}</a>!\n"
+        f"<b>ɴᴀᴍᴇ: </b><b>{char['name']}</b>\nʀᴀʀɪᴛʏ: <b>{char['rarity']}</b>"
     )
     await update.message.reply_photo(char["img_url"], caption=caption, parse_mode="HTML")
     await send_win_log(context, user, char, "dice")
@@ -132,17 +132,17 @@ async def propose(update: Update, context: CallbackContext):
     if not await is_user_joined(context, user.id):
         btn = [[InlineKeyboardButton("📢 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url=UPDATE_CHANNEL_URL)]]
         return await update.message.reply_text(
-            "<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ!</b>\n\nᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.",
+            "<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
             reply_markup=InlineKeyboardMarkup(btn), parse_mode="HTML",
         )
 
     user_data = await user_collection.find_one({"id": user.id})
     if not user_data or user_data.get("balance", 0) < PROPOSAL_COST:
-        return await update.message.reply_text("ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀꜱᴛ 2000 ᴛᴏᴋᴇɴꜱ ᴛᴏ ᴘʀᴏᴘᴏꜱᴇ.", parse_mode="HTML")
+        return await update.message.reply_text("<b>ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀꜱᴛ 2000 ᴄᴏɪɴs ᴛᴏ ᴘʀᴏᴘᴏꜱᴇ.</b>", parse_mode="HTML")
 
     ok, rem = check_cooldown(user.id, "propose", PROPOSE_COOLDOWN)
     if not ok:
-        return await update.message.reply_text(f"⏳ ᴄᴏᴏʟᴅᴏᴡɴ: <code>{rem // 60}ᴍ {rem % 60}s</code>", parse_mode="HTML")
+        return await update.message.reply_text(f"<b>⏳ ᴄᴏᴏʟᴅᴏᴡɴ: </b><code>{rem // 60}ᴍ {rem % 60}s</code>", parse_mode="HTML")
 
     await user_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
 
@@ -192,7 +192,7 @@ async def cdm_cmd(update: Update, context: CallbackContext):
 
     cooldowns["dice"].pop(target_id, None)
     cooldowns["propose"].pop(target_id, None)
-    await update.message.reply_text(f"COOLDOWN RESET FOR USER {target_id} (MARRY & PROPOSE).")
+    await update.message.reply_text(f"<b> ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ</b> {target_id} <b>(ᴍᴀʀʀʏ ɴ ᴘʀᴏᴘᴏsᴇ).</b>")
 
 
 # ---------------- HANDLERS ----------------
