@@ -192,7 +192,7 @@ async def cdm_cmd(update: Update, context: CallbackContext):
 
     cooldowns["dice"].pop(target_id, None)
     cooldowns["propose"].pop(target_id, None)
-    await update.message.reply_text(f"<b> ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ</b> {target_id} <b>(ᴍᴀʀʀʏ ɴ ᴘʀᴏᴘᴏsᴇ).</b>")
+    await update.message.reply_text(f"ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ {target_id} (ᴍᴀʀʀʏ ɴ ᴘʀᴏᴘᴏsᴇ).")
 
 
 # ---------------- HANDLERS ----------------
