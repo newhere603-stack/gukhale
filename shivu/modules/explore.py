@@ -85,8 +85,8 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
         action = random.choice(EXPLORE_ACTIONS)
         await update.message.reply_text(
-            f"🗺️ ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ {reward} ᴛᴏᴋᴇɴs!\n"
-            f"💰 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: -{CONFIG.fee} ᴛᴏᴋᴇɴs"
+            f"<b>🗺️ ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ {reward} ᴄᴏɪɴs!</b>\n"
+            f"<b>💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: -{CONFIG.fee} ᴄᴏɪɴs</b>"
         )
 
     except Exception as e:
