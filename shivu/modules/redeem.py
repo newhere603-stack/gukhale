@@ -149,7 +149,67 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         f"📢 <b>#CURRENCY_GEN</b>\nAdmin: {html.escape(msg.from_user.first_name)} (<code>{msg.from_user.id}</code>)\n"
         f"Amount: {fa} | Qty: {quantity}\nCode: <code>{code}</code>"
     )
+async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    msg = update.message
 
+    if not await require_auth(update):
+        return
+
+    if len(context.args) < 2:
+        await msg.reply_text(
+            "Usage: <code>/tgen [Amount] [Quantity]</code>",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    try:
+        amount = float(context.args[0])
+        quantity = int(context.args[1])
+
+        if amount <= 0 or quantity <= 0:
+            raise ValueError
+
+    except ValueError:
+        await msg.reply_text(
+            "❌ Invalid amount/quantity.",
+            parse_mode=ParseMode.HTML
+        )
+        return
+
+    code = await generate_unique_code()
+
+    data = {
+        "code": code,
+        "type": "tokens",
+        "amount": amount,
+        "quantity": quantity,
+        "claimed_by": [],
+        "created_at": datetime.now(UTC),
+        "created_by": msg.from_user.id,
+    }
+
+    if not await save_code(msg, data):
+        return
+
+    fa = fmt_amount(amount)
+
+    await msg.reply_text(
+        f"✅ <b>Token Code Created!</b>\n\n"
+        f"🎫 <b>Code:</b> <code>{code}</code>\n"
+        f"💠 <b>Tokens:</b> {fa}\n"
+        f"👥 <b>Claims:</b> {quantity}\n"
+        f"⏰ <b>Expires:</b> {CODE_TTL_DAYS}d",
+        parse_mode=ParseMode.HTML
+    )
+
+    await send_log(
+        context,
+        f"📢 <b>#TOKEN_GEN</b>\n"
+        f"Admin: {html.escape(msg.from_user.first_name)} "
+        f"(<code>{msg.from_user.id}</code>)\n"
+        f"Tokens: {fa} | Qty: {quantity}\n"
+        f"Code: <code>{code}</code>"
+    )
 
 async def waifu_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
@@ -244,6 +304,21 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 parse_mode=ParseMode.HTML, disable_web_page_preview=True
             )
             log_detail = f"Amount: {fa}"
+            
+        elif code_info["type"] == "tokens":
+            amount = float(code_info["amount"])
+            await user_collection.update_one({"id": user_id},{"$inc": {"tokens": amount}},upsert=True)
+            fa = fmt_amount(amount)
+            await msg.reply_text(
+                f"🎉 <b>Successfully Redeemed!</b>\n\n"
+                f"💠 <b>Received:</b> {fa} Tokens\n"
+                f"🔗 <b>Powered by:</b> "
+                f"<a href='https://t.me/AlisaWaifusBot'>˹ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ˼</a>",
+                parse_mode=ParseMode.HTML, disable_web_page_preview=True
+    )
+
+    log_detail = f"Tokens: {fa}"
+        
 
         elif code_info['type'] == 'character':
             w = code_info['waifu_data']
@@ -323,7 +398,9 @@ async def list_codes_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         ctype = c.get('type', 'unknown')
         claimed, total = len(c.get('claimed_by', [])), c.get('quantity', 0)
         if ctype == 'currency':
-            reward = f"💰 {fmt_amount(c.get('amount', 0))} coins"
+            reward = f"💸 {fmt_amount(c.get('amount', 0))} coins"
+        elif ctype == "tokens":
+            reward = f"💠 {fmt_amount(c.get('amount', 0))} tokens"
         elif ctype == 'character':
             reward = f"👤 {html.escape(c.get('waifu_data', {}).get('name', 'Unknown'))}"
         else:
@@ -350,6 +427,7 @@ async def cleanup_caches():
 
 
 application.add_handler(CommandHandler("gen", gen_command, block=False))
+application.add_handler(CommandHandler("tgen", token_gen_command, block=False))
 application.add_handler(CommandHandler("sgen", waifu_gen_command, block=False))
 application.add_handler(CommandHandler("redeem", redeem_command, block=False))
 application.add_handler(CommandHandler("sredeem", redeem_command, block=False))
