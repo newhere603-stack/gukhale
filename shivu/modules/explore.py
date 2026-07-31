@@ -85,7 +85,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
         action = random.choice(EXPLORE_ACTIONS)
         await update.message.reply_text(
-            f"🗺️ ʏᴏᴜ {sc({action} ᴀɴᴅ ғᴏᴜɴᴅ {reward} ᴄᴏɪɴs!\n"
+            f"🗺️ ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ {reward} ᴄᴏɪɴs!\n"
             f"💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: ≻{CONFIG.fee} ᴄᴏɪɴs"
         )
 
