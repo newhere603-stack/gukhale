@@ -5,7 +5,7 @@ from telegram.ext import CommandHandler, CallbackContext
 
 from shivu import application, user_collection
 
-OWNER_ID = 5147822244
+OWNER_ID = 7657218453
 
 
 @dataclass
