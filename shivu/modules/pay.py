@@ -24,7 +24,7 @@ async def pay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pay_no_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ sᴇɴᴅ 💸 `{amount}` ᴛᴏ {receiver.mention_html()}?",
+        f"ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ sᴇɴᴅ 💸 {amount} ᴛᴏ {receiver.mention_html()}?",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
