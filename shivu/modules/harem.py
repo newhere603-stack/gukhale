@@ -79,7 +79,7 @@ DEFAULT_STYLE = {
     'header': "<b>✨ {user_name}'s ʜᴀʀᴇᴍ — ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
     'anime_header': "<b>🎞 {anime}</b> ({user_count}/{total_count})\n",
     'separator': "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n",
-    'character': "<b>{rarity} {id} • {name} x{count}{fav}</b>\n",
+    'character': "{rarity} {id} • {name} x{count}{fav}\n",
     'footer': "\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
