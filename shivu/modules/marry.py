@@ -110,7 +110,7 @@ async def dice_marry(update: Update, context: CallbackContext):
     await asyncio.sleep(3.5)
 
     if val not in (1, 6):
-        return await update.message.reply_text(f"<b>ʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏꜱᴀʟ ᴡᴀꜱ ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ ꜱʜᴇ ʀᴀɴ ᴀᴡᴀʏ!</b>", parse_mode="HTML")
+        return await update.message.reply_text(f"ʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏꜱᴀʟ ᴡᴀꜱ ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ ꜱʜᴇ ʀᴀɴ ᴀᴡᴀʏ!", parse_mode="HTML")
 
     char = await get_unique_char(user.id, DICE_RARITIES)
     if not char:
