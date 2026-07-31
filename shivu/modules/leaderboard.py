@@ -36,7 +36,7 @@ async def send_or_edit(update, context, text, kb, edit):
 
 
 def back_close_buttons(refresh_cb, extra_row=None):
-    rows = [[InlineKeyboardButton("⟳", callback_data=refresh_cb), InlineKeyboardButton("⋟", callback_data="lb_menu")]]
+    rows = [[InlineKeyboardButton("⟳", callback_data=refresh_cb), InlineKeyboardButton("≼", callback_data="lb_menu")]]
     if extra_row:
         rows.append(extra_row)
     rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")])
@@ -46,7 +46,7 @@ def back_close_buttons(refresh_cb, extra_row=None):
 # ---------- /tops menu ----------
 
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
-    text = f"🏆 {sc('select the top list')} 🏆"
+    text = f"🏆 𝗦𝗘𝗟𝗘𝗖𝗧 𝗧𝗛𝗘 𝗧𝗢𝗣 𝗟𝗜𝗦𝗧 🏆"
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")],
         [InlineKeyboardButton("🎴 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ", callback_data="lb_chars")],
@@ -69,7 +69,7 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
     for i, u in enumerate(data, 1):
         name = u.get('first_name', 'Unknown')
         link = mention_html(u['id'], name)
-        rows.append(f"{i}. {link} ≻ 💸{u.get('balance', 0):,}")
+        rows.append(f"{i}. {link} - 💸 {u.get('balance', 0):,}")
     text = format_list("users by coins", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
 
@@ -90,7 +90,7 @@ async def top_characters(update: Update, context: CallbackContext, edit=False):
     for i, u in enumerate(data, 1):
         name = u.get('first_name', 'Unknown')
         link = mention_html(u['user_id'], name)
-        rows.append(f"{i}. {link} - {u['count']:,} ᴄʜᴀʀꜱ")
+        rows.append(f"{i}. {link} - {u['count']:,}")
 
     text = format_list("users by characters", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_chars"), edit)
@@ -104,7 +104,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     if not data:
         return await send_or_edit(update, context, sc("no data."), None, edit)
 
-    rows = [f"{i}. {escape(g.get('group_name', 'Unknown'))} ≻ {g.get('count', 0):,}👥"
+    rows = [f"{i}. {escape(g.get('group_name', 'Unknown'))} - {g.get('count', 0):,}👥"
             for i, g in enumerate(data, 1)]
     text = format_list("groups", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
@@ -136,7 +136,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"{link}\n\n"
         f"{sc('rank')}: <b>#{rank:,}</b>/{total:,}\n"
         f"{sc('characters')}: <b>{char_count:,}</b>\n"
-        f"{sc('balance')}: <b>💸{balance:,}</b>"
+        f"{sc('balance')}: <b>💸 {balance:,}</b>"
     )
     await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
 
