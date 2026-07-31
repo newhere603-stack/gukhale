@@ -193,7 +193,7 @@ async def send_media(update: Update, char: Char, caption: str, kb) -> None:
 
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("Usage: /check <id>")
+        return await update.message.reply_text("<b>ᴜsᴀɢᴇ:</b> `/check` <b><ɪᴅ></b>")
     char = await get_char(context.args[0])
     if not char:
         return await update.message.reply_text("<b>❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ.</b>")
