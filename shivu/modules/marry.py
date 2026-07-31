@@ -114,11 +114,11 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     char = await get_unique_char(user.id, DICE_RARITIES)
     if not char:
-        return await update.message.reply_text("<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>")
+        return await update.message.reply_text("ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!")
 
     await add_char_to_user(user.id, user.username, user.first_name, char)
     caption = (
-        f"<b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs </b><a href='tg://user?id={user.id}'>{user.first_name}</a>!\n"
+        f"ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs <a href='tg://user?id={user.id}'>{user.first_name}</a>!\n"
         f"<b>ɴᴀᴍᴇ: </b><b>{char['name']}</b>\nʀᴀʀɪᴛʏ: <b>{char['rarity']}</b>"
     )
     await update.message.reply_photo(char["img_url"], caption=caption, parse_mode="HTML")
