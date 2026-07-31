@@ -110,7 +110,7 @@ async def dice_marry(update: Update, context: CallbackContext):
     await asyncio.sleep(3.5)
 
     if val not in (1, 6):
-        return await update.message.reply_text(f"ʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏꜱᴀʟ ᴡᴀꜱ ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ ꜱʜᴇ ʀᴀɴ ᴀᴡᴀʏ!", parse_mode="HTML")
+        return await update.message.reply_text(f"🎲 ᴅɪᴄᴇ: <b>{val}</b>\nʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏꜱᴀʟ ᴡᴀꜱ ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ ꜱʜᴇ ʀᴀɴ ᴀᴡᴀʏ!", parse_mode="HTML")
 
     char = await get_unique_char(user.id, DICE_RARITIES)
     if not char:
@@ -118,7 +118,7 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     await add_char_to_user(user.id, user.username, user.first_name, char)
     caption = (
-        f"ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs <a href='tg://user?id={user.id}'>{user.first_name}</a>!\n"
+        f"<b>🎲 ᴅɪᴄᴇ ʀᴇsᴜʟᴛ: {val}</b>\nᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs <a href='tg://user?id={user.id}'>{user.first_name}</a>!\n"
         f"<b>ɴᴀᴍᴇ: </b><b>{char['name']}</b>\nʀᴀʀɪᴛʏ: <b>{char['rarity']}</b>"
     )
     await update.message.reply_photo(char["img_url"], caption=caption, parse_mode="HTML")
