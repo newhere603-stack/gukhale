@@ -170,7 +170,7 @@ async def start(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Critical error in start command: {e}", exc_info=True)
         try:
-            await update.message.reply_text("<b>⚠️ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>")
+            await update.message.reply_text("**⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.**")
         except Exception:
             pass
 
@@ -189,7 +189,7 @@ async def button_callback(update: Update, context: CallbackContext):
 
         if data == 'sxc_checksub':
             if not await is_force_sub_member(user_id, context):
-                await query.answer("<b>⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!</b>", show_alert=True)
+                await query.answer("**⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!**", show_alert=True)
                 return
             first_name = query.from_user.first_name or "User"
             username = query.from_user.username or ""
@@ -202,11 +202,11 @@ async def button_callback(update: Update, context: CallbackContext):
             return
 
         if not await is_force_sub_member(user_id, context):
-            await query.answer("⚠️<b> ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!</b>", show_alert=True)
+            await query.answer("**⚠️ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!**", show_alert=True)
             return
 
         if not await user_collection.find_one({"id": user_id}):
-            await query.answer("⚠️<b> sᴛᴀʀᴛ ʙᴏᴛ ғɪʀsᴛ</b>", show_alert=True)
+            await query.answer("**⚠️ sᴛᴀʀᴛ ʙᴏᴛ ғɪʀsᴛ**", show_alert=True)
             return
 
         if data == 'sxc_credits':
