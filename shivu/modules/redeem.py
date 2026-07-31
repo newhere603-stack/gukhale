@@ -178,7 +178,7 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     code = await generate_unique_code()
     data = {
-        'code': code,'type': 'tokens' 'amount': amount, 'quantity': 'quantity,
+        'code': code,'type': 'tokens' 'amount': amount, 'quantity': quantity,
         'claimed_by': [], 'created_at': datetime.now(UTC),'created_by': msg.from_user.id,
     }
     if not await save_code(msg, data):
