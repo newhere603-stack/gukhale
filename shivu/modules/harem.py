@@ -321,7 +321,7 @@ class ModeHandler:
         def label(key, text):
             return f"{text} ✅" if key == current else text
 
-        rarity_label = label("rarity", "RARITY") if current in RARITIES else "RARITY"
+        rarity_label = label("rarity", "ʀᴀʀɪᴛʏ") if current in RARITIES else "RARITY"
         rows = [
             [InlineKeyboardButton(label("default", "ᴅᴇғᴀᴜʟᴛ"), callback_data="harem_mode_default"),
              InlineKeyboardButton(rarity_label, callback_data="harem_mode_rarity")],
