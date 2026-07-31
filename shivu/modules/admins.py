@@ -4,7 +4,7 @@ from telegram.ext import CommandHandler, CallbackContext
 from shivu import application, user_collection, db
 
 OWNER_ID = 7657218453
-SUDO_USERS = [8949956998]
+SUDO_USERS = [7657218453]
 
 
 def is_authorized(user_id):
