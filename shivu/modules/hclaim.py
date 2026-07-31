@@ -59,8 +59,8 @@ class RarityType(Enum):
 
 @dataclass(frozen=True)
 class ClaimConfig:
-    LOG_GROUP_ID: int = -1002956939145
-    SUPPORT_LINK: str = "https://t.me/THE_DRAGON_SUPPORT"
+    LOG_GROUP_ID: int = -1003893927065
+    SUPPORT_LINK: str = "https://t.me/ANIME_GROUP_HAI"
     COOLDOWN_HOURS: int = 24
     STREAK_RESET_HOURS: int = 48
     MAX_STREAK: int = 7
@@ -129,7 +129,7 @@ def rate_limit(func):
         if not rate_limit_check(user_id):
             remaining = CONFIG.RATE_LIMIT_WINDOW - int((datetime.now() - rate_limit_tracker[user_id][0]).total_seconds())
             await update.message.reply_text(
-                f"⚠️ <b>ʀᴀᴛᴇ ʟɪᴍɪᴛ</b>\nWait {remaining}s.",
+                f"⚠️ <b>ʀᴀᴛᴇ ʟɪᴍɪᴛ</b>\nᴡᴀɪᴛ {remaining}s.",
                 parse_mode=ParseMode.HTML
             )
             return
