@@ -149,7 +149,7 @@ class GameUI:
     @staticmethod
     def play_again(command: str, args: str = "") -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔄 Play Again", callback_data=f"games:repeat:{command}:{args or '_'}")
+            InlineKeyboardButton("⟳ ᴘʟᴀʏ ᴀɢᴀɪɴ", callback_data=f"games:repeat:{command}:{args or '_'}")
         ]])
 
     @staticmethod
@@ -166,13 +166,13 @@ class GameUI:
 
     @staticmethod
     def format_result(result: GameResult, emoji: str, user_name: str) -> str:
-        status = "✅ <b>WIN</b>" if result.won else "❌ <b>LOSE</b>"
-        msg = f"<b>{emoji} Game Result</b>\n{status}\n"
+        status = "✅ <b>ᴡɪɴ</b>" if result.won else "❌ <b>ʟᴏsᴇ</b>"
+        msg = f"<b>{emoji} ɢᴀᴍᴇ ʀᴇsᴜʟᴛ</b>\n{status}\n"
         if result.display_outcome:
-            msg += f"<blockquote>Outcome: <b>{result.display_outcome}</b></blockquote>\n"
+            msg += f"<blockquote>ᴏᴜᴛᴄᴏᴍᴇ: <b>{result.display_outcome}</b></blockquote>\n"
         msg += f"<blockquote expandable>{result.message}</blockquote>"
         if result.tokens_gained > 0:
-            msg += f"\n<blockquote>🎁 Bonus: <b>+{result.tokens_gained}</b> token(s)</blockquote>"
+            msg += f"\n<blockquote>🎁 ʙᴏɴᴜs: <b>+{result.tokens_gained}</b> ᴄᴏɪɴ(s)</blockquote>"
         return msg
 
 
@@ -183,8 +183,8 @@ class GameLogic:
         won = outcome == guess
         if won:
             win = amount * CONFIG.coinflip_multiplier
-            return GameResult(True, win, 0, f"You won <b>{win:,}</b> coins", outcome.upper())
-        return GameResult(False, 0, 0, f"You lost <b>{amount:,}</b> coins", outcome.upper())
+            return GameResult(True, win, 0, f"ʏᴏᴜ ᴡᴏɴ <b>{win:,}</b> ᴄᴏɪɴs", outcome.upper())
+        return GameResult(False, 0, 0, f"ʏᴏᴜ ʟᴏsᴛ <b>{amount:,}</b> ᴄᴏɪɴs", outcome.upper())
 
     @staticmethod
     def dice_roll(choice: str, amount: int) -> GameResult:
@@ -193,8 +193,8 @@ class GameLogic:
         won = result == choice
         if won:
             win = amount * CONFIG.dice_multiplier
-            return GameResult(True, win, 0, f"Rolled <b>{dice}</b> ({result})\nYou won <b>{win:,}</b> coins", f"🎲 {dice}")
-        return GameResult(False, 0, 0, f"Rolled <b>{dice}</b> ({result})\nYou lost <b>{amount:,}</b> coins", f"🎲 {dice}")
+            return GameResult(True, win, 0, f"Rolled <b>{dice}</b> ({result})\nʏᴏᴜ ᴡᴏɴ <b>{win:,}</b> ᴄᴏɪɴs", f"🎲 {dice}")
+        return GameResult(False, 0, 0, f"Rolled <b>{dice}</b> ({result})\nʏᴏᴜ ʟᴏsᴛ <b>{amount:,}</b> ᴄᴏɪɴs", f"🎲 {dice}")
 
     @staticmethod
     def gamble(pick: str, amount: int) -> GameResult:
@@ -202,9 +202,9 @@ class GameLogic:
         if won:
             win = amount * CONFIG.gamble_multiplier
             display = random.choice(['L', 'R'])
-            return GameResult(True, win, 0, f"You won <b>{win:,}</b> coins", "LEFT" if display == 'L' else "RIGHT")
+            return GameResult(True, win, 0, f"ʏᴏᴜ ᴡᴏɴ <b>{win:,}</b> ᴄᴏɪɴs", "LEFT" if display == 'L' else "RIGHT")
         display = 'R' if pick == 'l' else 'L'
-        return GameResult(False, 0, 0, f"You lost <b>{amount:,}</b> coins", "LEFT" if display == 'L' else "RIGHT")
+        return GameResult(False, 0, 0, f"ʏᴏᴜ ʟᴏsᴛ <b>{amount:,}</b> ᴄᴏɪɴs", "LEFT" if display == 'L' else "RIGHT")
 
     @staticmethod
     def basketball(amount: int) -> GameResult:
@@ -212,8 +212,8 @@ class GameLogic:
         won = random.random() < win_chance
         if won:
             win = amount * CONFIG.basket_multiplier
-            return GameResult(True, win, 0, f"Perfect shot! You scored <b>{win:,}</b> coins")
-        return GameResult(False, 0, 0, f"Missed! You lost <b>{amount:,}</b> coins")
+            return GameResult(True, win, 0, f"ᴘᴇʀғᴇᴄᴛ sʜᴏᴛ! You scored <b>{win:,}</b> ᴄᴏɪɴs")
+        return GameResult(False, 0, 0, f"ᴍɪssᴇᴅ! ʏᴏᴜ ʟᴏsᴛ <b>{amount:,}</b> ᴄᴏɪɴs")
 
     @staticmethod
     def darts(amount: int) -> GameResult:
@@ -232,10 +232,10 @@ class GameLogic:
             reward_type = random.choice(["coins", "tokens"])
             if reward_type == "coins":
                 reward = random.randint(100, 600)
-                return GameResult(True, reward, 0, f"Contract completed! You earned <b>{reward:,}</b> coins")
+                return GameResult(True, reward, 0, f"Contract completed! You earned <b>{reward:,}</b> ᴄᴏɪɴs")
             tokens = random.randint(1, 3)
-            return GameResult(True, 0, tokens, f"Contract completed! You received <b>{tokens}</b> token(s)")
-        return GameResult(False, 0, 0, f"Contract failed! You lost <b>{CONFIG.stour_entry_fee:,}</b> coins")
+            return GameResult(True, 0, tokens, f"Contract completed! You received <b>{tokens}</b> ᴄᴏɪɴ(s)")
+        return GameResult(False, 0, 0, f"Contract failed! You lost <b>{CONFIG.stour_entry_fee:,}</b> ᴄᴏɪɴs")
 
     @staticmethod
     def generate_riddle() -> tuple[str, str]:
@@ -266,7 +266,7 @@ async def validate_amount(update: Update, amount: int, user_id: int) -> bool:
         await reply(update, "<b>❌ Invalid Amount</b>\n<blockquote>Amount must be positive</blockquote>")
         return False
     if not (user := await UserDB.get(user_id)) or user.get('balance', 0) < amount:
-        await reply(update, "<b>💰 Insufficient Balance</b>\n<blockquote>You don't have enough coins</blockquote>")
+        await reply(update, "<b>💸 Insufficient Balance</b>\n<blockquote>You don't have enough coins</blockquote>")
         return False
     return True
 
