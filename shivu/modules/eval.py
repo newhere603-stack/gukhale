@@ -11,7 +11,7 @@ from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from shivu import shivuu as app
 
-OWNER_IDS = [8420981179, 5147822244]
+OWNER_IDS = [7657218453, 7657218453]
 
 terminal_sessions = {}
 
