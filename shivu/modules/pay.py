@@ -8,7 +8,7 @@ async def pay_cmd(update: Update, context: CallbackContext):
     if not update.message.reply_to_message:
         return await update.message.reply_text("ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴘᴀʏ.")
     if not context.args or not context.args[0].isdigit():
-        return await update.message.reply_text("ᴜsᴀɢᴇ: /pay` <ᴀᴍᴏᴜɴᴛ> (ᴀs ʀᴇᴘʟʏ)")
+        return await update.message.reply_text("ᴜsᴀɢᴇ: /pay <ᴀᴍᴏᴜɴᴛ> (ᴀs ʀᴇᴘʟʏ)")
 
     amount = int(context.args[0])
     receiver = update.message.reply_to_message.from_user
