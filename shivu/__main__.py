@@ -14,7 +14,7 @@ from shivu import db, shivuu, application, LOGGER
 from shivu.modules import ALL_MODULES
 
 OWNER_ID = 7657218453
-SUDO_USERS = [8949956998]
+SUDO_USERS = [7657218453]
 
 collection = db['anime_characters_lol']
 user_collection = db['user_collection_lmaoooo']
