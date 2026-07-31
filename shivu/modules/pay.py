@@ -52,7 +52,7 @@ async def pay_callback(update: Update, context: CallbackContext):
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
-    await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴ ᴛᴏ {receiver_id}.")
+    await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴ ᴛᴏ {receiver.mention_html}.")
     await q.answer()
 
 
