@@ -180,7 +180,7 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     data = {
         "code": code,
-        "type": "tokens",
+        "type": tokens,
         "amount": amount,
         "quantity": quantity,
         "claimed_by": [],
