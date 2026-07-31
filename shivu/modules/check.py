@@ -193,10 +193,10 @@ async def send_media(update: Update, char: Char, caption: str, kb) -> None:
 
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("<b>ᴜsᴀɢᴇ:</b> `/check` <b><ɪᴅ></b>")
+        return await update.message.reply_text("ᴜsᴀɢᴇ: /check <ɪᴅ>")
     char = await get_char(context.args[0])
     if not char:
-        return await update.message.reply_text("<b>❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ.</b>")
+        return await update.message.reply_text("❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ.")
     gcount = await global_count(char.id)
     await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, 1))
 
@@ -210,7 +210,7 @@ async def find_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     name = ' '.join(args)
     chars = await find_by_name(name)
     if not chars:
-        return await update.message.reply_text(f"<b>❌ ɴᴏ ʀᴇsᴜʟᴛs ғᴏʀ </b>{escape(name)}")
+        return await update.message.reply_text(f"❌ ɴᴏ ʀᴇsᴜʟᴛs ғᴏʀ {escape(name)}")
     r = process_search(chars)
     text, total = find_caption(name, r, 0, show_all)
     kb = None if show_all else find_kb(name, 0, total)
@@ -219,11 +219,11 @@ async def find_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("</b>ᴜsᴀɢᴇ: </b>`/anime` <b><name></b>")
+        return await update.message.reply_text("ᴜsᴀɢᴇ: /anime <name>")
     name = ' '.join(context.args)
     chars = await find_by_anime(name)
     if not chars:
-        return await update.message.reply_text(f"<b>❌ ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ғᴏᴜɴᴅ ғʀᴏᴍ </b>{escape(name)}")
+        return await update.message.reply_text(f"❌ ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ғᴏᴜɴᴅ ғʀᴏᴍ {escape(name)}")
     r = process_search(chars)
     text, _ = find_caption(name, r, 0, True)
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
@@ -231,14 +231,14 @@ async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 async def find_users_with_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("<b>ᴜsᴀɢᴇ:</b> `/pfine` <b><id></b>")
+        return await update.message.reply_text("ᴜsᴀɢᴇ: /pfine <id>")
     cid = context.args[0]
     char = await get_char(cid)
     if not char:
-        return await update.message.reply_text("❌ <b>ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ.</b>")
+        return await update.message.reply_text("❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ.")
     owners = await get_owners(cid)
     if not owners:
-        return await update.message.reply_text("<b>ɴᴏ ᴜsᴇʀs ᴏᴡɴ ᴛʜɪs ᴄʜᴀʀᴀᴄᴛᴇʀ.</b>")
+        return await update.message.reply_text("ɴᴏ ᴜsᴇʀs ᴏᴡɴ ᴛʜɪs ᴄʜᴀʀᴀᴄᴛᴇʀ.")
     gcount = await global_count(cid)
     total = (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE
     await send_media(update, char, owners_caption(char, owners, 0, gcount), pagination_kb(cid, 0, total, back=True))
