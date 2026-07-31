@@ -24,7 +24,7 @@ async def pay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pay_no_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"<b>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ sᴇɴᴅ</b> 💸`{amount}` <b>ᴛᴏ {receiver.mention_html()}?</b>",
+        f"<b>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ sᴇɴᴅ</b> 💸 `{amount}` <b>ᴛᴏ {receiver.mention_html()}?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -52,7 +52,7 @@ async def pay_callback(update: Update, context: CallbackContext):
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
-    await q.edit_message_text(f"<b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ </b>💸`{amount}`<b> ᴄᴏɪɴ ᴛᴏ {receiver_name}.</b>")
+    await q.edit_message_text(f"<b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ </b>💸 `{amount}`<b> ᴄᴏɪɴ ᴛᴏ {receiver_name}.</b>")
     await q.answer()
 
 
