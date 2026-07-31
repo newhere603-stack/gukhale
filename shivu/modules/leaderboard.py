@@ -36,10 +36,10 @@ async def send_or_edit(update, context, text, kb, edit):
 
 
 def back_close_buttons(refresh_cb, extra_row=None):
-    rows = [[InlineKeyboardButton("🔄", callback_data=refresh_cb), InlineKeyboardButton("🔙", callback_data="lb_menu")]]
+    rows = [[InlineKeyboardButton("⟳", callback_data=refresh_cb), InlineKeyboardButton("⋟", callback_data="lb_menu")]]
     if extra_row:
         rows.append(extra_row)
-    rows.append([InlineKeyboardButton("❌", callback_data="lb_close")])
+    rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -48,7 +48,7 @@ def back_close_buttons(refresh_cb, extra_row=None):
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"🏆 {sc('select the top list')} 🏆"
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💰 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")],
+        [InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")],
         [InlineKeyboardButton("🎴 ᴄʜᴀʀᴀᴄᴛᴇʀꜱ", callback_data="lb_chars")],
         [InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")],
         [InlineKeyboardButton("👤 sᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile")],
@@ -69,7 +69,7 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
     for i, u in enumerate(data, 1):
         name = u.get('first_name', 'Unknown')
         link = mention_html(u['id'], name)
-        rows.append(f"{i}. {link} - 💸{u.get('balance', 0):,}")
+        rows.append(f"{i}. {link} ≻ 💸{u.get('balance', 0):,}")
     text = format_list("users by coins", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
 
@@ -104,7 +104,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     if not data:
         return await send_or_edit(update, context, sc("no data."), None, edit)
 
-    rows = [f"{i}. {escape(g.get('group_name', 'Unknown'))} - {g.get('count', 0):,} ᴄʜᴀʀꜱ"
+    rows = [f"{i}. {escape(g.get('group_name', 'Unknown'))} ≻ {g.get('count', 0):,}👥"
             for i, g in enumerate(data, 1)]
     text = format_list("groups", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
@@ -171,8 +171,8 @@ async def stats(update: Update, context: CallbackContext, edit=False):
         f"<i>{datetime.now().strftime('%H:%M:%S')}</i>"
     )
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔄", callback_data="lb_stats")],
-        [InlineKeyboardButton("❌", callback_data="lb_close")]
+        [InlineKeyboardButton("⟳", callback_data="lb_stats")],
+        [InlineKeyboardButton("×", callback_data="lb_close")]
     ])
     await send_or_edit(update, context, text, kb, edit)
 
