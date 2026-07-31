@@ -20,10 +20,15 @@ async def pay_cmd(update: Update, context: CallbackContext):
         return await update.message.reply_text("ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.")
 
     kb = [[
-        InlineKeyboardButton("ᴄᴏɴꜰɪʀᴍ",callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}_{receiver.first_name}"
-                            )                     
-        InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pay_no_{sender.id}")
-    ]]
+    InlineKeyboardButton(
+        "ᴄᴏɴꜰɪʀᴍ ✅",
+        callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}_{receiver.first_name}"
+    ),
+    InlineKeyboardButton(
+        "ᴄᴀɴᴄᴇʟ ❌",
+        callback_data=f"pay_no_{sender.id}"
+    )
+]]
     await update.message.reply_text(
         f"ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ sᴇɴᴅ 💸 {amount} ᴛᴏ {receiver.mention_html()}?",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
