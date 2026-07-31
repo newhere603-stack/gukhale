@@ -84,13 +84,13 @@ class UserDB:
 
 def build_bonus_text(user: dict, first_name: str) -> str:
     return (
-        "<b>Alisa Waifu Bot</b>\n\n"
-        "🎮 <b>Bonus System (IST)</b>\n\n"
-        f"👤 <b>User:</b> {first_name}\n"
-        f"📅 <b>Date:</b> {now_ist().strftime('%Y-%m-%d %H:%M')} IST\n\n"
-        f"🔥 <b>Current Streak:</b> {user.get('bonus_streak', 0)} days\n"
-        f"🏆 <b>Highest Streak:</b> {user.get('bonus_highest_streak', 0)} days\n\n"
-        "Select an option below:"
+        "<b>ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ</b>\n\n"
+        "🎮 <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
+        f"👤 <b>ᴜsᴇʀ:</b> {first_name}\n"
+        f"📅 <b>ᴅᴀᴛᴇ:</b> {now_ist().strftime('%Y-%m-%d %H:%M')} \n\n"
+        f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> {user.get('bonus_streak', 0)} ᴅᴀʏs\n"
+        f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> {user.get('bonus_highest_streak', 0)} ᴅᴀʏs\n\n"
+        "<b>sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ʙᴇʟᴏᴡ:</b>"
     )
 
 
@@ -103,8 +103,8 @@ def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
             if remaining.total_seconds() > 0:
                 label = f"{kind.title()} ⏳ {format_countdown(remaining)}"
         rows.append([InlineKeyboardButton(label, callback_data=f"bonus:{kind}")])
-    rows.append([InlineKeyboardButton("📊 Stats", callback_data="bonus:stats"),
-                 InlineKeyboardButton("❌ Close", callback_data="bonus:close")])
+    rows.append([InlineKeyboardButton("📊 sᴛᴀᴛs", callback_data="bonus:stats"),
+                 InlineKeyboardButton("❌ ᴄʟᴏsᴇ", callback_data="bonus:close")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -135,7 +135,7 @@ async def claim(update: Update, context: CallbackContext, kind: str):
     if last := user.get(f'last_{kind}_claim'):
         remaining = timedelta(hours=COOLDOWNS[kind]) - (now - to_ist(last))
         if remaining.total_seconds() > 0:
-            await query.answer(f"⏳ Come back in {format_countdown(remaining)}", show_alert=True)
+            await query.answer(f"⏳ ᴄᴏᴍᴇ ʙᴀᴄᴋ ɪɴ {format_countdown(remaining)}", show_alert=True)
             return
 
     set_fields = {f'last_{kind}_claim': now}
@@ -146,10 +146,10 @@ async def claim(update: Update, context: CallbackContext, kind: str):
         set_fields['bonus_streak'] = streak
         set_fields['bonus_highest_streak'] = max(streak, user.get('bonus_highest_streak', 0))
         reward = daily_reward(streak)
-        alert = f"🎁 +{reward:,} coins! Streak: {streak}d"
+        alert = f"🎁 +{reward:,} ᴄᴏɪɴs! sᴛʀᴇᴀᴋ: {streak}d"
     else:
         reward = weekly_reward(streak)
-        alert = f"🎁 +{reward:,} coins!"
+        alert = f"🎁 +{reward:,} ᴄᴏɪɴs!"
 
     await UserDB.update(user_id, inc={'balance': reward}, set_=set_fields)
     await query.answer(alert, show_alert=True)
@@ -162,17 +162,17 @@ async def show_stats(update: Update, context: CallbackContext):
     streak = user.get('bonus_streak', 0)
 
     text = (
-        "📊 <b>Bonus Stats</b>\n\n"
-        f"💰 <b>Balance:</b> {user.get('balance', 0):,} coins\n"
-        f"🔥 <b>Current Streak:</b> {streak} days\n"
-        f"🏆 <b>Highest Streak:</b> {user.get('bonus_highest_streak', 0)} days\n\n"
-        f"🎁 <b>Next Daily Reward:</b> {daily_reward(streak):,} coins\n"
-        f"🎁 <b>Next Weekly Reward:</b> {weekly_reward(streak):,} coins"
+        "📊 <b>ʙᴏɴᴜs sᴛᴀᴛs</b>\n\n"
+        f"💰 <b>ʙᴀʟᴀɴᴄᴇ:</b> {user.get('balance', 0):,} ᴄᴏɪɴs\n"
+        f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> {streak} days\n"
+        f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> {user.get('bonus_highest_streak', 0)} ᴅᴀʏs\n\n"
+        f"🎁 <b>ɴᴇxᴛ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ:</b> {daily_reward(streak):,} ᴄᴏɪɴs\n"
+        f"🎁 <b>ɴᴇxᴛ ᴡᴇᴇᴋʟʏ ʀᴇᴡᴀʀᴅ:</b> {weekly_reward(streak):,} ᴄᴏɪɴs"
     )
     await query.answer()
     await query.edit_message_text(
         text, parse_mode='HTML',
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="bonus:menu")]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data="bonus:menu")]])
     )
 
 
@@ -200,12 +200,12 @@ async def bonus_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     handler = HANDLERS.get(query.data.split(':', 1)[1])
     if not handler:
-        await query.answer("❌ Unknown action", show_alert=True)
+        await query.answer("❌ ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
         return
     try:
         await handler(update, context)
     except TelegramError as e:
-        await query.answer(f"❌ Error: {type(e).__name__}", show_alert=True)
+        await query.answer(f"❌ ᴇʀʀᴏʀ: {type(e).__name__}", show_alert=True)
 
 
 application.add_handler(CommandHandler("bonus", bonus_command, block=False))
