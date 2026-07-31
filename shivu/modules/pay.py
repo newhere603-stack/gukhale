@@ -6,18 +6,18 @@ from shivu import application, user_collection
 async def pay_cmd(update: Update, context: CallbackContext):
     sender = update.effective_user
     if not update.message.reply_to_message:
-        return await update.message.reply_text("Reply to the user you want to pay.")
+        return await update.message.reply_text("<b>ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴘᴀʏ.</b>")
     if not context.args or not context.args[0].isdigit():
-        return await update.message.reply_text("Usage: /pay <amount> (as reply)")
+        return await update.message.reply_text("<b>ᴜsᴀɢᴇ: /pay <ᴀᴍᴏᴜɴᴛ> (ᴀs ʀᴇᴘʟʏ)</b>")
 
     amount = int(context.args[0])
     receiver = update.message.reply_to_message.from_user
     if amount <= 0 or receiver.id == sender.id:
-        return await update.message.reply_text("Invalid transaction.")
+        return await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴛʀᴀɴsᴀᴄᴛɪᴏɴ.</b>")
 
     s = await user_collection.find_one({'id': sender.id})
     if not s or int(s.get('balance', 0)) < amount:
-        return await update.message.reply_text("Insufficient balance.")
+        return await update.message.reply_text("<b>ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.</b>")
 
     kb = [[
         InlineKeyboardButton("Confirm", callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}"),
@@ -35,10 +35,10 @@ async def pay_callback(update: Update, context: CallbackContext):
     sender_id = int(sender_id)
 
     if q.from_user.id != sender_id:
-        return await q.answer("Not your transaction.", show_alert=True)
+        return await q.answer("<b> ɴᴏᴛ ʏᴏᴜʀ ᴛʀᴀɴsᴀᴄᴛɪᴏɴ.</b>", show_alert=True)
 
     if action == "no":
-        await q.edit_message_text("Payment cancelled.")
+        await q.edit_message_text("<b> ᴘᴀʏᴍᴇɴᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>")
         return await q.answer()
 
     receiver_id, amount = int(rest[0]), int(rest[1])
@@ -48,7 +48,7 @@ async def pay_callback(update: Update, context: CallbackContext):
         {'$inc': {'balance': -amount}}
     )
     if not res:
-        await q.edit_message_text("Insufficient balance.")
+        await q.edit_message_text("<b>ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.</b>")
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
