@@ -7,8 +7,8 @@ from shivu import collection, user_collection, application
 from shivu.modules.database.sudo import is_user_sudo
 
 # --- CONFIGURATION ---
-LOG_GROUP_ID = -1003110990230 
-OWNER_ID = 8420981179  # <--- Sirf ye ID command use kar payegi
+LOG_GROUP_ID = -1003893927065 
+OWNER_ID = 7657218453  # <--- Sirf ye ID command use kar payegi
 # ---------------------
 
 @dataclass
