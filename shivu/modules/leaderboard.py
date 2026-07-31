@@ -73,6 +73,23 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
     text = format_list("users by coins", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
 
+async def top_tokens(update: Update, context: CallbackContext, edit=False):
+    data = await user_collection.find(
+        {},
+        {"id": 1, "first_name": 1, "tokens": 1}
+    ).sort("tokens", -1).limit(10).to_list(10)
+
+    if not data:
+        return await send_or_edit(update, context, sc("no data."), None, edit)
+
+    rows = []
+    for i, u in enumerate(data, 1):
+        name = u.get("first_name", "Unknown")
+        link = mention_html(u["id"], name)
+        rows.append(f"{i}. {link} - 🪙 {u.get('tokens', 0):,}")
+
+    text = format_list("users by tokens", rows)
+    await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
 
 # ---------- Top by characters ----------
 
