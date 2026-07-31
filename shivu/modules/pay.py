@@ -57,7 +57,7 @@ async def pay_callback(update: Update, context: CallbackContext):
     )
 
     try:
-        chat = await context.bot.get_chat(receiver_id)
+        chat = await context.bot.get_chat(receiver_name)
         receiver_name = chat.full_name
     except:
         receiver_name = f"User ({receiver_name})"
