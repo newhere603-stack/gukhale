@@ -235,7 +235,7 @@ async def button_callback(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Error in button callback: {e}", exc_info=True)
         try:
-            await query.answer("<b>⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>", show_alert=True)
+            await query.answer("**⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.**", show_alert=True)
         except Exception:
             pass
 
