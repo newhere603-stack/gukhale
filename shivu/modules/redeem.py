@@ -157,9 +157,7 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if len(context.args) < 2:
         await msg.reply_text(
-            "Usage: <code>/tgen [Amount] [Quantity]</code>",
-            parse_mode=ParseMode.HTML
-        )
+            "Usage: <code>/tgen [Amount] [Quantity]</code>", parse_mode=ParseMode.HTML)
         return
 
     try:
@@ -171,9 +169,7 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     except ValueError:
         await msg.reply_text(
-            "❌ Invalid amount/quantity.",
-            parse_mode=ParseMode.HTML
-        )
+            "❌ Invalid amount/quantity.", parse_mode=ParseMode.HTML)
         return
 
     code = await generate_unique_code()
