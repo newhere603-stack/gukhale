@@ -297,18 +297,16 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
             log_detail = f"Amount: {fa}"
             
-        elif code_info["type"] == "tokens":
-            amount = float(code_info["amount"])
-            await user_collection.update_one({"id": user_id},{"$inc": {"tokens": amount}},upsert=True)
-            fa = fmt_amount(amount)
-            await msg.reply_text(
-                f"🎉 <b>Successfully Redeemed!</b>\n\n"
-                f"💠 <b>Received:</b> {fa} Tokens\n"
-                f"🔗 <b>Powered by:</b> "
-                f"<a href='https://t.me/AlisaWaifusBot'>˹ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ˼</a>",
-                parse_mode=ParseMode.HTML, disable_web_page_preview=True
-            )
-            log_detail = f"Tokens: {fa}"
+        elif code_info['type'] == 'tokens':
+    amount = float(code_info['amount'])
+    await user_collection.update_one({'id': user_id}, {'$inc': {'tokens': amount}},upsert=True)
+    fa = fmt_amount(amount)
+    await msg.reply_text(
+        f"🎉 <b>Successfully Redeemed!</b>\n\n"
+        f"🪙 <b>Received:</b> {fa} Tokens",
+        parse_mode=ParseMode.HTML
+    )
+    log_detail = f"Tokens: {fa}"
         
         elif code_info['type'] == 'character':
             w = code_info['waifu_data']
