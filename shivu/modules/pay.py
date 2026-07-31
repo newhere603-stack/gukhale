@@ -8,7 +8,7 @@ async def pay_cmd(update: Update, context: CallbackContext):
     if not update.message.reply_to_message:
         return await update.message.reply_text("<b>ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴘᴀʏ.</b>")
     if not context.args or not context.args[0].isdigit():
-        return await update.message.reply_text("<b>ᴜsᴀɢᴇ: /pay <ᴀᴍᴏᴜɴᴛ> (ᴀs ʀᴇᴘʟʏ)</b>")
+        return await update.message.reply_text("<b>ᴜsᴀɢᴇ:</b> `/pay` <b><ᴀᴍᴏᴜɴᴛ> (ᴀs ʀᴇᴘʟʏ)</b>")
 
     amount = int(context.args[0])
     receiver = update.message.reply_to_message.from_user
@@ -20,11 +20,11 @@ async def pay_cmd(update: Update, context: CallbackContext):
         return await update.message.reply_text("<b>ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ.</b>")
 
     kb = [[
-        InlineKeyboardButton("Confirm", callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}"),
-        InlineKeyboardButton("Cancel", callback_data=f"pay_no_{sender.id}")
+        InlineKeyboardButton("ᴄᴏɴғɪʀᴍ", callback_data=f"pay_yes_{sender.id}_{receiver.id}_{amount}"),
+        InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pay_no_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"Send {amount} to {receiver.mention_html()}?",
+        f"<b>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ sᴇɴᴅ</b> 💸`{amount}` <b>ᴛᴏ {receiver.mention_html()}?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -52,7 +52,7 @@ async def pay_callback(update: Update, context: CallbackContext):
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
-    await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ 💸{amount} ᴄᴏɪɴ ᴛᴏ {replytag}.")
+    await q.edit_message_text(f"<b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ </b>💸`{amount}`<b> ᴄᴏɪɴ ᴛᴏ {receiver_name}.</b>")
     await q.answer()
 
 
