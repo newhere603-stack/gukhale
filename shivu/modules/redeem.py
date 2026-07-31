@@ -149,6 +149,8 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         f"📢 <b>#CURRENCY_GEN</b>\nAdmin: {html.escape(msg.from_user.first_name)} (<code>{msg.from_user.id}</code>)\n"
         f"Amount: {fa} | Qty: {quantity}\nCode: <code>{code}</code>"
     )
+
+
 async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
 
@@ -174,8 +176,8 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     code = await generate_unique_code()
     data = {
-        'code': code,'type': 'tokens', 'amount': amount, 'quantity': quantity,
-        'claimed_by': [], 'created_at': datetime.now(UTC),'created_by': msg.from_user.id,
+        'code': code, 'type': 'tokens', 'amount': amount, 'quantity': quantity,
+        'claimed_by': [], 'created_at': datetime.now(UTC), 'created_by': msg.from_user.id,
     }
     if not await save_code(msg, data):
         return
