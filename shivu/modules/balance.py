@@ -26,7 +26,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     balance = user.get("balance", 0)
 
     await update.message.reply_text(
-        f"💸 **ʙᴀʟᴀɴᴄᴇ:** `{balance}`",
+        f"💸<b> ʙᴀʟᴀɴᴄᴇ:</b> `{balance}`",
         parse_mode="Markdown",
     )
 
