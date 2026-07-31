@@ -177,22 +177,14 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
 
     code = await generate_unique_code()
-
     data = {
-        "code": code,
-        "type": tokens,
-        "amount": amount,
-        "quantity": quantity,
-        "claimed_by": [],
-        "created_at": datetime.now(UTC),
-        "created_by": msg.from_user.id,
+        'code': code,'type': 'tokens' 'amount': amount, 'quantity': 'quantity,
+        'claimed_by': [], 'created_at': datetime.now(UTC),'created_by': msg.from_user.id,
     }
-
     if not await save_code(msg, data):
         return
-
+        
     fa = fmt_amount(amount)
-
     await msg.reply_text(
         f"✅ <b>Token Code Created!</b>\n\n"
         f"🎫 <b>Code:</b> <code>{code}</code>\n"
@@ -201,7 +193,6 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"⏰ <b>Expires:</b> {CODE_TTL_DAYS}d",
         parse_mode=ParseMode.HTML
     )
-
     await send_log(
         context,
         f"📢 <b>#TOKEN_GEN</b>\n"
@@ -210,6 +201,7 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"Tokens: {fa} | Qty: {quantity}\n"
         f"Code: <code>{code}</code>"
     )
+
 
 async def waifu_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
@@ -315,11 +307,9 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 f"🔗 <b>Powered by:</b> "
                 f"<a href='https://t.me/AlisaWaifusBot'>˹ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ˼</a>",
                 parse_mode=ParseMode.HTML, disable_web_page_preview=True
-    )
-
-    log_detail = f"Tokens: {fa}"
+            )
+            log_detail = f"Tokens: {fa}"
         
-
         elif code_info['type'] == 'character':
             w = code_info['waifu_data']
             await user_collection.update_one({'id': user_id}, {'$addToSet': {'characters': w}}, upsert=True)
