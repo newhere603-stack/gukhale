@@ -53,7 +53,6 @@ async def pay_callback(update: Update, context: CallbackContext):
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
     await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ! ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴ ᴛᴏ {receiver.mention_html()}.")
-    await q.answer()
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
