@@ -1,6 +1,11 @@
+import asyncio
+import nest_asyncio
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 from shivu import application, user_collection
+
+# Event loop conflict / RuntimeError fix karne ke liye
+nest_asyncio.apply()
 
 
 async def get_user(uid):
@@ -25,7 +30,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     balance = user.get("balance", 0)
 
-    # Balance value ko inline code block (monospace) mein kar diya hai taaki easily copy ho sake
+    # Text small caps + bold hai, aur number `{balance}` copyable monospace hai
     await update.message.reply_text(
         f"💸 **ʙᴀʟᴀɴᴄᴇ:** `{balance}`",
         parse_mode="Markdown",
