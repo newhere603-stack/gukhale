@@ -1,6 +1,6 @@
 import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import BadRequest, Forbidden
+from telegram.error import BadRequest, Forbidden, TelegramError
 from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 from shivu import (
     BOT_USERNAME,
@@ -15,12 +15,6 @@ from shivu import (
 START_VIDEO = "https://graph.org/file/e668451eba24048fe880c-8cefbbe834e0f673d8.mp4"
 FORCE_SUB_CHAT = "anime_group_hai"
 OWNER_ID = 7657218453  # Aapki Master Owner ID
-
-# Small Caps + Bold Text for Main Caption
-MAIN_CAPTION = (
-    f"<b>✨ ʜᴇʏ ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b>\n\n"
-    f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!</b>"
-)
 
 MAIN_KEYBOARD = InlineKeyboardMarkup([
     [
@@ -99,14 +93,40 @@ CATEGORIES = {
 }
 
 
-async def is_force_sub_member(user_id, context: CallbackContext):
+# Dynamic Caption Generator with User Mention
+def get_main_caption(user_id: int, first_name: str) -> str:
+    user_mention = f'<a href="tg://user?id={user_id}">{first_name}</a>'
+    return (
+        f"<b>✨ ʜᴇʏ {user_mention}, ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b>\n\n"
+        f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!</b>"
+    )
+
+
+# Robust Force Sub Checker (Supports Groups Bypass & API Error Handling)
+async def is_force_sub_member(update: Update, context: CallbackContext) -> bool:
     try:
-        member = await context.bot.get_chat_member(
-            f"@{FORCE_SUB_CHAT}", user_id
+        # Group chats me force sub check mat karo
+        if update.effective_chat and update.effective_chat.type != "private":
+            return True
+
+        user_id = update.effective_user.id
+        chat_identifier = (
+            f"@{FORCE_SUB_CHAT}"
+            if not str(FORCE_SUB_CHAT).startswith("@")
+            and not str(FORCE_SUB_CHAT).startswith("-100")
+            else FORCE_SUB_CHAT
         )
-        return member.status not in ("left", "kicked")
+
+        member = await context.bot.get_chat_member(
+            chat_id=chat_identifier, user_id=user_id
+        )
+        return member.status in ["member", "administrator", "creator"]
+
+    except BadRequest as e:
+        LOGGER.warning(f"Force-sub BadRequest for user: {e}")
+        return True  # Error hone par allow kar do
     except Exception as e:
-        LOGGER.warning(f"Force-sub check failed for {user_id}: {e}")
+        LOGGER.error(f"Force-sub error: {e}")
         return True
 
 
@@ -124,7 +144,7 @@ def menu_view():
         [InlineKeyboardButton("ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="sxc_back")],
     ]
     return (
-        "<b>ʜᴇʟᴘ ᴍᴇɴᴜ</b>\n\n<b>sᴇʟᴇᴄᴛ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴ檔:</b>",
+        "<b>ʜᴇʟᴘ ᴍᴇɴᴜ</b>\n\n<b>sᴇʟᴇᴄᴛ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴᴅs:</b>",
         InlineKeyboardMarkup(kb),
     )
 
@@ -187,7 +207,7 @@ async def credits_view(context: CallbackContext):
                 added_ids.add(u_id)
 
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
-    return "<b>Sudo:</b>", InlineKeyboardMarkup(kb)
+    return "<b>Sudo List:</b>", InlineKeyboardMarkup(kb)
 
 
 def _new_user_doc(user_id, first_name, username):
@@ -250,16 +270,19 @@ async def safe_track_bot_start(user_id, first_name, username, is_new_user):
 
 async def start(update: Update, context: CallbackContext):
     try:
-        if not update or not update.effective_user:
+        if not update or not update.effective_user or not update.effective_chat:
             return
 
+        chat_id = update.effective_chat.id
         user_id = update.effective_user.id
         first_name = update.effective_user.first_name or "User"
         username = update.effective_user.username or ""
 
-        if not await is_force_sub_member(user_id, context):
-            await update.message.reply_text(
-                FORCE_SUB_TEXT,
+        # Safe FSub Check
+        if not await is_force_sub_member(update, context):
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=FORCE_SUB_TEXT,
                 parse_mode="HTML",
                 reply_markup=FORCE_SUB_KEYBOARD,
             )
@@ -276,9 +299,13 @@ async def start(update: Update, context: CallbackContext):
                 safe_track_bot_start(user_id, first_name, username, is_new)
             )
 
-        await update.message.reply_video(
+        caption_text = get_main_caption(user_id, first_name)
+
+        # Direct message send (Bina user message ko reply tag kiye)
+        await context.bot.send_video(
+            chat_id=chat_id,
             video=START_VIDEO,
-            caption=MAIN_CAPTION,
+            caption=caption_text,
             reply_markup=MAIN_KEYBOARD,
             parse_mode="HTML",
             supports_streaming=True,
@@ -287,8 +314,9 @@ async def start(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Critical error in start command: {e}", exc_info=True)
         try:
-            await update.message.reply_text(
-                "⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>",
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>",
                 parse_mode="HTML",
             )
         except Exception:
@@ -306,37 +334,37 @@ async def button_callback(update: Update, context: CallbackContext):
     try:
         data = query.data
         user_id = query.from_user.id
+        first_name = query.from_user.first_name or "User"
+        username = query.from_user.username or ""
 
         if data == "sxc_checksub":
-            if not await is_force_sub_member(user_id, context):
+            if not await is_force_sub_member(update, context):
                 await query.answer(
                     "ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True
                 )
                 return
-            first_name = query.from_user.first_name or "User"
-            username = query.from_user.username or ""
             await _ensure_user(user_id, first_name, username)
             try:
                 await query.message.delete()
             except Exception:
                 pass
+            
+            caption_text = get_main_caption(user_id, first_name)
             await context.bot.send_video(
                 chat_id=user_id,
                 video=START_VIDEO,
-                caption=MAIN_CAPTION,
+                caption=caption_text,
                 reply_markup=MAIN_KEYBOARD,
                 parse_mode="HTML",
                 supports_streaming=True,
             )
             return
 
-        if not await is_force_sub_member(user_id, context):
+        if not await is_force_sub_member(update, context):
             await query.answer("ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!", show_alert=True)
             return
 
-        await _ensure_user(
-            user_id, query.from_user.first_name, query.from_user.username
-        )
+        await _ensure_user(user_id, first_name, username)
 
         if data == "sxc_credits":
             text, markup = await credits_view(context)
@@ -355,7 +383,7 @@ async def button_callback(update: Update, context: CallbackContext):
                 return
             text, markup = category_view(cat_key, int(page_str))
         elif data == "sxc_back":
-            text, markup = MAIN_CAPTION, MAIN_KEYBOARD
+            text, markup = get_main_caption(user_id, first_name), MAIN_KEYBOARD
         elif data == "sxc_none":
             await query.answer("No sudo users added yet!", show_alert=True)
             return
