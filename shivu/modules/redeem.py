@@ -301,7 +301,7 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             fa = fmt_amount(amount)
             await msg.reply_text(
                 f"🎉 <b>Successfully Redeemed!</b>\n\n"
-                f"🪙 <b>Received:</b> {fa} Tokens",
+                f"💠 <b>Received:</b> {fa} Tokens",
                 parse_mode=ParseMode.HTML
             )
             log_detail = f"Tokens: {fa}"
