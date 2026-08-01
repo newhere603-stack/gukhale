@@ -55,7 +55,7 @@ PROPOSING_LOADING_TEXTS = [
     "<b>🌸 ᴡᴀɪᴛɪɴɢ ғᴏʀ ʜᴇʀ ʀᴇsᴘᴏɴsᴇ....💌</b>",
     "<b>💓 ʜᴇʀ ʜᴇᴀʀᴛ ɪs ʙᴇᴀᴛɪɴɢ ғᴀsᴛ....💫</b>",
     "<b>✨ ᴏᴘᴇɴɪɴɢ ᴛʜᴇ ʀɪɴɢ ʙᴏx....🎁</b>",
-    "<b>👀 ʟᴏᴏCore ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....🕊️</b>"
+    "<b>👀 ʟᴏᴏᴋɪɴɢ ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....🕊️</b>"
 ]
 
 DICE_REJECT_TEXTS = [
@@ -106,12 +106,14 @@ async def is_user_joined(update: Update, context: CallbackContext) -> bool:
     
     try:
         member = await context.bot.get_chat_member(UPDATE_GROUP_ID, user.id)
-        return member.status in ("member", "administrator", "creator")
-    except BadRequest:
-        return True  
+        # Check if user status is active in group
+        return member.status in ("member", "administrator", "creator", "restricted")
+    except BadRequest as e:
+        LOGGER.warning(f"FSub Check BadRequest for {user.id}: {e}")
+        return False  # Bot not admin or User not found -> Enforce FSub
     except Exception as e:
         LOGGER.error(f"is_user_joined failed for {user.id}: {e}")
-        return True
+        return False
 
 
 async def get_unique_char(user_id: int, rarities: list[str]):
@@ -333,18 +335,17 @@ async def propose_callback(update: Update, context: CallbackContext):
     if not query:
         return
 
-    try:
-        await query.answer()
-    except Exception:
-        pass
-
     if query.data == "propose_checksub":
         user = query.from_user
         user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
         
+        # Check Force Sub
         if not await is_user_joined(update, context):
-            await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
-            return
+            # Answer callback ONLY ONCE with alert
+            return await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
+        
+        # If joined successfully
+        await query.answer("✅ Verified! You can now propose.", show_alert=False)
         
         try:
             await query.message.delete()
