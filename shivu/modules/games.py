@@ -2,6 +2,7 @@ import math
 import asyncio
 import random
 import time
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -10,6 +11,7 @@ from typing import Dict, Optional
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext
 
+# Primary imports from your main bot
 from shivu import application, user_collection
 
 
@@ -98,8 +100,17 @@ class UserDB:
     @staticmethod
     async def get(user_id: int) -> Optional[dict]:
         try:
-            return await user_collection.find_one({'id': user_id})
-        except Exception:
+            # FIX: Checks user_id as both Int & String AND handles 'id' or 'user_id'
+            return await user_collection.find_one({
+                '$or': [
+                    {'user_id': user_id},
+                    {'user_id': str(user_id)},
+                    {'id': user_id},
+                    {'id': str(user_id)}
+                ]
+            })
+        except Exception as e:
+            print(f"Error fetching user {user_id}: {e}")
             return None
 
     @staticmethod
@@ -111,24 +122,23 @@ class UserDB:
                 updates['username'] = username
             if first_name and first_name != doc.get('first_name'):
                 updates['first_name'] = first_name
-            # Existing document me missing fields add karein bina balance touch kiye
             if 'tokens' not in doc:
                 updates['tokens'] = 0
-            if 'coins' not in doc and 'balance' not in doc:
-                updates['coins'] = 0
                 
             if updates:
                 try:
-                    await user_collection.update_one({'id': user_id}, {'$set': updates})
+                    await user_collection.update_one({'_id': doc['_id']}, {'$set': updates})
                 except Exception:
                     pass
-            return await UserDB.get(user_id)
+            return doc
 
-        # Sirf naye user ke liye insert hoga
+        # Naya user tabhi banega jab main bot ke database mein bilkul exist na kare
         new_user = {
+            'user_id': user_id,
             'id': user_id,
             'first_name': first_name or 'ᴜɴᴋɴᴏᴡɴ',
             'username': username,
+            'balance': 0,
             'coins': 0,
             'tokens': 0,
             'characters': [],
@@ -136,7 +146,7 @@ class UserDB:
         }
         try:
             await user_collection.update_one(
-                {'id': user_id},
+                {'user_id': user_id},
                 {'$setOnInsert': new_user},
                 upsert=True
             )
@@ -149,22 +159,35 @@ class UserDB:
         user = await UserDB.get(user_id)
         if not user:
             return 0
-        # Shivu bot me balance 'coins' ya 'balance' me ho sakta hai
-        return user.get('coins', user.get('balance', 0))
+            
+        # Checks all possible balance keys in Shivu bot database
+        for field_name in ['balance', 'coins', 'wallet', 'money', 'gold']:
+            if field_name in user and user[field_name] is not None:
+                return int(user[field_name])
+        return 0
 
     @staticmethod
     async def change_balance(user_id: int, delta_coins: int, delta_tokens: int = 0) -> Optional[dict]:
         try:
             user = await UserDB.get(user_id)
-            # Check karein user document me konsa key active hai ('coins' ya 'balance')
-            coin_field = 'coins' if user and 'coins' in user else ('balance' if user and 'balance' in user else 'coins')
+            if not user:
+                return None
+                
+            # Automatically detects which field name main bot is using
+            target_field = 'balance'
+            for field_name in ['balance', 'coins', 'wallet', 'money', 'gold']:
+                if field_name in user:
+                    target_field = field_name
+                    break
             
-            inc_data = {coin_field: delta_coins}
+            inc_data = {target_field: delta_coins}
             if delta_tokens != 0:
                 inc_data['tokens'] = delta_tokens
-            await user_collection.update_one({'id': user_id}, {'$inc': inc_data})
-        except Exception:
-            pass
+                
+            await user_collection.update_one({'_id': user['_id']}, {'$inc': inc_data})
+        except Exception as e:
+            print(f"Error changing balance: {e}")
+            
         return await UserDB.get(user_id)
 
 
