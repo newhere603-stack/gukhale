@@ -97,8 +97,11 @@ GAME_EMOJIS = {
 
 
 class UserDB:
+    BALANCE_FIELDS = ['balance', 'coins', 'wallet', 'money', 'gold']
+
     @staticmethod
     async def get(user_id: int) -> Optional[dict]:
+        """Fetch user document using both int and str representation of ID."""
         try:
             return await user_collection.find_one({
                 '$or': [
@@ -113,87 +116,47 @@ class UserDB:
             return None
 
     @staticmethod
-    async def ensure(user_id: int, first_name: str = None, username: str = None) -> dict:
-        doc = await UserDB.get(user_id)
-        if doc:
-            updates = {}
-            if username and username != doc.get('username'):
-                updates['username'] = username
-            if first_name and first_name != doc.get('first_name'):
-                updates['first_name'] = first_name
-            if 'tokens' not in doc:
-                updates['tokens'] = 0
-            if 'balance' not in doc and 'coins' not in doc:
-                updates['balance'] = 0
-                
-            if updates:
+    async def get_balance_and_field(user: dict) -> tuple[int, str]:
+        """Dynamically detect which balance key Shivu Bot is using."""
+        if not user:
+            return 0, 'balance'
+            
+        for field in UserDB.BALANCE_FIELDS:
+            if field in user and user[field] is not None:
                 try:
-                    await user_collection.update_one({'_id': doc['_id']}, {'$set': updates})
-                except Exception:
+                    return int(user[field]), field
+                except (ValueError, TypeError):
                     pass
-            return doc
-
-        new_user = {
-            'id': user_id,
-            'user_id': user_id,
-            'first_name': first_name or 'ᴜɴᴋɴᴏᴡɴ',
-            'username': username,
-            'balance': 0,
-            'coins': 0,
-            'tokens': 0,
-            'characters': [],
-            'created_at': datetime.now(timezone.utc)
-        }
-        try:
-            await user_collection.update_one(
-                {'id': user_id},
-                {'$setOnInsert': new_user},
-                upsert=True
-            )
-        except Exception:
-            pass
-        return await UserDB.get(user_id)
+        return 0, 'balance'
 
     @staticmethod
     async def get_balance(user_id: int) -> int:
         user = await UserDB.get(user_id)
-        if not user:
-            return 0
-            
-        for field_name in ['balance', 'coins', 'wallet', 'money', 'gold']:
-            if field_name in user and user[field_name] is not None:
-                return int(user[field_name])
-        return 0
+        balance, _ = await UserDB.get_balance_and_field(user)
+        return balance
 
     @staticmethod
     async def change_balance(user_id: int, delta_coins: int, delta_tokens: int = 0) -> bool:
-        """
-        Atomic update: Negative balance ko prevent karega database level par.
-        """
-        try:
-            user = await UserDB.get(user_id)
-            if not user:
-                return False
-                
-            target_field = 'balance'
-            for field_name in ['balance', 'coins', 'wallet', 'money', 'gold']:
-                if field_name in user:
-                    target_field = field_name
-                    break
-            
-            # Agar balance deduct kar rahe hain, check karo database me negative na ho
-            query = {'_id': user['_id']}
-            if delta_coins < 0:
-                query[target_field] = {'$gte': abs(delta_coins)}
+        """Atomic updates preventing negative balances or key mismatches."""
+        user = await UserDB.get(user_id)
+        if not user:
+            return False
 
+        current_bal, target_field = await UserDB.get_balance_and_field(user)
+
+        # Check balance sufficiency if deducting
+        if delta_coins < 0 and current_bal < abs(delta_coins):
+            return False
+
+        try:
             inc_data = {target_field: delta_coins}
             if delta_tokens != 0:
                 inc_data['tokens'] = delta_tokens
-                
-            res = await user_collection.update_one(query, {'$inc': inc_data})
+
+            res = await user_collection.update_one({'_id': user['_id']}, {'$inc': inc_data})
             return res.modified_count > 0
         except Exception as e:
-            print(f"Error changing balance: {e}")
+            print(f"Error changing balance for user {user_id}: {e}")
             return False
 
 
@@ -351,6 +314,11 @@ async def validate_amount(update: Update, amount: int, user_id: int) -> bool:
         await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
         return False
     
+    user = await UserDB.get(user_id)
+    if not user:
+        await send_or_edit_response(update, "<b>❌ ᴀᴄᴄᴏᴜɴᴛ ɴᴏᴛ ғᴏᴜɴᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ʀᴇɢɪsᴛᴇʀ/ɢᴜᴇss ғɪʀsᴛ!</b>")
+        return False
+
     balance = await UserDB.get_balance(user_id)
     if balance < amount:
         await send_or_edit_response(update, f"<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {balance:,})</b>")
@@ -406,11 +374,9 @@ async def sbet(update: Update, context: CallbackContext, override_args: List[str
         await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'heads' ᴏʀ 'tails'</b>")
         return
     
-    await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
     if not await validate_amount(update, amount, user_id):
         return
     
-    # Balance Deduction Safe Check
     if not await UserDB.change_balance(user_id, -amount):
         await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
         return
@@ -436,7 +402,6 @@ async def roll_cmd(update: Update, context: CallbackContext, override_args: List
         await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'odd' ᴏʀ 'even'</b>")
         return
     
-    await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
     if not await validate_amount(update, amount, user_id):
         return
     
@@ -465,7 +430,6 @@ async def gamble(update: Update, context: CallbackContext, override_args: List[s
         return
     
     pick = 'l' if pick.startswith('l') else 'r'
-    await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
     if not await validate_amount(update, amount, user_id):
         return
     
@@ -489,7 +453,6 @@ async def basket(update: Update, context: CallbackContext, override_args: List[s
         await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
         return
     
-    await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
     if not await validate_amount(update, amount, user_id):
         return
     
@@ -513,7 +476,6 @@ async def dart(update: Update, context: CallbackContext, override_args: List[str
         await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
         return
     
-    await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
     if not await validate_amount(update, amount, user_id):
         return
     
@@ -530,7 +492,6 @@ async def stour(update: Update, context: CallbackContext, override_args: List[st
     if await check_cooldown(update, user_id):
         return
     
-    await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
     if not await validate_amount(update, CONFIG.stour_entry_fee, user_id):
         return
     
@@ -636,7 +597,6 @@ async def games_menu(update: Update, context: CallbackContext):
 
 async def game_stats(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
     user = await UserDB.get(user_id)
     stats = game_state.stats.get(user_id, {})
     
