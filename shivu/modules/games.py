@@ -166,11 +166,14 @@ class UserDB:
         return 0
 
     @staticmethod
-    async def change_balance(user_id: int, delta_coins: int, delta_tokens: int = 0) -> Optional[dict]:
+    async def change_balance(user_id: int, delta_coins: int, delta_tokens: int = 0) -> bool:
+        """
+        Atomic update: Negative balance ko prevent karega database level par.
+        """
         try:
             user = await UserDB.get(user_id)
             if not user:
-                return None
+                return False
                 
             target_field = 'balance'
             for field_name in ['balance', 'coins', 'wallet', 'money', 'gold']:
@@ -178,15 +181,20 @@ class UserDB:
                     target_field = field_name
                     break
             
+            # Agar balance deduct kar rahe hain, check karo database me negative na ho
+            query = {'_id': user['_id']}
+            if delta_coins < 0:
+                query[target_field] = {'$gte': abs(delta_coins)}
+
             inc_data = {target_field: delta_coins}
             if delta_tokens != 0:
                 inc_data['tokens'] = delta_tokens
                 
-            await user_collection.update_one({'_id': user['_id']}, {'$inc': inc_data})
+            res = await user_collection.update_one(query, {'$inc': inc_data})
+            return res.modified_count > 0
         except Exception as e:
             print(f"Error changing balance: {e}")
-            
-        return await UserDB.get(user_id)
+            return False
 
 
 class GameUI:
@@ -402,7 +410,11 @@ async def sbet(update: Update, context: CallbackContext, override_args: List[str
     if not await validate_amount(update, amount, user_id):
         return
     
-    await UserDB.change_balance(user_id, -amount)
+    # Balance Deduction Safe Check
+    if not await UserDB.change_balance(user_id, -amount):
+        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        return
+
     result = GameLogic.coinflip(guess, amount)
     await process_game(update, context, GameType.COINFLIP, amount, result, f"{amount}:{guess}")
 
@@ -428,7 +440,10 @@ async def roll_cmd(update: Update, context: CallbackContext, override_args: List
     if not await validate_amount(update, amount, user_id):
         return
     
-    await UserDB.change_balance(user_id, -amount)
+    if not await UserDB.change_balance(user_id, -amount):
+        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        return
+
     result = GameLogic.dice_roll(choice, amount)
     await process_game(update, context, GameType.DICE, amount, result, f"{amount}:{choice}")
 
@@ -454,7 +469,10 @@ async def gamble(update: Update, context: CallbackContext, override_args: List[s
     if not await validate_amount(update, amount, user_id):
         return
     
-    await UserDB.change_balance(user_id, -amount)
+    if not await UserDB.change_balance(user_id, -amount):
+        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        return
+
     result = GameLogic.gamble(pick, amount)
     await process_game(update, context, GameType.GAMBLE, amount, result, f"{amount}:{pick}")
 
@@ -475,7 +493,10 @@ async def basket(update: Update, context: CallbackContext, override_args: List[s
     if not await validate_amount(update, amount, user_id):
         return
     
-    await UserDB.change_balance(user_id, -amount)
+    if not await UserDB.change_balance(user_id, -amount):
+        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        return
+
     result = GameLogic.basketball(amount)
     await process_game(update, context, GameType.BASKET, amount, result, str(amount))
 
@@ -496,7 +517,10 @@ async def dart(update: Update, context: CallbackContext, override_args: List[str
     if not await validate_amount(update, amount, user_id):
         return
     
-    await UserDB.change_balance(user_id, -amount)
+    if not await UserDB.change_balance(user_id, -amount):
+        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        return
+
     result = GameLogic.darts(amount)
     await process_game(update, context, GameType.DART, amount, result, str(amount))
 
@@ -510,7 +534,10 @@ async def stour(update: Update, context: CallbackContext, override_args: List[st
     if not await validate_amount(update, CONFIG.stour_entry_fee, user_id):
         return
     
-    await UserDB.change_balance(user_id, -CONFIG.stour_entry_fee)
+    if not await UserDB.change_balance(user_id, -CONFIG.stour_entry_fee):
+        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        return
+
     result = GameLogic.contract()
     await process_game(update, context, GameType.CONTRACT, CONFIG.stour_entry_fee, result)
 
@@ -700,5 +727,5 @@ application.add_handler(CommandHandler("gamestats", game_stats))
 
 application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:"))
 
-# group=1 ensure karega ki riddle answer handler priority me sabse pehle chale!
+# group=1 ensures riddle answer handler gets precedence
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer), group=1)
