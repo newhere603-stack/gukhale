@@ -4,7 +4,6 @@ from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 from shivu import application, user_collection
 
-# Event loop conflict / RuntimeError fix karne ke liye
 nest_asyncio.apply()
 
 
@@ -30,11 +29,11 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     balance = user.get("balance", 0)
 
-    # Text small caps + bold hai, aur number `{balance}` copyable monospace hai
     await update.message.reply_text(
         f"💸 **ʙᴀʟᴀɴᴄᴇ:** `{balance}`",
         parse_mode="Markdown",
     )
 
 
+# Ensure karein yeh line execute ho rahi hai
 application.add_handler(CommandHandler("bal", balance_cmd, block=False))
