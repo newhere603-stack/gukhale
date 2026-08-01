@@ -40,7 +40,7 @@ REJECT_IMAGES = [
     "https://files.catbox.moe/8ezqu8.jpg"
 ]
 
-# --- TEXT VARIATIONS ---
+# --- TEXT VARIATIONS (Bina Tag ke - Phase 1) ---
 PROPOSE_START_TEXTS = [
     "<b>💫 ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ... 💍</b>",
     "<b>✨ ғɪɴᴀʟʟʏ ᴛʜᴇ ᴛɪᴍᴇ ʜᴀs ᴄᴏᴍᴇ ✨</b>",
@@ -55,25 +55,25 @@ PROPOSING_LOADING_TEXTS = [
     "<b>🌸 ᴡᴀɪᴛɪɴɢ ғᴏʀ ʜᴇʀ ʀᴇsᴘᴏɴsᴇ....💌</b>",
     "<b>💓 ʜᴇʀ ʜᴇᴀʀᴛ ɪs ʙᴇᴀᴛɪɴɢ ғᴀsᴛ....💫</b>",
     "<b>✨ ᴏᴘᴇɴɪɴɢ ᴛʜᴇ ʀɪɴɢ ʙᴏx....🎁</b>",
-    "<b>👀 ʟᴏᴏᴋɪɴɢ ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....🕊️</b>"
+    "<b>👀 ʟᴏᴏCore ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....🕊️</b>"
 ]
 
 DICE_REJECT_TEXTS = [
-    "<b>ʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏsᴀʟ ᴡᴀs ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ sʜᴇ ʀᴀɴ ᴀᴡᴀʏ!</b>",
-    "<b>sʜᴇ sᴀɪᴅ 'ᴇᴡᴡ, ɴᴏ!' ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ ᴇᴠᴇʀʏᴡʜᴇʀᴇ!</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀᴛ ʏᴏᴜ ᴀɴᴅ ᴡᴀʟᴋᴇᴅ ᴀᴡᴀʏ!</b>",
-    "<b>sʜᴇ sᴀɪᴅ sʜᴇ ᴏɴʟʏ sᴇᴇs ʏᴏᴜ ᴀs ᴀ ʙʀᴏᴛʜᴇʀ!</b>",
-    "<b>ʏᴏᴜ ɢᴏᴛ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ ɪs ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.</b>"
+    "<b>{user}'s ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏsᴀʟ ᴡᴀs ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ sʜᴇ ʀᴀɴ ᴀᴡᴀʏ! 💔</b>",
+    "<b>sʜᴇ sᴀɪᴅ 'ᴇᴡᴡ, ɴᴏ!' ᴛᴏ {user} ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ᴛʜᴇᴍ ᴇᴠᴇʀʏᴡʜᴇʀᴇ! 🚫</b>",
+    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀᴛ {user} ᴀɴᴅ ᴡᴀʟᴋᴇᴅ ᴀᴡᴀʏ! 😂</b>",
+    "<b>sʜᴇ sᴀɪᴅ sʜᴇ ᴏɴʟʏ sᴇᴇs {user} ᴀs ᴀ ʙʀᴏᴛʜᴇʀ! 🫂</b>",
+    "<b>{user} ɢᴏᴛ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ ɪs ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ. 💔</b>"
 ]
 
 PROPOSE_REJECT_TEXTS = [
-    "<b>sʜᴇ sᴀɪᴅ sʜᴇ'ʟʟ ᴅᴀᴛᴇ ʏᴏᴜ... ɪɴ ʜᴇʀ ɴᴇxᴛ ʟɪғᴇ. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ʀᴇɪɴᴄᴀʀɴᴀᴛɪᴏɴ! 🔄</b>",
-    "<b>ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ʏᴏᴜ'ʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ ᴄɪᴛʏ! 🏙️</b>",
-    "<b>sʜᴇ ᴛᴏᴏᴋ ʏᴏᴜʀ ᴄᴏɪɴs, ᴀᴛᴇ ʏᴏᴜʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' 🍟</b>",
-    "<b>sʜᴇ sᴀɪᴅ ʏᴏᴜ ᴀʀᴇ ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ʏᴏᴜ ᴏɴ ʀᴇᴀᴅ! 💔</b>",
-    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ. 🎬</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀᴛ ʏᴏᴜ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! 🚓💨</b>",
-    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ ᴏɴ ᴇᴠᴇʀʏ sᴏᴄɪᴀʟ ᴍᴇᴅɪᴀ! 🚫</b>"
+    "<b>sʜᴇ sᴀɪᴅ sʜᴇ'ʟʟ ᴅᴀᴛᴇ {user}... ɪɴ ʜᴇʀ ɴᴇxᴛ ʟɪғᴇ! 🔄</b>",
+    "<b>{user} ʜᴀs ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ᴛʜᴇʏ'ʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ! 🏙️</b>",
+    "<b>sʜᴇ ᴛᴏᴏᴋ {user}'s ᴄᴏɪɴs, ᴀᴛᴇ ᴛʜᴇɪʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' 🍟</b>",
+    "<b>sʜᴇ sᴀɪᴅ {user} ɪs ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ᴛʜᴇᴍ ᴏɴ ʀᴇᴀᴅ! 💔</b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ, {user}. 🎬</b>",
+    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀᴛ {user}, sʟᴀᴘᴘᴇᴅ ᴛʜᴇᴍ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! 🚓💨</b>",
+    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴛᴏ {user} ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ᴛʜᴇᴍ! 🚫</b>"
 ]
 
 DICE_RARITIES = ["🟢 Common", "🟣 Rare", "🟡 Legendary"]
@@ -146,9 +146,10 @@ async def add_char_to_user(user_id: int, username: str, first_name: str, char: d
 
 
 async def send_win_log(context: CallbackContext, user, char: dict, method: str):
+    user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
     text = (
         "<b>🏆 ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴄʟᴀɪᴍᴇᴅ!</b>\n━━━━━━━━━━━━━━━━━━━━\n"
-        f"<b>👤 ᴜsᴇʀ: <a href='tg://user?id={user.id}'>{user.first_name}</a></b>\n"
+        f"<b>👤 ᴜsᴇʀ: {user_mention}</b>\n"
         f"<b>🕹️ ᴍᴇᴛʜᴏᴅ: <code>/{method}</code></b>\n"
         f"<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
         f"<b>💎 ʀᴀʀɪᴛʏ: <code>{char.get('rarity', 'N/A')}</code></b>\n━━━━━━━━━━━━━━━━━━━━"
@@ -166,12 +167,13 @@ async def dice_marry(update: Update, context: CallbackContext):
     
     chat_id = update.effective_chat.id
     user = update.effective_user
+    user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
 
     ok, rem = check_cooldown(user.id, "dice", DICE_COOLDOWN)
     if not ok:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⏳ ᴡᴀɪᴛ {rem // 60}ᴍ {rem % 60}s ʙᴇғᴏʀᴇ ᴜsɪɴɢ /dice ᴀɢᴀɪɴ!</b>",
+            text=f"<b>⏳ {user_mention}, ᴡᴀɪᴛ {rem // 60}ᴍ {rem % 60}s ʙᴇғᴏʀᴇ ᴜsɪɴɢ /dice ᴀɢᴀɪɴ!</b>",
             parse_mode="HTML"
         )
 
@@ -180,9 +182,10 @@ async def dice_marry(update: Update, context: CallbackContext):
     await asyncio.sleep(3.5)
 
     if val not in (1, 6):
+        text = random.choice(DICE_REJECT_TEXTS).format(user=user_mention)
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=random.choice(DICE_REJECT_TEXTS),
+            text=text,
             parse_mode="HTML"
         )
 
@@ -190,13 +193,12 @@ async def dice_marry(update: Update, context: CallbackContext):
     if not char:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text="<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>",
+            text=f"<b>{user_mention}, ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>",
             parse_mode="HTML"
         )
 
     await add_char_to_user(user.id, user.username or "", user.first_name or "User", char)
     
-    user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
     caption = (
         f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs {user_mention}!</b>\n"
         f"<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
@@ -219,6 +221,7 @@ async def propose(update: Update, context: CallbackContext):
 
     chat_id = update.effective_chat.id
     user = update.effective_user
+    user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
 
     # FSub Check
     if not await is_user_joined(update, context):
@@ -228,7 +231,7 @@ async def propose(update: Update, context: CallbackContext):
         ]
         return await context.bot.send_message(
             chat_id=chat_id,
-            text="<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
+            text=f"<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ, {user_mention}!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
             reply_markup=InlineKeyboardMarkup(btn),
             parse_mode="HTML",
         )
@@ -237,7 +240,7 @@ async def propose(update: Update, context: CallbackContext):
     if not user_data or user_data.get("balance", 0) < PROPOSAL_COST:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text="<b>ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀꜱᴛ 2000 ᴄᴏɪɴs ᴛᴏ ᴘʀᴏᴘᴏꜱᴇ.</b>",
+            text=f"<b>{user_mention}, ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀꜱᴛ 2000 ᴄᴏɪɴs ᴛᴏ ᴘʀᴏᴘᴏꜱᴇ.</b>",
             parse_mode="HTML"
         )
 
@@ -245,7 +248,7 @@ async def propose(update: Update, context: CallbackContext):
     if not ok:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⏳ ᴄᴏᴏʟᴅᴏᴡɴ: <code>{rem // 60}ᴍ {rem % 60}s</code></b>",
+            text=f"<b>⏳ {user_mention}, ᴄᴏᴏʟᴅᴏᴡɴ: <code>{rem // 60}ᴍ {rem % 60}s</code></b>",
             parse_mode="HTML"
         )
 
@@ -253,7 +256,7 @@ async def propose(update: Update, context: CallbackContext):
     await user_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
     set_cooldown(user.id, "propose")
 
-    # Phase 1: Start Message
+    # Phase 1: Start Message (BINA TAG KE)
     msg = await context.bot.send_photo(
         chat_id=chat_id,
         photo=random.choice(PROPOSE_IMAGES),
@@ -262,7 +265,7 @@ async def propose(update: Update, context: CallbackContext):
     )
     await asyncio.sleep(2)
 
-    # Phase 2: Status Update
+    # Phase 2: Status Update (BINA TAG KE)
     try:
         await msg.edit_caption(
             caption=random.choice(PROPOSING_LOADING_TEXTS),
@@ -273,19 +276,22 @@ async def propose(update: Update, context: CallbackContext):
 
     await asyncio.sleep(2.5)
 
-    # Phase 3: Result (Rejection or Win)
+    # Phase 3: Result (Rejection - TAG KE SATH)
     if random.random() > PROPOSE_SUCCESS_RATE:
         try:
             await msg.delete()
         except Exception:
             pass
+        
+        reject_text = random.choice(PROPOSE_REJECT_TEXTS).format(user=user_mention)
         return await context.bot.send_photo(
             chat_id=chat_id,
             photo=random.choice(REJECT_IMAGES),
-            caption=random.choice(PROPOSE_REJECT_TEXTS),
+            caption=reject_text,
             parse_mode="HTML",
         )
 
+    # Phase 3: Result (Win - TAG KE SATH)
     char = await get_unique_char(user.id, PROPOSE_RARITIES)
     if not char:
         await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
@@ -295,7 +301,7 @@ async def propose(update: Update, context: CallbackContext):
             pass
         return await context.bot.send_message(
             chat_id=chat_id,
-            text="<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ᴇxᴄʟᴜsɪᴠᴇ/ᴄᴇʟᴇsᴛɪᴀʟ ᴄʜᴀʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ.</b>",
+            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ {user_mention}! ɴᴏ ᴇxᴄʟᴜsɪᴠᴇ/ᴄᴇʟᴇsᴛɪᴀʟ ᴄʜᴀʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ.</b>",
             parse_mode="HTML"
         )
 
@@ -305,7 +311,6 @@ async def propose(update: Update, context: CallbackContext):
     except Exception:
         pass
 
-    user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
     caption = (
         f"<b>🎉 {char.get('name', 'Waifu')} ʜᴀs ᴀᴄᴄᴇᴘᴛᴇᴅ {user_mention}'s ᴘʀᴏᴘᴏsᴀʟ! 💖</b>\n\n"
         f"<b>☘️ ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
@@ -335,6 +340,8 @@ async def propose_callback(update: Update, context: CallbackContext):
 
     if query.data == "propose_checksub":
         user = query.from_user
+        user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
+        
         if not await is_user_joined(update, context):
             await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
             return
@@ -346,7 +353,7 @@ async def propose_callback(update: Update, context: CallbackContext):
         
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"<b>✨ ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ, <a href='tg://user?id={user.id}'>{user.first_name}</a>! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>",
+            text=f"<b>✨ ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ, {user_mention}! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>",
             parse_mode="HTML"
         )
 
@@ -357,10 +364,12 @@ async def cdm_cmd(update: Update, context: CallbackContext):
         return
         
     chat_id = update.effective_chat.id
+    user_mention = f"<a href='tg://user?id={update.effective_user.id}'>{update.effective_user.first_name}</a>"
+
     if not is_authorized(update.effective_user.id):
         return await context.bot.send_message(
             chat_id=chat_id,
-            text="<b>🚫 ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
+            text=f"<b>🚫 {user_mention}, ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
             parse_mode="HTML"
         )
 
@@ -373,15 +382,17 @@ async def cdm_cmd(update: Update, context: CallbackContext):
     if target_id is None:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text="<b>⚠️ ᴜsᴀɢᴇ: /cdm <user_id> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>",
+            text=f"<b>⚠️ {user_mention}, ᴜsᴀɢᴇ: /cdm <user_id> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>",
             parse_mode="HTML"
         )
 
     cooldowns["dice"].pop(target_id, None)
     cooldowns["propose"].pop(target_id, None)
+    
+    target_mention = f"<a href='tg://user?id={target_id}'>{target_id}</a>"
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"<b>ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ <code>{target_id}</code> (ᴍᴀʀʀʏ ɴ ᴘʀᴏᴘᴏsᴇ).</b>",
+        text=f"<b>ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ {target_mention} (ᴍᴀʀʀʏ ɴ ᴘʀᴏᴘᴏsᴇ).</b>",
         parse_mode="HTML"
     )
 
