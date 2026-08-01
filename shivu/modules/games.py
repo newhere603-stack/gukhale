@@ -164,9 +164,9 @@ class GameUI:
             [InlineKeyboardButton("ᴄᴏɪɴ ғʟɪᴘ", callback_data="games:info:sbet"),
              InlineKeyboardButton("ᴅɪᴄᴇ ʀᴏʟʟ", callback_data="games:info:roll")],
             [InlineKeyboardButton("ɢᴀᴍʙʟᴇ", callback_data="games:info:gamble"),
-             InlineKeyboardButton("ʙᴀsʙᴀʟʟ", callback_data="games:info:basket")],
+             InlineKeyboardButton("ʙᴀsᴋᴇᴛʙᴀʟʟ", callback_data="games:info:basket")],
             [InlineKeyboardButton("ᴅᴀʀᴛs", callback_data="games:info:dart"),
-             InlineKeyboardButton("ᴄᴏɴᴛʀᴄᴛ", callback_data="games:info:stour")],
+             InlineKeyboardButton("ᴄᴏɴᴛʀᴀᴄᴛ", callback_data="games:info:stour")],
             [InlineKeyboardButton("ʀɪᴅᴅʟᴇ", callback_data="games:info:riddle")]
         ])
 
@@ -177,20 +177,44 @@ class GameUI:
         if result.display_outcome:
             msg += f"<b>ᴏᴜᴛᴄᴏᴍᴇ: {result.display_outcome}</b>\n"
         msg += f"<b>{result.message}</b>"
-        if result.won and (result.bonus_coins > 0 or result.tokens_gained > 0):
-            msg += f"\n🎁 <b>ʙᴏɴᴜs: +{result.bonus_coins} ᴄᴏɪɴs | +{result.tokens_gained} ᴛᴏᴋᴇɴ</b>"
+        
+        # Format reward text conditionally
+        if result.won:
+            rewards = []
+            if result.bonus_coins > 0:
+                rewards.append(f"+{result.bonus_coins} ᴄᴏɪɴs")
+            if result.tokens_gained > 0:
+                rewards.append(f"+{result.tokens_gained} ᴛᴏᴋᴇɴs")
+            
+            if rewards:
+                msg += f"\n🎁 <b>ʙᴏɴᴜs: {' | '.join(rewards)}</b>"
+                
         return msg
 
 
 class GameLogic:
     @staticmethod
+    def _get_random_rewards() -> tuple[int, int]:
+        """Calculates random bonus reward (Coins, Tokens, or Both)."""
+        chance = random.random()
+        if chance < 0.45:
+            # Only coins bonus
+            return random.randint(50, 200), 0
+        elif chance < 0.80:
+            # Only token bonus
+            return 0, random.randint(1, 2)
+        else:
+            # Both coins & token bonus
+            return random.randint(50, 150), 1
+
+    @staticmethod
     def coinflip(guess: str, amount: int) -> GameResult:
         outcome = random.choice(['heads', 'tails'])
         won = outcome == guess
         if won:
-            bonus = random.randint(50, 150)
+            bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.coinflip_multiplier
-            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome=outcome.upper())
+            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome=outcome.upper())
         return GameResult(False, 0, message=f"ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome=outcome.upper())
 
     @staticmethod
@@ -200,19 +224,19 @@ class GameLogic:
         won = result == choice
         res_str = 'ᴏᴅᴅ' if result == 'odd' else 'ᴇᴠᴇɴ'
         if won:
-            bonus = random.randint(50, 150)
+            bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dice_multiplier
-            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome=f"🎲 {dice}")
+            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome=f"🎲 {dice}")
         return GameResult(False, 0, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome=f"🎲 {dice}")
 
     @staticmethod
     def gamble(pick: str, amount: int) -> GameResult:
         won = random.random() < CONFIG.gamble_win_rate
         if won:
-            bonus = random.randint(50, 150)
+            bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.gamble_multiplier
             display = random.choice(['L', 'R'])
-            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="ʟᴇғᴛ" if display == 'L' else "ʀɪɢʜᴛ")
+            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="ʟᴇғᴛ" if display == 'L' else "ʀɪɢʜᴛ")
         display = 'R' if pick == 'l' else 'L'
         return GameResult(False, 0, message=f"ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome="ʟᴇғᴛ" if display == 'L' else "ʀɪɢʜᴛ")
 
@@ -221,30 +245,30 @@ class GameLogic:
         win_chance = min(0.6, CONFIG.basket_base_win_rate + math.log1p(amount) / 50)
         won = random.random() < win_chance
         if won:
-            bonus = random.randint(50, 150)
+            bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.basket_multiplier
-            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ᴘᴇʀғᴇᴄᴛ sʜᴏᴛ! ʏᴏᴜ sᴄᴏʀᴇᴅ {win:,} ᴄᴏɪɴs")
+            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ᴘᴇʀғᴇᴄᴛ sʜᴏᴛ! ʏᴏᴜ sᴄᴏʀᴇᴅ {win:,} ᴄᴏɪɴs")
         return GameResult(False, 0, message=f"ᴍɪssᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs")
 
     @staticmethod
     def darts(amount: int) -> GameResult:
         roll = random.random()
         if roll < CONFIG.dart_bullseye_rate:
-            bonus = random.randint(50, 150)
+            bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dart_bullseye_multiplier
-            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ʙᴜʟʟsᴇʏᴇ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="🎯 ʙᴜʟʟsᴇʏᴇ")
+            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʙᴜʟʟsᴇʏᴇ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="🎯 ʙᴜʟʟsᴇʏᴇ")
         elif roll < (CONFIG.dart_bullseye_rate + CONFIG.dart_hit_rate):
-            bonus = random.randint(50, 150)
+            bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dart_hit_multiplier
-            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ɢᴏᴏᴅ ʜɪᴛ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="ᴛᴀʀɢᴇᴛ ʜɪᴛ")
+            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ɢᴏᴏᴅ ʜɪᴛ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="ᴛᴀʀɢᴇᴛ ʜɪᴛ")
         return GameResult(False, 0, message=f"ᴍɪssᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome="ᴍɪss")
 
     @staticmethod
     def contract() -> GameResult:
         if random.random() < CONFIG.stour_success_rate:
-            bonus = random.randint(50, 150)
+            bonus_c, bonus_t = GameLogic._get_random_rewards()
             reward = random.randint(100, 600)
-            return GameResult(True, reward, bonus_coins=bonus, tokens_gained=1, message=f"ᴄᴏɴᴛʀᴀᴄᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ! ʏᴏᴜ ᴇᴀʀɴᴇᴅ {reward:,} ᴄᴏɪɴs")
+            return GameResult(True, reward, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ᴄᴏɴᴛʀᴀᴄᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ! ʏᴏᴜ ᴇᴀʀɴᴇᴅ {reward:,} ᴄᴏɪɴs")
         return GameResult(False, 0, message=f"ᴄᴏɴᴛʀᴀᴄᴛ ғᴀɪʟᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {CONFIG.stour_entry_fee:,} ᴄᴏɪɴs")
 
     @staticmethod
@@ -493,14 +517,21 @@ async def riddle_answer(update: Update, context: CallbackContext):
         return
     
     if text == pending.answer:
-        bonus = random.randint(50, 150)
-        total_coins = pending.reward_coins + bonus
-        await UserDB.change_balance(user_id, total_coins, pending.reward_tokens)
+        bonus_c, bonus_t = GameLogic._get_random_rewards()
+        total_coins = pending.reward_coins + bonus_c
+        total_tokens = pending.reward_tokens + bonus_t
+        await UserDB.change_balance(user_id, total_coins, total_tokens)
+        
         user = await UserDB.get(user_id)
         bal = user.get('balance', 0) if user else 0
         tok = user.get('tokens', 0) if user else 0
+        
+        rewards_str = f"<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs</b>"
+        if total_tokens > 0:
+            rewards_str += f" <b>&amp; {total_tokens} ᴛᴏᴋᴇɴs!</b>"
+            
         await update.message.reply_text(
-            f"<b>✅ ᴄᴏʀʀᴇᴄᴛ</b>\n<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs (+{bonus} bonus) &amp; {pending.reward_tokens} ᴛᴏᴋᴇɴ!</b>\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
+            f"<b>✅ ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
             parse_mode="HTML"
         )
     else:
@@ -568,7 +599,7 @@ async def games_callback(update: Update, context: CallbackContext):
         game_cmd = parts[2]
         info_texts = {
             "sbet": "<b>🪙 ᴄᴏɪɴ ғʟɪᴘ</b>\nUsage: <code>/sbet &lt;amount&gt; heads|tails</code>",
-            "roll": "<b>🎲 ᴅɪᴄᴇ ʀᴏʟ ʟ</b>\nUsage: <code>/roll &lt;amount&gt; odd|even</code>",
+            "roll": "<b>🎲 ᴅɪᴄᴇ ʀᴏʟʟ</b>\nUsage: <code>/roll &lt;amount&gt; odd|even</code>",
             "gamble": "<b>🎰 ɢᴀᴍʙʟᴇ</b>\nUsage: <code>/gamble &lt;amount&gt; l|r</code>",
             "basket": "<b>🏀 ʙᴀsᴋᴇᴛʙᴀʟʟ</b>\nUsage: <code>/basket &lt;amount&gt;</code>",
             "dart": "<b>🎯 ᴅᴀʀᴛs</b>\nUsage: <code>/dart &lt;amount&gt;</code>",
