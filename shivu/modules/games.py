@@ -11,7 +11,7 @@ from typing import Dict, Optional
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext
 
-# Primary imports from your main bot
+# Main Shivu Bot Imports
 from shivu import application, user_collection
 
 
@@ -100,13 +100,13 @@ class UserDB:
     @staticmethod
     async def get(user_id: int) -> Optional[dict]:
         try:
-            # FIX: Checks user_id as both Int & String AND handles 'id' or 'user_id'
+            # OurWaifuBot Support: Checks both int/str and 'id'/'user_id' fields
             return await user_collection.find_one({
                 '$or': [
-                    {'user_id': user_id},
-                    {'user_id': str(user_id)},
                     {'id': user_id},
-                    {'id': str(user_id)}
+                    {'id': str(user_id)},
+                    {'user_id': user_id},
+                    {'user_id': str(user_id)}
                 ]
             })
         except Exception as e:
@@ -124,6 +124,8 @@ class UserDB:
                 updates['first_name'] = first_name
             if 'tokens' not in doc:
                 updates['tokens'] = 0
+            if 'balance' not in doc and 'coins' not in doc:
+                updates['balance'] = 0
                 
             if updates:
                 try:
@@ -132,10 +134,9 @@ class UserDB:
                     pass
             return doc
 
-        # Naya user tabhi banega jab main bot ke database mein bilkul exist na kare
         new_user = {
-            'user_id': user_id,
             'id': user_id,
+            'user_id': user_id,
             'first_name': first_name or 'ᴜɴᴋɴᴏᴡɴ',
             'username': username,
             'balance': 0,
@@ -146,7 +147,7 @@ class UserDB:
         }
         try:
             await user_collection.update_one(
-                {'user_id': user_id},
+                {'id': user_id},
                 {'$setOnInsert': new_user},
                 upsert=True
             )
@@ -160,7 +161,6 @@ class UserDB:
         if not user:
             return 0
             
-        # Checks all possible balance keys in Shivu bot database
         for field_name in ['balance', 'coins', 'wallet', 'money', 'gold']:
             if field_name in user and user[field_name] is not None:
                 return int(user[field_name])
@@ -173,7 +173,6 @@ class UserDB:
             if not user:
                 return None
                 
-            # Automatically detects which field name main bot is using
             target_field = 'balance'
             for field_name in ['balance', 'coins', 'wallet', 'money', 'gold']:
                 if field_name in user:
