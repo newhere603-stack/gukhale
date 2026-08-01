@@ -1,4 +1,5 @@
 import asyncio
+import shivu.modules.balance
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
