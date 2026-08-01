@@ -1,107 +1,68 @@
-from dataclasses import dataclass
 from html import escape
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
-
 from shivu import application, user_collection
 
 OWNER_ID = 7657218453
 
-
-@dataclass
-class UserTarget:
-    id: int
-    username: str | None = None
-    first_name: str = "Unknown"
-
-
-@dataclass
-class BalanceInfo:
-    wallet: int
-    bank: int
-    
-    @property
-    def total(self) -> int:
-        return self.wallet + self.bank
-
-
-async def get_target_user(update: Update, context: CallbackContext) -> UserTarget | None:
+async def get_target_user(update: Update, context: CallbackContext):
     if reply := update.message.reply_to_message:
-        return UserTarget(
-            id=reply.from_user.id,
-            username=reply.from_user.username,
-            first_name=reply.from_user.first_name
-        )
-    
+        return reply.from_user.id
     if context.args:
         try:
-            return UserTarget(id=int(context.args[0]))
+            return int(context.args[0])
         except ValueError:
-            await update.message.reply_text(
-                "<b>Invalid user ID</b>\n\n"
-                "Usage: <code>/ckill [user_id]</code> or reply to user",
-                parse_mode='HTML'
-            )
             return None
-    
-    await update.message.reply_text(
-        "Usage: <code>/ckill [user_id]</code> or reply to user",
-        parse_mode='HTML'
-    )
     return None
 
-
-async def ckill(update: Update, context: CallbackContext) -> None:
+async def tkill(update: Update, context: CallbackContext) -> None:
     if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text("⛔ Owner only command.")
+        await update.message.reply_text("<b>⛔ ᴏᴡɴᴇʀ ᴏɴʟＹ ᴄᴏᴍᴍᴀɴᴅ.</b>", parse_mode='HTML')
         return
     
-    if not (target := await get_target_user(update, context)):
+    target_id = await get_target_user(update, context)
+    if not target_id:
+        await update.message.reply_text(
+            "<b>⚠️ ɪɴᴠᴀʟɪᴅ ᴜꜱᴀɢᴇ!</b>\n\n"
+            "<b>ᴜꜱᴀɢᴇ:</b> <code>/tkill [user_id]</code> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴜꜱᴇʀ)",
+            parse_mode='HTML'
+        )
         return
     
     try:
-        user = await user_collection.find_one({'id': target.id})
+        user = await user_collection.find_one({'id': target_id})
         
         if not user:
             await update.message.reply_text(
-                f"❌ User not found\nID: <code>{target.id}</code>",
+                f"❌ <b>ᴜꜱᴇʀ ɴᴏᴛ ꜰᴏᴜɴᴅ</b>\nID: <code>{target_id}</code>",
                 parse_mode='HTML'
             )
             return
         
-        target.username = target.username or user.get('username')
-        target.first_name = user.get('first_name', target.first_name)
-        
-        balance = BalanceInfo(
-            wallet=user.get('balance', 0),
-            bank=user.get('bank', 0)
-        )
+        first_name = user.get('first_name', 'Unknown')
+        current_tokens = user.get('tokens', 0)
         
         result = await user_collection.update_one(
-            {'id': target.id},
-            {'$set': {'balance': 0, 'bank': 0}}
+            {'id': target_id},
+            {'$set': {'tokens': 0}}
         )
         
-        if result.modified_count > 0:
+        if result.modified_count > 0 or current_tokens > 0:
             await update.message.reply_text(
-                f"<b>✅ Balance Reset</b>\n\n"
-                f"<b>User:</b> <a href='tg://user?id={target.id}'>{escape(target.first_name)}</a>\n"
-                f"<b>ID:</b> <code>{target.id}</code>\n\n"
-                f"<b>Previous:</b>\n"
-                f"Wallet: <code>{balance.wallet:,}</code>\n"
-                f"Bank: <code>{balance.bank:,}</code>\n"
-                f"Total: <code>{balance.total:,}</code>\n\n"
-                f"<b>New Balance:</b> <code>0</code>",
+                f"<b>✅ ᴛᴏᴋᴇɴꜱ ʀᴇꜱᴇᴛ</b>\n\n"
+                f"<b>ᴜꜱᴇʀ:</b> <a href='tg://user?id={target_id}'>{escape(first_name)}</a>\n"
+                f"<b>ɪᴅ:</b> <code>{target_id}</code>\n\n"
+                f"<b>ᴘʀᴇᴠɪᴏᴜꜱ ᴛᴏᴋᴇɴꜱ:</b> <code>{current_tokens:,}</code>\n"
+                f"<b>ɴᴇᴡ ʙᴀʟᴀɴᴄᴇ:</b> <code>0</code>",
                 parse_mode='HTML'
             )
         else:
-            await update.message.reply_text("❌ Failed to update balance")
+            await update.message.reply_text("❌ <b>ᴜꜱᴇʀ'ꜱ ᴛᴏᴋᴇɴꜱ ᴀʟʀᴇᴀᴅʏ ᴢᴇʀᴏ ᴏʀ ꜰᴀɪʟᴇᴅ.</b>", parse_mode='HTML')
     
     except Exception as e:
         await update.message.reply_text(
-            f"<b>Error:</b> <code>{str(e)}</code>",
+            f"<b>ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>",
             parse_mode='HTML'
         )
 
-
-application.add_handler(CommandHandler('ckill', ckill, block=False))
+application.add_handler(CommandHandler('tkill', tkill, block=False))
