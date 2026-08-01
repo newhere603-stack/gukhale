@@ -157,9 +157,9 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
 
     buttons = [
         [
-            InlineKeyboardButton("⬅️", callback_data=f"mp_nav_{user_id}_{nav_index}"),
+            InlineKeyboardButton("⋞", callback_data=f"mp_nav_{user_id}_{nav_index}"),
             InlineKeyboardButton(to_small_caps("Buy"), callback_data=f"mp_buy_{user_id}_{index}"),
-            InlineKeyboardButton("➡️", callback_data=f"mp_nav_{user_id}_{nav_index}")
+            InlineKeyboardButton("⋟", callback_data=f"mp_nav_{user_id}_{nav_index}")
         ],
         [InlineKeyboardButton(f"🍃 {to_small_caps('Auction')}", callback_data=f"mp_auc_{user_id}")],
         [InlineKeyboardButton(to_small_caps("Refresh (30,000 💸)"), callback_data=f"mp_ref_{user_id}")]
