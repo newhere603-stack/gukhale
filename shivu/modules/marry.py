@@ -23,8 +23,9 @@ DICE_COOLDOWN = 1800
 PROPOSE_COOLDOWN = 300
 PROPOSE_SUCCESS_RATE = 0.5  # 50% Win Rate
 
-UPDATE_CHANNEL = "Anime_Group_hai"  # Channel Username without @
-UPDATE_CHANNEL_URL = "https://t.me/Anime_Group_hai"
+UPDATE_GROUP_URL = "https://t.me/Anime_Group_hai"
+UPDATE_GROUP_ID = -1003087506512
+
 LOG_GROUP_ID = -1003893927065
 
 PROPOSE_IMAGES = [
@@ -104,8 +105,7 @@ async def is_user_joined(update: Update, context: CallbackContext) -> bool:
         return True
     
     try:
-        chat_id = f"@{UPDATE_CHANNEL.replace('@', '')}"
-        member = await context.bot.get_chat_member(chat_id, user.id)
+        member = await context.bot.get_chat_member(UPDATE_GROUP_ID, user.id)
         return member.status in ("member", "administrator", "creator")
     except BadRequest:
         return True  
@@ -220,15 +220,15 @@ async def propose(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     user = update.effective_user
 
-    # FSub Check with Try Again Button
+    # FSub Check
     if not await is_user_joined(update, context):
         btn = [
-            [InlineKeyboardButton("ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇ", url=UPDATE_CHANNEL_URL)],
+            [InlineKeyboardButton("ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇ", url=UPDATE_GROUP_URL)],
             [InlineKeyboardButton("ᴛʀʏ ᴀɢᴀɪɴ", callback_data="propose_checksub")]
         ]
         return await context.bot.send_message(
             chat_id=chat_id,
-            text="<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
+            text="<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
             reply_markup=InlineKeyboardMarkup(btn),
             parse_mode="HTML",
         )
@@ -262,7 +262,7 @@ async def propose(update: Update, context: CallbackContext):
     )
     await asyncio.sleep(2)
 
-    # Phase 2: Status Update (Proposing Her...)
+    # Phase 2: Status Update
     try:
         await msg.edit_caption(
             caption=random.choice(PROPOSING_LOADING_TEXTS),
@@ -336,7 +336,7 @@ async def propose_callback(update: Update, context: CallbackContext):
     if query.data == "propose_checksub":
         user = query.from_user
         if not await is_user_joined(update, context):
-            await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴄʜᴀɴɴᴇʟ ʏᴇᴛ!", show_alert=True)
+            await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
             return
         
         try:
