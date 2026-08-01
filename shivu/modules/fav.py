@@ -4,8 +4,10 @@ from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 from shivu import LOGGER, application, user_collection
 
 
-# Small Caps Font Converter Helper Function
+# Helper function to convert text to Small Caps font
 def to_small_caps(text: str) -> str:
+    if not text:
+        return ""
     normal = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
     small = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢ"
     trans = str.maketrans(normal, small)
@@ -13,6 +15,9 @@ def to_small_caps(text: str) -> str:
 
 
 async def fav(update: Update, context: CallbackContext) -> None:
+    if not update.effective_user or not update.message:
+        return
+
     user_id = update.effective_user.id
 
     if not context.args:
@@ -40,7 +45,7 @@ async def fav(update: Update, context: CallbackContext) -> None:
             await update.message.reply_text("Character not in your collection")
             return
 
-        # Small Caps Emojis & Buttons
+        # Buttons with Small Caps Emoji & Text
         buttons = [
             [
                 InlineKeyboardButton(
@@ -50,16 +55,16 @@ async def fav(update: Update, context: CallbackContext) -> None:
             ]
         ]
 
-        # Fetch Name & Anime
         char_name = character.get("name", "Unknown")
         anime_name = character.get("anime", "Unknown")
 
-        # Convert everything to Small Caps
-        heading = to_small_caps("ARE YOU SURE YOU WANT TO MAKE THIS WAIFU YOU FAVOURITE?")
+        # Small Caps formatted heading & text (Screenshot exact layout)
+        heading = to_small_caps(
+            "ARE YOU SURE YOU WANT TO MAKE THIS WAIFU YOU FAVOURITE?"
+        )
         small_char_name = to_small_caps(char_name)
         small_anime_name = to_small_caps(anime_name)
 
-        # Photo 1 ki tarah exact text + Name + Anime in Small Caps
         caption = (
             f"<b>{heading}</b>\n"
             f"↳ <b>{escape(small_char_name)}</b> [ 🚪 ] (<b>{escape(small_anime_name)}</b>)"
@@ -85,19 +90,22 @@ async def fav(update: Update, context: CallbackContext) -> None:
 
     except Exception as e:
         LOGGER.error(f"Fav error: {e}")
-        await update.message.reply_text("Error occurred")
+        await update.message.reply_text("Error occurred while setting favorite")
 
 
 async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
+    if not query:
+        return
 
     try:
         data = query.data
-
-        if not (data.startswith("fvc_") or data.startswith("fvx_")):
+        if not data or not (data.startswith("fvc_") or data.startswith("fvx_")):
             return
 
-        parts = data.split("_", 2)
+        parts = data.split("_")
+
+        # Validation checks
         if len(parts) < 2:
             await query.answer("Invalid data", show_alert=True)
             return
@@ -109,14 +117,17 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
                 await query.answer("Invalid data", show_alert=True)
                 return
 
-            user_id = int(parts[1])
+            req_user_id = int(parts[1])
             character_id = str(parts[2])
 
-            if query.from_user.id != user_id:
-                await query.answer("Not your request", show_alert=True)
+            # Restrict action to the user who invoked /fav
+            if query.from_user.id != req_user_id:
+                await query.answer(
+                    "This is not your request!", show_alert=True
+                )
                 return
 
-            user = await user_collection.find_one({"id": user_id})
+            user = await user_collection.find_one({"id": req_user_id})
             if not user:
                 await query.answer("User not found", show_alert=True)
                 return
@@ -134,28 +145,32 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
                 await query.answer("Character not found", show_alert=True)
                 return
 
+            # Update favorite character in database
             await user_collection.update_one(
-                {"id": user_id}, {"$set": {"favorites": character}}
+                {"id": req_user_id}, {"$set": {"favorites": character}}
             )
 
-            # Photo 2 ke exact pop-up formatting (Small Caps Text)
+            # Show Pop-Up dialog in Small Caps
             pop_up_text = to_small_caps("DONE! MADE IT YOUR FAVOURITE")
             await query.answer(pop_up_text, show_alert=True)
 
         elif action == "fvx":
-            user_id = int(parts[1])
+            req_user_id = int(parts[1])
 
-            if query.from_user.id != user_id:
-                await query.answer("Not your request", show_alert=True)
+            if query.from_user.id != req_user_id:
+                await query.answer(
+                    "This is not your request!", show_alert=True
+                )
                 return
 
             cancel_text = to_small_caps("CANCELLED!")
             await query.answer(cancel_text, show_alert=True)
-            await query.message.delete()
+            if query.message:
+                await query.message.delete()
 
     except Exception as e:
         LOGGER.error(f"Callback error: {e}")
-        await query.answer(f"Error: {str(e)[:100]}", show_alert=True)
+        await query.answer("An error occurred", show_alert=True)
 
 
 application.add_handler(CommandHandler("fav", fav, block=False))
