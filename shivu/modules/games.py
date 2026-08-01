@@ -100,7 +100,6 @@ class UserDB:
     @staticmethod
     async def get(user_id: int) -> Optional[dict]:
         try:
-            # OurWaifuBot Support: Checks both int/str and 'id'/'user_id' fields
             return await user_collection.find_one({
                 '$or': [
                     {'id': user_id},
@@ -222,7 +221,7 @@ class GameUI:
             if result.bonus_coins > 0:
                 rewards.append(f"+{result.bonus_coins} ᴄᴏɪɴs")
             if result.tokens_gained > 0:
-                rewards.append(f"+{result.tokens_gained} ᴛᴏᴋᴇɴs")
+                rewards.append(f"+{result.tokens_gained} ᴛᴏᴋᴇɴ")
             
             if rewards:
                 msg += f"\n🎁 <b>ʙᴏɴᴜs: {' | '.join(rewards)}</b>"
@@ -233,13 +232,12 @@ class GameUI:
 class GameLogic:
     @staticmethod
     def _get_random_rewards() -> tuple[int, int]:
+        # Requirement: Kabhi 50 to 150 Coins milenge (80% chance), toh kabhi Sirf 1 Token (20% chance)
         chance = random.random()
-        if chance < 0.45:
-            return random.randint(50, 200), 0
-        elif chance < 0.80:
-            return 0, random.randint(1, 2)
+        if chance < 0.80:
+            return random.randint(50, 150), 0
         else:
-            return random.randint(50, 150), 1
+            return 0, 1
 
     @staticmethod
     def coinflip(guess: str, amount: int) -> GameResult:
@@ -313,30 +311,43 @@ class GameLogic:
         return f"{a} {op} {b}", str(ans)
 
 
-async def get_msg(update: Update):
-    return update.callback_query.message if update.callback_query else update.message
-
-
-async def reply(update: Update, text: str, markup=None):
-    msg = await get_msg(update)
-    return await msg.reply_text(text, reply_markup=markup, parse_mode="HTML")
+async def send_or_edit_response(update: Update, text: str, markup=None):
+    if update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+            return
+        except Exception:
+            pass
+    
+    msg = update.callback_query.message if update.callback_query else update.message
+    await msg.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
 
 async def check_cooldown(update: Update, user_id: int) -> bool:
     if remaining := game_state.check_cooldown(user_id):
-        await reply(update, f"<b>⏱ ᴄᴏᴏʟᴅᴏᴡɴ ᴀᴄᴛɪᴠᴇ</b>\n<b>ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ.</b>")
+        if update.callback_query:
+            # Pop-up alert timer for Play Again clicks!
+            await update.callback_query.answer(
+                f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ!", 
+                show_alert=True
+            )
+        else:
+            await send_or_edit_response(
+                update, 
+                f"<b>⏱ ᴄᴏᴏʟᴅᴏᴡɴ ᴀᴄᴛɪᴠᴇ</b>\n<b>ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ.</b>"
+            )
         return True
     return False
 
 
 async def validate_amount(update: Update, amount: int, user_id: int) -> bool:
     if amount <= 0:
-        await reply(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
+        await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
         return False
     
     balance = await UserDB.get_balance(user_id)
     if balance < amount:
-        await reply(update, f"<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (Your Balance: {balance:,})</b>")
+        await send_or_edit_response(update, f"<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {balance:,})</b>")
         return False
     return True
 
@@ -361,7 +372,7 @@ async def process_game(update: Update, context: CallbackContext, game_type: Game
     
     msg += f"\n<b>ʙᴀʟᴀɴᴄᴇ: <code>{curr_bal:,}</code> ᴄᴏɪɴs</b> | <b>ᴛᴏᴋᴇɴs: <code>{curr_tok:,}</code></b>"
     
-    await reply(update, msg, GameUI.play_again(game_type.value, extra))
+    await send_or_edit_response(update, msg, GameUI.play_again(game_type.value, extra))
 
 
 # --- GAME HANDLERS ---
@@ -374,12 +385,12 @@ async def sbet(update: Update, context: CallbackContext):
     try:
         amount, guess = int(context.args[0]), context.args[1].lower()
     except (IndexError, ValueError):
-        await reply(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/sbet &lt;amount&gt; heads|tails</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /sbet 100 heads</b></i>")
+        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/sbet &lt;amount&gt; heads|tails</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /sbet 100 heads</b></i>")
         return
     
     guess = 'heads' if guess in ('h', 'head', 'heads') else ('tails' if guess in ('t', 'tail', 'tails') else None)
     if not guess:
-        await reply(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'heads' ᴏʀ 'tails'</b>")
+        await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'heads' ᴏʀ 'tails'</b>")
         return
     
     await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
@@ -399,12 +410,12 @@ async def roll_cmd(update: Update, context: CallbackContext):
     try:
         amount, choice = int(context.args[0]), context.args[1].lower()
     except (IndexError, ValueError):
-        await reply(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/roll &lt;amount&gt; odd|even</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /roll 50 odd</b></i>")
+        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/roll &lt;amount&gt; odd|even</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /roll 50 odd</b></i>")
         return
     
     choice = 'odd' if choice in ('o', 'odd') else ('even' if choice in ('e', 'even') else None)
     if not choice:
-        await reply(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'odd' ᴏʀ 'even'</b>")
+        await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'odd' ᴏʀ 'even'</b>")
         return
     
     await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
@@ -424,11 +435,11 @@ async def gamble(update: Update, context: CallbackContext):
     try:
         amount, pick = int(context.args[0]), context.args[1].lower()
     except (IndexError, ValueError):
-        await reply(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/gamble &lt;amount&gt; l|r</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /gamble 100 l</b></i>")
+        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/gamble &lt;amount&gt; l|r</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /gamble 100 l</b></i>")
         return
     
     if pick not in ('l', 'r', 'left', 'right'):
-        await reply(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'l' ᴏʀ 'r'</b>")
+        await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'l' ᴏʀ 'r'</b>")
         return
     
     pick = 'l' if pick.startswith('l') else 'r'
@@ -449,7 +460,7 @@ async def basket(update: Update, context: CallbackContext):
     try:
         amount = int(context.args[0])
     except (IndexError, ValueError):
-        await reply(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
+        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
         return
     
     await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
@@ -469,7 +480,7 @@ async def dart(update: Update, context: CallbackContext):
     try:
         amount = int(context.args[0])
     except (IndexError, ValueError):
-        await reply(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
+        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
         return
     
     await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
@@ -501,16 +512,16 @@ async def riddle(update: Update, context: CallbackContext):
         return
     
     question, answer = GameLogic.generate_riddle()
-    msg = await get_msg(update)
     text = (
         f"<b>🧩 ʀɪᴅᴅʟᴇ ᴛɪᴍᴇ</b>\n"
         f"<b>sᴏʟᴠᴇ: {question}</b>\n"
         f"<b>ᴛɪᴍᴇ: <code>{CONFIG.riddle_timeout}s</code> | ʀᴇᴡᴀʀᴅ: <code>50</code> ᴄᴏɪɴs + <code>1</code> ᴛᴏᴋᴇɴ</b>\n"
         f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜᴍʙᴇʀ</b></i>"
     )
-    sent = await msg.reply_text(text, parse_mode="HTML")
+    sent = await send_or_edit_response(update, text)
+    msg_id = sent.message_id if sent else update.callback_query.message.message_id
     
-    riddle_data = PendingRiddle(answer, time.time() + CONFIG.riddle_timeout, sent.message_id, update.effective_chat.id, question)
+    riddle_data = PendingRiddle(answer, time.time() + CONFIG.riddle_timeout, msg_id, update.effective_chat.id, question)
     game_state.riddles[user_id] = riddle_data
     game_state.set_cooldown(user_id)
     game_state.record_play(user_id, GameType.RIDDLE.value)
@@ -563,7 +574,7 @@ async def riddle_answer(update: Update, context: CallbackContext):
         
         rewards_str = f"<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs</b>"
         if total_tokens > 0:
-            rewards_str += f" <b>&amp; {total_tokens} ᴛᴏᴋᴇɴs!</b>"
+            rewards_str += f" <b>&amp; {total_tokens} ᴛᴏᴋᴇɴ!</b>"
             
         await update.message.reply_text(
             f"<b>✅ ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
@@ -586,7 +597,7 @@ async def games_menu(update: Update, context: CallbackContext):
         f"<b>ᴅᴀʀᴛs • ᴄᴏɴᴛʀᴀᴄᴛ</b>\n"
         f"<b>ʀɪᴅᴅʟᴇ</b>"
     )
-    await reply(update, text, GameUI.menu())
+    await send_or_edit_response(update, text, GameUI.menu())
 
 
 async def game_stats(update: Update, context: CallbackContext):
@@ -596,7 +607,7 @@ async def game_stats(update: Update, context: CallbackContext):
     stats = game_state.stats.get(user_id, {})
     
     if not stats:
-        await reply(update, "<b>📊 ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
+        await send_or_edit_response(update, "<b>📊 ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
         return
 
     stat_lines = [f"• {game.upper()}: {count} ᴘʟᴀʏ(s)" for game, count in stats.items()]
@@ -612,7 +623,7 @@ async def game_stats(update: Update, context: CallbackContext):
         f"<b>ᴄᴜʀʀᴇɴᴛ ʙᴀʟᴀɴᴄᴇ: <code>{bal:,}</code> ᴄᴏɪɴs</b>\n"
         f"<b>ᴄᴜʀʀᴇɴᴛ ᴛᴏᴋᴇɴs: <code>{tok:,}</code></b>"
     )
-    await reply(update, text)
+    await send_or_edit_response(update, text)
 
 
 # --- CALLBACK QUERY HANDLER FOR GAMES HUB & REPEAT ---
@@ -644,8 +655,9 @@ async def games_callback(update: Update, context: CallbackContext):
         await query.message.reply_text(info_texts.get(game_cmd, "Unknown Game"), parse_mode="HTML")
 
     elif action == "repeat":
+        # Check Cooldown - Show Popup alert timer on rapid clicks!
         if remaining := game_state.check_cooldown(user_id):
-            await query.answer(f"⏱ Cooldown Active! Wait {remaining:.1f}s before playing again.", show_alert=True)
+            await query.answer(f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ!", show_alert=True)
             return
 
         await query.answer()
