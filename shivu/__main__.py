@@ -1,4 +1,8 @@
-import asyncio
+import nest_asyncio
+nest_asyncio.apply()
+
+# Baki saare imports iske BAAD aayenge
+
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
