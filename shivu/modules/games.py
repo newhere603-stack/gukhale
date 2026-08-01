@@ -111,20 +111,25 @@ class UserDB:
                 updates['username'] = username
             if first_name and first_name != doc.get('first_name'):
                 updates['first_name'] = first_name
+            # Existing document me missing fields add karein bina balance touch kiye
             if 'tokens' not in doc:
                 updates['tokens'] = 0
+            if 'coins' not in doc and 'balance' not in doc:
+                updates['coins'] = 0
+                
             if updates:
                 try:
                     await user_collection.update_one({'id': user_id}, {'$set': updates})
                 except Exception:
                     pass
-            return doc
+            return await UserDB.get(user_id)
 
+        # Sirf naye user ke liye insert hoga
         new_user = {
             'id': user_id,
             'first_name': first_name or 'ᴜɴᴋɴᴏᴡɴ',
             'username': username,
-            'balance': 0,
+            'coins': 0,
             'tokens': 0,
             'characters': [],
             'created_at': datetime.now(timezone.utc)
@@ -140,9 +145,21 @@ class UserDB:
         return await UserDB.get(user_id)
 
     @staticmethod
+    async def get_balance(user_id: int) -> int:
+        user = await UserDB.get(user_id)
+        if not user:
+            return 0
+        # Shivu bot me balance 'coins' ya 'balance' me ho sakta hai
+        return user.get('coins', user.get('balance', 0))
+
+    @staticmethod
     async def change_balance(user_id: int, delta_coins: int, delta_tokens: int = 0) -> Optional[dict]:
         try:
-            inc_data = {'balance': delta_coins}
+            user = await UserDB.get(user_id)
+            # Check karein user document me konsa key active hai ('coins' ya 'balance')
+            coin_field = 'coins' if user and 'coins' in user else ('balance' if user and 'balance' in user else 'coins')
+            
+            inc_data = {coin_field: delta_coins}
             if delta_tokens != 0:
                 inc_data['tokens'] = delta_tokens
             await user_collection.update_one({'id': user_id}, {'$inc': inc_data})
@@ -178,7 +195,6 @@ class GameUI:
             msg += f"<b>ᴏᴜᴛᴄᴏᴍᴇ: {result.display_outcome}</b>\n"
         msg += f"<b>{result.message}</b>"
         
-        # Format reward text conditionally
         if result.won:
             rewards = []
             if result.bonus_coins > 0:
@@ -195,16 +211,12 @@ class GameUI:
 class GameLogic:
     @staticmethod
     def _get_random_rewards() -> tuple[int, int]:
-        """Calculates random bonus reward (Coins, Tokens, or Both)."""
         chance = random.random()
         if chance < 0.45:
-            # Only coins bonus
             return random.randint(50, 200), 0
         elif chance < 0.80:
-            # Only token bonus
             return 0, random.randint(1, 2)
         else:
-            # Both coins & token bonus
             return random.randint(50, 150), 1
 
     @staticmethod
@@ -299,10 +311,10 @@ async def validate_amount(update: Update, amount: int, user_id: int) -> bool:
     if amount <= 0:
         await reply(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
         return False
-    user = await UserDB.get(user_id)
-    balance = user.get('balance', 0) if user else 0
+    
+    balance = await UserDB.get_balance(user_id)
     if balance < amount:
-        await reply(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs.</b>")
+        await reply(update, f"<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (Your Balance: {balance:,})</b>")
         return False
     return True
 
@@ -321,9 +333,10 @@ async def process_game(update: Update, context: CallbackContext, game_type: Game
     emoji = GAME_EMOJIS.get(game_type, "🎮")
     msg = GameUI.format_result(result, emoji)
     
+    curr_bal = await UserDB.get_balance(user_id)
     updated = await UserDB.get(user_id)
-    curr_bal = updated.get('balance', 0) if updated else 0
     curr_tok = updated.get('tokens', 0) if updated else 0
+    
     msg += f"\n<b>ʙᴀʟᴀɴᴄᴇ: <code>{curr_bal:,}</code> ᴄᴏɪɴs</b> | <b>ᴛᴏᴋᴇɴs: <code>{curr_tok:,}</code></b>"
     
     await reply(update, msg, GameUI.play_again(game_type.value, extra))
@@ -522,8 +535,8 @@ async def riddle_answer(update: Update, context: CallbackContext):
         total_tokens = pending.reward_tokens + bonus_t
         await UserDB.change_balance(user_id, total_coins, total_tokens)
         
+        bal = await UserDB.get_balance(user_id)
         user = await UserDB.get(user_id)
-        bal = user.get('balance', 0) if user else 0
         tok = user.get('tokens', 0) if user else 0
         
         rewards_str = f"<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs</b>"
@@ -567,7 +580,7 @@ async def game_stats(update: Update, context: CallbackContext):
     stat_lines = [f"• {game.upper()}: {count} ᴘʟᴀʏ(s)" for game, count in stats.items()]
     stats_str = "\n".join(stat_lines)
     name = user.get('first_name', 'ᴜɴᴋɴᴏᴡɴ') if user else 'ᴜɴᴋɴᴏᴡɴ'
-    bal = user.get('balance', 0) if user else 0
+    bal = await UserDB.get_balance(user_id)
     tok = user.get('tokens', 0) if user else 0
 
     text = (
