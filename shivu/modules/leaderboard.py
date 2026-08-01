@@ -276,11 +276,11 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     link = update.effective_user.mention_html()
 
     text = (
-        f"✨ <b>{sc('user profile')}</b> ✨\n"
+        f"✨ 𝗨𝗦𝗘𝗥 𝗣𝗥𝗢𝗙𝗜𝗟𝗘 ✨\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 <b>{sc('grabber')} :</b> {link}\n"
+        f"👤 <b>{sc('nane')} :</b> {link}\n"
         f"🔖 <b>{sc('id')} :</b> <code>{user_id}</code>\n"
-        f"🏷️ <b>{sc('badge')} :</b> <b>{badge}</b>\n"
+        f"📛 <b>{sc('badge')} :</b> <b>{badge}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📊 <b>{sc('collection stats')}</b>\n"
         f"├ <b>{sc('rank')} :</b> <b>#{rank:,}</b> / <b>{total_collectors:,}</b>\n"
@@ -290,7 +290,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"├ <b>{sc('balance')} :</b> <b>💸 {balance:,}</b>\n"
         f"└ <b>{sc('tokens')} :</b> <b>💠 {tokens:,}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<i><b>❤️‍🔥 {sc('keep grabbing to reach top 10!')}</b></i>"
+        f"<i><b>{sc('keep grabbing to reach top 10!')}</b></i>"
     )
 
     profile_kb = InlineKeyboardMarkup([
@@ -300,7 +300,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         ],
         [
             InlineKeyboardButton("⟳", callback_data="lb_profile"),
-            InlineKeyboardButton("≼", callback_data="lb_menu")
+            InlineKeyboardButton("⋞", callback_data="lb_menu")
         ],
         [
             InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")
