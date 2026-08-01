@@ -45,6 +45,8 @@ class GameType(Enum):
 class GameResult:
     won: bool
     amount_changed: int
+    bonus_coins: int = 0
+    tokens_gained: int = 0
     message: str = ""
     display_outcome: Optional[str] = None
 
@@ -57,6 +59,7 @@ class PendingRiddle:
     chat_id: int
     question: str
     reward_coins: int = 50
+    reward_tokens: int = 1
 
 
 @dataclass
@@ -108,6 +111,8 @@ class UserDB:
                 updates['username'] = username
             if first_name and first_name != doc.get('first_name'):
                 updates['first_name'] = first_name
+            if 'tokens' not in doc:
+                updates['tokens'] = 0
             if updates:
                 try:
                     await user_collection.update_one({'id': user_id}, {'$set': updates})
@@ -115,12 +120,12 @@ class UserDB:
                     pass
             return doc
 
-        # Agar user existing nahi hai, tabhi $setOnInsert ke sath safe insert karein
         new_user = {
             'id': user_id,
             'first_name': first_name or 'ᴜɴᴋɴᴏᴡɴ',
             'username': username,
             'balance': 0,
+            'tokens': 0,
             'characters': [],
             'created_at': datetime.now(timezone.utc)
         }
@@ -135,10 +140,12 @@ class UserDB:
         return await UserDB.get(user_id)
 
     @staticmethod
-    async def change_balance(user_id: int, delta: int) -> Optional[dict]:
+    async def change_balance(user_id: int, delta_coins: int, delta_tokens: int = 0) -> Optional[dict]:
         try:
-            # Upsert ko False rakha hai taaki existing document overwrite na ho
-            await user_collection.update_one({'id': user_id}, {'$inc': {'balance': delta}})
+            inc_data = {'balance': delta_coins}
+            if delta_tokens != 0:
+                inc_data['tokens'] = delta_tokens
+            await user_collection.update_one({'id': user_id}, {'$inc': inc_data})
         except Exception:
             pass
         return await UserDB.get(user_id)
@@ -170,6 +177,8 @@ class GameUI:
         if result.display_outcome:
             msg += f"<b>ᴏᴜᴛᴄᴏᴍᴇ: {result.display_outcome}</b>\n"
         msg += f"<b>{result.message}</b>"
+        if result.won and (result.bonus_coins > 0 or result.tokens_gained > 0):
+            msg += f"\n🎁 <b>ʙᴏɴᴜs: +{result.bonus_coins} ᴄᴏɪɴs | +{result.tokens_gained} ᴛᴏᴋᴇɴ</b>"
         return msg
 
 
@@ -179,9 +188,10 @@ class GameLogic:
         outcome = random.choice(['heads', 'tails'])
         won = outcome == guess
         if won:
+            bonus = random.randint(50, 150)
             win = amount * CONFIG.coinflip_multiplier
-            return GameResult(True, win, f"ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", outcome.upper())
-        return GameResult(False, 0, f"ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", outcome.upper())
+            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome=outcome.upper())
+        return GameResult(False, 0, message=f"ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome=outcome.upper())
 
     @staticmethod
     def dice_roll(choice: str, amount: int) -> GameResult:
@@ -190,46 +200,52 @@ class GameLogic:
         won = result == choice
         res_str = 'ᴏᴅᴅ' if result == 'odd' else 'ᴇᴠᴇɴ'
         if won:
+            bonus = random.randint(50, 150)
             win = amount * CONFIG.dice_multiplier
-            return GameResult(True, win, f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", f"🎲 {dice}")
-        return GameResult(False, 0, f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", f"🎲 {dice}")
+            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome=f"🎲 {dice}")
+        return GameResult(False, 0, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome=f"🎲 {dice}")
 
     @staticmethod
     def gamble(pick: str, amount: int) -> GameResult:
         won = random.random() < CONFIG.gamble_win_rate
         if won:
+            bonus = random.randint(50, 150)
             win = amount * CONFIG.gamble_multiplier
             display = random.choice(['L', 'R'])
-            return GameResult(True, win, f"ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", "ʟᴇғᴛ" if display == 'L' else "ʀɪɢʜᴛ")
+            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="ʟᴇғᴛ" if display == 'L' else "ʀɪɢʜᴛ")
         display = 'R' if pick == 'l' else 'L'
-        return GameResult(False, 0, f"ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", "ʟᴇғᴛ" if display == 'L' else "ʀɪɢʜᴛ")
+        return GameResult(False, 0, message=f"ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome="ʟᴇғᴛ" if display == 'L' else "ʀɪɢʜᴛ")
 
     @staticmethod
     def basketball(amount: int) -> GameResult:
         win_chance = min(0.6, CONFIG.basket_base_win_rate + math.log1p(amount) / 50)
         won = random.random() < win_chance
         if won:
+            bonus = random.randint(50, 150)
             win = amount * CONFIG.basket_multiplier
-            return GameResult(True, win, f"ᴘᴇʀғᴇᴄᴛ sʜᴏᴛ! ʏᴏᴜ sᴄᴏʀᴇᴅ {win:,} ᴄᴏɪɴs")
-        return GameResult(False, 0, f"ᴍɪssᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs")
+            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ᴘᴇʀғᴇᴄᴛ sʜᴏᴛ! ʏᴏᴜ sᴄᴏʀᴇᴅ {win:,} ᴄᴏɪɴs")
+        return GameResult(False, 0, message=f"ᴍɪssᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs")
 
     @staticmethod
     def darts(amount: int) -> GameResult:
         roll = random.random()
         if roll < CONFIG.dart_bullseye_rate:
+            bonus = random.randint(50, 150)
             win = amount * CONFIG.dart_bullseye_multiplier
-            return GameResult(True, win, f"ʙᴜʟʟsᴇʏᴇ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", "🎯 ʙᴜʟʟsᴇʏᴇ")
+            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ʙᴜʟʟsᴇʏᴇ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="🎯 ʙᴜʟʟsᴇʏᴇ")
         elif roll < (CONFIG.dart_bullseye_rate + CONFIG.dart_hit_rate):
+            bonus = random.randint(50, 150)
             win = amount * CONFIG.dart_hit_multiplier
-            return GameResult(True, win, f"ɢᴏᴏᴅ ʜɪᴛ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", "ᴛᴀʀɢᴇᴛ ʜɪᴛ")
-        return GameResult(False, 0, f"ᴍɪssᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", "ᴍɪss")
+            return GameResult(True, win, bonus_coins=bonus, tokens_gained=1, message=f"ɢᴏᴏᴅ ʜɪᴛ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="ᴛᴀʀɢᴇᴛ ʜɪᴛ")
+        return GameResult(False, 0, message=f"ᴍɪssᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome="ᴍɪss")
 
     @staticmethod
     def contract() -> GameResult:
         if random.random() < CONFIG.stour_success_rate:
+            bonus = random.randint(50, 150)
             reward = random.randint(100, 600)
-            return GameResult(True, reward, f"ᴄᴏɴᴛʀᴀᴄᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ! ʏᴏᴜ ᴇᴀʀɴᴇᴅ {reward:,} ᴄᴏɪɴs")
-        return GameResult(False, 0, f"ᴄᴏɴᴛʀᴀᴄᴛ ғᴀɪʟᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {CONFIG.stour_entry_fee:,} ᴄᴏɪɴs")
+            return GameResult(True, reward, bonus_coins=bonus, tokens_gained=1, message=f"ᴄᴏɴᴛʀᴀᴄᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ! ʏᴏᴜ ᴇᴀʀɴᴇᴅ {reward:,} ᴄᴏɪɴs")
+        return GameResult(False, 0, message=f"ᴄᴏɴᴛʀᴀᴄᴛ ғᴀɪʟᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {CONFIG.stour_entry_fee:,} ᴄᴏɪɴs")
 
     @staticmethod
     def generate_riddle() -> tuple[str, str]:
@@ -271,8 +287,9 @@ async def process_game(update: Update, context: CallbackContext, game_type: Game
                       amount: int, result: GameResult, extra: str = ""):
     user_id = update.effective_user.id
     
-    if result.won and result.amount_changed > 0:
-        await UserDB.change_balance(user_id, result.amount_changed)
+    if result.won:
+        total_coins = result.amount_changed + result.bonus_coins
+        await UserDB.change_balance(user_id, total_coins, result.tokens_gained)
     
     game_state.record_play(user_id, game_type.value)
     game_state.set_cooldown(user_id)
@@ -282,7 +299,8 @@ async def process_game(update: Update, context: CallbackContext, game_type: Game
     
     updated = await UserDB.get(user_id)
     curr_bal = updated.get('balance', 0) if updated else 0
-    msg += f"\n<b>ʙᴀʟᴀɴᴄᴇ: <code>{curr_bal:,}</code> ᴄᴏɪɴs</b>"
+    curr_tok = updated.get('tokens', 0) if updated else 0
+    msg += f"\n<b>ʙᴀʟᴀɴᴄᴇ: <code>{curr_bal:,}</code> ᴄᴏɪɴs</b> | <b>ᴛᴏᴋᴇɴs: <code>{curr_tok:,}</code></b>"
     
     await reply(update, msg, GameUI.play_again(game_type.value, extra))
 
@@ -428,8 +446,8 @@ async def riddle(update: Update, context: CallbackContext):
     text = (
         f"<b>🧩 ʀɪᴅᴅʟᴇ ᴛɪᴍᴇ</b>\n"
         f"<b>sᴏʟᴠᴇ: {question}</b>\n"
-        f"<b>ᴛɪᴍᴇ: <code>{CONFIG.riddle_timeout}s</code> | ʀᴇᴡᴀʀᴅ: <code>50</code> ᴄᴏɪɴs</b>\n"
-        f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜ姆ʙᴇʀ</b></i>"
+        f"<b>ᴛɪᴍᴇ: <code>{CONFIG.riddle_timeout}s</code> | ʀᴇᴡᴀʀᴅ: <code>50</code> ᴄᴏɪɴs + <code>1</code> ᴛᴏᴋᴇɴ</b>\n"
+        f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜᴍʙᴇʀ</b></i>"
     )
     sent = await msg.reply_text(text, parse_mode="HTML")
     
@@ -475,11 +493,14 @@ async def riddle_answer(update: Update, context: CallbackContext):
         return
     
     if text == pending.answer:
-        await UserDB.change_balance(user_id, pending.reward_coins)
+        bonus = random.randint(50, 150)
+        total_coins = pending.reward_coins + bonus
+        await UserDB.change_balance(user_id, total_coins, pending.reward_tokens)
         user = await UserDB.get(user_id)
         bal = user.get('balance', 0) if user else 0
+        tok = user.get('tokens', 0) if user else 0
         await update.message.reply_text(
-            f"<b>✅ ᴄᴏʀʀᴇᴄᴛ</b>\n<b>ᴇᴀʀɴᴇᴅ {pending.reward_coins} ᴄᴏɪɴs!</b>\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code></b>",
+            f"<b>✅ ᴄᴏʀʀᴇᴄᴛ</b>\n<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs (+{bonus} bonus) &amp; {pending.reward_tokens} ᴛᴏᴋᴇɴ!</b>\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
             parse_mode="HTML"
         )
     else:
@@ -516,12 +537,14 @@ async def game_stats(update: Update, context: CallbackContext):
     stats_str = "\n".join(stat_lines)
     name = user.get('first_name', 'ᴜɴᴋɴᴏᴡɴ') if user else 'ᴜɴᴋɴᴏᴡɴ'
     bal = user.get('balance', 0) if user else 0
+    tok = user.get('tokens', 0) if user else 0
 
     text = (
         f"<b>📊 ɢᴀᴍᴇ sᴛᴀᴛɪsᴛɪᴄs</b>\n"
         f"<b>ᴜsᴇʀ: {name}</b>\n\n"
         f"<b>{stats_str}</b>\n\n"
-        f"<b>ᴄᴜʀʀᴇɴᴛ ʙᴀʟᴀɴᴄᴇ: <code>{bal:,}</code> ᴄᴏɪɴs</b>"
+        f"<b>ᴄᴜʀʀᴇɴᴛ ʙᴀʟᴀɴᴄᴇ: <code>{bal:,}</code> ᴄᴏɪɴs</b>\n"
+        f"<b>ᴄᴜʀʀᴇɴᴛ ᴛᴏᴋᴇɴs: <code>{tok:,}</code></b>"
     )
     await reply(update, text)
 
@@ -530,20 +553,22 @@ async def game_stats(update: Update, context: CallbackContext):
 
 async def games_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()
     data = query.data
+    user_id = update.effective_user.id
 
     if not data.startswith("games:"):
+        await query.answer()
         return
 
     parts = data.split(":")
     action = parts[1]
 
     if action == "info":
+        await query.answer()
         game_cmd = parts[2]
         info_texts = {
             "sbet": "<b>🪙 ᴄᴏɪɴ ғʟɪᴘ</b>\nUsage: <code>/sbet &lt;amount&gt; heads|tails</code>",
-            "roll": "<b>🎲 ᴅɪᴄᴇ ʀᴏʟʟ</b>\nUsage: <code>/roll &lt;amount&gt; odd|even</code>",
+            "roll": "<b>🎲 ᴅɪᴄᴇ ʀᴏʟ ʟ</b>\nUsage: <code>/roll &lt;amount&gt; odd|even</code>",
             "gamble": "<b>🎰 ɢᴀᴍʙʟᴇ</b>\nUsage: <code>/gamble &lt;amount&gt; l|r</code>",
             "basket": "<b>🏀 ʙᴀsᴋᴇᴛʙᴀʟʟ</b>\nUsage: <code>/basket &lt;amount&gt;</code>",
             "dart": "<b>🎯 ᴅᴀʀᴛs</b>\nUsage: <code>/dart &lt;amount&gt;</code>",
@@ -553,8 +578,14 @@ async def games_callback(update: Update, context: CallbackContext):
         await query.message.reply_text(info_texts.get(game_cmd, "Unknown Game"), parse_mode="HTML")
 
     elif action == "repeat":
+        if remaining := game_state.check_cooldown(user_id):
+            await query.answer(f"⏱ Cooldown Active! Wait {remaining:.1f}s before playing again.", show_alert=True)
+            return
+
+        await query.answer()
         cmd = parts[2]
         args_str = parts[3]
+        
         context.args = args_str.split(":") if args_str != "_" else []
 
         handlers = {
