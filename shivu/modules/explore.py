@@ -22,7 +22,6 @@ class ExploreConfig:
 CONFIG = ExploreConfig()
 user_cooldowns = {}
 
-# Small Caps Actions
 EXPLORE_ACTIONS = [
     "ᴇxᴘʟᴏʀᴇᴅ ᴀ ᴅᴜɴɢᴇᴏɴ",
     "ᴠᴇɴᴛᴜʀᴇᴅ ɪɴᴛᴏ ᴀ ᴅᴀʀᴋ ғᴏʀᴇsᴛ",
@@ -37,7 +36,6 @@ def check_cooldown(user_id: int) -> Optional[int]:
     if user_id not in user_cooldowns:
         return None
     
-    # Calculate elapsed time smoothly
     now = datetime.now(timezone.utc)
     elapsed = (now - user_cooldowns[user_id]).total_seconds()
     remaining = CONFIG.cooldown - elapsed
@@ -48,7 +46,6 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
     if not update.message:
         return
 
-    # Check 1: Must be in a group
     if update.effective_chat.type == "private":
         await update.message.reply_text(
             "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!</b>", 
@@ -56,7 +53,6 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         )
         return
 
-    # Check 2: Cannot be used as a reply
     if update.message.reply_to_message:
         await update.message.reply_text(
             "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴɴᴏᴛ ʙᴇ ᴜsᴇᴅ ᴀs ᴀ ʀᴇᴘʟʏ!</b>", 
@@ -66,7 +62,6 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
     user_id = update.effective_user.id
 
-    # Check 3: Cooldown validation
     remaining = check_cooldown(user_id)
     if remaining is not None:
         await update.message.reply_text(
@@ -78,7 +73,6 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
     try:
         user = await user_collection.find_one({'id': user_id})
         
-        # Check 4: User existence
         if not user:
             await update.message.reply_text(
                 "<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴ ᴀᴄᴄᴏᴜɴᴛ ʏᴇᴛ!</b>", 
@@ -86,7 +80,6 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             )
             return
 
-        # Check 5: Balance verification
         if user.get('balance', 0) < CONFIG.min_balance:
             await update.message.reply_text(
                 f"<b>❌ ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀsᴛ {CONFIG.min_balance} ᴄᴏɪɴs ᴛᴏ ᴇxᴘʟᴏʀᴇ!</b>",
@@ -97,13 +90,11 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         reward = random.randint(CONFIG.min_reward, CONFIG.max_reward)
         net_reward = reward - CONFIG.fee
 
-        # Update database balance asynchronously
         await user_collection.update_one(
             {'id': user_id},
             {'$inc': {'balance': net_reward}}
         )
 
-        # Set new cooldown timestamp
         user_cooldowns[user_id] = datetime.now(timezone.utc)
 
         action = random.choice(EXPLORE_ACTIONS)
@@ -120,5 +111,4 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         )
 
 
-# Handler registration
 application.add_handler(CommandHandler("explore", explore_cmd, block=False))
