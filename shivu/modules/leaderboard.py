@@ -217,7 +217,7 @@ async def top_characters(update: Update, context: CallbackContext, edit=False):
         link = mention_html(uid, name)
         rows.append(f"<b>{i}. {link} - {u['count']:,}</b>")
 
-    text = format_list("users by characters", rows)
+    text = format_list("users by grabbers", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_chars"), edit)
 
 
@@ -278,7 +278,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     text = (
         f"✨ <b>{sc('user profile')}</b> ✨\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 <b>{sc('collector')} :</b> {link}\n"
+        f"👤 <b>{sc('grabber')} :</b> {link}\n"
         f"🆔 <b>{sc('id')} :</b> <code>{user_id}</code>\n"
         f"🏷️ <b>{sc('badge')} :</b> <b>{badge}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -295,15 +295,15 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
 
     profile_kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎴 ᴄ-ᴛᴏᴘ", callback_data="lb_chars"),
-            InlineKeyboardButton("💸 ʙ-ᴛᴏᴘ", callback_data="lb_bal")
+            InlineKeyboardButton("🎴 ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")
         ],
         [
-            InlineKeyboardButton("⟳ ʀᴇꜰʀᴇsʜ", callback_data="lb_profile"),
-            InlineKeyboardButton("≼ ᴍᴇɴᴜ", callback_data="lb_menu")
+            InlineKeyboardButton("⟳", callback_data="lb_profile"),
+            InlineKeyboardButton("≼", callback_data="lb_menu")
         ],
         [
-            InlineKeyboardButton("ᴄʟᴏsᴇ ❌", callback_data="lb_close")
+            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")
         ]
     ])
 
