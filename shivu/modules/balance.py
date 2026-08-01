@@ -3,26 +3,21 @@ from telegram.ext import CommandHandler, ContextTypes
 from shivu import application, user_collection, LOGGER
 
 
-async def get_user(uid: int):
+async def get_or_init_user(uid: int):
+    """User ko database se fetch karega, agar nahi mila toh default values ke sath create karke return karega."""
     try:
-        return await user_collection.find_one({"id": uid})
-    except Exception as e:
-        LOGGER.error(f"Error fetching user in balance: {e}")
-        return None
-
-
-async def init_user(uid: int):
-    try:
-        # Default balance aur tokens 0 set kar diye hain
-        user = {"id": uid, "balance": 0, "tokens": 0}
-        await user_collection.update_one(
-            {"id": uid},
-            {"$setOnInsert": user},
-            upsert=True
-        )
+        user = await user_collection.find_one({"id": uid})
+        if user is None:
+            new_user = {"id": uid, "balance": 0, "tokens": 0}
+            await user_collection.update_one(
+                {"id": uid},
+                {"$setOnInsert": new_user},
+                upsert=True
+            )
+            return new_user
         return user
     except Exception as e:
-        LOGGER.error(f"Error initializing user in balance: {e}")
+        LOGGER.error(f"Error in get_or_init_user for uid {uid}: {e}")
         return {"id": uid, "balance": 0, "tokens": 0}
 
 
@@ -34,15 +29,12 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
     try:
-        user = await get_user(uid)
-        if user is None:
-            user = await init_user(uid)
-
+        user = await get_or_init_user(uid)
         balance = user.get("balance", 0)
 
-        # Text: Small Caps + Bold | Number: Monospace / Code Block (Single-tap copy)
+        # Text: Small Caps + Bold | Number formatted with commas inside code block
         await update.message.reply_text(
-            f"💸 <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance}</code></b>",
+            f"💸 <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance:,}</code></b>",
             parse_mode="HTML",
         )
     except Exception as e:
@@ -64,16 +56,12 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
     try:
-        user = await get_user(uid)
-        if user is None:
-            user = await init_user(uid)
-
-        # Tokens balance fetch karega
+        user = await get_or_init_user(uid)
         tokens = user.get("tokens", 0)
 
-        # Text: Small Caps + Bold | Number: Monospace / Code Block (Single-tap copy)
+        # Text: Small Caps + Bold | Number formatted with commas inside code block
         await update.message.reply_text(
-            f"💠 <b>ᴛᴏᴋᴇɴs ʙᴀʟᴀɴᴄᴇ: <code>{tokens}</code></b>",
+            f"💠 <b>ᴛᴏᴋᴇɴs ʙᴀʟᴀɴᴄᴇ: <code>{tokens:,}</code></b>",
             parse_mode="HTML",
         )
     except Exception as e:
