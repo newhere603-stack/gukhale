@@ -10,25 +10,25 @@ from shivu import application, user_collection
 async def pay_cmd(update: Update, context: CallbackContext):
     sender = update.effective_user
     if not update.message.reply_to_message:
-        return await update.message.reply_text("ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜꜱᴇʀ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴘᴀʏ.")
+        return await update.message.reply_text("<b>ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜꜱᴇʀ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴘᴀʏ.</b>", parse_mode="HTML")
     if not context.args or not context.args[0].isdigit():
-        return await update.message.reply_text("ᴜꜱᴀɢᴇ: /pay <ᴀᴍᴏᴜɴᴛ> (ᴀꜱ ʀᴇᴘʟʏ)")
+        return await update.message.reply_text("<b>ᴜꜱᴀɢᴇ: /pay <ᴀᴍᴏᴜɴᴛ> (ᴀꜱ ʀᴇᴘʟʏ)</b>", parse_mode="HTML")
 
     amount = int(context.args[0])
     receiver = update.message.reply_to_message.from_user
     if amount <= 0 or receiver.id == sender.id or receiver.is_bot:
-        return await update.message.reply_text("ɪɴᴠᴀʟɪᴅ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ.")
+        return await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ.</b>", parse_mode="HTML")
 
     s = await user_collection.find_one({'id': sender.id})
     if not s or int(s.get('balance', 0)) < amount:
-        return await update.message.reply_text("ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴄᴏɪɴꜱ ʙᴀʟᴀɴᴄᴇ.")
+        return await update.message.reply_text("<b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴄᴏɪɴꜱ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode="HTML")
 
     kb = [[
         InlineKeyboardButton("ᴄᴏɴꜰɪʀᴍ", callback_data=f"paycoins_yes_{sender.id}_{receiver.id}_{amount}"),
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"paycoins_no_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 💸 {amount} ᴄᴏɪɴꜱ ᴛᴏ {receiver.mention_html()}?",
+        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 💸 {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -42,7 +42,7 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
         return await q.answer("ɴᴏᴛ ʏᴏᴜʀ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ.", show_alert=True)
 
     if action == "no":
-        await q.edit_message_text("ᴘᴀʏᴍᴇɴᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.")
+        await q.edit_message_text("<b>ᴘᴀʏᴍᴇɴᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode="HTML")
         return await q.answer()
 
     receiver_id, amount = int(rest[0]), int(rest[1])
@@ -52,12 +52,11 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
         {'$inc': {'balance': -amount}}
     )
     if not res:
-        await q.edit_message_text("ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴄᴏɪɴꜱ ʙᴀʟᴀɴᴄᴇ.")
+        await q.edit_message_text("<b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴄᴏɪɴꜱ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode="HTML")
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
 
-    # Fetch Receiver details to show name
     try:
         receiver_user = await context.bot.get_chat(receiver_id)
         receiver_mention = receiver_user.mention_html()
@@ -65,7 +64,7 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
         receiver_mention = f"<code>{receiver_id}</code>"
 
     await q.edit_message_text(
-        f"<b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\nʏᴏᴜ ꜱᴇɴᴛ 💸 <b>{amount}</b> ᴄᴏɪɴꜱ ᴛᴏ {receiver_mention}.",
+        f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
         parse_mode="HTML"
     )
     await q.answer()
@@ -78,25 +77,25 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
 async def tpay_cmd(update: Update, context: CallbackContext):
     sender = update.effective_user
     if not update.message.reply_to_message:
-        return await update.message.reply_text("ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜꜱᴇʀ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴘᴀʏ.")
+        return await update.message.reply_text("<b>ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜꜱᴇʀ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴘᴀʏ.</b>", parse_mode="HTML")
     if not context.args or not context.args[0].isdigit():
-        return await update.message.reply_text("ᴜꜱᴀɢᴇ: /tpay <ᴀᴍᴏᴜɴᴛ> (ᴀꜱ ʀᴇᴘʟʏ)")
+        return await update.message.reply_text("<b>ᴜꜱᴀɢᴇ: /tpay <ᴀᴍᴏᴜɴᴛ> (ᴀꜱ ʀᴇᴘʟʏ)</b>", parse_mode="HTML")
 
     amount = int(context.args[0])
     receiver = update.message.reply_to_message.from_user
     if amount <= 0 or receiver.id == sender.id or receiver.is_bot:
-        return await update.message.reply_text("ɪɴᴠᴀʟɪᴅ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ.")
+        return await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ.</b>", parse_mode="HTML")
 
     s = await user_collection.find_one({'id': sender.id})
     if not s or int(s.get('tokens', 0)) < amount:
-        return await update.message.reply_text("ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴛᴏᴋᴇɴꜱ ʙᴀʟᴀɴᴄᴇ.")
+        return await update.message.reply_text("<b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴛᴏᴋᴇɴꜱ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode="HTML")
 
     kb = [[
         InlineKeyboardButton("ᴄᴏɴꜰɪʀᴍ", callback_data=f"paytokens_yes_{sender.id}_{receiver.id}_{amount}"),
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"paytokens_no_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ {receiver.mention_html()}?",
+        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -110,7 +109,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         return await q.answer("ɴᴏᴛ ʏᴏᴜʀ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ.", show_alert=True)
 
     if action == "no":
-        await q.edit_message_text("ᴘᴀʏᴍᴇɴᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.")
+        await q.edit_message_text("<b>ᴘᴀʏᴍᴇɴᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode="HTML")
         return await q.answer()
 
     receiver_id, amount = int(rest[0]), int(rest[1])
@@ -120,12 +119,11 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         {'$inc': {'tokens': -amount}}
     )
     if not res:
-        await q.edit_message_text("ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴛᴏᴋᴇɴꜱ ʙᴀʟᴀɴᴄᴇ.")
+        await q.edit_message_text("<b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴛᴏᴋᴇɴꜱ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode="HTML")
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'tokens': amount}}, upsert=True)
 
-    # Fetch Receiver details to show name
     try:
         receiver_user = await context.bot.get_chat(receiver_id)
         receiver_mention = receiver_user.mention_html()
@@ -133,7 +131,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         receiver_mention = f"<code>{receiver_id}</code>"
 
     await q.edit_message_text(
-        f"<b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\nʏᴏᴜ ꜱᴇɴᴛ 💠 <b>{amount}</b> ᴛᴏᴋᴇɴꜱ ᴛᴏ {receiver_mention}.",
+        f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
         parse_mode="HTML"
     )
     await q.answer()
