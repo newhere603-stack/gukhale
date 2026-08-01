@@ -25,9 +25,9 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     balance = user.get("balance", 0)
 
-    # Text ko small caps font aur bold mein format kiya gaya hai
+    # Balance value ko inline code block (monospace) mein kar diya hai taaki easily copy ho sake
     await update.message.reply_text(
-        f"💸 **ʙᴀʟᴀɴᴄᴇ: {balance}**",
+        f"💸 **ʙᴀʟᴀɴᴄᴇ:** `{balance}`",
         parse_mode="Markdown",
     )
 
