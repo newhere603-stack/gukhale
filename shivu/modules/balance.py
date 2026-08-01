@@ -14,7 +14,11 @@ async def get_user(uid: int):
 async def init_user(uid: int):
     try:
         user = {"id": uid, "balance": 0}
-        await user_collection.insert_one(user)
+        await user_collection.update_one(
+            {"id": uid},
+            {"$setOnInsert": user},
+            upsert=True
+        )
         return user
     except Exception as e:
         LOGGER.error(f"Error initializing user in balance: {e}")
@@ -32,11 +36,12 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user is None:
             user = await init_user(uid)
 
+        # FIXED: Correct variable name 'balance'
         balance = user.get("balance", 0)
 
         # Text: Small Caps + Bold | Number: Monospace / Code Block (Single-tap copy)
         await update.message.reply_text(
-            f"💸 <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance_amount}</code></b>",
+            f"💸 <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance}</code></b>",
             parse_mode="HTML",
         )
     except Exception as e:
@@ -51,6 +56,6 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # Command Handler Register
-application.add_handler(CommandHandler("bal", balance_cmd, block=False))
+application.add_handler(CommandHandler(["bal", "balance"], balance_cmd, block=False))
 
 LOGGER.info("✓ Balance module loaded successfully")
