@@ -15,6 +15,18 @@ def to_small_caps(text: str) -> str:
     return str(text).translate(trans)
 
 
+# Safe Async MongoDB Helper Functions (Event Loop Error Permanent Fix)
+async def get_user_data(user_id: int):
+    return await user_collection.find_one({"id": user_id})
+
+async def update_user_fav(user_id: int, character: dict):
+    return await user_collection.update_one(
+        {"id": user_id},
+        {"$set": {"favorites": character}},
+        upsert=True
+    )
+
+
 # 1. /fav Command Handler
 async def fav(update: Update, context: CallbackContext) -> None:
     if not update.effective_user or not update.message:
@@ -29,8 +41,8 @@ async def fav(update: Update, context: CallbackContext) -> None:
     character_id = str(context.args[0]).strip()
 
     try:
-        # Event Loop Safe Database Call (Fixes Event Loop Error)
-        user = await user_collection.find_one({"id": user_id})
+        # Loop-Safe Database Call
+        user = await get_user_data(user_id)
         
         if not user or "characters" not in user or not isinstance(user["characters"], list):
             await update.message.reply_text("You have no characters in your collection!")
@@ -116,7 +128,7 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
                 await query.answer("This is not your request!", show_alert=True)
                 return
 
-            user = await user_collection.find_one({"id": req_user_id})
+            user = await get_user_data(req_user_id)
             if not user or "characters" not in user:
                 await query.answer("User collection not found!", show_alert=True)
                 return
@@ -131,11 +143,8 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
                 await query.answer("Character not found!", show_alert=True)
                 return
 
-            await user_collection.update_one(
-                {"id": req_user_id},
-                {"$set": {"favorites": character}},
-                upsert=True
-            )
+            # Loop-Safe Update
+            await update_user_fav(req_user_id, character)
 
             pop_up_text = to_small_caps("DONE! MADE IT YOUR FAVOURITE")
             await query.answer(pop_up_text, show_alert=True)
