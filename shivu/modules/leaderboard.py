@@ -1,267 +1,110 @@
-import os
-from datetime import datetime
-from html import escape
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.helpers import mention_html
-from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
+# ---------- Helper Functions for Upgraded Profile ----------
 
-from shivu import application, OWNER_ID, user_collection, top_global_groups_collection, group_user_totals_collection
-from shivu import sudo_users as SUDO_USERS
-
-
-def sc(t):
-    return t.translate(str.maketrans(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
-        "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    ))
-
-
-def is_sudo(user_id):
-    return user_id == OWNER_ID or str(user_id) in SUDO_USERS
+def get_rank_badge(rank: int) -> str:
+    """Returns cool trophy badges based on rank."""
+    if rank == 1:
+        return "🥇 ᴄʀᴏᴡɴ ʟᴇɢᴇɴᴅ"
+    elif rank == 2:
+        return "🥈 ᴍᴀsᴛᴇʀ"
+    elif rank == 3:
+        return "🥉 ᴇʟɪᴛᴇ"
+    elif rank <= 10:
+        return "🎖️ ᴛᴏᴘ 10"
+    elif rank <= 50:
+        return "⭐ ᴛᴏᴘ 50"
+    return "🏅 ᴄᴏʟʟᴇᴄᴛᴏʀ"
 
 
-def format_list(title, rows):
-    """rows: list of already-formatted line strings"""
-    header = f"🏆 {sc('top')} {len(rows)} {sc(title)} 🏆\n\n"
-    return header + "\n".join(rows)
+def generate_progress_bar(current: int, total: int, length: int = 8) -> str:
+    """Generates a stylish progress bar."""
+    if total <= 0:
+        return "░" * length
+    percentage = min(1.0, current / total)
+    filled = int(round(length * percentage))
+    return "█" * filled + "░" * (length - filled)
 
 
-async def send_or_edit(update, context, text, kb, edit):
-    if edit:
-        q = update.callback_query
-        await q.answer()
-        await q.message.edit_text(text, parse_mode='HTML', reply_markup=kb)
-    else:
-        await update.message.reply_text(text, parse_mode='HTML', reply_markup=kb)
-
-
-def back_close_buttons(refresh_cb, extra_row=None):
-    rows = [[InlineKeyboardButton("⟳", callback_data=refresh_cb), InlineKeyboardButton("≼", callback_data="lb_menu")]]
-    if extra_row:
-        rows.append(extra_row)
-    rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")])
-    return InlineKeyboardMarkup(rows)
-
-
-# ---------- /tops menu ----------
-
-async def tops_menu(update: Update, context: CallbackContext, edit=False):
-    text = f"🏆 {sc('select the top list')} 🏆"
-    kb = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("👤 ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"),
-        InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
-    ],
-    [
-        InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
-    ],
-    [
-        InlineKeyboardButton("🎴 ᴄᴛᴏᴘ", callback_data="lb_chars"),
-        InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")
-    ],
-])
-    await send_or_edit(update, context, text, kb, edit)
-
-
-# ---------- Top by balance ----------
-
-async def top_balance(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.find({}, {'id': 1, 'first_name': 1, 'balance': 1}) \
-        .sort('balance', -1).limit(10).to_list(10)
-
-    if not data:
-        return await send_or_edit(update, context, sc("no data."), None, edit)
-
-    rows = []
-    for i, u in enumerate(data, 1):
-        name = u.get('first_name', 'Unknown')
-        link = mention_html(u['id'], name)
-        rows.append(f"{i}. {link} - 💸 {u.get('balance', 0):,}")
-    text = format_list("users by coins", rows)
-    await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
-
-async def top_tokens(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.find({},{"id": 1, "first_name": 1, "tokens": 1}) \
-    .sort("tokens", -1).limit(10).to_list(10)
-
-    if not data:
-        return await send_or_edit(update, context, sc("no data."), None, edit)
-
-    rows = []
-    for i, u in enumerate(data, 1):
-        name = u.get("first_name", "Unknown")
-        link = mention_html(u["id"], name)
-        rows.append(f"{i}. {link} - 💠 {u.get('tokens', 0):,}")
-
-    text = format_list("users by tokens", rows)
-    await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
-
-# ---------- Top by characters ----------
-
-async def top_characters(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.aggregate([
-        {"$match": {"characters": {"$exists": True, "$type": "array"}}},
-        {"$project": {"user_id": "$id", "first_name": 1, "count": {"$size": "$characters"}}},
-        {"$sort": {"count": -1}}, {"$limit": 10}
-    ]).to_list(10)
-
-    if not data:
-        return await send_or_edit(update, context, sc("no data."), None, edit)
-
-    rows = []
-    for i, u in enumerate(data, 1):
-        name = u.get('first_name', 'Unknown')
-        link = mention_html(u['user_id'], name)
-        rows.append(f"{i}. {link} - {u['count']:,}")
-
-    text = format_list("users by characters", rows)
-    await send_or_edit(update, context, text, back_close_buttons("lb_chars"), edit)
-
-
-# ---------- Top groups ----------
-
-async def top_groups(update: Update, context: CallbackContext, edit=False):
-    data = await top_global_groups_collection.find({}).sort('count', -1).limit(10).to_list(10)
-
-    if not data:
-        return await send_or_edit(update, context, sc("no data."), None, edit)
-
-    rows = [f"{i}. {escape(g.get('group_name', 'Unknown'))} - {g.get('count', 0):,}👥"
-            for i, g in enumerate(data, 1)]
-    text = format_list("groups", rows)
-    await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
-
-
-# ---------- My profile ----------
+# ---------- Upgraded My Profile ----------
 
 async def my_profile(update: Update, context: CallbackContext, edit=False):
     user_id = update.effective_user.id
-    user = await user_collection.find_one({'id': user_id})
+    user = await user_collection.find_one(get_user_id_query(user_id))
 
     if not user:
-        text = f"🏆 {sc('no profile yet')} 🏆\n\n{sc('start collecting!')}"
+        text = (
+            f"🏆 <b>{sc('profile not found')}</b> 🏆\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>❌ {sc('you havent collected any characters yet!')}</b>\n"
+            f"<b>🌱 {sc('start guessing characters in groups to build your profile.')}</b>"
+        )
         return await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
 
-    char_count = len(user.get('characters', []))
-    balance = user.get('balance', 0)
+    # Character Data & Calculation
+    characters = user.get('characters', [])
+    char_count = len(characters)
+    
+    # Balance & Tokens Data
+    balance = get_balance_from_doc(user)
+    tokens = user.get('tokens', 0)
+
+    # Total characters in system for Progress Bar
+    # (Assuming total characters count or default estimate if not tracked)
+    total_db_chars = await user_collection.aggregate([
+        {"$unwind": "$characters"},
+        {"$group": {"_id": "$characters.id"}}
+    ]).to_list(None)
+    
+    # Fallback to at least total characters or char_count for safety
+    total_available_chars = max(len(total_db_chars) if total_db_chars else 100, char_count, 1)
+    completion_pct = round((char_count / total_available_chars) * 100, 1)
+    progress_bar = generate_progress_bar(char_count, total_available_chars)
+
+    # Ranking System Calculation
     better_than = await user_collection.count_documents({
         "characters": {"$exists": True, "$type": "array"},
-        "$expr": {"$lt": [{"$size": "$characters"}, char_count]}
+        "$expr": {"$gt": [{"$size": "$characters"}, char_count]}
     })
-    total = await user_collection.count_documents({"characters": {"$exists": True, "$type": "array"}})
-    rank = total - better_than
+    total_collectors = await user_collection.count_documents({
+        "characters": {"$exists": True, "$type": "array"}
+    })
+    rank = better_than + 1
+    badge = get_rank_badge(rank)
 
+    # User Mention
     link = update.effective_user.mention_html()
 
+    # Dynamic Card UI Formatting
     text = (
-        f"✨ {sc('profile')} ✨\n\n"
-        f"{link}\n\n"
-        f"{sc('rank')}: <b>#{rank:,}</b>/{total:,}\n"
-        f"{sc('characters')}: <b>{char_count:,}</b>\n"
-        f"{sc('balance')}: <b>💸 {balance:,}</b>"
+        f"✨ <b>{sc('user profile')}</b> ✨\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>{sc('collector')} :</b> {link}\n"
+        f"🆔 <b>{sc('id')} :</b> <code>{user_id}</code>\n"
+        f"🏷️ <b>{sc('badge')} :</b> <b>{badge}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📊 <b>{sc('collection stats')}</b>\n"
+        f"├ <b>{sc('rank')} :</b> <b>#{rank:,}</b> / <b>{total_collectors:,}</b>\n"
+        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> 🎴\n"
+        f"└ <b>{sc('progress')} :</b> [<code>{progress_bar}</code>] <b>{completion_pct}%</b>\n\n"
+        f"💰 <b>{sc('vault & wallet')}</b>\n"
+        f"├ <b>{sc('balance')} :</b> <b>💸 {balance:,}</b>\n"
+        f"└ <b>{sc('tokens')} :</b> <b>💠 {tokens:,}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<i><b>🔥 {sc('keep collecting to reach top 10!')}</b></i>"
     )
-    await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
 
-
-# ---------- Owner/sudo stats ----------
-
-async def stats(update: Update, context: CallbackContext, edit=False):
-    user_id = update.effective_user.id
-    if not is_sudo(user_id):
-        msg = sc("unauthorized.")
-        if edit:
-            return await update.callback_query.answer(msg, show_alert=True)
-        return await update.message.reply_text(msg)
-
-    users = await user_collection.count_documents({})
-    groups = len(await group_user_totals_collection.distinct('group_id'))
-    collectors = await user_collection.count_documents({"characters": {"$exists": True, "$type": "array"}})
-
-    total_chars_result = await user_collection.aggregate([
-        {"$match": {"characters": {"$exists": True, "$type": "array"}}},
-        {"$project": {"count": {"$size": "$characters"}}},
-        {"$group": {"_id": None, "total": {"$sum": "$count"}}}
-    ]).to_list(1)
-    total_chars = total_chars_result[0]['total'] if total_chars_result else 0
-
-    text = (
-        f"📊 {sc('system stats')} 📊\n\n"
-        f"{sc('users')}: <b>{users:,}</b>\n"
-        f"{sc('collectors')}: <b>{collectors:,}</b>\n"
-        f"{sc('groups')}: <b>{groups:,}</b>\n"
-        f"{sc('total characters')}: <b>{total_chars:,}</b>\n\n"
-        f"<i>{datetime.now().strftime('%H:%M:%S')}</i>"
-    )
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⟳", callback_data="lb_stats")],
-        [InlineKeyboardButton("×", callback_data="lb_close")]
+    # Custom Upgraded Buttons
+    profile_kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🎴 ᴄ-ᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("💸 ʙ-ᴛᴏᴘ", callback_data="lb_bal")
+        ],
+        [
+            InlineKeyboardButton("⟳", callback_data="lb_profile"),
+            InlineKeyboardButton("≼", callback_data="lb_menu")
+        ],
+        [
+            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")
+        ]
     ])
-    await send_or_edit(update, context, text, kb, edit)
 
-
-# ---------- Export commands (sudo only) ----------
-
-async def export_users(update: Update, context: CallbackContext):
-    if not is_sudo(update.effective_user.id):
-        return await update.message.reply_text(sc('unauthorized.'))
-
-    users = await user_collection.find({}).to_list(None)
-    lines = [f"[{u.get('id')}] {u.get('first_name')} | @{u.get('username')} | {len(u.get('characters', []))} chars"
-              for u in users]
-    content = f"USER EXPORT — {datetime.now()}\nTotal: {len(users):,}\n{'='*50}\n\n" + "\n".join(lines)
-
-    with open('users.txt', 'w', encoding='utf-8') as f:
-        f.write(content)
-    with open('users.txt', 'rb') as f:
-        await context.bot.send_document(update.effective_chat.id, f, caption=f"<b>{sc('users')}</b>: {len(users):,}", parse_mode='HTML')
-    os.remove('users.txt')
-
-
-async def export_groups(update: Update, context: CallbackContext):
-    if not is_sudo(update.effective_user.id):
-        return await update.message.reply_text(sc('unauthorized.'))
-
-    groups = await top_global_groups_collection.find({}).sort('count', -1).to_list(None)
-    lines = [f"[{i}] {g.get('group_name')} | {g.get('count', 0):,}" for i, g in enumerate(groups, 1)]
-    content = f"GROUP EXPORT — {datetime.now()}\nTotal: {len(groups):,}\n{'='*50}\n\n" + "\n".join(lines)
-
-    with open('groups.txt', 'w', encoding='utf-8') as f:
-        f.write(content)
-    with open('groups.txt', 'rb') as f:
-        await context.bot.send_document(update.effective_chat.id, f, caption=f"<b>{sc('groups')}</b>: {len(groups):,}", parse_mode='HTML')
-    os.remove('groups.txt')
-
-
-# ---------- Callback router ----------
-
-CALLBACKS = {
-    "lb_menu": tops_menu,
-    "lb_profile": my_profile,
-    "lb_tokens": top_tokens,
-    "lb_bal": top_balance,
-    "lb_chars": top_characters,
-    "lb_gtop": top_groups,
-    "lb_stats": stats,
-}
-
-
-async def cb(update: Update, context: CallbackContext):
-    data = update.callback_query.data
-    if data == "lb_close":
-        return await update.callback_query.message.delete()
-    handler = CALLBACKS.get(data)
-    if handler:
-        await handler(update, context, edit=True)
-
-
-# ---------- Handlers ----------
-
-application.add_handler(CommandHandler(['tops', 'top'], tops_menu, block=False))
-application.add_handler(CommandHandler('balancetop', top_balance, block=False))
-application.add_handler(CommandHandler('chartop', top_characters, block=False))
-application.add_handler(CommandHandler(['gtop', 'topgroups'], top_groups, block=False))
-application.add_handler(CommandHandler(['sprofile', 'rank'], my_profile, block=False))
-application.add_handler(CommandHandler('stats', stats, block=False))
-application.add_handler(CommandHandler('list', export_users, block=False))
-application.add_handler(CommandHandler('groups', export_groups, block=False))
-application.add_handler(CallbackQueryHandler(cb, pattern="^lb_"))
+    await send_or_edit(update, context, text, profile_kb, edit)
