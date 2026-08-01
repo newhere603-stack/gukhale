@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext
@@ -232,7 +232,6 @@ class GameUI:
 class GameLogic:
     @staticmethod
     def _get_random_rewards() -> tuple[int, int]:
-        # Requirement: Kabhi 50 to 150 Coins milenge (80% chance), toh kabhi Sirf 1 Token (20% chance)
         chance = random.random()
         if chance < 0.80:
             return random.randint(50, 150), 0
@@ -326,7 +325,6 @@ async def send_or_edit_response(update: Update, text: str, markup=None):
 async def check_cooldown(update: Update, user_id: int) -> bool:
     if remaining := game_state.check_cooldown(user_id):
         if update.callback_query:
-            # Pop-up alert timer for Play Again clicks!
             await update.callback_query.answer(
                 f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ!", 
                 show_alert=True
@@ -375,15 +373,23 @@ async def process_game(update: Update, context: CallbackContext, game_type: Game
     await send_or_edit_response(update, msg, GameUI.play_again(game_type.value, extra))
 
 
+def extract_args(update: Update, context: CallbackContext, override_args: List[str] = None) -> List[str]:
+    """Helper to extract args cleanly both from /commands and Inline Button clicks"""
+    if override_args is not None and len(override_args) > 0 and override_args != ['_']:
+        return override_args
+    return context.args or []
+
+
 # --- GAME HANDLERS ---
 
-async def sbet(update: Update, context: CallbackContext):
+async def sbet(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
     if await check_cooldown(update, user_id):
         return
     
+    args = extract_args(update, context, override_args)
     try:
-        amount, guess = int(context.args[0]), context.args[1].lower()
+        amount, guess = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
         await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/sbet &lt;amount&gt; heads|tails</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /sbet 100 heads</b></i>")
         return
@@ -402,13 +408,14 @@ async def sbet(update: Update, context: CallbackContext):
     await process_game(update, context, GameType.COINFLIP, amount, result, f"{amount}:{guess}")
 
 
-async def roll_cmd(update: Update, context: CallbackContext):
+async def roll_cmd(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
     if await check_cooldown(update, user_id):
         return
     
+    args = extract_args(update, context, override_args)
     try:
-        amount, choice = int(context.args[0]), context.args[1].lower()
+        amount, choice = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
         await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/roll &lt;amount&gt; odd|even</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /roll 50 odd</b></i>")
         return
@@ -427,13 +434,14 @@ async def roll_cmd(update: Update, context: CallbackContext):
     await process_game(update, context, GameType.DICE, amount, result, f"{amount}:{choice}")
 
 
-async def gamble(update: Update, context: CallbackContext):
+async def gamble(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
     if await check_cooldown(update, user_id):
         return
     
+    args = extract_args(update, context, override_args)
     try:
-        amount, pick = int(context.args[0]), context.args[1].lower()
+        amount, pick = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
         await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/gamble &lt;amount&gt; l|r</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /gamble 100 l</b></i>")
         return
@@ -452,13 +460,14 @@ async def gamble(update: Update, context: CallbackContext):
     await process_game(update, context, GameType.GAMBLE, amount, result, f"{amount}:{pick}")
 
 
-async def basket(update: Update, context: CallbackContext):
+async def basket(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
     if await check_cooldown(update, user_id):
         return
     
+    args = extract_args(update, context, override_args)
     try:
-        amount = int(context.args[0])
+        amount = int(args[0])
     except (IndexError, ValueError):
         await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
         return
@@ -472,13 +481,14 @@ async def basket(update: Update, context: CallbackContext):
     await process_game(update, context, GameType.BASKET, amount, result, str(amount))
 
 
-async def dart(update: Update, context: CallbackContext):
+async def dart(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
     if await check_cooldown(update, user_id):
         return
     
+    args = extract_args(update, context, override_args)
     try:
-        amount = int(context.args[0])
+        amount = int(args[0])
     except (IndexError, ValueError):
         await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
         return
@@ -492,7 +502,7 @@ async def dart(update: Update, context: CallbackContext):
     await process_game(update, context, GameType.DART, amount, result, str(amount))
 
 
-async def stour(update: Update, context: CallbackContext):
+async def stour(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
     if await check_cooldown(update, user_id):
         return
@@ -506,7 +516,7 @@ async def stour(update: Update, context: CallbackContext):
     await process_game(update, context, GameType.CONTRACT, CONFIG.stour_entry_fee, result)
 
 
-async def riddle(update: Update, context: CallbackContext):
+async def riddle(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
     if await check_cooldown(update, user_id):
         return
@@ -664,7 +674,7 @@ async def games_callback(update: Update, context: CallbackContext):
         cmd = parts[2]
         args_str = parts[3]
         
-        context.args = args_str.split(":") if args_str != "_" else []
+        parsed_args = args_str.split(":") if args_str != "_" else []
 
         handlers = {
             "sbet": sbet,
@@ -677,7 +687,7 @@ async def games_callback(update: Update, context: CallbackContext):
         }
 
         if handler := handlers.get(cmd):
-            await handler(update, context)
+            await handler(update, context, override_args=parsed_args)
 
 
 # --- REGISTER HANDLERS INTO APPLICATION ---
