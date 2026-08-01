@@ -245,7 +245,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         text = (
             f"🏆 <b>{sc('profile not found')}</b> 🏆\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>❌ {sc('you havent collected any characters yet!')}</b>\n"
+            f"<b>❌ {sc('start me first!')}</b>\n"
             f"<b>🌱 {sc('start guessing characters in groups to build your profile.')}</b>"
         )
         return await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
@@ -279,18 +279,18 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"✨ <b>{sc('user profile')}</b> ✨\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"👤 <b>{sc('grabber')} :</b> {link}\n"
-        f"🆔 <b>{sc('id')} :</b> <code>{user_id}</code>\n"
+        f"🔖 <b>{sc('id')} :</b> <code>{user_id}</code>\n"
         f"🏷️ <b>{sc('badge')} :</b> <b>{badge}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📊 <b>{sc('collection stats')}</b>\n"
         f"├ <b>{sc('rank')} :</b> <b>#{rank:,}</b> / <b>{total_collectors:,}</b>\n"
         f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> 🎴\n"
         f"└ <b>{sc('progress')} :</b> [<code>{progress_bar}</code>] <b>{completion_pct}%</b>\n\n"
-        f"💰 <b>{sc('vault & wallet')}</b>\n"
+        f"🏛️ <b>{sc('vault & wallet')}</b>\n"
         f"├ <b>{sc('balance')} :</b> <b>💸 {balance:,}</b>\n"
         f"└ <b>{sc('tokens')} :</b> <b>💠 {tokens:,}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<i><b>🔥 {sc('keep collecting to reach top 10!')}</b></i>"
+        f"<i><b>❤️‍🔥 {sc('keep grabbing to reach top 10!')}</b></i>"
     )
 
     profile_kb = InlineKeyboardMarkup([
@@ -334,7 +334,7 @@ async def stats(update: Update, context: CallbackContext, edit=False):
     text = (
         f"📊 <b>{sc('system stats')}</b> 📊\n\n"
         f"<b>{sc('users')}</b>: <b>{users:,}</b>\n"
-        f"<b>{sc('collectors')}</b>: <b>{collectors:,}</b>\n"
+        f"<b>{sc('grabbers')}</b>: <b>{collectors:,}</b>\n"
         f"<b>{sc('groups')}</b>: <b>{groups:,}</b>\n"
         f"<b>{sc('total characters')}</b>: <b>{total_chars:,}</b>\n\n"
         f"<i><b>{datetime.now().strftime('%H:%M:%S')}</b></i>"
