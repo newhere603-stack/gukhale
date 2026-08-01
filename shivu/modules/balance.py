@@ -34,17 +34,17 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         balance = user.get("balance", 0)
 
-        # Text: Small Caps + Bold | Number: Monospace / Code Block (Single-tap copy)
+        # HTML Formatting: <b>...</b> se Guaranteed Bold + <code>...</code> se Monospace (Copyable)
         await update.message.reply_text(
-            f"💸 **ʙᴀʟᴀɴᴄᴇ:** `{balance}`",
-            parse_mode="Markdown",
+            f"💸 <b>ʙᴀʟᴀɴᴄᴇ:</b> <code>{balance}</code>",
+            parse_mode="HTML",
         )
     except Exception as e:
         LOGGER.error(f"Critical error in balance_cmd: {e}")
         try:
             await update.message.reply_text(
-                "⚠️ **ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.**",
-                parse_mode="Markdown",
+                "⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
+                parse_mode="HTML",
             )
         except Exception:
             pass
