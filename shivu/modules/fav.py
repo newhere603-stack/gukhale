@@ -15,15 +15,14 @@ def to_small_caps(text: str) -> str:
     return str(text).translate(trans)
 
 
-# Safe Async MongoDB Helper Functions (Event Loop Error Permanent Fix)
+# Safe Async MongoDB Helper Functions
 async def get_user_data(user_id: int):
     return await user_collection.find_one({"id": user_id})
 
+
 async def update_user_fav(user_id: int, character: dict):
     return await user_collection.update_one(
-        {"id": user_id},
-        {"$set": {"favorites": character}},
-        upsert=True
+        {"id": user_id}, {"$set": {"favorites": character}}, upsert=True
     )
 
 
@@ -35,17 +34,22 @@ async def fav(update: Update, context: CallbackContext) -> None:
     user_id = update.effective_user.id
 
     if not context.args:
-        await update.message.reply_text("Please provide a Character ID. Example: /fav 1")
+        msg = f"<b>{to_small_caps('PLEASE PROVIDE A CHARACTER ID. EXAMPLE: /FAV 1')}</b>"
+        await update.message.reply_text(msg, parse_mode="HTML")
         return
 
     character_id = str(context.args[0]).strip()
 
     try:
-        # Loop-Safe Database Call
         user = await get_user_data(user_id)
-        
-        if not user or "characters" not in user or not isinstance(user["characters"], list):
-            await update.message.reply_text("You have no characters in your collection!")
+
+        if (
+            not user
+            or "characters" not in user
+            or not isinstance(user["characters"], list)
+        ):
+            msg = f"<b>{to_small_caps('YOU HAVE NO CHARACTERS IN YOUR COLLECTION!')}</b>"
+            await update.message.reply_text(msg, parse_mode="HTML")
             return
 
         character = None
@@ -55,7 +59,8 @@ async def fav(update: Update, context: CallbackContext) -> None:
                 break
 
         if not character:
-            await update.message.reply_text("Character not found in your collection!")
+            msg = f"<b>{to_small_caps('CHARACTER NOT FOUND IN YOUR COLLECTION!')}</b>"
+            await update.message.reply_text(msg, parse_mode="HTML")
             return
 
         buttons = [
@@ -70,7 +75,10 @@ async def fav(update: Update, context: CallbackContext) -> None:
         char_name = str(character.get("name", "Unknown"))
         anime_name = str(character.get("anime", "Unknown"))
 
-        heading = to_small_caps("ARE YOU SURE YOU WANT TO MAKE THIS WAIFU YOU FAVOURITE?")
+        # Heading & Text in Bold Small Caps
+        heading = to_small_caps(
+            "ARE YOU SURE YOU WANT TO MAKE THIS WAIFU YOU FAVOURITE?"
+        )
         small_char_name = to_small_caps(char_name)
         small_anime_name = to_small_caps(anime_name)
 
@@ -99,7 +107,8 @@ async def fav(update: Update, context: CallbackContext) -> None:
 
     except Exception as e:
         LOGGER.error(f"Fav Command Error: {e}")
-        await update.message.reply_text("An internal error occurred while processing /fav.")
+        err_msg = f"<b>{to_small_caps('AN INTERNAL ERROR OCCURRED WHILE PROCESSING /FAV.')}</b>"
+        await update.message.reply_text(err_msg, parse_mode="HTML")
 
 
 # 2. Callback Query Handler (YES / NO Pop-up)
@@ -118,19 +127,22 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
 
         if action == "fvc":
             if len(parts) < 3:
-                await query.answer("Invalid request data!", show_alert=True)
+                pop_err = to_small_caps("INVALID REQUEST DATA!")
+                await query.answer(pop_err, show_alert=True)
                 return
 
             req_user_id = int(parts[1])
             character_id = str(parts[2])
 
             if query.from_user.id != req_user_id:
-                await query.answer("This is not your request!", show_alert=True)
+                pop_err = to_small_caps("THIS IS NOT YOUR REQUEST!")
+                await query.answer(pop_err, show_alert=True)
                 return
 
             user = await get_user_data(req_user_id)
             if not user or "characters" not in user:
-                await query.answer("User collection not found!", show_alert=True)
+                pop_err = to_small_caps("USER COLLECTION NOT FOUND!")
+                await query.answer(pop_err, show_alert=True)
                 return
 
             character = None
@@ -140,15 +152,15 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
                     break
 
             if not character:
-                await query.answer("Character not found!", show_alert=True)
+                pop_err = to_small_caps("CHARACTER NOT FOUND!")
+                await query.answer(pop_err, show_alert=True)
                 return
 
-            # Loop-Safe Update
             await update_user_fav(req_user_id, character)
 
             pop_up_text = to_small_caps("DONE! MADE IT YOUR FAVOURITE")
             await query.answer(pop_up_text, show_alert=True)
-            
+
             # Message Delete on YES
             if query.message:
                 await query.message.delete()
@@ -157,19 +169,21 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
             req_user_id = int(parts[1])
 
             if query.from_user.id != req_user_id:
-                await query.answer("This is not your request!", show_alert=True)
+                pop_err = to_small_caps("THIS IS NOT YOUR REQUEST!")
+                await query.answer(pop_err, show_alert=True)
                 return
 
             cancel_text = to_small_caps("CANCELLED!")
             await query.answer(cancel_text, show_alert=True)
-            
+
             # Message Delete on NO
             if query.message:
                 await query.message.delete()
 
     except Exception as e:
         LOGGER.error(f"Fav Callback Error: {e}")
-        await query.answer(f"Error occurred!", show_alert=True)
+        pop_err = to_small_caps("ERROR OCCURRED!")
+        await query.answer(pop_err, show_alert=True)
 
 
 # Application Handlers
