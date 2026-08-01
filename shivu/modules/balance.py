@@ -36,7 +36,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # HTML Formatting: <b>...</b> se Guaranteed Bold + <code>...</code> se Monospace (Copyable)
         await update.message.reply_text(
-            f"💸 <b>ʙᴀʟᴀɴᴄᴇ:</b> <code>{balance}</code>",
+            f"💸 <b>ʙᴀʟᴀɴᴄᴇ:</b> `{balance}`",
             parse_mode="HTML",
         )
     except Exception as e:
