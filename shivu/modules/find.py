@@ -59,7 +59,7 @@ def get_current_mp_day():
 async def set_mp_price(update: Update, context: CallbackContext):
     try:
         if update.effective_user.id != OWNER_ID:
-            await update.message.reply_text(bold_sc("❌ Only Owner can use this command."), parse_mode='HTML')
+            await update.message.reply_text(bold_sc("Only owner can use this command."), parse_mode='HTML')
             return
         
         if len(context.args) != 2:
@@ -71,7 +71,7 @@ async def set_mp_price(update: Update, context: CallbackContext):
         try:
             price = int(context.args[1])
         except ValueError:
-            await update.message.reply_text(bold_sc("❌ Price numbers mein hona chahiye."), parse_mode='HTML')
+            await update.message.reply_text(bold_sc("Price must be in numbers."), parse_mode='HTML')
             return
             
         result = await collection.update_one({'id': char_id}, {'$set': {'mp_price': price}})
@@ -79,11 +79,11 @@ async def set_mp_price(update: Update, context: CallbackContext):
             result = await collection.update_one({'id': int(char_id)}, {'$set': {'mp_price': price}})
             
         if result.modified_count > 0:
-            await update.message.reply_text(bold_sc(f"✅ Character ID {char_id} ka marketplace price {price:,} set ho gaya hai."), parse_mode='HTML')
+            await update.message.reply_text(bold_sc(f"Character ID {char_id} marketplace price set to {price:,}."), parse_mode='HTML')
         else:
-            await update.message.reply_text(bold_sc("❌ Character ID nahi mila, ya price already same hai."), parse_mode='HTML')
+            await update.message.reply_text(bold_sc("Character ID not found, or price is already the same."), parse_mode='HTML')
     except Exception as e:
-        await update.message.reply_text(f"❌ Error in setprice: {str(e)}")
+        await update.message.reply_text(f"Error in setprice: {str(e)}")
 
 
 # --- Generate/Load User Deals ---
@@ -96,11 +96,19 @@ async def load_user_deals(user_id):
     mp_data = user.get('mp_data', {})
     
     if mp_data.get('day') != current_day or not mp_data.get('chars'):
-        pipeline = [{"$sample": {"size": 2}}] 
-        chars = await collection.aggregate(pipeline).to_list(length=2)
+        total_chars = await collection.count_documents({})
+        if total_chars < 2:
+            return None
+            
+        indices = random.sample(range(total_chars), 2)
+        char1 = await collection.find_one({}, skip=indices[0])
+        char2 = await collection.find_one({}, skip=indices[1])
         
+        chars = [char1, char2]
         formatted_chars = []
+        
         for c in chars:
+            if not c: continue
             orig = get_price(c)
             disc = random.randint(2, 15)
             sale = int(orig - (orig * (disc / 100)))
@@ -123,7 +131,7 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     if index >= len(chars): index = 0
     
     char = chars[index]
-    user_id = user['id'] # Get owner's user_id for button restriction
+    user_id = user['id'] 
     owned_count = len([c for c in user.get('characters', []) if str(c.get('id')) == str(char.get('id'))])
     
     name = str(char.get('name', 'Unknown')).upper()
@@ -147,7 +155,6 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
 
     nav_index = 1 if index == 0 else 0
 
-    # FIX: Callback data me user_id add kiya gaya hai
     buttons = [
         [
             InlineKeyboardButton("⬅️", callback_data=f"mp_nav_{user_id}_{nav_index}"),
@@ -155,7 +162,7 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
             InlineKeyboardButton("➡️", callback_data=f"mp_nav_{user_id}_{nav_index}")
         ],
         [InlineKeyboardButton(f"🍃 {to_small_caps('Auction')}", callback_data=f"mp_auc_{user_id}")],
-        [InlineKeyboardButton(to_small_caps("Refresh (30,000 💰)"), callback_data=f"mp_ref_{user_id}")]
+        [InlineKeyboardButton(to_small_caps("Refresh (30,000 💸)"), callback_data=f"mp_ref_{user_id}")]
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
     img_url = char.get('img_url')
@@ -188,12 +195,12 @@ async def marketplace(update: Update, context: CallbackContext):
         user = await load_user_deals(user_id)
         
         if not user:
-            await update.message.reply_text(bold_sc("❌ Please /start the bot first to create an account."), parse_mode='HTML')
+            await update.message.reply_text(bold_sc("Please /start the bot first to create an account."), parse_mode='HTML')
             return
             
         await render_mp_message(update, user, 0, is_edit=False)
     except Exception as e:
-        await update.message.reply_text(f"❌ Error Command: {str(e)}")
+        await update.message.reply_text(f"Error Command: {str(e)}")
 
 
 async def marketplace_callbacks(update: Update, context: CallbackContext):
@@ -203,17 +210,16 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
         data = query.data
         parts = data.split("_")
         
-        # FIX: Check karega ki clicker aur button ka owner same hai ya nahi
         owner_id = int(parts[2])
         if clicker_id != owner_id:
-            await query.answer(to_small_caps("❌ Ye marketplace tumhara nahi hai! Apna open karne ke liye /mp bhejo."), show_alert=True)
+            await query.answer(to_small_caps("This is not your marketplace! Type /mp to open yours."), show_alert=True)
             return
             
         user_id = owner_id
         
         user = await load_user_deals(user_id)
         if not user:
-            await query.answer(to_small_caps("❌ Account not found!"), show_alert=True)
+            await query.answer(to_small_caps("Account not found!"), show_alert=True)
             return
 
         if data.startswith("mp_nav_"):
@@ -228,14 +234,14 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
             char = chars[index]
             
             if char.get('is_sold'):
-                await query.answer(to_small_caps("❌ Ye character tum already khareed chuke ho!"), show_alert=True)
+                await query.answer(to_small_caps("You have already purchased this character!"), show_alert=True)
                 return
                 
             user_balance = user.get('balance', 0)
             price = char['mp_sale']
             
             if user_balance < price:
-                await query.answer(to_small_caps(f"❌ Balance kam hai! (Required: {price:,} | Yours: {user_balance:,})"), show_alert=True)
+                await query.answer(to_small_caps(f"Low balance! (Required: {price:,} | Yours: {user_balance:,})"), show_alert=True)
                 return
                 
             char['is_sold'] = True
@@ -249,7 +255,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 }
             )
             
-            await query.answer(to_small_caps(f"✅ Transaction Successful! You bought {char.get('name')}."), show_alert=True)
+            await query.answer(to_small_caps(f"Transaction successful! You bought {char.get('name')}."), show_alert=True)
             await render_mp_message(query, user, index, is_edit=True)
             return
 
@@ -262,7 +268,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
             cost = 30000
             
             if user_balance < cost:
-                await query.answer(to_small_caps("❌ Not enough coins to refresh! (Required: 30,000)"), show_alert=True)
+                await query.answer(to_small_caps("Not enough coins to refresh! (Required: 30,000)"), show_alert=True)
                 return
                 
             await user_collection.update_one(
@@ -275,7 +281,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
             
             new_user = await load_user_deals(user_id)
             await render_mp_message(query, new_user, 0, is_edit=True)
-            await query.answer(to_small_caps("🔄 Marketplace successfully refreshed!"), show_alert=False)
+            await query.answer(to_small_caps("Marketplace successfully refreshed!"), show_alert=False)
 
     except Exception as e:
         if update.callback_query:
