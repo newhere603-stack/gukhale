@@ -142,7 +142,7 @@ class GameUI:
     @staticmethod
     def play_again(command: str, args: str = "") -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔄 ᴘʟᴀʏ ᴀɢᴀɪɴ", callback_data=f"games:repeat:{command}:{args or '_'}")
+            InlineKeyboardButton("⟳ ᴘʟᴀʏ ᴀɢᴀɪɴ", callback_data=f"games:repeat:{command}:{args or '_'}")
         ]])
 
     @staticmethod
@@ -256,7 +256,7 @@ async def validate_amount(update: Update, amount: int, user_id: int) -> bool:
     user = await UserDB.get(user_id)
     balance = user.get('balance', 0) if user else 0
     if balance < amount:
-        await reply(update, "<b>💰 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs.</b>")
+        await reply(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs.</b>")
         return False
     return True
 
