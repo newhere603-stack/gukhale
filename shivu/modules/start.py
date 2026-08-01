@@ -207,7 +207,7 @@ async def credits_view(context: CallbackContext):
                 added_ids.add(u_id)
 
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
-    return "<b>Sudo List:</b>", InlineKeyboardMarkup(kb)
+    return "<b>sᴜᴅᴏ:</b>", InlineKeyboardMarkup(kb)
 
 
 def _new_user_doc(user_id, first_name, username):
