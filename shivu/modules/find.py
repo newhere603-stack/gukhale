@@ -3,11 +3,10 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from shivu import application, db
 
-# Collections
-collection = db['anime_characters_lol']
-user_collection = db['user_collection_groups'] 
+# --- Database Setup (Tumhare repo ke hisaab se) ---
+collection = db['anime_characters_lol'] # Character DB
+user_collection = db['users'] # Tumhara exact user collection
 
-# Sudo Users List
 SUDO_USERS = [7657218453] 
 
 # --- Rarity and Default Pricing ---
@@ -110,24 +109,15 @@ async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 {to_small_caps('🛒 Status:')} {to_small_caps('Available')}"""
 
         buttons = [
-            [InlineKeyboardButton(to_small_caps("🛒 Buy Character", is_html=False), callback_data=f"mp_buy_{char_id}_{price}")],
-            [InlineKeyboardButton(to_small_caps("🔄 Refresh Deal", is_html=False), callback_data="mp_refresh")]
+            [InlineKeyboardButton(to_small_caps("🛒 Buy Character", is_html=False), callback_data=f"mpbuy_{char_id}_{price}")],
+            [InlineKeyboardButton(to_small_caps("🔄 Refresh Deal", is_html=False), callback_data="mpref")]
         ]
         reply_markup = InlineKeyboardMarkup(buttons)
 
         if img_url:
-            await update.message.reply_photo(
-                photo=img_url, 
-                caption=caption, 
-                reply_markup=reply_markup, 
-                parse_mode='HTML'
-            )
+            await update.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         else:
-            await update.message.reply_text(
-                text=caption, 
-                reply_markup=reply_markup, 
-                parse_mode='HTML'
-            )
+            await update.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
 
     except Exception as e:
         await update.message.reply_text(f"<blockquote>{to_small_caps(f'Error in Marketplace: {str(e)}') }</blockquote>", parse_mode='HTML')
@@ -139,35 +129,39 @@ async def marketplace_callbacks(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = query.from_user.id
     data = query.data
 
-    if data == "mp_refresh":
+    if data == "mpref":
         await query.answer(to_small_caps("Refreshing Marketplace...", is_html=False), show_alert=False)
         await query.message.delete()
         await query.message.reply_text(to_small_caps("🔄 Marketplace deal refresh ho gaya hai. Naya character dekhne ke liye dubara /mp use karein."), parse_mode='HTML')
         return
 
-    if data.startswith("mp_buy_"):
+    if data.startswith("mpbuy_"):
         parts = data.split("_")
-        char_id = parts[2]
-        price = int(parts[3])
+        char_id = parts[1]
+        price = int(parts[2])
         
         char = await collection.find_one({'id': char_id})
         if not char:
             await query.answer(to_small_caps("❌ Ye character ab database me nahi hai!", is_html=False), show_alert=True)
             return
             
-        user = await user_collection.find_one({'id': user_id})
+        # FIX: Yahan 'id' ki jagah 'user_id' check kar raha hu jo tumhare db.py ke according hai
+        user = await user_collection.find_one({'user_id': user_id})
         if not user:
             await query.answer(to_small_caps("❌ Please /start the bot first to create an account!", is_html=False), show_alert=True)
             return
 
+        # Yahan hum assume kar rahe hain ki coins ka data 'balance' field me save hota hai. 
+        # Agar tumhare bot mein iska naam 'coins' ya kuch aur hai to is word ko theek kar lena.
         user_balance = user.get('balance', 0) 
         
         if user_balance < price:
             await query.answer(to_small_caps(f"❌ Funds kam hain! Price {price:,} hai par aapke paas sirf {user_balance:,} tokens hain.", is_html=False), show_alert=True)
             return
             
+        # FIX: Yahan update_one mein bhi 'user_id' hi pass hoga
         await user_collection.update_one(
-            {'id': user_id},
+            {'user_id': user_id},
             {
                 '$inc': {'balance': -price},
                 '$push': {'characters': char}
@@ -178,17 +172,16 @@ async def marketplace_callbacks(update: Update, context: ContextTypes.DEFAULT_TY
         
         sold_text = to_small_caps(f"🎉 {char['name']} has been SOLD to {query.from_user.first_name} for {price:,} Tokens!")
         
-        # FIX: Check if message has photo to prevent crash when editing text
         try:
             if query.message.photo:
                 await query.edit_message_caption(caption=sold_text, parse_mode='HTML')
             else:
                 await query.edit_message_text(text=sold_text, parse_mode='HTML')
-        except Exception as e:
-            print(f"Error editing message: {e}")
+        except Exception:
+            pass
 
 
 # --- Handlers Register ---
 application.add_handler(CommandHandler(['mp', 'marketplace'], marketplace))
 application.add_handler(CommandHandler('setprice', set_mp_price))
-application.add_handler(CallbackQueryHandler(marketplace_callbacks, pattern="^mp_"))
+application.add_handler(CallbackQueryHandler(marketplace_callbacks, pattern="^(mpref|mpbuy_)"))
