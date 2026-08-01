@@ -3,15 +3,14 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from shivu import application, db
 
-# Collections (Apne database ke actual user collection ka naam check kar lena agar alag ho)
+# Collections
 collection = db['anime_characters_lol']
 user_collection = db['user_collection_groups'] 
 
-# Sudo Users List (Tumhari ID added hai)
+# Sudo Users List
 SUDO_USERS = [7657218453] 
 
-# --- Rarity and Default Pricing (Strictly based on Photo) ---
-# Yahan tum prices ko apne hisaab se ghata/badha sakte ho
+# --- Rarity and Default Pricing ---
 DEFAULT_PRICES = {
     "🟢 Common": 10000,
     "🔵 Rare": 20000,
@@ -31,7 +30,7 @@ DEFAULT_PRICES = {
 }
 
 # --- Universal Small Caps & Bold Converter ---
-def to_small_caps(text: str) -> str:
+def to_small_caps(text: str, is_html=True) -> str:
     mapping = {
         'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
         'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
@@ -45,45 +44,45 @@ def to_small_caps(text: str) -> str:
         'Y': 'ʏ', 'Z': 'ᴢ'
     }
     converted = "".join(mapping.get(c, c) for c in str(text))
-    return f"<b>{converted}</b>"
+    if is_html:
+        return f"<b>{converted}</b>"
+    return converted
 
 def get_price(char):
-    """Character ki price nikalta hai (Sudo set price ya phir default)"""
     if 'mp_price' in char and char['mp_price'] is not None:
         return char['mp_price']
-    
     rarity = char.get('rarity', 'Unknown')
-    return DEFAULT_PRICES.get(rarity, 50000) # Agar rarity list me na ho to 50k default
+    return DEFAULT_PRICES.get(rarity, 50000) 
 
 
 # --- Sudo Command to Set Custom Price ---
 async def set_mp_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.id not in SUDO_USERS:
-        await update.message.reply_text("❌ Only Sudo/Owner can use this command.")
+        await update.message.reply_text(to_small_caps("❌ Only Sudo/Owner can use this command."), parse_mode='HTML')
         return
     
     if len(context.args) != 2:
-        await update.message.reply_text("<blockquote>Usage: /setprice <char_id> <price>\nExample: /setprice 1024 15000</blockquote>", parse_mode='HTML')
+        msg = "Usage: /setprice <char_id> <price>\nExample: /setprice 1024 15000"
+        await update.message.reply_text(f"<blockquote>{to_small_caps(msg)}</blockquote>", parse_mode='HTML')
         return
         
     char_id = context.args[0]
     try:
         price = int(context.args[1])
     except ValueError:
-        await update.message.reply_text("❌ Price numbers me hona chahiye.")
+        await update.message.reply_text(to_small_caps("❌ Price numbers me hona chahiye."), parse_mode='HTML')
         return
         
     result = await collection.update_one({'id': char_id}, {'$set': {'mp_price': price}})
     if result.modified_count > 0:
-        await update.message.reply_text(f"✅ Character ID <b>{char_id}</b> ka marketplace price <b>{price:,} 💰</b> set ho gaya hai.", parse_mode='HTML')
+        await update.message.reply_text(to_small_caps(f"✅ Character ID {char_id} ka marketplace price {price:,} 💰 set ho gaya hai."), parse_mode='HTML')
     else:
-        await update.message.reply_text("❌ Character ID nahi mila, ya price already same hai.")
+        await update.message.reply_text(to_small_caps("❌ Character ID nahi mila, ya price already same hai."), parse_mode='HTML')
 
 
 # --- Marketplace Feature ---
 async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        # Pick 1 random character for the marketplace deal
         pipeline = [{"$sample": {"size": 1}}]
         chars = await collection.aggregate(pipeline).to_list(length=1)
         
@@ -98,22 +97,21 @@ async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         rarity = char.get('rarity', 'Unknown')
         img_url = char.get('img_url', None)
 
-        # Get final price
         price = get_price(char)
 
         caption = f"""{to_small_caps('🏪 Daily Deals Marketplace')}
 
 {to_small_caps('📛 Name:')} {to_small_caps(name)}
 {to_small_caps('📺 Series:')} {to_small_caps(anime)}
-{to_small_caps('🆔 ID:')} <b>{char_id}</b>
+{to_small_caps('🆔 ID:')} {to_small_caps(char_id)}
 {to_small_caps('💫 Rarity:')} {to_small_caps(rarity)}
-{to_small_caps('💰 Price:')} <b>{price:,} Tokens</b>
+{to_small_caps('💰 Price:')} {to_small_caps(f"{price:,} Tokens")}
 
 {to_small_caps('🛒 Status:')} {to_small_caps('Available')}"""
 
         buttons = [
-            [InlineKeyboardButton("🛒 Buy Character", callback_data=f"mp_buy_{char_id}_{price}")],
-            [InlineKeyboardButton("🔄 Refresh Deal", callback_data="mp_refresh")]
+            [InlineKeyboardButton(to_small_caps("🛒 Buy Character", is_html=False), callback_data=f"mp_buy_{char_id}_{price}")],
+            [InlineKeyboardButton(to_small_caps("🔄 Refresh Deal", is_html=False), callback_data="mp_refresh")]
         ]
         reply_markup = InlineKeyboardMarkup(buttons)
 
@@ -142,9 +140,9 @@ async def marketplace_callbacks(update: Update, context: ContextTypes.DEFAULT_TY
     data = query.data
 
     if data == "mp_refresh":
-        await query.answer("Refreshing Marketplace...", show_alert=False)
+        await query.answer(to_small_caps("Refreshing Marketplace...", is_html=False), show_alert=False)
         await query.message.delete()
-        await query.message.reply_text("🔄 Marketplace deal refresh ho gaya hai. Naya character dekhne ke liye dubara /mp use karein.")
+        await query.message.reply_text(to_small_caps("🔄 Marketplace deal refresh ho gaya hai. Naya character dekhne ke liye dubara /mp use karein."), parse_mode='HTML')
         return
 
     if data.startswith("mp_buy_"):
@@ -152,27 +150,22 @@ async def marketplace_callbacks(update: Update, context: ContextTypes.DEFAULT_TY
         char_id = parts[2]
         price = int(parts[3])
         
-        # 1. Check if character still exists in main collection
         char = await collection.find_one({'id': char_id})
         if not char:
-            await query.answer("❌ Ye character ab database me nahi hai!", show_alert=True)
+            await query.answer(to_small_caps("❌ Ye character ab database me nahi hai!", is_html=False), show_alert=True)
             return
             
-        # 2. Get user info
         user = await user_collection.find_one({'id': user_id})
         if not user:
-            await query.answer("❌ Please /start the bot first to create an account!", show_alert=True)
+            await query.answer(to_small_caps("❌ Please /start the bot first to create an account!", is_html=False), show_alert=True)
             return
 
-        # Bot ka token/coin system idhar handle hota hai
         user_balance = user.get('balance', 0) 
         
-        # 3. Check Balance
         if user_balance < price:
-            await query.answer(f"❌ Funds kam hain! Price {price:,} hai par aapke paas sirf {user_balance:,} tokens hain.", show_alert=True)
+            await query.answer(to_small_caps(f"❌ Funds kam hain! Price {price:,} hai par aapke paas sirf {user_balance:,} tokens hain.", is_html=False), show_alert=True)
             return
             
-        # 4. Deduct Money and Add Character
         await user_collection.update_one(
             {'id': user_id},
             {
@@ -181,17 +174,21 @@ async def marketplace_callbacks(update: Update, context: ContextTypes.DEFAULT_TY
             }
         )
         
-        await query.answer(f"✅ Transaction Successful! {char['name']} is now yours.", show_alert=True)
+        await query.answer(to_small_caps(f"✅ Transaction Successful! {char['name']} is now yours.", is_html=False), show_alert=True)
         
-        # 5. Update UI so no one else clicks buy
-        await query.edit_message_caption(
-            caption=f"🎉 <b>{char['name']}</b> has been SOLD to {query.from_user.first_name} for <b>{price:,} Tokens</b>!",
-            parse_mode='HTML'
-        )
+        sold_text = to_small_caps(f"🎉 {char['name']} has been SOLD to {query.from_user.first_name} for {price:,} Tokens!")
+        
+        # FIX: Check if message has photo to prevent crash when editing text
+        try:
+            if query.message.photo:
+                await query.edit_message_caption(caption=sold_text, parse_mode='HTML')
+            else:
+                await query.edit_message_text(text=sold_text, parse_mode='HTML')
+        except Exception as e:
+            print(f"Error editing message: {e}")
 
 
 # --- Handlers Register ---
-# /mp aur /marketplace ek hi function kholenge
 application.add_handler(CommandHandler(['mp', 'marketplace'], marketplace))
 application.add_handler(CommandHandler('setprice', set_mp_price))
 application.add_handler(CallbackQueryHandler(marketplace_callbacks, pattern="^mp_"))
