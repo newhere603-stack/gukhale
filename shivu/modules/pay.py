@@ -56,7 +56,18 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
-    await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!\nʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ.")
+
+    # Fetch Receiver details to show name
+    try:
+        receiver_user = await context.bot.get_chat(receiver_id)
+        receiver_mention = receiver_user.mention_html()
+    except Exception:
+        receiver_mention = f"<code>{receiver_id}</code>"
+
+    await q.edit_message_text(
+        f"<b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\nʏᴏᴜ ꜱᴇɴᴛ 💸 <b>{amount}</b> ᴄᴏɪɴꜱ ᴛᴏ {receiver_mention}.",
+        parse_mode="HTML"
+    )
     await q.answer()
 
 
@@ -85,7 +96,7 @@ async def tpay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"paytokens_no_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 🪙 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ {receiver.mention_html()}?",
+        f"ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ {receiver.mention_html()}?",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -113,7 +124,18 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         return await q.answer()
 
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'tokens': amount}}, upsert=True)
-    await q.edit_message_text(f"ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!\nʏᴏᴜ ꜱᴇɴᴛ 🪙 {amount} ᴛᴏᴋᴇɴꜱ.")
+
+    # Fetch Receiver details to show name
+    try:
+        receiver_user = await context.bot.get_chat(receiver_id)
+        receiver_mention = receiver_user.mention_html()
+    except Exception:
+        receiver_mention = f"<code>{receiver_id}</code>"
+
+    await q.edit_message_text(
+        f"<b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\nʏᴏᴜ ꜱᴇɴᴛ 💠 <b>{amount}</b> ᴛᴏᴋᴇɴꜱ ᴛᴏ {receiver_mention}.",
+        parse_mode="HTML"
+    )
     await q.answer()
 
 
