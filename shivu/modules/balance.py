@@ -1,4 +1,4 @@
-From telegram import Update
+from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 from shivu import application, user_collection
 
@@ -32,4 +32,3 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 application.add_handler(CommandHandler("bal", balance_cmd, block=False))
-
