@@ -40,7 +40,7 @@ REJECT_IMAGES = [
     "https://files.catbox.moe/8ezqu8.jpg"
 ]
 
-# --- TEXT VARIATIONS (Bina Tag ke - Phase 1) ---
+# --- TEXT VARIATIONS ---
 PROPOSE_START_TEXTS = [
     "<b>💫 ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ... 💍</b>",
     "<b>✨ ғɪɴᴀʟʟʏ ᴛʜᴇ ᴛɪᴍᴇ ʜᴀs ᴄᴏᴍᴇ ✨</b>",
@@ -71,7 +71,7 @@ PROPOSE_REJECT_TEXTS = [
     "<b>{user} ʜᴀs ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ᴛʜᴇʏ'ʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ! 🏙️</b>",
     "<b>sʜᴇ ᴛᴏᴏᴋ {user}'s ᴄᴏɪɴs, ᴀᴛᴇ ᴛʜᴇɪʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' 🍟</b>",
     "<b>sʜᴇ sᴀɪᴅ {user} ɪs ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ᴛʜᴇᴍ ᴏɴ ʀᴇᴀᴅ! 💔</b>",
-    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ, {user}. 🎬</b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ, {user}. 🎬</b>",
     "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀᴛ {user}, sʟᴀᴘᴘᴇᴅ ᴛʜᴇᴍ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! 🚓💨</b>",
     "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴛᴏ {user} ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ᴛʜᴇᴍ! 🚫</b>"
 ]
@@ -99,20 +99,14 @@ def set_cooldown(user_id: int, cmd: str):
     cooldowns[cmd][user_id] = time.time()
 
 
-async def is_user_joined(update: Update, context: CallbackContext) -> bool:
-    user = update.effective_user
-    if not user:
-        return True
-    
+async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
     try:
-        member = await context.bot.get_chat_member(UPDATE_GROUP_ID, user.id)
-        # Check if user status is active in group
-        return member.status in ("member", "administrator", "creator", "restricted")
-    except BadRequest as e:
-        LOGGER.warning(f"FSub Check BadRequest for {user.id}: {e}")
-        return False  # Bot not admin or User not found -> Enforce FSub
+        member = await context.bot.get_chat_member(chat_id=UPDATE_GROUP_ID, user_id=user_id)
+        if member.status in ("member", "administrator", "creator", "restricted"):
+            return True
+        return False
     except Exception as e:
-        LOGGER.error(f"is_user_joined failed for {user.id}: {e}")
+        LOGGER.warning(f"FSub check failed for {user_id}: {e}")
         return False
 
 
@@ -158,25 +152,27 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     )
     try:
         await context.bot.send_photo(LOG_GROUP_ID, char["img_url"], caption=text, parse_mode="HTML")
-    except Exception as e:
-        LOGGER.error(f"send_win_log failed: {e}")
+    except Exception:
+        pass
 
 
 # ---------------- /dice, /marry ----------------
 async def dice_marry(update: Update, context: CallbackContext):
-    if not update.effective_user or not update.effective_chat:
+    if not update.message or not update.effective_user:
         return
     
     chat_id = update.effective_chat.id
     user = update.effective_user
+    msg_id = update.message.message_id
     user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
 
     ok, rem = check_cooldown(user.id, "dice", DICE_COOLDOWN)
     if not ok:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⏳ {user_mention}, ᴡᴀɪᴛ {rem // 60}ᴍ {rem % 60}s ʙᴇғᴏʀᴇ ᴜsɪɴɢ /dice ᴀɢᴀɪɴ!</b>",
-            parse_mode="HTML"
+            text=f"<b>⏳ {user_mention}, ᴡᴀɪᴛ {rem // 60}ᴍ {rem % 60}s ʙᴇғᴏʀᴇ ᴜsɪɴɢ ᴀɢᴀɪɴ!</b>",
+            parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     set_cooldown(user.id, "dice")
@@ -188,7 +184,8 @@ async def dice_marry(update: Update, context: CallbackContext):
         return await context.bot.send_message(
             chat_id=chat_id,
             text=text,
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     char = await get_unique_char(user.id, DICE_RARITIES)
@@ -196,7 +193,8 @@ async def dice_marry(update: Update, context: CallbackContext):
         return await context.bot.send_message(
             chat_id=chat_id,
             text=f"<b>{user_mention}, ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     await add_char_to_user(user.id, user.username or "", user.first_name or "User", char)
@@ -211,31 +209,34 @@ async def dice_marry(update: Update, context: CallbackContext):
         chat_id=chat_id,
         photo=char["img_url"],
         caption=caption,
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_to_message_id=msg_id
     )
     await send_win_log(context, user, char, "dice")
 
 
 # ---------------- /propose ----------------
 async def propose(update: Update, context: CallbackContext):
-    if not update.effective_user or not update.effective_chat:
+    if not update.message or not update.effective_user:
         return
 
     chat_id = update.effective_chat.id
     user = update.effective_user
+    msg_id = update.message.message_id
     user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
 
     # FSub Check
-    if not await is_user_joined(update, context):
+    if not await is_user_joined(context, user.id):
         btn = [
             [InlineKeyboardButton("ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇ", url=UPDATE_GROUP_URL)],
             [InlineKeyboardButton("ᴛʀʏ ᴀɢᴀɪɴ", callback_data="propose_checksub")]
         ]
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ, {user_mention}!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
+            text=f"<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ, {user_mention}!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
             reply_markup=InlineKeyboardMarkup(btn),
             parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     user_data = await user_collection.find_one({"id": user.id})
@@ -243,7 +244,8 @@ async def propose(update: Update, context: CallbackContext):
         return await context.bot.send_message(
             chat_id=chat_id,
             text=f"<b>{user_mention}, ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀꜱᴛ 2000 ᴄᴏɪɴs ᴛᴏ ᴘʀᴏᴘᴏꜱᴇ.</b>",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     ok, rem = check_cooldown(user.id, "propose", PROPOSE_COOLDOWN)
@@ -251,23 +253,25 @@ async def propose(update: Update, context: CallbackContext):
         return await context.bot.send_message(
             chat_id=chat_id,
             text=f"<b>⏳ {user_mention}, ᴄᴏᴏʟᴅᴏᴡɴ: <code>{rem // 60}ᴍ {rem % 60}s</code></b>",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     # Deduct coins & set cooldown
     await user_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
     set_cooldown(user.id, "propose")
 
-    # Phase 1: Start Message (BINA TAG KE)
+    # Phase 1: Start Message (Ab yeh bhi user ke message ko reply karegi)
     msg = await context.bot.send_photo(
         chat_id=chat_id,
         photo=random.choice(PROPOSE_IMAGES),
         caption=random.choice(PROPOSE_START_TEXTS),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_to_message_id=msg_id
     )
     await asyncio.sleep(2)
 
-    # Phase 2: Status Update (BINA TAG KE)
+    # Phase 2: Status Update
     try:
         await msg.edit_caption(
             caption=random.choice(PROPOSING_LOADING_TEXTS),
@@ -278,41 +282,36 @@ async def propose(update: Update, context: CallbackContext):
 
     await asyncio.sleep(2.5)
 
-    # Phase 3: Result (Rejection - TAG KE SATH)
+    # Delete Phase 1 message
+    try:
+        await msg.delete()
+    except Exception:
+        pass
+
+    # Phase 3: Result (Rejection - WITH REPLY TAG)
     if random.random() > PROPOSE_SUCCESS_RATE:
-        try:
-            await msg.delete()
-        except Exception:
-            pass
-        
         reject_text = random.choice(PROPOSE_REJECT_TEXTS).format(user=user_mention)
         return await context.bot.send_photo(
             chat_id=chat_id,
             photo=random.choice(REJECT_IMAGES),
             caption=reject_text,
             parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
-    # Phase 3: Result (Win - TAG KE SATH)
+    # Phase 3: Result (Win - WITH REPLY TAG)
     char = await get_unique_char(user.id, PROPOSE_RARITIES)
     if not char:
         await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
-        try:
-            await msg.delete()
-        except Exception:
-            pass
         return await context.bot.send_message(
             chat_id=chat_id,
             text=f"<b>ʀᴇғᴜɴᴅᴇᴅ {user_mention}! ɴᴏ ᴇxᴄʟᴜsɪᴠᴇ/ᴄᴇʟᴇsᴛɪᴀʟ ᴄʜᴀʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ.</b>",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     await add_char_to_user(user.id, user.username or "", user.first_name or "User", char)
-    try:
-        await msg.delete()
-    except Exception:
-        pass
-
+    
     caption = (
         f"<b>🎉 {char.get('name', 'Waifu')} ʜᴀs ᴀᴄᴄᴇᴘᴛᴇᴅ {user_mention}'s ᴘʀᴏᴘᴏsᴀʟ! 💖</b>\n\n"
         f"<b>☘️ ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
@@ -324,7 +323,8 @@ async def propose(update: Update, context: CallbackContext):
         chat_id=chat_id,
         photo=char["img_url"],
         caption=caption,
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_to_message_id=msg_id
     )
     await send_win_log(context, user, char, "propose")
 
@@ -337,11 +337,9 @@ async def propose_callback(update: Update, context: CallbackContext):
 
     if query.data == "propose_checksub":
         user = query.from_user
-        user_mention = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
         
         # Check Force Sub
-        if not await is_user_joined(update, context):
-            # Answer callback ONLY ONCE with alert
+        if not await is_user_joined(context, user.id):
             return await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
         
         # If joined successfully
@@ -354,24 +352,26 @@ async def propose_callback(update: Update, context: CallbackContext):
         
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"<b>✨ ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ, {user_mention}! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>",
+            text=f"<b>✨ ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>",
             parse_mode="HTML"
         )
 
 
 # ---------------- /cdm (owner/sudo) ----------------
 async def cdm_cmd(update: Update, context: CallbackContext):
-    if not update.effective_user or not update.effective_chat:
+    if not update.message or not update.effective_user:
         return
         
     chat_id = update.effective_chat.id
+    msg_id = update.message.message_id
     user_mention = f"<a href='tg://user?id={update.effective_user.id}'>{update.effective_user.first_name}</a>"
 
     if not is_authorized(update.effective_user.id):
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>🚫 {user_mention}, ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
-            parse_mode="HTML"
+            text=f"<b>🚫 {user_mention}, ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ.</b>",
+            parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     reply = update.message.reply_to_message if update.message else None
@@ -383,18 +383,19 @@ async def cdm_cmd(update: Update, context: CallbackContext):
     if target_id is None:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⚠️ {user_mention}, ᴜsᴀɢᴇ: /cdm <user_id> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>",
-            parse_mode="HTML"
+            text=f"<b>⚠️ ᴜsᴀɢᴇ: /cdm <user_id> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>",
+            parse_mode="HTML",
+            reply_to_message_id=msg_id
         )
 
     cooldowns["dice"].pop(target_id, None)
     cooldowns["propose"].pop(target_id, None)
     
-    target_mention = f"<a href='tg://user?id={target_id}'>{target_id}</a>"
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"<b>ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ {target_mention} (ᴍᴀʀʀʏ ɴ ᴘʀᴏᴘᴏsᴇ).</b>",
-        parse_mode="HTML"
+        text=f"<b>ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ {target_id}.</b>",
+        parse_mode="HTML",
+        reply_to_message_id=msg_id
     )
 
 
