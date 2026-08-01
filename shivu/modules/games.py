@@ -115,6 +115,7 @@ class UserDB:
                     pass
             return doc
 
+        # Agar user existing nahi hai, tabhi $setOnInsert ke sath safe insert karein
         new_user = {
             'id': user_id,
             'first_name': first_name or 'ᴜɴᴋɴᴏᴡɴ',
@@ -124,15 +125,20 @@ class UserDB:
             'created_at': datetime.now(timezone.utc)
         }
         try:
-            await user_collection.insert_one(new_user)
+            await user_collection.update_one(
+                {'id': user_id},
+                {'$setOnInsert': new_user},
+                upsert=True
+            )
         except Exception:
             pass
-        return new_user
+        return await UserDB.get(user_id)
 
     @staticmethod
     async def change_balance(user_id: int, delta: int) -> Optional[dict]:
         try:
-            await user_collection.update_one({'id': user_id}, {'$inc': {'balance': delta}}, upsert=True)
+            # Upsert ko False rakha hai taaki existing document overwrite na ho
+            await user_collection.update_one({'id': user_id}, {'$inc': {'balance': delta}})
         except Exception:
             pass
         return await UserDB.get(user_id)
@@ -148,13 +154,13 @@ class GameUI:
     @staticmethod
     def menu() -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("🪙 ᴄᴏɪɴ ғʟɪᴘ", callback_data="games:info:sbet"),
-             InlineKeyboardButton("🎲 ᴅɪᴄᴇ ʀᴏʟʟ", callback_data="games:info:roll")],
-            [InlineKeyboardButton("🎰 ɢᴀᴍʙʟᴇ", callback_data="games:info:gamble"),
-             InlineKeyboardButton("🏀 ʙᴀsᴋᴇᴛʙᴀʟʟ", callback_data="games:info:basket")],
-            [InlineKeyboardButton("🎯 ᴅᴀʀᴛs", callback_data="games:info:dart"),
-             InlineKeyboardButton("🤝 ᴄᴏɴᴛʀᴀᴄᴛ", callback_data="games:info:stour")],
-            [InlineKeyboardButton("🧩 ʀɪᴅᴅʟᴇ", callback_data="games:info:riddle")]
+            [InlineKeyboardButton("ᴄᴏɪɴ ғʟɪᴘ", callback_data="games:info:sbet"),
+             InlineKeyboardButton("ᴅɪᴄᴇ ʀᴏʟʟ", callback_data="games:info:roll")],
+            [InlineKeyboardButton("ɢᴀᴍʙʟᴇ", callback_data="games:info:gamble"),
+             InlineKeyboardButton("ʙᴀsʙᴀʟʟ", callback_data="games:info:basket")],
+            [InlineKeyboardButton("ᴅᴀʀᴛs", callback_data="games:info:dart"),
+             InlineKeyboardButton("ᴄᴏɴᴛʀᴄᴛ", callback_data="games:info:stour")],
+            [InlineKeyboardButton("ʀɪᴅᴅʟᴇ", callback_data="games:info:riddle")]
         ])
 
     @staticmethod
@@ -423,7 +429,7 @@ async def riddle(update: Update, context: CallbackContext):
         f"<b>🧩 ʀɪᴅᴅʟᴇ ᴛɪᴍᴇ</b>\n"
         f"<b>sᴏʟᴠᴇ: {question}</b>\n"
         f"<b>ᴛɪᴍᴇ: <code>{CONFIG.riddle_timeout}s</code> | ʀᴇᴡᴀʀᴅ: <code>50</code> ᴄᴏɪɴs</b>\n"
-        f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜᴍʙᴇʀ</b></i>"
+        f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜ姆ʙᴇʀ</b></i>"
     )
     sent = await msg.reply_text(text, parse_mode="HTML")
     
@@ -487,12 +493,11 @@ async def riddle_answer(update: Update, context: CallbackContext):
 
 async def games_menu(update: Update, context: CallbackContext):
     text = (
-        f"<b>🎮 ɢᴀᴍᴇs ʜᴜʙ</b>\n"
-        f"<b>ᴀᴠᴀɪʟᴀʙʟᴇ ɢᴀᴍᴇs:</b>\n"
-        f"<b>🪙 ᴄᴏɪɴ ғʟɪᴘ • 🎲 ᴅɪᴄᴇ ʀᴏʟʟ</b>\n"
-        f"<b>🎰 ɢᴀᴍʙʟᴇ • 🏀 ʙᴀsᴋᴇᴛʙᴀʟʟ</b>\n"
-        f"<b>🎯 ᴅᴀʀᴛs • 🤝 ᴄᴏɴᴛʀᴀᴄᴛ</b>\n"
-        f"<b>🧩 ʀɪᴅᴅʟᴇ</b>"
+        f"<b>ᴀᴠᴀɪʟᴀʙʟᴇ ɢᴀᴍᴇs 🎮</b>\n"
+        f"<b>ᴄᴏɪɴ ғʟɪᴘ • ᴅɪᴄᴇ ʀᴏʟʟ</b>\n"
+        f"<b>ɢᴀᴍʙʟᴇ • ʙᴀsᴋᴇᴛʙᴀʟʟ</b>\n"
+        f"<b>ᴅᴀʀᴛs • ᴄᴏɴᴛʀᴀᴄᴛ</b>\n"
+        f"<b>ʀɪᴅᴅʟᴇ</b>"
     )
     await reply(update, text, GameUI.menu())
 
