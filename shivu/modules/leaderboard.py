@@ -20,58 +20,61 @@ def is_sudo(user_id):
     return user_id == OWNER_ID or str(user_id) in SUDO_USERS or user_id in SUDO_USERS
 
 
-# ---------- Smart Helper Functions ----------
+# ---------- Smart Database & Field Handlers ----------
 
 async def get_user_document(user_id):
-    """Deep search for user using both int and str IDs across multiple possible fields"""
+    """Fetches user document matching both integer and string formats"""
     try:
-        user_id_int = int(user_id)
-        user_id_str = str(user_id)
-    except Exception:
-        user_id_int = user_id
-        user_id_str = str(user_id)
+        uid_int = int(user_id)
+    except (ValueError, TypeError):
+        uid_int = user_id
+    uid_str = str(user_id)
 
     user = await user_collection.find_one({
         '$or': [
-            {'id': user_id_int},
-            {'id': user_id_str},
-            {'user_id': user_id_int},
-            {'user_id': user_id_str},
-            {'_id': user_id_int},
-            {'_id': user_id_str}
+            {'id': uid_int},
+            {'id': uid_str},
+            {'user_id': uid_int},
+            {'user_id': uid_str},
+            {'_id': uid_int},
+            {'_id': uid_str}
         ]
     })
     return user
 
 
 def extract_balance(user_doc):
-    """Smart extraction of balance/coins from any possible field name"""
-    if not user_doc:
+    """Safely extracts balance/coins from any user document schema"""
+    if not user_doc or not isinstance(user_doc, dict):
         return 0
     
-    # Common balance field keys used in Telegram bots
-    possible_keys = ['balance', 'coins', 'wallet', 'money', 'gold', 'bal']
-    
-    for key in possible_keys:
-        if key in user_doc and user_doc[key] is not None:
-            try:
-                return int(user_doc[key])
-            except (ValueError, TypeError):
-                pass
+    # Common keys used across shivu / anime character collector bots
+    for key in ['balance', 'coins', 'wallet', 'money', 'gold', 'bal']:
+        val = user_doc.get(key)
+        if val is not None:
+            if isinstance(val, (int, float)):
+                return int(val)
+            elif isinstance(val, str) and val.isdigit():
+                return int(val)
+            elif isinstance(val, dict):
+                for sub_key in ['amount', 'coins', 'balance', 'val']:
+                    sub_val = val.get(sub_key)
+                    if sub_val is not None and str(sub_val).isdigit():
+                        return int(sub_val)
     return 0
 
 
 def extract_tokens(user_doc):
-    """Smart extraction of tokens"""
-    if not user_doc:
+    """Safely extracts tokens"""
+    if not user_doc or not isinstance(user_doc, dict):
         return 0
-    possible_keys = ['tokens', 'token', 'gems']
-    for key in possible_keys:
-        if key in user_doc and user_doc[key] is not None:
-            try:
-                return int(user_doc[key])
-            except (ValueError, TypeError):
-                pass
+    for key in ['tokens', 'token', 'gems']:
+        val = user_doc.get(key)
+        if val is not None:
+            if isinstance(val, (int, float)):
+                return int(val)
+            elif isinstance(val, str) and val.isdigit():
+                return int(val)
     return 0
 
 
@@ -142,13 +145,17 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
 # ---------- Top by balance ----------
 
 async def top_balance(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.find({}).sort([('balance', -1), ('coins', -1)]).limit(10).to_list(10)
+    # Fetch top 50 to sort accurately in python if DB field name varies
+    data = await user_collection.find({}).limit(50).to_list(50)
 
     if not data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
 
+    # Sort users by extracted balance
+    sorted_data = sorted(data, key=lambda x: extract_balance(x), reverse=True)[:10]
+
     rows = []
-    for i, u in enumerate(data, 1):
+    for i, u in enumerate(sorted_data, 1):
         uid = u.get('id') or u.get('user_id') or u.get('_id', 0)
         try:
             uid = int(uid)
@@ -164,13 +171,15 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
 
 
 async def top_tokens(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.find({}).sort("tokens", -1).limit(10).to_list(10)
+    data = await user_collection.find({}).limit(50).to_list(50)
 
     if not data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
 
+    sorted_data = sorted(data, key=lambda x: extract_tokens(x), reverse=True)[:10]
+
     rows = []
-    for i, u in enumerate(data, 1):
+    for i, u in enumerate(sorted_data, 1):
         uid = u.get('id') or u.get('user_id') or u.get('_id', 0)
         try:
             uid = int(uid)
@@ -226,7 +235,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
 
 
-# ---------- My Profile (Upgraded & Fixed) ----------
+# ---------- My Profile (Fixed & Upgraded) ----------
 
 async def my_profile(update: Update, context: CallbackContext, edit=False):
     user_id = update.effective_user.id
@@ -241,29 +250,25 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         )
         return await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
 
-    # Smart extraction
+    # Characters & Stats
     characters = user.get('characters', [])
     char_count = len(characters)
     balance = extract_balance(user)
     tokens = extract_tokens(user)
 
-    # Calculating Collection Percentage safely
-    total_db_chars = await user_collection.aggregate([
-        {"$unwind": "$characters"},
-        {"$group": {"_id": "$characters.id"}}
-    ]).to_list(None)
+    # Calculate collection progress
+    total_collectors = await user_collection.count_documents({
+        "characters": {"$exists": True, "$type": "array"}
+    })
     
-    total_available_chars = max(len(total_db_chars) if total_db_chars else 100, char_count, 1)
+    total_available_chars = max(100, char_count, 1)
     completion_pct = round((char_count / total_available_chars) * 100, 1)
     progress_bar = generate_progress_bar(char_count, total_available_chars)
 
-    # Rank calculation
+    # Calculate rank
     better_than = await user_collection.count_documents({
         "characters": {"$exists": True, "$type": "array"},
         "$expr": {"$gt": [{"$size": "$characters"}, char_count]}
-    })
-    total_collectors = await user_collection.count_documents({
-        "characters": {"$exists": True, "$type": "array"}
     })
     rank = better_than + 1
     badge = get_rank_badge(rank)
@@ -294,11 +299,11 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
             InlineKeyboardButton("💸 ʙ-ᴛᴏᴘ", callback_data="lb_bal")
         ],
         [
-            InlineKeyboardButton("⟳", callback_data="lb_profile"),
-            InlineKeyboardButton("≼", callback_data="lb_menu")
+            InlineKeyboardButton("⟳ ʀᴇꜰʀᴇsʜ", callback_data="lb_profile"),
+            InlineKeyboardButton("≼ ᴍᴇɴᴜ", callback_data="lb_menu")
         ],
         [
-            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")
+            InlineKeyboardButton("ᴄʟᴏsᴇ ❌", callback_data="lb_close")
         ]
     ])
 
