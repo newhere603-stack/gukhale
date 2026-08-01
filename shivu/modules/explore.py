@@ -27,14 +27,14 @@ class ExploreResult:
 CONFIG = ExploreConfig()
 user_cooldowns = {}
 
-# Sabhi actions ko Small Caps font aur bold me kar diya gaya hai
+# Clean Small Caps text (Without nested HTML tags)
 EXPLORE_ACTIONS = [
-    "<b>ᴇxᴘʟᴏʀᴇᴅ ᴀ ᴅᴜɴɢᴇᴏɴ</b>",
-    "<b>ᴠᴇɴᴛᴜʀᴇᴅ ɪɴᴛᴏ ᴀ ᴅᴀʀᴋ ғᴏʀᴇsᴛ</b>",
-    "<b>ᴅɪsᴄᴏᴠᴇʀᴇᴅ ᴀɴᴄɪᴇɴᴛ ʀᴜɪɴs</b>",
-    "<b>ɪɴғɪʟᴛʀᴀᴛᴇᴅ ᴀɴ ᴇʟᴠɪsʜ ᴠɪʟʟᴀɢᴇ</b>",
-    "<b>ʀᴀɪᴅᴇᴅ ᴀ ɢᴏʙʟɪɴ ɴᴇsᴛ</b>",
-    "<b>sᴜʀᴠɪᴠᴇᴅ ᴀɴ ᴏʀᴄ ᴅᴇɴ</b>"
+    "ᴇxᴘʟᴏʀᴇᴅ ᴀ ᴅᴜɴɢᴇᴏɴ",
+    "ᴠᴇɴᴛᴜʀᴇᴅ ɪɴᴛᴏ ᴀ ᴅᴀʀᴋ ғᴏʀᴇsᴛ",
+    "ᴅɪsᴄᴏᴠᴇʀᴇᴅ ᴀɴᴄɪᴇɴᴛ ʀᴜɪɴs",
+    "ɪɴғɪʟᴛʀᴀᴛᴇᴅ ᴀɴ ᴇʟᴠɪsʜ ᴠɪʟʟᴀɢᴇ",
+    "ʀᴀɪᴅᴇᴅ ᴀ ɢᴏʙʟɪɴ ɴᴇsᴛ",
+    "sᴜʀᴠɪᴠᴇᴅ ᴀɴ ᴏʀᴄ ᴅᴇɴ"
 ]
 
 
@@ -43,7 +43,8 @@ def check_cooldown(user_id: int) -> int | None:
         return None
     
     elapsed = (datetime.now(timezone.utc) - user_cooldowns[user_id]).total_seconds()
-    return None if elapsed >= CONFIG.cooldown else int(CONFIG.cooldown - elapsed)
+    remaining = CONFIG.cooldown - elapsed
+    return int(remaining) if remaining > 0 else None
 
 
 async def explore_cmd(update: Update, context: CallbackContext) -> None:
@@ -60,7 +61,8 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
     user_id = update.effective_user.id
 
-    if remaining := check_cooldown(user_id):
+    remaining = check_cooldown(user_id)
+    if remaining is not None:
         await update.message.reply_text(
             f"<b>⏰ ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining} sᴇᴄᴏɴᴅs ʙᴇғᴏʀᴇ ᴇxᴘʟᴏʀɪɴɢ ᴀɢᴀɪɴ!</b>",
             parse_mode=ParseMode.HTML
@@ -92,7 +94,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
         action = random.choice(EXPLORE_ACTIONS)
         await update.message.reply_text(
-            f"<b>🗺️ ʏᴏᴜ</b> {action} <b>ᴀɴᴅ ғᴏᴜɴᴅ 💸 {reward} ᴄᴏɪɴs!</b>\n"
+            f"<b>🗺️ ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ 💸 {reward} ᴄᴏɪɴs!</b>\n"
             f"<b>💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: 💸 {CONFIG.fee} ᴄᴏɪɴs</b>",
             parse_mode=ParseMode.HTML
         )
