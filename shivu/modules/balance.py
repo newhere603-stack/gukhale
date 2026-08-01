@@ -13,7 +13,8 @@ async def get_user(uid: int):
 
 async def init_user(uid: int):
     try:
-        user = {"id": uid, "balance": 0}
+        # Default balance aur tokens 0 set kar diye hain
+        user = {"id": uid, "balance": 0, "tokens": 0}
         await user_collection.update_one(
             {"id": uid},
             {"$setOnInsert": user},
@@ -22,9 +23,10 @@ async def init_user(uid: int):
         return user
     except Exception as e:
         LOGGER.error(f"Error initializing user in balance: {e}")
-        return {"id": uid, "balance": 0}
+        return {"id": uid, "balance": 0, "tokens": 0}
 
 
+# --- COINS BALANCE COMMAND ---
 async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or not update.message:
         return
@@ -36,7 +38,6 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user is None:
             user = await init_user(uid)
 
-        # FIXED: Correct variable name 'balance'
         balance = user.get("balance", 0)
 
         # Text: Small Caps + Bold | Number: Monospace / Code Block (Single-tap copy)
@@ -55,7 +56,39 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
-# Command Handler Register
-application.add_handler(CommandHandler(["bal", "balance"], balance_cmd, block=False))
+# --- TOKENS BALANCE COMMAND ---
+async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or not update.message:
+        return
 
-LOGGER.info("✓ Balance module loaded successfully")
+    uid = update.effective_user.id
+
+    try:
+        user = await get_user(uid)
+        if user is None:
+            user = await init_user(uid)
+
+        # Tokens balance fetch karega
+        tokens = user.get("tokens", 0)
+
+        # Text: Small Caps + Bold | Number: Monospace / Code Block (Single-tap copy)
+        await update.message.reply_text(
+            f"💠 <b>ᴛᴏᴋᴇɴs ʙᴀʟᴀɴᴄᴇ: <code>{tokens}</code></b>",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        LOGGER.error(f"Critical error in tokens_cmd: {e}")
+        try:
+            await update.message.reply_text(
+                "⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+
+# Command Handlers Register
+application.add_handler(CommandHandler(["bal", "balance"], balance_cmd, block=False))
+application.add_handler(CommandHandler(["tokens", "tbal", "token"], tokens_cmd, block=False))
+
+LOGGER.info("✓ Balance & Tokens module loaded successfully")
