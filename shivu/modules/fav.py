@@ -139,6 +139,10 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
 
             pop_up_text = to_small_caps("DONE! MADE IT YOUR FAVOURITE")
             await query.answer(pop_up_text, show_alert=True)
+            
+            # Message Delete on YES
+            if query.message:
+                await query.message.delete()
 
         elif action == "fvx":
             req_user_id = int(parts[1])
@@ -150,6 +154,7 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
             cancel_text = to_small_caps("CANCELLED!")
             await query.answer(cancel_text, show_alert=True)
             
+            # Message Delete on NO
             if query.message:
                 await query.message.delete()
 
@@ -158,7 +163,7 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
         await query.answer(f"Error occurred!", show_alert=True)
 
 
-# Application Handlers (block=False ko hata diya gaya hai)
+# Application Handlers
 application.add_handler(CommandHandler("fav", fav))
 application.add_handler(
     CallbackQueryHandler(handle_fav_callback, pattern="^fv[cx]_")
