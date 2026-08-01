@@ -1,16 +1,9 @@
+import logging
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
-from shivu import application, user_collection, LOGGER
+from shivu import application, user_collection
 
-
-async def get_user(uid: int):
-    return await user_collection.find_one({"id": uid})
-
-
-async def init_user(uid: int):
-    user = {"id": uid, "balance": 0}
-    await user_collection.insert_one(user)
-    return user
+LOGGER = logging.getLogger(__name__)
 
 
 async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -20,13 +13,13 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
     try:
-        user = await get_user(uid)
-        if user is None:
-            user = await init_user(uid)
+        user = await user_collection.find_one({"id": uid})
+        if not user:
+            user = {"id": uid, "balance": 0}
+            await user_collection.insert_one(user)
 
         balance = user.get("balance", 0)
 
-        # Formatting: Small caps + Bold text, Monospace number (click-to-copy)
         await update.message.reply_text(
             f"💸 **ʙᴀʟᴀɴᴄᴇ:** `{balance}`",
             parse_mode="Markdown",
