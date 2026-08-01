@@ -13,7 +13,7 @@ async def get_user(uid: int):
 
 async def init_user(uid: int):
     try:
-        user = {"id": uid, "balance": 0}
+        user = {"id": uid, "balance": 0, "coins": 0}
         await user_collection.insert_one(user)
         return user
     except Exception as e:
@@ -32,11 +32,16 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user is None:
             user = await init_user(uid)
 
-        balance = user.get("balance", 0)
+        # Database ki sabhi keys ko priority check karega (Coins -> Balance -> Gold -> Points)
+        balance_amount = (
+            user.get("coins") 
+            if user.get("coins") is not None 
+            else user.get("balance", user.get("gold", user.get("points", user.get("wallet", 0))))
+        )
 
-        # HTML Formatting: <b>...</b> se Guaranteed Bold + <code>...</code> se Monospace (Copyable)
+        # Output Text: Bold Small Caps + Bold Copyable Monospace Number
         await update.message.reply_text(
-            f"💸 <b>ʙᴀʟᴀɴᴄᴇ:</b> `{balance}`",
+            f"💸 <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance_amount}</code></b>",
             parse_mode="HTML",
         )
     except Exception as e:
@@ -50,7 +55,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
-# Command Handler Register
+# Register Command Handler
 application.add_handler(CommandHandler("bal", balance_cmd, block=False))
 
 LOGGER.info("✓ Balance module loaded successfully")
