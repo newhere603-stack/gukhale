@@ -1,35 +1,19 @@
+From pymongo import MongoClient
 import os
-from motor.motor_asyncio import AsyncIOMotorClient
 
-MONGO_URI = os.getenv(
-    "MONGO_URL",
-    "mongodb+srv://teamdaxx123:teamdaxx123@cluster0.ysbpgcp.mongodb.net/?retryWrites=true&w=majority",
-)
+
+MONGO_URI = os.getenv("mongodb+srv://teamdaxx123:teamdaxx123@cluster0.ysbpgcp.mongodb.net/?retryWrites=true&w=majority")
 DB_NAME = os.getenv("DB_NAME", "GRABBING_YOUR_WAIFU")
+COLLECTION_NAME = "users"
 
-db_client = None
+client = MongoClient(MONGO_URI)
+db = client[DB_NAME]
+collection = db[COLLECTION_NAME]
 
-def get_db():
-    global db_client
-    if db_client is None:
-        db_client = AsyncIOMotorClient(MONGO_URI)
-    return db_client[DB_NAME]
+def get_user_data(user_id):
+    return collection.find_one({"user_id": user_id})
 
-class LazyCollection:
-    def __init__(self, name):
-        self.name = name
+def save_user_data(user_id, user_data):
+    collection.update_one({"user_id": user_id}, {"$set": user_data}, upsert=True)
+    print("User data saved successfully.")
 
-    @property
-    def col(self):
-        return get_db()[self.name]
-
-    async def find_one(self, *args, **kwargs):
-        return await self.col.find_one(*args, **kwargs)
-
-    async def insert_one(self, *args, **kwargs):
-        return await self.col.insert_one(*args, **kwargs)
-
-    async def update_one(self, *args, **kwargs):
-        return await self.col.update_one(*args, **kwargs)
-
-user_collection = LazyCollection("users")
