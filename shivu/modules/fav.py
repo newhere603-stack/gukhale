@@ -64,7 +64,7 @@ async def fav(update: Update, context: CallbackContext) -> None:
 
         caption = (
             f"<b>{heading}</b>\n"
-            f"↳ <b>{escape(small_char_name)}</b> [ 🚪 ] (<b>{escape(small_anime_name)}</b>)"
+            f"⤿ <b>{escape(small_char_name)}</b> ↷\n(<b>{escape(small_anime_name)}</b>)"
         )
 
         media_url = character.get("img_url")
