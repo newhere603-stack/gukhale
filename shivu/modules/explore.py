@@ -1,7 +1,8 @@
 import random
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, CallbackContext
 
 from shivu import application, user_collection
@@ -26,13 +27,14 @@ class ExploreResult:
 CONFIG = ExploreConfig()
 user_cooldowns = {}
 
+# Sabhi actions ko Small Caps font aur bold me kar diya gaya hai
 EXPLORE_ACTIONS = [
-    "explored a dungeon",
-    "ventured into a dark forest",
-    "discovered ancient ruins",
-    "infiltrated an elvish village",
-    "raided a goblin nest",
-    "survived an orc den"
+    "<b>ᴇxᴘʟᴏʀᴇᴅ ᴀ ᴅᴜɴɢᴇᴏɴ</b>",
+    "<b>ᴠᴇɴᴛᴜʀᴇᴅ ɪɴᴛᴏ ᴀ ᴅᴀʀᴋ ғᴏʀᴇsᴛ</b>",
+    "<b>ᴅɪsᴄᴏᴠᴇʀᴇᴅ ᴀɴᴄɪᴇɴᴛ ʀᴜɪɴs</b>",
+    "<b>ɪɴғɪʟᴛʀᴀᴛᴇᴅ ᴀɴ ᴇʟᴠɪsʜ ᴠɪʟʟᴀɢᴇ</b>",
+    "<b>ʀᴀɪᴅᴇᴅ ᴀ ɢᴏʙʟɪɴ ɴᴇsᴛ</b>",
+    "<b>sᴜʀᴠɪᴠᴇᴅ ᴀɴ ᴏʀᴄ ᴅᴇɴ</b>"
 ]
 
 
@@ -40,24 +42,28 @@ def check_cooldown(user_id: int) -> int | None:
     if user_id not in user_cooldowns:
         return None
     
-    elapsed = (datetime.utcnow() - user_cooldowns[user_id]).total_seconds()
+    elapsed = (datetime.now(timezone.utc) - user_cooldowns[user_id]).total_seconds()
     return None if elapsed >= CONFIG.cooldown else int(CONFIG.cooldown - elapsed)
 
 
 async def explore_cmd(update: Update, context: CallbackContext) -> None:
+    if not update.message:
+        return
+
     if update.effective_chat.type == "private":
-        await update.message.reply_text("❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!")
+        await update.message.reply_text("<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!</b>", parse_mode=ParseMode.HTML)
         return
 
     if update.message.reply_to_message:
-        await update.message.reply_text("❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴɴᴏᴛ ʙᴇ ᴜsᴇᴅ ᴀs ᴀ ʀᴇᴘʟʏ!")
+        await update.message.reply_text("<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴɴᴏᴛ ʙᴇ ᴜsᴇᴅ ᴀs ᴀ ʀᴇᴘʟʏ!</b>", parse_mode=ParseMode.HTML)
         return
 
     user_id = update.effective_user.id
 
     if remaining := check_cooldown(user_id):
         await update.message.reply_text(
-            f"⏰ ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining} sᴇᴄᴏɴᴅs ʙᴇғᴏʀᴇ ᴇxᴘʟᴏʀɪɴɢ ᴀɢᴀɪɴ!"
+            f"<b>⏰ ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining} sᴇᴄᴏɴᴅs ʙᴇғᴏʀᴇ ᴇxᴘʟᴏʀɪɴɢ ᴀɢᴀɪɴ!</b>",
+            parse_mode=ParseMode.HTML
         )
         return
 
@@ -65,12 +71,13 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         user = await user_collection.find_one({'id': user_id})
         
         if not user:
-            await update.message.reply_text("❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴ ᴀᴄᴄᴏᴜɴᴛ ʏᴇᴛ!")
+            await update.message.reply_text("<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴ ᴀᴄᴄᴏᴜɴᴛ ʏᴇᴛ!</b>", parse_mode=ParseMode.HTML)
             return
 
         if user.get('balance', 0) < CONFIG.min_balance:
             await update.message.reply_text(
-                f"❌ ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀsᴛ {CONFIG.min_balance} ᴛᴏᴋᴇɴs ᴛᴏ ᴇxᴘʟᴏʀᴇ!"
+                f"<b>❌ ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀsᴛ {CONFIG.min_balance} ᴛᴏᴋᴇɴs ᴛᴏ ᴇxᴘʟᴏʀᴇ!</b>",
+                parse_mode=ParseMode.HTML
             )
             return
 
@@ -81,19 +88,20 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             {'$inc': {'balance': reward - CONFIG.fee}}
         )
 
-        user_cooldowns[user_id] = datetime.utcnow()
+        user_cooldowns[user_id] = datetime.now(timezone.utc)
 
         action = random.choice(EXPLORE_ACTIONS)
         await update.message.reply_text(
-            f"🗺️ Yᴏᴜ {action} Aɴᴅ Fᴏᴜɴᴅ 💸 {reward} Cᴏɪɴs!\n"
-            f"💸 Exᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: 💸 {CONFIG.fee} Cᴏɪɴs"
+            f"<b>🗺️ ʏᴏᴜ</b> {action} <b>ᴀɴᴅ ғᴏᴜɴᴅ 💸 {reward} ᴄᴏɪɴs!</b>\n"
+            f"<b>💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: 💸 {CONFIG.fee} ᴄᴏɪɴs</b>",
+            parse_mode=ParseMode.HTML
         )
 
     except Exception as e:
         await update.message.reply_text(
-            f"❌ ᴇʀʀᴏʀ: <code>{str(e)}</code>",
-            parse_mode='HTML'
+            f"<b>❌ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>",
+            parse_mode=ParseMode.HTML
         )
 
 
-application.add_handler(CommandHandler("explore", explore_cmd))
+application.add_handler(CommandHandler("explore", explore_cmd, block=False))
