@@ -1,6 +1,8 @@
 import random
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
+from typing import Optional
+
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, CallbackContext
@@ -17,17 +19,9 @@ class ExploreConfig:
     min_balance: int = 500
 
 
-@dataclass
-class ExploreResult:
-    success: bool
-    message: str
-    reward: int = 0
-
-
 CONFIG = ExploreConfig()
 user_cooldowns = {}
 
-# Clean Small Caps text (Without nested HTML tags)
 EXPLORE_ACTIONS = [
     "ᴇxᴘʟᴏʀᴇᴅ ᴀ ᴅᴜɴɢᴇᴏɴ",
     "ᴠᴇɴᴛᴜʀᴇᴅ ɪɴᴛᴏ ᴀ ᴅᴀʀᴋ ғᴏʀᴇsᴛ",
@@ -38,11 +32,11 @@ EXPLORE_ACTIONS = [
 ]
 
 
-def check_cooldown(user_id: int) -> int | None:
+def check_cooldown(user_id: int) -> Optional[int]:
     if user_id not in user_cooldowns:
         return None
     
-    elapsed = (datetime.now(timezone.utc) - user_cooldowns[user_id]).total_seconds()
+    elapsed = (datetime.utcnow() - user_cooldowns[user_id]).total_seconds()
     remaining = CONFIG.cooldown - elapsed
     return int(remaining) if remaining > 0 else None
 
@@ -90,7 +84,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             {'$inc': {'balance': reward - CONFIG.fee}}
         )
 
-        user_cooldowns[user_id] = datetime.now(timezone.utc)
+        user_cooldowns[user_id] = datetime.utcnow()
 
         action = random.choice(EXPLORE_ACTIONS)
         await update.message.reply_text(
