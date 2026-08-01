@@ -99,12 +99,8 @@ def set_cooldown(user_id: int, cmd: str):
 
 
 async def is_user_joined(update: Update, context: CallbackContext) -> bool:
-    chat = update.effective_chat
     user = update.effective_user
-    if not chat or not user:
-        return True
-    
-    if chat.type != "private":
+    if not user:
         return True
     
     try:
@@ -329,10 +325,13 @@ async def propose(update: Update, context: CallbackContext):
 # ---------------- CALLBACK HANDLER FOR TRY AGAIN ----------------
 async def propose_callback(update: Update, context: CallbackContext):
     query = update.callback_query
+    if not query:
+        return
+
     try:
         await query.answer()
     except Exception:
-        return
+        pass
 
     if query.data == "propose_checksub":
         user = query.from_user
