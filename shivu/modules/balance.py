@@ -43,8 +43,8 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LOGGER.error(f"Critical error in balance_cmd: {e}")
         try:
             await update.message.reply_text(
-                "⚠️ **ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.**",
-                parse_mode="Markdown",
+                "⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
+                parse_mode="HTML",
             )
         except Exception:
             pass
