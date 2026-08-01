@@ -1,8 +1,4 @@
-import nest_asyncio
-nest_asyncio.apply()
-
-# Baki saare imports iske BAAD aayenge
-
+import asyncio
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
@@ -18,7 +14,7 @@ from shivu import db, shivuu, application, LOGGER
 from shivu.modules import ALL_MODULES
 
 OWNER_ID = 7657218453
-SUDO_USERS = [7657218453]
+SUDO_USERS = [8949956998]
 
 collection = db['anime_characters_lol']
 user_collection = db['user_collection_lmaoooo']
@@ -279,14 +275,14 @@ async def guess(update: Update, context: CallbackContext) -> None:
         r_emoji, r_name = (rarity.split(' ', 1) + [''])[:2] if isinstance(rarity, str) and ' ' in rarity else (rarity, '')
 
         success_message = (
-    f"<b>✅ {escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs</b> 🎉\n"
-    "<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧</b>\n\n"
+    f"✅ <b>{escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs 🎉\n"
+    "ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ</b> 🫧\n\n"
     f"🌸 𝗡𝗔𝗠𝗘: {escape(character.get('name', 'Unknown'))}\n"
     f"💮 𝗥𝗔𝗥𝗜𝗧𝗬: {escape(r_emoji)} {escape(r_name)}\n"
     f"❇️ 𝗔𝗡𝗜𝗠𝗘: {escape(character.get('anime', 'Unknown'))}\n\n"
-    "<b>⛩ Check your /harem Now</b>"
+    "⛩ <b>Check your /harem Now</b>"
 )
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🪼 ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
         await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
         spawn_message_links.pop(chat_id, None)
 
@@ -297,7 +293,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
     lines = ["<b>🎯 Rarity Spawn Status</b>\n"]
     for key, (emoji, name) in RARITIES.items():
-        state = "✅ ᴏɴ" if rarity_status_cache.get(key, True) else "❌ ᴏғғ"
+        state = "✅ ON" if rarity_status_cache.get(key, True) else "❌ OFF"
         lines.append(f"{emoji} <b>{escape(name)}</b> (<code>{key}</code>) — {state}")
     lines.append("\nUse /rarity_on <key> or /rarity_off <key> to change.")
     await update.message.reply_html("\n".join(lines))
@@ -367,7 +363,7 @@ async def main():
         await application.start()
         await application.updater.start_polling(drop_pending_updates=True)
 
-        LOGGER.info("✅ ᴡᴀɪғᴜ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
+        LOGGER.info("✅ ʏᴏɪᴄʜɪ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
         await asyncio.Event().wait()
 
     except Exception:
