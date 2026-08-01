@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 from shivu import application, sudo_users_collection
 
-# Aapki Master Owner ID (Only You)
+# Aapki Master Owner ID
 OWNER_ID = 7657218453
 
 
@@ -17,18 +17,20 @@ def to_small_caps(text: str) -> str:
     return str(text).translate(trans)
 
 
-async def is_sudo(user_id: int) -> bool:
-    if user_id == OWNER_ID:
-        return True
-    return await sudo_users_collection.find_one({"id": user_id}) is not None
+# Owner Validation Function
+def is_owner(user_id: int) -> bool:
+    try:
+        return int(user_id) == int(OWNER_ID)
+    except Exception:
+        return False
 
 
 # 1. ADD SUDO COMMAND (Silent for non-owners)
 async def addsudo_cmd(update: Update, context: CallbackContext):
     msg, user = update.effective_message, update.effective_user
 
-    # Non-owner test karega toh NO REPLY AT ALL (Silent)
-    if not user or user.id != OWNER_ID:
+    # Owner ke alawa koi aur chalaye toh Silent Ignore
+    if not user or not is_owner(user.id):
         return
 
     target_id = None
@@ -51,8 +53,8 @@ async def addsudo_cmd(update: Update, context: CallbackContext):
         except Exception:
             pass
     else:
-        err_msg = f"<b>{to_small_caps('REPLY TO A USER MESSAGE OR GIVE USER ID TO ADD THEM AS SUDO.')}\n{to_small_caps('EXAMPLE: /ADDSUDO 12345678')}</b>"
-        return await msg.reply_text(err_msg, parse_mode="HTML")
+        err_text = f"<b>{to_small_caps('REPLY TO A USER MESSAGE OR GIVE USER ID TO ADD THEM AS SUDO.')}\n{to_small_caps('EXAMPLE: /ADDSUDO 12345678')}</b>"
+        return await msg.reply_text(err_text, parse_mode="HTML")
 
     await sudo_users_collection.update_one(
         {"id": target_id},
@@ -67,16 +69,15 @@ async def addsudo_cmd(update: Update, context: CallbackContext):
         upsert=True,
     )
 
-    success_msg = f"<b>{to_small_caps('ADDED')} <a href='tg://user?id={target_id}'>{to_small_caps(target_name)}</a> {to_small_caps('AS SUDO USER.')}</b>"
-    await msg.reply_html(success_msg)
+    success_text = f"<b>{to_small_caps('ADDED')} <a href='tg://user?id={target_id}'>{to_small_caps(target_name)}</a> {to_small_caps('AS SUDO USER.')}</b>"
+    await msg.reply_html(success_text)
 
 
 # 2. REMOVE SUDO COMMAND (Silent for non-owners)
 async def removesudo_cmd(update: Update, context: CallbackContext):
     msg, user = update.effective_message, update.effective_user
 
-    # Silent Ignore if not Owner
-    if not user or user.id != OWNER_ID:
+    if not user or not is_owner(user.id):
         return
 
     target_id = None
@@ -86,33 +87,30 @@ async def removesudo_cmd(update: Update, context: CallbackContext):
     elif context.args and context.args[0].isdigit():
         target_id = int(context.args[0])
     else:
-        err_msg = f"<b>{to_small_caps('REPLY TO A SUDO USER MESSAGE OR PROVIDE ID TO REMOVE THEM.')}\n{to_small_caps('EXAMPLE: /REMOVESUDO 12345678')}</b>"
-        return await msg.reply_text(err_msg, parse_mode="HTML")
+        err_text = f"<b>{to_small_caps('REPLY TO A SUDO USER MESSAGE OR PROVIDE ID TO REMOVE THEM.')}\n{to_small_caps('EXAMPLE: /REMOVESUDO 12345678')}</b>"
+        return await msg.reply_text(err_text, parse_mode="HTML")
 
-    if target_id == OWNER_ID:
-        err_msg = (
+    if is_owner(target_id):
+        err_text = (
             f"<b>{to_small_caps('YOU CANNOT REMOVE THE MAIN OWNER!')}</b>"
         )
-        return await msg.reply_text(err_msg, parse_mode="HTML")
+        return await msg.reply_text(err_text, parse_mode="HTML")
 
     deleted_res = await sudo_users_collection.delete_one({"id": target_id})
 
     if deleted_res.deleted_count > 0:
-        res_msg = f"<b>{to_small_caps('REMOVED USER')} <code>{target_id}</code> {to_small_caps('FROM SUDO LIST.')}</b>"
-        await msg.reply_html(res_msg)
+        res_text = f"<b>{to_small_caps('REMOVED USER')} <code>{target_id}</code> {to_small_caps('FROM SUDO LIST.')}</b>"
+        await msg.reply_html(res_text)
     else:
-        res_msg = (
-            f"<b>{to_small_caps('USER NOT FOUND IN SUDO DATABASE.')}</b>"
-        )
-        await msg.reply_text(res_msg, parse_mode="HTML")
+        res_text = f"<b>{to_small_caps('USER NOT FOUND IN SUDO DATABASE.')}</b>"
+        await msg.reply_text(res_text, parse_mode="HTML")
 
 
 # 3. SUDO LIST COMMAND (Silent for non-owners)
 async def sudolist_cmd(update: Update, context: CallbackContext):
     msg, user = update.effective_message, update.effective_user
 
-    # Silent Ignore if not Owner
-    if not user or user.id != OWNER_ID:
+    if not user or not is_owner(user.id):
         return
 
     users = await sudo_users_collection.find().to_list(length=None)
@@ -124,7 +122,7 @@ async def sudolist_cmd(update: Update, context: CallbackContext):
     if users:
         for u in users:
             u_id = u.get("id")
-            if u_id != OWNER_ID:
+            if not is_owner(u_id):
                 u_name = to_small_caps(u.get("first_name", "SUDO USER"))
                 text += f"{count}. <a href='tg://user?id={u_id}'>{u_name}</a>\n"
                 count += 1
