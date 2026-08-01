@@ -148,7 +148,7 @@ class GameUI:
     @staticmethod
     def play_again(command: str, args: str = "") -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([[
-            InlineKeyboardButton("⟳ ᴘʟᴀʏ ᴀɢᴀɪɴ", callback_data=f"games:repeat:{command}:{args or '_'}")
+            InlineKeyboardButton("ᴘʟᴀʏ ᴀɢᴀɪɴ ⟳", callback_data=f"games:repeat:{command}:{args or '_'}")
         ]])
 
     @staticmethod
