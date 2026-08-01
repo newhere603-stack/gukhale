@@ -319,7 +319,7 @@ async def send_or_edit_response(update: Update, text: str, markup=None):
             pass
     
     msg = update.callback_query.message if update.callback_query else update.message
-    await msg.reply_text(text, reply_markup=markup, parse_mode="HTML")
+    return await msg.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
 
 async def check_cooldown(update: Update, user_id: int) -> bool:
@@ -374,7 +374,6 @@ async def process_game(update: Update, context: CallbackContext, game_type: Game
 
 
 def extract_args(update: Update, context: CallbackContext, override_args: List[str] = None) -> List[str]:
-    """Helper to extract args cleanly both from /commands and Inline Button clicks"""
     if override_args is not None and len(override_args) > 0 and override_args != ['_']:
         return override_args
     return context.args or []
@@ -529,7 +528,7 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
         f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜᴍʙᴇʀ</b></i>"
     )
     sent = await send_or_edit_response(update, text)
-    msg_id = sent.message_id if sent else update.callback_query.message.message_id
+    msg_id = sent.message_id if sent else (update.callback_query.message.message_id if update.callback_query else 0)
     
     riddle_data = PendingRiddle(answer, time.time() + CONFIG.riddle_timeout, msg_id, update.effective_chat.id, question)
     game_state.riddles[user_id] = riddle_data
@@ -558,10 +557,8 @@ async def riddle_answer(update: Update, context: CallbackContext):
         return
     
     user_id = update.effective_user.id
-    if not (pending := game_state.riddles.get(user_id)):
-        return
-    
-    if not update.effective_chat or update.effective_chat.id != pending.chat_id:
+    pending = game_state.riddles.get(user_id)
+    if not pending:
         return
     
     text = (update.message.text or "").strip()
@@ -584,19 +581,19 @@ async def riddle_answer(update: Update, context: CallbackContext):
         
         rewards_str = f"<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs</b>"
         if total_tokens > 0:
-            rewards_str += f" <b>&amp; {total_tokens} ᴛᴏᴋᴇɴ!</b>"
+            rewards_str += f" <b>& {total_tokens} ᴛᴏᴋᴇɴ!</b>"
             
         await update.message.reply_text(
             f"<b>✅ ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
             parse_mode="HTML"
         )
-    else:
+        game_state.riddles.pop(user_id, None)
+    elif text.isdigit() or (text.startswith('-') and text[1:].isdigit()):
         await update.message.reply_text(
             f"<b>❌ ᴡʀᴏɴɢ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {pending.answer}</b>",
             parse_mode="HTML"
         )
-    
-    game_state.riddles.pop(user_id, None)
+        game_state.riddles.pop(user_id, None)
 
 
 async def games_menu(update: Update, context: CallbackContext):
@@ -636,7 +633,7 @@ async def game_stats(update: Update, context: CallbackContext):
     await send_or_edit_response(update, text)
 
 
-# --- CALLBACK QUERY HANDLER FOR GAMES HUB & REPEAT ---
+# --- CALLBACK QUERY HANDLER ---
 
 async def games_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -665,7 +662,6 @@ async def games_callback(update: Update, context: CallbackContext):
         await query.message.reply_text(info_texts.get(game_cmd, "Unknown Game"), parse_mode="HTML")
 
     elif action == "repeat":
-        # Check Cooldown - Show Popup alert timer on rapid clicks!
         if remaining := game_state.check_cooldown(user_id):
             await query.answer(f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ!", show_alert=True)
             return
@@ -690,7 +686,7 @@ async def games_callback(update: Update, context: CallbackContext):
             await handler(update, context, override_args=parsed_args)
 
 
-# --- REGISTER HANDLERS INTO APPLICATION ---
+# --- HANDLERS REGISTRATION ---
 
 application.add_handler(CommandHandler("sbet", sbet))
 application.add_handler(CommandHandler("roll", roll_cmd))
@@ -702,8 +698,7 @@ application.add_handler(CommandHandler("riddle", riddle))
 application.add_handler(CommandHandler("games", games_menu))
 application.add_handler(CommandHandler("gamestats", game_stats))
 
-# Callback Query Handler for Game Buttons
 application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:"))
 
-# Message Handler for Riddle Answers
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer))
+# group=1 ensure karega ki riddle answer handler priority me sabse pehle chale!
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer), group=1)
