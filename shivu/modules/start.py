@@ -14,10 +14,11 @@ from shivu import (
 
 START_VIDEO = "https://graph.org/file/e668451eba24048fe880c-8cefbbe834e0f673d8.mp4"
 FORCE_SUB_CHAT = "anime_group_hai"
+OWNER_ID = 7657218453  # Aapki Master Owner ID
 
 # Small Caps + Bold Text for Main Caption
 MAIN_CAPTION = (
-    f"<b>✨ ʜᴇʏ ᴛʜᴇʀᴇ! ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b>\n\n"
+    f"<b>✨ ʜᴇʏ {mention}! ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b>\n\n"
     f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!</b>"
 )
 
@@ -89,6 +90,7 @@ CATEGORIES = {
             ("/broadcast", "ʙʀᴏᴀᴅᴄᴀsᴛ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ᴀʟʟ ᴜsᴇʀs"),
             ("/addsudo", "ᴀᴅᴅ ᴀ sᴜᴅᴏ ᴜsᴇʀ"),
             ("/removesudo", "ʀᴇᴍᴏᴠᴇ ᴀ sᴜᴅᴏ ᴜsᴇʀ"),
+            ("/sudolist", "ᴠɪᴇᴡ sᴜᴅᴏ ᴜsᴇʀs ʟɪsᴛ"),
             ("/ban", "ʙᴀɴ ᴀ ᴜsᴇʀ ғʀᴏᴍ ᴛʜᴇ ʙᴏᴛ"),
             ("/unban", "ᴜɴʙᴀɴ ᴀ ᴜsᴇʀ"),
             ("/stats", "ᴠɪᴇᴡ ʙᴏᴛ sᴛᴀᴛɪsᴛɪᴄs"),
@@ -122,7 +124,7 @@ def menu_view():
         [InlineKeyboardButton("ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="sxc_back")],
     ]
     return (
-        "<b>ʜᴇʟᴘ ᴍᴇɴᴜ</b>\n\n<b>sᴇʟᴇᴄᴛ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴᴅs:</b>",
+        "<b>ʜᴇʟᴘ ᴍᴇɴᴜ</b>\n\n<b>sᴇʟᴇᴄᴛ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴ檔:</b>",
         InlineKeyboardMarkup(kb),
     )
 
@@ -157,22 +159,32 @@ def category_view(cat_key: str, page: int = 1):
     return text, InlineKeyboardMarkup(kb)
 
 
-# Dynamic Credits View Fetching Sudo Users Directly from Database
+# Dynamic Credits View Fetching Owner & Sudo Users Directly from Database
 async def credits_view(context: CallbackContext):
     kb = []
-    # Database se direct active sudo users fetch honge
+    added_ids = set()
+
+    # 1. First add Main Owner Always
+    try:
+        owner_chat = await context.bot.get_chat(OWNER_ID)
+        owner_name = owner_chat.first_name or "ＩＭ 𖣘 ＵＣＨＩＨＡ"
+    except Exception:
+        owner_name = "ＩＭ 𖣘 ＵＣＨＩＨＡ"
+
+    kb.append([InlineKeyboardButton(f"{owner_name}", url=f"tg://user?id={OWNER_ID}")])
+    added_ids.add(OWNER_ID)
+
+    # 2. Database se baki sabhi Sudo Users fetch honge
     sudo_users = await sudo_users_collection.find().to_list(length=None)
 
     if sudo_users:
         for u in sudo_users:
-            name = u.get("first_name", "Sudo User")
-            user_id = u.get("id")
-            url = f"tg://user?id={user_id}"
-            kb.append([InlineKeyboardButton(f"{name}", url=url)])
-    else:
-        kb.append([
-            InlineKeyboardButton("ɴᴏ sᴜᴅᴏ ᴏᴡɴᴇʀs", callback_data="sxc_none")
-        ])
+            u_id = u.get("id")
+            if u_id not in added_ids:
+                name = u.get("first_name", "Sudo User")
+                url = f"tg://user?id={u_id}"
+                kb.append([InlineKeyboardButton(f"{name}", url=url)])
+                added_ids.add(u_id)
 
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
     return "<b>Sudo:</b>", InlineKeyboardMarkup(kb)
@@ -298,7 +310,7 @@ async def button_callback(update: Update, context: CallbackContext):
         if data == "sxc_checksub":
             if not await is_force_sub_member(user_id, context):
                 await query.answer(
-                    "⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True
+                    "ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True
                 )
                 return
             first_name = query.from_user.first_name or "User"
@@ -319,7 +331,7 @@ async def button_callback(update: Update, context: CallbackContext):
             return
 
         if not await is_force_sub_member(user_id, context):
-            await query.answer("⚠️ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!", show_alert=True)
+            await query.answer("ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!", show_alert=True)
             return
 
         await _ensure_user(
