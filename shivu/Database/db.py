@@ -7,17 +7,14 @@ MONGO_URI = os.getenv(
 )
 DB_NAME = os.getenv("DB_NAME", "GRABBING_YOUR_WAIFU")
 
-# Global variable for client
 db_client = None
 
 def get_db():
     global db_client
     if db_client is None:
-        # Motor client running loop ke andar initialize hoga
         db_client = AsyncIOMotorClient(MONGO_URI)
     return db_client[DB_NAME]
 
-# Dummy wrapper or collection accessor
 class LazyCollection:
     def __init__(self, name):
         self.name = name
