@@ -1,7 +1,5 @@
 import random
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -9,17 +7,13 @@ from telegram.ext import CommandHandler, CallbackContext
 
 from shivu import application, user_collection
 
+# Basic Settings
+COOLDOWN_SEC = 73
+FEE = 300
+MIN_REWARD = 600
+MAX_REWARD = 1000
+MIN_BALANCE = 500
 
-@dataclass(frozen=True)
-class ExploreConfig:
-    cooldown: int = 73
-    fee: int = 300
-    min_reward: int = 600
-    max_reward: int = 1000
-    min_balance: int = 500
-
-
-CONFIG = ExploreConfig()
 user_cooldowns = {}
 
 EXPLORE_ACTIONS = [
@@ -30,17 +24,6 @@ EXPLORE_ACTIONS = [
     "ʀᴀɪᴅᴇᴅ ᴀ ɢᴏʙʟɪɴ ɴᴇsᴛ",
     "sᴜʀᴠɪᴠᴇᴅ ᴀɴ ᴏʀᴄ ᴅᴇɴ"
 ]
-
-
-def check_cooldown(user_id: int) -> Optional[int]:
-    if user_id not in user_cooldowns:
-        return None
-    
-    now = datetime.now(timezone.utc)
-    elapsed = (now - user_cooldowns[user_id]).total_seconds()
-    remaining = CONFIG.cooldown - elapsed
-    return int(remaining) if remaining > 0 else None
-
 
 async def explore_cmd(update: Update, context: CallbackContext) -> None:
     if not update.message:
@@ -61,14 +44,18 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         return
 
     user_id = update.effective_user.id
+    now = datetime.now(timezone.utc)
 
-    remaining = check_cooldown(user_id)
-    if remaining is not None:
-        await update.message.reply_text(
-            f"<b>⏰ ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining} sᴇᴄᴏɴᴅs ʙᴇғᴏʀᴇ ᴇxᴘʟᴏʀɪɴɢ ᴀɢᴀɪɴ!</b>",
-            parse_mode=ParseMode.HTML
-        )
-        return
+    # Cooldown Check
+    if user_id in user_cooldowns:
+        elapsed = (now - user_cooldowns[user_id]).total_seconds()
+        if elapsed < COOLDOWN_SEC:
+            remaining = int(COOLDOWN_SEC - elapsed)
+            await update.message.reply_text(
+                f"<b>⏰ ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining} sᴇᴄᴏɴᴅs ʙᴇғᴏʀᴇ ᴇxᴘʟᴏʀɪɴɢ ᴀɢᴀɪɴ!</b>",
+                parse_mode=ParseMode.HTML
+            )
+            return
 
     try:
         user = await user_collection.find_one({'id': user_id})
@@ -80,27 +67,27 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             )
             return
 
-        if user.get('balance', 0) < CONFIG.min_balance:
+        if user.get('balance', 0) < MIN_BALANCE:
             await update.message.reply_text(
-                f"<b>❌ ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀsᴛ {CONFIG.min_balance} ᴄᴏɪɴs ᴛᴏ ᴇxᴘʟᴏʀᴇ!</b>",
+                f"<b>❌ ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀsᴛ {MIN_BALANCE} ᴄᴏɪɴs ᴛᴏ ᴇxᴘʟᴏʀᴇ!</b>",
                 parse_mode=ParseMode.HTML
             )
             return
 
-        reward = random.randint(CONFIG.min_reward, CONFIG.max_reward)
-        net_reward = reward - CONFIG.fee
+        reward = random.randint(MIN_REWARD, MAX_REWARD)
+        net_reward = reward - FEE
 
         await user_collection.update_one(
             {'id': user_id},
             {'$inc': {'balance': net_reward}}
         )
 
-        user_cooldowns[user_id] = datetime.now(timezone.utc)
+        user_cooldowns[user_id] = now
 
         action = random.choice(EXPLORE_ACTIONS)
         await update.message.reply_text(
             f"<b>🗺️ ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ 💸 {reward} ᴄᴏɪɴs!</b>\n"
-            f"<b>💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: 💸 {CONFIG.fee} ᴄᴏɪɴs</b>",
+            f"<b>💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: 💸 {FEE} ᴄᴏɪɴs</b>",
             parse_mode=ParseMode.HTML
         )
 
@@ -109,6 +96,5 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             f"<b>❌ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>",
             parse_mode=ParseMode.HTML
         )
-
 
 application.add_handler(CommandHandler("explore", explore_cmd, block=False))
