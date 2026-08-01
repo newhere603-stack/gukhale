@@ -1,4 +1,4 @@
-#siya method v3
+#siya method v3 - Custom Symbols + Small Caps Font
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
@@ -9,6 +9,19 @@ from typing import Optional, List, Dict, Any
 import random
 import math
 from shivu import db, application, LOGGER
+
+# --- SMALL CAPS CONVERTER HELPERS ---
+SMALL_CAPS_TRANS = str.maketrans(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
+)
+
+def to_small_caps(text: str) -> str:
+    """Converts regular text to Small Caps font matching your style."""
+    if not text:
+        return ""
+    return str(text).translate(SMALL_CAPS_TRANS)
+
 
 RARITIES = {
     "common": ("🟢", "Common"),
@@ -35,7 +48,9 @@ def rarity_display(key: str) -> str:
 
 
 def rarity_emoji(display: str) -> str:
-    return display.split(' ', 1)[0] if display else "🟢"
+    if not display:
+        return "🔮"
+    return display.split(' ', 1)[0] if ' ' in display else display
 
 
 def chunk(items: list, size: int) -> list:
@@ -50,18 +65,20 @@ class Character:
     rarity: str
     img_url: Optional[str] = None
     is_video: bool = False
+    event_emoji: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Optional['Character']:
         if not isinstance(data, dict):
             return None
         return cls(
-            id=data.get('id', ''),
+            id=str(data.get('id', '')),
             name=data.get('name', 'Unknown'),
             anime=data.get('anime', 'Unknown'),
             rarity=data.get('rarity', rarity_display('common')),
             img_url=data.get('img_url'),
-            is_video=data.get('is_video', False)
+            is_video=data.get('is_video', False),
+            event_emoji=data.get('event_emoji') or data.get('event')
         )
 
 
@@ -72,14 +89,14 @@ class DisplayOptions:
     preview_image: bool = True
     show_rarity_full: bool = False
     compact_mode: bool = False
-    show_id_bottom: bool = False
 
 
+# YOUR ORIGINAL SYMBOLS WITH SCREENSHOT STRUCTURE
 DEFAULT_STYLE = {
     'header': "<b>✨ {user_name}'s ʜᴀʀᴇᴍ — ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
     'anime_header': "<b>🎞 {anime}</b> ({user_count}/{total_count})\n",
     'separator': "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n",
-    'character': "{rarity} {id} • {name} x{count}{fav}\n",
+    'character': "<b>➥ {id} | {rarity} | {name}{event} x{count}</b>\n",
     'footer': "\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
@@ -101,7 +118,7 @@ class UserCollection:
             return list(reversed(self.characters))
         if mode == "animes":
             return sorted(self.characters, key=lambda c: c.anime)
-        return self.characters  # default / waifus / unknown -> show all
+        return self.characters
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
         counts: Dict[str, int] = {}
@@ -164,7 +181,9 @@ class HaremMessageBuilder:
 
     def build_message(self, characters: List[Character], anime_counts: Dict[str, int]) -> str:
         message = self.style['header'].format(
-            user_name=escape(self.user_name), page=self.page + 1, total_pages=self.total_pages
+            user_name=escape(to_small_caps(self.user_name)),
+            page=self.page + 1,
+            total_pages=self.total_pages
         )
 
         grouped = self.collection.group_by_anime(characters)
@@ -173,11 +192,15 @@ class HaremMessageBuilder:
 
         for anime, chars in grouped.items():
             user_count = sum(1 for c in self.collection.characters if c.anime == anime)
+            
+            # Formatting Anime header in Small Caps
+            formatted_anime = to_small_caps(escape(anime))
             message += self.style['anime_header'].format(
-                anime=escape(anime), user_count=user_count, total_count=anime_counts.get(anime, 0)
+                anime=formatted_anime,
+                user_count=user_count,
+                total_count=anime_counts.get(anime, 0)
             )
-            if not self.options.compact_mode:
-                message += self.style['separator']
+            message += self.style['separator']
 
             for char in chars:
                 if char.id in seen:
@@ -185,22 +208,27 @@ class HaremMessageBuilder:
                 message += self._format_character(char, counts.get(char.id, 1))
                 seen.add(char.id)
 
-            message += self.style['footer'] if not self.options.compact_mode else '\n'
+            message += self.style['footer']
 
         return message
 
     def _format_character(self, char: Character, count: int) -> str:
-        rarity = char.rarity if self.options.show_rarity_full else rarity_emoji(char.rarity)
-        fav = " [🍁]" if self.collection.favorite and char.id == self.collection.favorite.id else ""
-
-        if self.options.show_id_bottom:
-            line = self.style['character'].replace('{id}', '').format(
-                id='', rarity=rarity, name=escape(char.name), fav=fav, count=count
-            )
-            return line + f"    └─ ɪᴅ: <code>{char.id}</code>\n"
+        # ID padded nicely (e.g. 016, 043, 004)
+        char_id = str(char.id).zfill(3)
+        rarity = rarity_emoji(char.rarity)
+        
+        # Format character name in small caps
+        formatted_name = to_small_caps(escape(char.name))
+        
+        # Event Tag/Emoji formatting if present
+        event_str = f" [{char.event_emoji}]" if char.event_emoji else ""
 
         return self.style['character'].format(
-            id=char.id, rarity=rarity, name=escape(char.name), fav=fav, count=count
+            id=char_id,
+            rarity=rarity,
+            name=formatted_name,
+            event=event_str,
+            count=count
         )
 
 
@@ -244,7 +272,8 @@ class HaremHandler:
         if nav:
             keyboard.append(nav)
 
-        keyboard.append([InlineKeyboardButton("⭆ 5x", callback_data=f"harem_5x:{user_id}")])
+        # 2x Speed Page Skip
+        keyboard.append([InlineKeyboardButton("⭆ 2x", callback_data=f"harem_2x:{page}:{user_id}")])
         keyboard.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"harem_close:{user_id}")])
         return InlineKeyboardMarkup(keyboard)
 
@@ -304,9 +333,6 @@ class HaremHandler:
 
 
 class ModeHandler:
-    """/smode menu: DEFAULT / RARITY / LATEST / ANIMES / WAIFUS + close, with a
-    ✅ marking whichever mode is currently active for the user."""
-
     IMG = "https://files.catbox.moe/sgo9in.png"
     LABELS = {"default": "ᴅᴇғᴀᴜʟᴛ", "latest": "ʟᴀᴛᴇsᴛ", "animes": "ᴀɴɪᴍᴇs", "waifus": "ᴡᴀɪғᴜs"}
 
@@ -400,8 +426,8 @@ class UnfavHandler:
         ]]
         caption = (
             f"<b>💔 ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʀᴇᴍᴏᴠᴇ ᴛʜɪs ғᴀᴠᴏʀɪᴛᴇ?</b>\n\n"
-            f"✨ <b>ɴᴀᴍᴇ:</b> <code>{escape(fav.name)}</code>\n"
-            f"🎞 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(fav.anime)}</code>\n"
+            f"✨ <b>ɴᴀᴍᴇ:</b> <code>{escape(to_small_caps(fav.name))}</code>\n"
+            f"🎞 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n"
             f"🆔 <b>ɪᴅ:</b> <code>{fav.id}</code>"
         )
         await MediaHelper.send_media_message(
@@ -427,8 +453,8 @@ class UnfavHandler:
             await query.edit_message_caption(
                 caption=(
                     f"<b>💔 ғᴀᴠᴏʀɪᴛᴇ ʀᴇᴍᴏᴠᴇᴅ!</b>\n\n"
-                    f"✨ <b>ɴᴀᴍᴇ:</b> <code>{escape(fav.name)}</code>\n"
-                    f"🎞 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(fav.anime)}</code>\n\n"
+                    f"✨ <b>ɴᴀᴍᴇ:</b> <code>{escape(to_small_caps(fav.name))}</code>\n"
+                    f"🎞 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n\n"
                     f"<i>💖 ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ɴᴇᴡ ғᴀᴠᴏʀɪᴛᴇ ᴜsɪɴɢ /fav</i>"
                 ),
                 parse_mode='HTML'
@@ -506,12 +532,18 @@ async def unfav_callback(update: Update, context: CallbackContext):
         LOGGER.error(f"Error in unfav_callback: {e}", exc_info=True)
 
 
-async def harem_5x_callback(update: Update, context: CallbackContext):
+async def harem_2x_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    _, _, user_id_str = query.data.partition(':')
-    if await verify_owner(query, user_id_str) is None:
-        return
-    await query.answer("⭆ 5x ᴠɪᴇᴡ ᴄᴏᴍɪɴɢ sᴏᴏɴ", show_alert=True)
+    try:
+        _, curr_page_str, user_id_str = query.data.split(':')
+        user_id = await verify_owner(query, user_id_str)
+        if user_id is None:
+            return
+        await query.answer("2x ᴘᴀɢᴇ sᴋɪᴘ")
+        target_page = int(curr_page_str) + 2
+        await harem_handler.show_harem(update, context, target_page, edit=True)
+    except Exception as e:
+        LOGGER.error(f"Error in harem_2x_callback: {e}", exc_info=True)
 
 
 async def harem_close_callback(update: Update, context: CallbackContext):
@@ -529,5 +561,5 @@ application.add_handler(CommandHandler("unfav", unfav_command, block=False))
 application.add_handler(CallbackQueryHandler(harem_page_callback, pattern='^harem_page:', block=False))
 application.add_handler(CallbackQueryHandler(mode_callback, pattern='^harem_mode_', block=False))
 application.add_handler(CallbackQueryHandler(unfav_callback, pattern="^harem_unfav_", block=False))
-application.add_handler(CallbackQueryHandler(harem_5x_callback, pattern='^harem_5x:', block=False))
+application.add_handler(CallbackQueryHandler(harem_2x_callback, pattern='^harem_2x:', block=False))
 application.add_handler(CallbackQueryHandler(harem_close_callback, pattern='^harem_close:', block=False))
