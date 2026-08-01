@@ -99,7 +99,7 @@ async def tpay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pt_n_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 🪙 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
+        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -137,7 +137,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         receiver_mention = f"<code>{receiver_id}</code>"
 
     await q.edit_message_text(
-        f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ 🪙 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
+        f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
         parse_mode="HTML"
     )
     await q.answer()
