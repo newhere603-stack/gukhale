@@ -33,5 +33,3 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 application.add_handler(CommandHandler("bal", balance_cmd, block=False))
 
-
-Isme bhi sare reply wale text ko chhote Wale font mein karke bold kardo
