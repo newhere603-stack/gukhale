@@ -519,3 +519,67 @@ async def game_stats(update: Update, context: CallbackContext):
         f"<b>ᴄᴜʀʀᴇɴᴛ ʙᴀʟᴀɴᴄᴇ: <code>{bal:,}</code> ᴄᴏɪɴs</b>"
     )
     await reply(update, text)
+
+
+# --- CALLBACK QUERY HANDLER FOR GAMES HUB & REPEAT ---
+
+async def games_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if not data.startswith("games:"):
+        return
+
+    parts = data.split(":")
+    action = parts[1]
+
+    if action == "info":
+        game_cmd = parts[2]
+        info_texts = {
+            "sbet": "<b>🪙 ᴄᴏɪɴ ғʟɪᴘ</b>\nUsage: <code>/sbet &lt;amount&gt; heads|tails</code>",
+            "roll": "<b>🎲 ᴅɪᴄᴇ ʀᴏʟʟ</b>\nUsage: <code>/roll &lt;amount&gt; odd|even</code>",
+            "gamble": "<b>🎰 ɢᴀᴍʙʟᴇ</b>\nUsage: <code>/gamble &lt;amount&gt; l|r</code>",
+            "basket": "<b>🏀 ʙᴀsᴋᴇᴛʙᴀʟʟ</b>\nUsage: <code>/basket &lt;amount&gt;</code>",
+            "dart": "<b>🎯 ᴅᴀʀᴛs</b>\nUsage: <code>/dart &lt;amount&gt;</code>",
+            "stour": f"<b>🤝 ᴄᴏɴᴛʀᴀᴄᴛ</b>\nUsage: <code>/stour</code>\nFee: {CONFIG.stour_entry_fee} coins",
+            "riddle": "<b>🧩 ʀɪᴅᴅʟᴇ</b>\nUsage: <code>/riddle</code>"
+        }
+        await query.message.reply_text(info_texts.get(game_cmd, "Unknown Game"), parse_mode="HTML")
+
+    elif action == "repeat":
+        cmd = parts[2]
+        args_str = parts[3]
+        context.args = args_str.split(":") if args_str != "_" else []
+
+        handlers = {
+            "sbet": sbet,
+            "roll": roll_cmd,
+            "gamble": gamble,
+            "basket": basket,
+            "dart": dart,
+            "stour": stour,
+            "riddle": riddle
+        }
+
+        if handler := handlers.get(cmd):
+            await handler(update, context)
+
+
+# --- REGISTER HANDLERS INTO APPLICATION ---
+
+application.add_handler(CommandHandler("sbet", sbet))
+application.add_handler(CommandHandler("roll", roll_cmd))
+application.add_handler(CommandHandler("gamble", gamble))
+application.add_handler(CommandHandler("basket", basket))
+application.add_handler(CommandHandler("dart", dart))
+application.add_handler(CommandHandler("stour", stour))
+application.add_handler(CommandHandler("riddle", riddle))
+application.add_handler(CommandHandler("games", games_menu))
+application.add_handler(CommandHandler("gamestats", game_stats))
+
+# Callback Query Handler for Game Buttons
+application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:"))
+
+# Message Handler for Riddle Answers
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer))
