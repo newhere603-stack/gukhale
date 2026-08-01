@@ -7,8 +7,6 @@ from telegram.ext import CommandHandler, CallbackContext
 from shivu import application, user_collection, collection, LOGGER
 
 # NOTE: adjust this import to match wherever RARITIES/rarity_display actually live
-# (e.g. shivu.modules.harem). Centralizing here stops rarity strings from
-# silently drifting out of sync with what's stored in the DB.
 from shivu.modules.harem import RARITIES, rarity_display
 
 # ---------------- CONFIG ----------------
@@ -21,11 +19,36 @@ PROPOSE_COOLDOWN = 300
 PROPOSE_SUCCESS_RATE = 0.5  # 1/6 win chance (half of dice's 2/6)
 
 UPDATE_CHANNEL = "@Anime_Group_hai"
-UPDATE_CHANNEL_URL = "https://t.me/Anime_Group_hai"  # must be SAME channel as above
+UPDATE_CHANNEL_URL = "https://t.me/Anime_Group_hai"
 LOG_GROUP_ID = -1003893927065
 
-PROPOSE_IMAGES = ["https://files.catbox.moe/nvx2um.jpg", "https://files.catbox.moe/vaz41p.jpg", "https://files.catbox.moe/a0ybe8.jpg", "https://files.catbox.moe/5z3vgb.jpg"]
-REJECT_IMAGES = ["https://files.catbox.moe/b9l3ot.jpg", "https://files.catbox.moe/yjygaj.jpg", "https://files.catbox.moe/8ezqu8.jpg"]
+PROPOSE_IMAGES = [
+    "https://files.catbox.moe/nvx2um.jpg",
+    "https://files.catbox.moe/vaz41p.jpg",
+    "https://files.catbox.moe/a0ybe8.jpg",
+    "https://files.catbox.moe/5z3vgb.jpg"
+]
+REJECT_IMAGES = [
+    "https://files.catbox.moe/b9l3ot.jpg",
+    "https://files.catbox.moe/yjygaj.jpg",
+    "https://files.catbox.moe/8ezqu8.jpg"
+]
+
+# Multiple rejection responses for dice/marry & propose
+DICE_REJECT_TEXTS = [
+    "<b>ʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏꜱᴀʟ ᴡᴀꜱ ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ ꜱʜᴇ ʀᴀɴ ᴀᴡᴀʏ!</b>",
+    "<b>ꜱʜᴇ ꜱᴀɪᴅ 'ᴇᴡᴡ, ɴᴏ!' ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ ᴇᴠᴇʀʏᴡʜᴇʀᴇ!</b>",
+    "<b>ꜱʜᴇ ᴊᴜꜱᴛ ʟᴀᴜɢʜᴇᴅ ᴀᴛ ʏᴏᴜ ᴀɴᴅ ᴡᴀʟᴋᴇᴅ ᴀᴡᴀʏ!</b>",
+    "<b>ꜱʜᴇ ꜱᴀɪᴅ ꜱʜᴇ ᴏɴʟʏ ꜱᴇᴇꜱ ʏᴏᴜ ᴀꜱ ᴀ ʙʀᴏᴛʜᴇʀ!</b>",
+    "<b>ʏᴏᴜ ɢᴏᴛ 𝄥ʀᴇᴊᴇᴄᴛᴇᴅ! ꜱʜᴇ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ ꜱᴏᴍᴇᴏɴᴇ ᴇʟꜱᴇ.</b>"
+]
+
+PROPOSE_REJECT_TEXTS = [
+    "<b>ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ꜰʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ ꜱᴏ ʜᴀʀᴅ, ʏᴏᴜ'ʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏꜰ ꜰʀɪᴇɴᴅ ᴢᴏɴᴇ ᴄɪᴛʏ! 🏙️</b>",
+    "<b>ꜱʜᴇ ᴛᴏᴏᴋ ʏᴏᴜʀ ᴄᴏɪɴꜱ, ᴀᴛᴇ ʏᴏᴜʀ ꜰᴏᴏᴅ, ᴀɴᴅ ꜱᴀɪᴅ 'ʟᴇᴛ'ꜱ ᴊᴜꜱᴛ ʙᴇ ʙᴇꜱᴛɪᴇꜱ!'</b>",
+    "<b>ꜱʜᴇ ꜱᴀɪᴅ ʏᴏᴜ ᴀʀᴇ ᴛᴏᴏ ɢᴏᴏᴅ ꜰᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇꜰᴛ ʏᴏᴜ ᴏɴ ʀᴇᴀᴅ!</b>",
+    "<b>ᴘʀᴏᴘᴏꜱᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! ꜱʜᴇ ꜱᴀɪᴅ ꜱʜᴇ ɪꜱ ꜰᴏᴄᴜꜱɪɴɢ ᴏɴ ʜᴇʀ ᴄᴀʀᴇᴇʀ right ɴᴏᴡ.</b>"
+]
 
 DICE_RARITIES = [rarity_display(k) for k in ("common", "rare", "legendary")]
 PROPOSE_RARITIES = [rarity_display(k) for k in ("celestial", "exclusive")]
@@ -88,10 +111,10 @@ async def add_char_to_user(user_id: int, username: str, first_name: str, char: d
 async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     text = (
         "<b>🏆 ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴄʟᴀɪᴍᴇᴅ!</b>\n━━━━━━━━━━━━━━━━━━━━\n"
-        f"<b>👤 ᴜsᴇʀ:</b> <a href='tg://user?id={user.id}'>{user.first_name}</a>\n"
-        f"<b>🕹️ ᴍᴇᴛʜᴏᴅ:</b> <code>/{method}</code>\n"
-        f"<b>🌸 ɴᴀᴍᴇ:</b> {char['name']}\n"
-        f"<b>💎 ʀᴀʀɪᴛʏ:</b> <code>{char['rarity']}</code>\n━━━━━━━━━━━━━━━━━━━━"
+        f"<b>👤 ᴜsᴇʀ: <a href='tg://user?id={user.id}'>{user.first_name}</a></b>\n"
+        f"<b>🕹️ ᴍᴇᴛʜᴏᴅ: <code>/{method}</code></b>\n"
+        f"<b>🌸 ɴᴀᴍᴇ: {char['name']}</b>\n"
+        f"<b>💎 ʀᴀʀɪᴛʏ: <code>{char['rarity']}</code></b>\n━━━━━━━━━━━━━━━━━━━━"
     )
     try:
         await context.bot.send_photo(LOG_GROUP_ID, char["img_url"], caption=text, parse_mode="HTML")
@@ -104,22 +127,23 @@ async def dice_marry(update: Update, context: CallbackContext):
     user = update.effective_user
     ok, rem = check_cooldown(user.id, "dice", DICE_COOLDOWN)
     if not ok:
-        return await update.message.reply_text(f"⏳ ᴡᴀɪᴛ <b>{rem // 60}ᴍ {rem % 60}s</b>", parse_mode="HTML")
+        return await update.message.reply_text(f"<b>⏳ ᴡᴀɪᴛ {rem // 60}ᴍ {rem % 60}s</b>", parse_mode="HTML")
 
     val = (await context.bot.send_dice(update.effective_chat.id, emoji="🎲")).dice.value
     await asyncio.sleep(3.5)
 
     if val not in (1, 6):
-        return await update.message.reply_text(f"🎲 ᴅɪᴄᴇ: <b>{val}</b>\nʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏꜱᴀʟ ᴡᴀꜱ ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ ꜱʜᴇ ʀᴀɴ ᴀᴡᴀʏ!", parse_mode="HTML")
+        return await update.message.reply_text(random.choice(DICE_REJECT_TEXTS), parse_mode="HTML")
 
     char = await get_unique_char(user.id, DICE_RARITIES)
     if not char:
-        return await update.message.reply_text("ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!")
+        return await update.message.reply_text("<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>", parse_mode="HTML")
 
     await add_char_to_user(user.id, user.username, user.first_name, char)
     caption = (
-        f"<b>🎲 ᴅɪᴄᴇ ʀᴇsᴜʟᴛ: {val}</b>\nᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs <a href='tg://user?id={user.id}'>{user.first_name}</a>!\n"
-        f"<b>ɴᴀᴍᴇ: </b><b>{char['name']}</b>\nʀᴀʀɪᴛʏ: <b>{char['rarity']}</b>"
+        f"<b>🎉 ᴄᴏɴɢʀᴀᴛs <a href='tg://user?id={user.id}'>{user.first_name}</a>!</b>\n"
+        f"<b>🌸 ɴᴀᴍᴇ: {char['name']}</b>\n"
+        f"<b>💎 ʀᴀʀɪᴛʏ: {char['rarity']}</b>"
     )
     await update.message.reply_photo(char["img_url"], caption=caption, parse_mode="HTML")
     await send_win_log(context, user, char, "dice")
@@ -130,7 +154,7 @@ async def propose(update: Update, context: CallbackContext):
     user = update.effective_user
 
     if not await is_user_joined(context, user.id):
-        btn = [[InlineKeyboardButton("📢 ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇ ᴄʜᴀɴɴᴇʟ", url=UPDATE_CHANNEL_URL)]]
+        btn = [[InlineKeyboardButton("ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇ", url=UPDATE_CHANNEL_URL)]]
         return await update.message.reply_text(
             "<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
             reply_markup=InlineKeyboardMarkup(btn), parse_mode="HTML",
@@ -142,7 +166,7 @@ async def propose(update: Update, context: CallbackContext):
 
     ok, rem = check_cooldown(user.id, "propose", PROPOSE_COOLDOWN)
     if not ok:
-        return await update.message.reply_text(f"<b>⏳ ᴄᴏᴏʟᴅᴏᴡɴ: </b><code>{rem // 60}ᴍ {rem % 60}s</code>", parse_mode="HTML")
+        return await update.message.reply_text(f"<b>⏳ ᴄᴏᴏʟᴅᴏᴡɴ: <code>{rem // 60}ᴍ {rem % 60}s</code></b>", parse_mode="HTML")
 
     await user_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
 
@@ -155,23 +179,23 @@ async def propose(update: Update, context: CallbackContext):
         await msg.delete()
         return await update.message.reply_photo(
             random.choice(REJECT_IMAGES),
-            caption=f"<b>ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ꜰʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ ꜱᴏ ʜᴀʀᴅ, ʏᴏᴜ'ʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏꜰ ꜰʀɪᴇɴᴅ ᴢᴏɴᴇ ᴄɪᴛʏ! 🏙️!</b>",
+            caption=random.choice(PROPOSE_REJECT_TEXTS),
             parse_mode="HTML",
         )
 
     char = await get_unique_char(user.id, PROPOSE_RARITIES)
     if not char:
         await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
-        return await msg.edit_caption(caption="ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ʀᴀʀᴇ ᴄʜᴀʀs ʟᴇғᴛ.")
+        return await msg.edit_caption(caption="<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ʀᴀʀᴇ ᴄʜᴀʀs ʟᴇғᴛ.</b>", parse_mode="HTML")
 
     await add_char_to_user(user.id, user.username, user.first_name, char)
     await msg.delete()
     caption = (
         f"<b>{char['name']} ʜᴀꜱ ᴀᴄᴄᴇᴘᴛᴇᴅ ʏᴏᴜʀ ᴘʀᴏᴘᴏꜱᴀʟ! 😇</b>\n"
-        f"☘️ 𝙉𝙖𝙢𝙚: {char['name']}\n"
-        f"🏵️ 𝙍𝙖𝙧𝙞𝙩𝙮: {char['rarity']}\n"
-        f"🎞 𝘼𝙣𝙞𝙢𝙚:  {char.get('anime', 'Unknown')}\n"
-        f"🔖 𝙄𝘿: {char['id']}"
+        f"<b>☘️ ɴᴀᴍᴇ: {char['name']}</b>\n"
+        f"<b>🏵️ ʀᴀʀɪᴛʏ: {char['rarity']}</b>\n"
+        f"<b>🎞 ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
+        f"<b>🔖 ɪᴅ: {char['id']}</b>"
     )
     await update.message.reply_photo(char["img_url"], caption=caption, parse_mode="HTML")
     await send_win_log(context, user, char, "propose")
@@ -180,7 +204,7 @@ async def propose(update: Update, context: CallbackContext):
 # ---------------- /cdm (owner/sudo) ----------------
 async def cdm_cmd(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
-        return await update.message.reply_text("🚫 You are not authorized to use this command.")
+        return await update.message.reply_text("<b>🚫 ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>", parse_mode="HTML")
 
     reply = update.message.reply_to_message
     target_id = reply.from_user.id if reply and reply.from_user else None
@@ -188,11 +212,11 @@ async def cdm_cmd(update: Update, context: CallbackContext):
         target_id = int(context.args[0]) if context.args[0].isdigit() else None
 
     if target_id is None:
-        return await update.message.reply_text("Usage: /cdm <user_id> (or reply to the user's message)")
+        return await update.message.reply_text("<b>⚠️ ᴜsᴀɢᴇ: /cdm <user_id> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>", parse_mode="HTML")
 
     cooldowns["dice"].pop(target_id, None)
     cooldowns["propose"].pop(target_id, None)
-    await update.message.reply_text(f"ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ {target_id} (ᴍᴀʀʀʏ ɴ ᴘʀᴏᴘᴏsᴇ).")
+    await update.message.reply_text(f"<b>ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ {target_id} (ᴍᴀʀʀʏ ɴ ᴘʀᴏᴘᴏsᴇ).</b>", parse_mode="HTML")
 
 
 # ---------------- HANDLERS ----------------
