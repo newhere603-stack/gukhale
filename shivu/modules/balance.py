@@ -61,7 +61,7 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Text: Small Caps + Bold | Number formatted with commas inside code block
         await update.message.reply_text(
-            f"💠 <b>ᴛᴏᴋᴇɴs ʙᴀʟᴀɴᴄᴇ: <code>{tokens:,}</code></b>",
+            f"💠 <b>ᴛᴏᴋᴇɴs: <code>{tokens:,}</code></b>",
             parse_mode="HTML",
         )
     except Exception as e:
