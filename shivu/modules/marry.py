@@ -261,7 +261,7 @@ async def propose(update: Update, context: CallbackContext):
     await user_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
     set_cooldown(user.id, "propose")
 
-    # Phase 1: Start Message (Ab yeh bhi user ke message ko reply karegi)
+    # Phase 1: Start Message
     msg = await context.bot.send_photo(
         chat_id=chat_id,
         photo=random.choice(PROPOSE_IMAGES),
@@ -288,7 +288,7 @@ async def propose(update: Update, context: CallbackContext):
     except Exception:
         pass
 
-    # Phase 3: Result (Rejection - WITH REPLY TAG)
+    # Phase 3: Result (Rejection)
     if random.random() > PROPOSE_SUCCESS_RATE:
         reject_text = random.choice(PROPOSE_REJECT_TEXTS).format(user=user_mention)
         return await context.bot.send_photo(
@@ -299,7 +299,7 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    # Phase 3: Result (Win - WITH REPLY TAG)
+    # Phase 3: Result (Win)
     char = await get_unique_char(user.id, PROPOSE_RARITIES)
     if not char:
         await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
@@ -338,11 +338,9 @@ async def propose_callback(update: Update, context: CallbackContext):
     if query.data == "propose_checksub":
         user = query.from_user
         
-        # Check Force Sub
         if not await is_user_joined(context, user.id):
             return await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
         
-        # If joined successfully
         await query.answer("✅ Verified! You can now propose.", show_alert=False)
         
         try:
@@ -375,10 +373,12 @@ async def cdm_cmd(update: Update, context: CallbackContext):
         )
 
     reply = update.message.reply_to_message if update.message else None
-    target_id = reply.from_user.id if reply and reply.from_user else None
+    target_id = None
     
-    if target_id is None and context.args:
-        target_id = int(context.args[0]) if context.args[0].isdigit() else None
+    if reply and reply.from_user:
+        target_id = reply.from_user.id
+    elif context.args and context.args[0].isdigit():
+        target_id = int(context.args[0])
 
     if target_id is None:
         return await context.bot.send_message(
