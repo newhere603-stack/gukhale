@@ -1,4 +1,4 @@
-Import asyncio
+import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest, Forbidden
 from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
@@ -7,10 +7,12 @@ from shivu import application, SUPPORT_CHAT, UPDATE_CHAT, BOT_USERNAME, LOGGER, 
 START_VIDEO = "https://graph.org/file/e668451eba24048fe880c-8cefbbe834e0f673d8.mp4"
 FORCE_SUB_CHAT = "anime_group_hai"
 
+# Small Caps + Bold Text for Main Caption
 MAIN_CAPTION = (
-    f"<b>✨ ʜᴇʏ ᴛʜᴇʀᴇ! ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b> "
+    f"<b>✨ ʜᴇʏ ᴛʜᴇʀᴇ! ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b>\n\n"
     f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!</b>"
 )
+
 MAIN_KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("sᴜᴘᴘᴏʀᴛ", url=f'https://t.me/{SUPPORT_CHAT}'),
      InlineKeyboardButton("ᴜᴘᴅᴀᴛᴇs", url=f'https://t.me/{UPDATE_CHAT}')],
@@ -26,37 +28,37 @@ FORCE_SUB_KEYBOARD = InlineKeyboardMarkup([
 ])
 
 PAGE_SIZE = 6
+
+# Small Caps + Bold Categories & Commands List
 CATEGORIES = {
-    "basic": ("Basic Commands", [
-        ("/start", "Start the bot"),
-        ("/grab", "Grab the character"),
-        ("/fav", "Add a character to your favourite"),
-        ("/claim", "claim your daily reward"),
-        ("/pay", "Give coins💸 to other users"),
-        ("/bal", "See your balence"),
-        ("/harem", "See your character's collection"),
-        ("/gift", "Gift your waifu to someone 🎀"),
-        ("/trade", "Trade characters between users"),
-        ("/top", "View the leaderboard"),
-        ("/sprofile", "View your profile"),
-        ("/changetime", "Change the spawn time of characters [Owner/Admins]"),
+    "basic": ("ʙᴀsɪᴄ ᴄᴏᴍᴍᴀɴᴅs", [
+        ("/start", "sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ"),
+        ("/grab", "ɢʀᴀʙ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ"),
+        ("/fav", "ᴀᴅᴅ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴛᴏ ʏᴏᴜʀ ғᴀᴠᴏᴜʀɪᴛᴇ"),
+        ("/claim", "ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ"),
+        ("/pay", "ɢɪᴠᴇ ᴄᴏɪɴs💸 ᴛᴏ ᴏᴛʜᴇʀ ᴜsᴇʀs"),
+        ("/bal", "sᴇᴇ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ"),
+        ("/harem", "sᴇᴇ ʏᴏᴜʀ ᴄʜᴀʀᴀᴄᴛᴇʀ's ᴄᴏʟʟᴇᴄᴛɪᴏɴ"),
+        ("/gift", "ɢɪғᴛ ʏᴏᴜʀ ᴡᴀɪғᴜ ᴛᴏ sᴏᴍᴇᴏɴᴇ 🎀"),
+        ("/trade", "ᴛʀᴀᴅᴇ ᴄʜᴀʀᴀᴄᴛᴇʀs ʙᴇᴛᴡᴇᴇɴ ᴜsᴇʀs"),
+        ("/top", "ᴠɪᴇᴡ ᴛʜᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ"),
+        ("/sprofile", "ᴠɪᴇᴡ ʏᴏᴜʀ ᴘʀᴏғɪʟᴇ"),
+        ("/changetime", "ᴄʜᴀɴɢᴇ ᴛʜᴇ sᴘᴀᴡɴ ᴛɪᴍᴇ ᴏғ ᴄʜᴀʀᴀᴄᴛᴇʀs [ᴏᴡɴᴇʀ/ᴀᴅᴍɪɴs]"),
     ]),
-    "interactive": ("Interactive Commands", [
-        ("/claim", "Claim your daily reward"),
-        ("/roll", "Gamble your gold"),
-        ("/games", "Play games"),
+    "interactive": ("ɪɴᴛᴇʀᴀᴄᴛɪᴠᴇ ᴄᴏᴍᴍᴀɴᴅs", [
+        ("/claim", "ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ"),
+        ("/roll", "ɢᴀᴍʙʟᴇ ʏᴏᴜʀ ɢᴏʟᴅ"),
+        ("/games", "ᴘʟᴀʏ ɢᴀᴍᴇs"),
     ]),
-    "sudo": ("Sudo Commands", [
-        ("/broadcast", "Broadcast a message to all users"),
-        ("/addsudo", "Add a sudo user"),
-        ("/removesudo", "Remove a sudo user"),
-        ("/ban", "Ban a user from the bot"),
-        ("/unban", "Unban a user"),
-        ("/stats", "View bot statistics"),
+    "sudo": ("sᴜᴅᴏ ᴄᴏᴍᴍᴀɴᴅs", [
+        ("/broadcast", "ʙʀᴏᴀᴅᴄᴀsᴛ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ᴀʟʟ ᴜsᴇʀs"),
+        ("/addsudo", "ᴀᴅᴅ ᴀ sᴜᴅᴏ ᴜsᴇʀ"),
+        ("/removesudo", "ʀᴇᴍᴏᴠᴇ ᴀ sᴜᴅᴏ ᴜsᴇʀ"),
+        ("/ban", "ʙᴀɴ ᴀ ᴜsᴇʀ ғʀᴏᴍ ᴛʜᴇ ʙᴏᴛ"),
+        ("/unban", "ᴜɴʙᴀɴ ᴀ ᴜsᴇʀ"),
+        ("/stats", "ᴠɪᴇᴡ ʙᴏᴛ sᴛᴀᴛɪsᴛɪᴄs"),
     ]),
 }
-
-
 
 
 async def is_force_sub_member(user_id, context: CallbackContext):
@@ -70,12 +72,12 @@ async def is_force_sub_member(user_id, context: CallbackContext):
 
 def menu_view():
     kb = [
-        [InlineKeyboardButton("Basic", callback_data='sxc_cat_basic'),
-         InlineKeyboardButton("Interactive", callback_data='sxc_cat_interactive')],
-        [InlineKeyboardButton("🌿 Sudo", callback_data='sxc_cat_sudo')],
-        [InlineKeyboardButton("Main Menu", callback_data='sxc_back')]
+        [InlineKeyboardButton("ʙᴀsɪᴄ", callback_data='sxc_cat_basic'),
+         InlineKeyboardButton("ɪɴᴛᴇʀᴀᴄᴛɪᴠᴇ", callback_data='sxc_cat_interactive')],
+        [InlineKeyboardButton("🌿 sᴜᴅᴏ", callback_data='sxc_cat_sudo')],
+        [InlineKeyboardButton("ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data='sxc_back')]
     ]
-    return "<b>Help Menu</b>\n\nSelect a category to view commands:", InlineKeyboardMarkup(kb)
+    return "<b>ʜᴇʟᴘ ᴍᴇɴᴜ</b>\n\n<b>sᴇʟᴇᴄᴛ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴᴅs:</b>", InlineKeyboardMarkup(kb)
 
 
 def category_view(cat_key: str, page: int = 1):
@@ -84,22 +86,24 @@ def category_view(cat_key: str, page: int = 1):
     page = max(1, min(page, total_pages))
     chunk = commands[(page - 1) * PAGE_SIZE: page * PAGE_SIZE]
 
-    text = f"<b>{title} {page}/{total_pages}</b>\n\n" + "\n".join(
-        f"• <code>{cmd}</code> - {desc}" for cmd, desc in chunk
+    text = f"<b>{title}</b> `[{page}/{total_pages}]`\n\n" + "\n".join(
+        f"• <code>{cmd}</code> - <b>{desc}</b>" for cmd, desc in chunk
     )
 
     nav = []
     if page > 1:
-        nav.append(InlineKeyboardButton("Previous", callback_data=f'sxc_pg_{cat_key}_{page - 1}'))
+        nav.append(InlineKeyboardButton("⟴ ᴘʀᴇᴠɪᴏᴜs", callback_data=f'sxc_pg_{cat_key}_{page - 1}'))
     if page < total_pages:
-        nav.append(InlineKeyboardButton("Next", callback_data=f'sxc_pg_{cat_key}_{page + 1}'))
+        nav.append(InlineKeyboardButton("ɴᴇxᴛ ⟴", callback_data=f'sxc_pg_{cat_key}_{page + 1}'))
 
-    kb = ([nav] if nav else []) + [[InlineKeyboardButton("Back to Help Menu", callback_data='sxc_menu')]]
+    kb = ([nav] if nav else []) + [[InlineKeyboardButton("⟲ ʙᴀᴄᴋ ᴛᴏ ᴍᴇɴᴜ", callback_data='sxc_menu')]]
     return text, InlineKeyboardMarkup(kb)
 
+
 CREDITS_USERS = [
-    ("ＩＭ 𖣘 ＵＣＨＩＨＡ", "iMSASUKESi", 7657218453),  # replace with real numeric id
+    ("ＩＭ 𖣘 ＵＣＨＩＨＡ", "iMSASUKESi", 7657218453),
 ]
+
 
 async def credits_view(context: CallbackContext):
     kb = []
@@ -107,7 +111,9 @@ async def credits_view(context: CallbackContext):
         url = f'tg://user?id={user_id}'
         kb.append([InlineKeyboardButton(f"{name}", url=url)])
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data='sxc_back')])
-    return "𝗦𝘂𝗱𝗼:", InlineKeyboardMarkup(kb)
+    return "<b>sᴜᴅᴏ ᴏᴡɴᴇʀs:</b>", InlineKeyboardMarkup(kb)
+
+
 def _new_user_doc(user_id, first_name, username):
     return {
         "id": user_id, "first_name": first_name, "username": username,
@@ -123,15 +129,19 @@ def _new_user_doc(user_id, first_name, username):
 
 
 async def _ensure_user(user_id, first_name, username):
-    """Returns True if this is a newly created user."""
-    user_data = await user_collection.find_one({"id": user_id})
-    if user_data:
-        await user_collection.update_one(
-            {"id": user_id}, {"$set": {"first_name": first_name, "username": username}}
-        )
+    """Safe DB check to avoid runtime loop mismatch crashes."""
+    try:
+        user_data = await user_collection.find_one({"id": user_id})
+        if user_data:
+            await user_collection.update_one(
+                {"id": user_id}, {"$set": {"first_name": first_name, "username": username}}
+            )
+            return False
+        await user_collection.insert_one(_new_user_doc(user_id, first_name, username))
+        return True
+    except Exception as e:
+        LOGGER.error(f"Error in _ensure_user DB query: {e}")
         return False
-    await user_collection.insert_one(_new_user_doc(user_id, first_name, username))
-    return True
 
 
 async def safe_track_bot_start(user_id, first_name, username, is_new_user):
@@ -160,7 +170,11 @@ async def start(update: Update, context: CallbackContext):
             return
 
         is_new = await _ensure_user(user_id, first_name, username)
-        context.application.create_task(safe_track_bot_start(user_id, first_name, username, is_new))
+        
+        if hasattr(context.application, "create_task"):
+            context.application.create_task(safe_track_bot_start(user_id, first_name, username, is_new))
+        else:
+            asyncio.create_task(safe_track_bot_start(user_id, first_name, username, is_new))
 
         await update.message.reply_video(
             video=START_VIDEO, caption=MAIN_CAPTION, reply_markup=MAIN_KEYBOARD,
@@ -170,7 +184,7 @@ async def start(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Critical error in start command: {e}", exc_info=True)
         try:
-            await update.message.reply_text("⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.")
+            await update.message.reply_text("⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>", parse_mode='HTML')
         except Exception:
             pass
 
@@ -194,7 +208,10 @@ async def button_callback(update: Update, context: CallbackContext):
             first_name = query.from_user.first_name or "User"
             username = query.from_user.username or ""
             await _ensure_user(user_id, first_name, username)
-            await query.message.delete()
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
             await context.bot.send_video(
                 chat_id=user_id, video=START_VIDEO, caption=MAIN_CAPTION,
                 reply_markup=MAIN_KEYBOARD, parse_mode='HTML', supports_streaming=True
@@ -205,9 +222,7 @@ async def button_callback(update: Update, context: CallbackContext):
             await query.answer("⚠️ ᴊᴏɪɴ ᴏᴜʀ ᴄʜᴀɴɴᴇʟ ғɪʀsᴛ!", show_alert=True)
             return
 
-        if not await user_collection.find_one({"id": user_id}):
-            await query.answer("⚠️ sᴛᴀʀᴛ ʙᴏᴛ ғɪʀsᴛ", show_alert=True)
-            return
+        await _ensure_user(user_id, query.from_user.first_name, query.from_user.username)
 
         if data == 'sxc_credits':
             text, markup = await credits_view(context)
