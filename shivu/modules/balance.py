@@ -1,20 +1,7 @@
-import asyncio
-import nest_asyncio
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
-from shivu import application, user_collection
-
-nest_asyncio.apply()
-
-
-async def get_user(uid):
-    return await user_collection.find_one({"id": uid})
-
-
-async def init_user(uid):
-    user = {"id": uid, "balance": 0}
-    await user_collection.insert_one(user)
-    return user
+# Apne module se updated functions import karein
+from shivu import application, get_user, init_user
 
 
 async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -29,11 +16,11 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     balance = user.get("balance", 0)
 
+    # Small caps font (bold) + balance copyable monospace format
     await update.message.reply_text(
         f"💸 **ʙᴀʟᴀɴᴄᴇ:** `{balance}`",
         parse_mode="Markdown",
     )
 
 
-# Ensure karein yeh line execute ho rahi hai
 application.add_handler(CommandHandler("bal", balance_cmd, block=False))
