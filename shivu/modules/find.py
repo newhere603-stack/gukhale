@@ -6,12 +6,8 @@ from shivu import application, db
 
 # --- Database Setup ---
 collection = db['anime_characters_lol'] 
-user_collection = db['users'] 
-
-# OWNER ID
 OWNER_ID = 7657218453
 
-# --- Default Prices ---
 DEFAULT_PRICES = {
     "🟢 Common": 10000, "🔵 Rare": 20000, "🟠 Medium": 30000, 
     "🟡 Legendary": 50000, "🪽 Celestial": 75000, "🥵 Spicy": 100000, 
@@ -20,6 +16,24 @@ DEFAULT_PRICES = {
     "⚡ Neon": 400000, "🐚 Summer": 450000, "🌌 Manga": 500000
 }
 
+# --- Formatting Functions ---
+def to_small_caps(text: str) -> str:
+    mapping = {
+        'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
+        'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
+        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
+        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 
+        'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
+        'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
+        'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 
+        'Q': 'ǫ', 'R': 'ʀ', 'S': 'ꜱ', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 
+        'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ'
+    }
+    return "".join(mapping.get(c, c) for c in str(text))
+
+def bold_sc(text: str) -> str:
+    return f"<b>{to_small_caps(text)}</b>"
+
 def get_price(char):
     if 'mp_price' in char and char['mp_price'] is not None:
         return char['mp_price']
@@ -27,55 +41,64 @@ def get_price(char):
     return DEFAULT_PRICES.get(rarity, 50000) 
 
 def get_current_mp_day():
-    """4 AM IST ke hisaab se aaj ka din calculate karta hai"""
     IST = timezone(timedelta(hours=5, minutes=30))
     now = datetime.now(IST)
     if now.hour < 4:
-        # Raat ke 4 baje se pehle, pichle din me count hoga
         return (now - timedelta(days=1)).strftime('%Y-%m-%d')
     return now.strftime('%Y-%m-%d')
 
+# --- Smart DB Fetcher ---
+async def get_user_and_collection(user_id):
+    """Ye function automatically sahi DB dhund lega jisse error na aaye"""
+    try_collections = ['user_collection_lmaoooo', 'users']
+    for col_name in try_collections:
+        c = db[col_name]
+        user = await c.find_one({'id': user_id})
+        if user: return user, c
+        user = await c.find_one({'user_id': user_id})
+        if user: return user, c
+    return None, None
 
-# --- Set Price Command (Fixed) ---
+
+# --- Set Price Command ---
 async def set_mp_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.id != OWNER_ID:
-        await update.message.reply_text("❌ Only Owner can use this command.")
+        await update.message.reply_text(bold_sc("❌ Only Owner can use this command."), parse_mode='HTML')
         return
     
     if len(context.args) != 2:
-        await update.message.reply_text("Usage: /setprice <char_id> <price>\nExample: /setprice 7742 15000")
+        msg = "Usage: /setprice <char_id> <price>\nExample: /setprice 7742 15000"
+        await update.message.reply_text(f"<blockquote>{bold_sc(msg)}</blockquote>", parse_mode='HTML')
         return
         
     char_id = context.args[0]
     try:
         price = int(context.args[1])
     except ValueError:
-        await update.message.reply_text("❌ Price numbers mein hona chahiye.")
+        await update.message.reply_text(bold_sc("❌ Price numbers mein hona chahiye."), parse_mode='HTML')
         return
         
-    # DB me ID string ya integer kuch bhi ho sakti hai, dono try karenge
     result = await collection.update_one({'id': char_id}, {'$set': {'mp_price': price}})
     if result.modified_count == 0 and char_id.isdigit():
         result = await collection.update_one({'id': int(char_id)}, {'$set': {'mp_price': price}})
         
     if result.modified_count > 0:
-        await update.message.reply_text(f"✅ Character ID {char_id} ka marketplace price {price:,} set ho gaya hai.")
+        await update.message.reply_text(bold_sc(f"✅ Character ID {char_id} ka marketplace price {price:,} set ho gaya hai."), parse_mode='HTML')
     else:
-        await update.message.reply_text("❌ Character ID nahi mila, ya price already same hai.")
+        await update.message.reply_text(bold_sc("❌ Character ID nahi mila, ya price already same hai."), parse_mode='HTML')
 
 
 # --- Generate/Load User Deals ---
 async def load_user_deals(user_id):
-    user = await user_collection.find_one({'user_id': user_id})
+    user, user_col = await get_user_and_collection(user_id)
     if not user:
-        return None
+        return None, None
         
     current_day = get_current_mp_day()
     mp_data = user.get('mp_data', {})
     
-    # Agar aaj ka deal nahi bana hai ya fresh start chahiye
     if mp_data.get('day') != current_day or not mp_data.get('chars'):
-        pipeline = [{"$sample": {"size": 2}}] # Roz ke sirf 2 character
+        pipeline = [{"$sample": {"size": 2}}] 
         chars = await collection.aggregate(pipeline).to_list(length=2)
         
         formatted_chars = []
@@ -86,51 +109,51 @@ async def load_user_deals(user_id):
             c['mp_orig'] = orig
             c['mp_disc'] = disc
             c['mp_sale'] = sale
-            c['mp_status'] = "🛒 AVAILABLE"
+            c['mp_status'] = f"🛒 {to_small_caps('AVAILABLE')}"
             formatted_chars.append(c)
             
         mp_data = {'day': current_day, 'chars': formatted_chars}
-        await user_collection.update_one({'user_id': user_id}, {'$set': {'mp_data': mp_data}})
+        
+        query = {'id': user_id} if 'id' in user else {'user_id': user_id}
+        await user_col.update_one(query, {'$set': {'mp_data': mp_data}})
         user['mp_data'] = mp_data
         
-    return user
+    return user, user_col
 
 
-# --- UI Renderer (Screenshot jaisa exact format) ---
+# --- UI Renderer ---
 async def render_mp_message(update_obj, user, index, is_edit=False):
     chars = user['mp_data']['chars']
     if index >= len(chars): index = 0
     
     char = chars[index]
-    
-    # Owned count check
     owned_count = len([c for c in user.get('characters', []) if str(c.get('id')) == str(char.get('id'))])
     
     name = str(char.get('name', 'Unknown')).upper()
     anime = str(char.get('anime', 'Unknown')).upper()
     char_id = char.get('id', 'N/A')
-    rarity = str(char.get('rarity', 'Unknown')).upper()
+    rarity = str(char.get('rarity', 'Unknown'))
     
-    caption = f"""🏪 <b>DAILY DEALS</b> ({index+1}/2)
+    caption = f"""🏪 {bold_sc(f'DAILY DEALS ({index+1}/2)')}
 
-🎭 <b>NAME:</b> {name}
-📺 <b>SERIES:</b> {anime}
-🆔 <b>ID:</b> {char_id}
-💫 <b>RARITY:</b> {rarity}
-💰 <b>ORIGINAL:</b> {char['mp_orig']:,}
-🏷️ <b>SALE PRICE:</b> {char['mp_sale']:,}
-📊 <b>DISCOUNT:</b> {char['mp_disc']}%
-📋 <b>STATUS:</b> {char['mp_status']}
-🔴 <b>OWNED:</b> {owned_count}"""
+🎭 {bold_sc('NAME:')} {bold_sc(name)}
+📺 {bold_sc('SERIES:')} {bold_sc(anime)}
+🆔 {bold_sc('ID:')} {bold_sc(str(char_id))}
+💫 {bold_sc('RARITY:')} {bold_sc(rarity)}
+💰 {bold_sc('ORIGINAL:')} {bold_sc(f"{char['mp_orig']:,}")}
+🏷️ {bold_sc('SALE PRICE:')} {bold_sc(f"{char['mp_sale']:,}")}
+📊 {bold_sc('DISCOUNT:')} {bold_sc(f"{char['mp_disc']}%")}
+📋 {bold_sc('STATUS:')} <b>{char['mp_status']}</b>
+🔴 {bold_sc('OWNED:')} {bold_sc(str(owned_count))}"""
 
     buttons = [
         [
             InlineKeyboardButton("⬅️", callback_data=f"mp_nav_0"),
-            InlineKeyboardButton("Buy", callback_data=f"mp_buy_{index}"),
+            InlineKeyboardButton(to_small_caps("Buy"), callback_data=f"mp_buy_{index}"),
             InlineKeyboardButton("➡️", callback_data=f"mp_nav_1")
         ],
-        [InlineKeyboardButton("🍃 Auction", callback_data="mp_auction")],
-        [InlineKeyboardButton("Refresh (30,000 💰)", callback_data="mp_refresh")]
+        [InlineKeyboardButton(f"🍃 {to_small_caps('Auction')}", callback_data="mp_auction")],
+        [InlineKeyboardButton(to_small_caps("Refresh (30,000 💰)"), callback_data="mp_refresh")]
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
     img_url = char.get('img_url')
@@ -153,10 +176,12 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
 # --- Commands & Callbacks ---
 async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    user = await load_user_deals(user_id)
+    user, _ = await load_user_deals(user_id)
+    
     if not user:
-        await update.message.reply_text("❌ Please /start the bot first to create an account.")
+        await update.message.reply_text(bold_sc("❌ Please /start the bot first to create an account."), parse_mode='HTML')
         return
+        
     await render_mp_message(update, user, 0, is_edit=False)
 
 
@@ -165,78 +190,75 @@ async def marketplace_callbacks(update: Update, context: ContextTypes.DEFAULT_TY
     user_id = query.from_user.id
     data = query.data
     
-    # Sirf us user ko button click karne de jiska ye message hai
-    user = await load_user_deals(user_id)
+    user, user_col = await load_user_deals(user_id)
     if not user:
-        await query.answer("❌ Account not found!", show_alert=True)
+        await query.answer(to_small_caps("❌ Account not found!"), show_alert=True)
         return
 
-    # Button: Navigation (⬅️ ➡️)
     if data.startswith("mp_nav_"):
         index = int(data.split("_")[2])
         await render_mp_message(query, user, index, is_edit=True)
         await query.answer()
         return
 
-    # Button: Buy Character
     if data.startswith("mp_buy_"):
         index = int(data.split("_")[2])
         chars = user['mp_data']['chars']
         char = chars[index]
         
-        if char['mp_status'] == "❌ SOLD":
-            await query.answer("❌ Ye character tum already khareed chuke ho!", show_alert=True)
+        sold_text = f"❌ {to_small_caps('SOLD')}"
+        if char['mp_status'] == sold_text:
+            await query.answer(to_small_caps("❌ Ye character tum already khareed chuke ho!"), show_alert=True)
             return
             
         user_balance = user.get('balance', 0)
         price = char['mp_sale']
         
         if user_balance < price:
-            await query.answer(f"❌ Balance kam hai! (Required: {price:,} 💰 | Yours: {user_balance:,} 💰)", show_alert=True)
+            await query.answer(to_small_caps(f"❌ Balance kam hai! (Required: {price:,} | Yours: {user_balance:,})"), show_alert=True)
             return
             
-        # Deduct coins, add char, update status
-        char['mp_status'] = "❌ SOLD"
-        await user_collection.update_one(
-            {'user_id': user_id},
+        char['mp_status'] = sold_text
+        db_query = {'id': user_id} if 'id' in user else {'user_id': user_id}
+        
+        await user_col.update_one(
+            db_query,
             {
                 '$inc': {'balance': -price},
                 '$push': {'characters': char},
-                '$set': {'mp_data': user['mp_data']} # Local status update in DB
+                '$set': {'mp_data': user['mp_data']} 
             }
         )
         
-        await query.answer(f"✅ Transaction Successful! You bought {char.get('name')}.", show_alert=True)
+        await query.answer(to_small_caps(f"✅ Transaction Successful! You bought {char.get('name')}."), show_alert=True)
         await render_mp_message(query, user, index, is_edit=True)
         return
 
-    # Button: Auction
     if data == "mp_auction":
-        await query.answer("🍃 Auction feature coming soon!", show_alert=True)
+        await query.answer(to_small_caps("🍃 Auction feature coming soon!"), show_alert=True)
         return
 
-    # Button: Paid Refresh
     if data == "mp_refresh":
         user_balance = user.get('balance', 0)
         cost = 30000
         
         if user_balance < cost:
-            await query.answer(f"❌ Not enough coins to refresh! (Required: 30,000 💰)", show_alert=True)
+            await query.answer(to_small_caps("❌ Not enough coins to refresh! (Required: 30,000)"), show_alert=True)
             return
             
-        # Deduct coins and force a new day refresh
-        await user_collection.update_one(
-            {'user_id': user_id},
+        db_query = {'id': user_id} if 'id' in user else {'user_id': user_id}
+        
+        await user_col.update_one(
+            db_query,
             {
                 '$inc': {'balance': -cost},
-                '$set': {'mp_data.day': "FORCE_REFRESH"} # Day change karenge taaki load_user_deals naye laye
+                '$set': {'mp_data.day': "FORCE_REFRESH"} 
             }
         )
         
-        # Load deals again (yeha fresh 2 chars aayenge)
-        new_user = await load_user_deals(user_id)
+        new_user, _ = await load_user_deals(user_id)
         await render_mp_message(query, new_user, 0, is_edit=True)
-        await query.answer("🔄 Marketplace successfully refreshed!", show_alert=False)
+        await query.answer(to_small_caps("🔄 Marketplace successfully refreshed!"), show_alert=False)
 
 
 # Handlers Register
