@@ -1,6 +1,6 @@
 import random
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import CommandHandler, CallbackContext
+from telegram.ext import CommandHandler, ContextTypes
 from shivu import application, db
 
 collection = db['anime_characters_lol']
@@ -46,7 +46,7 @@ def to_small_caps(text: str) -> str:
     converted = "".join(mapping.get(c, c) for c in str(text))
     return f"<b>{converted}</b>"
 
-async def rarity_count(update: Update, context: CallbackContext) -> None:
+async def rarity_count(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         args = context.args
         
@@ -94,7 +94,7 @@ async def rarity_count(update: Update, context: CallbackContext) -> None:
 
 
 # --- Marketplace Feature with Small Caps ---
-async def marketplace(update: Update, context: CallbackContext) -> None:
+async def marketplace(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         pipeline = [{"$sample": {"size": 1}}]
         chars = await collection.aggregate(pipeline).to_list(length=1)
@@ -155,6 +155,6 @@ async def marketplace(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(f"<blockquote>{to_small_caps(f'Error in Marketplace: {str(e)}') }</blockquote>", parse_mode='HTML')
 
 
-# Register command handlers
-application.add_handler(CommandHandler('r', rarity_count, block=False))
-application.add_handler(CommandHandler(['mp', 'marketplace'], marketplace, block=False))
+# Register command handlers (Removed block=False as it causes errors in modern python-telegram-bot versions)
+application.add_handler(CommandHandler('r', rarity_count))
+application.add_handler(CommandHandler(['mp', 'marketplace'], marketplace))
