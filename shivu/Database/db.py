@@ -1,4 +1,4 @@
-From pymongo import MongoClient
+from pymongo import MongoClient
 import os
 
 
@@ -16,4 +16,3 @@ def get_user_data(user_id):
 def save_user_data(user_id, user_data):
     collection.update_one({"user_id": user_id}, {"$set": user_data}, upsert=True)
     print("User data saved successfully.")
-
