@@ -66,9 +66,9 @@ async def fav(update: Update, context: CallbackContext) -> None:
         buttons = [
             [
                 InlineKeyboardButton(
-                    "🟢 YES", callback_data=f"fvc_{user_id}_{character_id}"
+                    "🟢 ʏᴇs", callback_data=f"fvc_{user_id}_{character_id}"
                 ),
-                InlineKeyboardButton("🔴 NO", callback_data=f"fvx_{user_id}"),
+                InlineKeyboardButton("🔴 ɴᴏ", callback_data=f"fvx_{user_id}"),
             ]
         ]
 
