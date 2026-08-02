@@ -53,10 +53,10 @@ def next_streak(last_claim, current_streak: int, now: datetime) -> int:
 def format_countdown(remaining: timedelta) -> str:
     total = int(remaining.total_seconds())
     if total <= 0:
-        return "Ready"
+        return "ʀᴇᴀᴅʏ"
     h, r = divmod(total, 3600)
     m, s = divmod(r, 60)
-    return f"{h}h {m}m" if h else (f"{m}m" if m else f"{s}s")
+    return f"{h}ʜ {m}ᴍ" if h else (f"{m}ᴍ" if m else f"{s}s")
 
 
 class UserDB:
@@ -84,27 +84,39 @@ class UserDB:
 
 def build_bonus_text(user: dict, first_name: str) -> str:
     return (
-        "<b>ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ</b>\n\n"
+        "<b>🌸 ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ 🫧</b>\n\n"
         "🎮 <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
-        f"👤 <b>ᴜsᴇʀ:</b> {first_name}\n"
-        f"📅 <b>ᴅᴀᴛᴇ:</b> {now_ist().strftime('%Y-%m-%d %H:%M')} \n\n"
-        f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> {user.get('bonus_streak', 0)} ᴅᴀʏs\n"
-        f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> {user.get('bonus_highest_streak', 0)} ᴅᴀʏs\n\n"
+        f"👤 <b>ᴜsᴇʀ:</b> <b>{first_name}</b>\n"
+        f"📅 <b>ᴅᴀᴛᴇ:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
+        f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
+        f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
         "<b>sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ʙᴇʟᴏᴡ:</b>"
     )
 
 
 def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
     rows = []
-    for kind in ('daily', 'weekly'):
-        label = f"{kind.title()} 🎁"
-        if last := user.get(f'last_{kind}_claim'):
-            remaining = timedelta(hours=COOLDOWNS[kind]) - (now - to_ist(last))
-            if remaining.total_seconds() > 0:
-                label = f"{kind.title()} ⏳ {format_countdown(remaining)}"
-        rows.append([InlineKeyboardButton(label, callback_data=f"bonus:{kind}")])
-    rows.append([InlineKeyboardButton("📊 sᴛᴀᴛs", callback_data="bonus:stats"),
-                 InlineKeyboardButton("❌ ᴄʟᴏsᴇ", callback_data="bonus:close")])
+    
+    # Daily Button
+    daily_label = "ᴅᴀɪʟʏ 🎁"
+    if last_d := user.get('last_daily_claim'):
+        rem_d = timedelta(hours=COOLDOWNS['daily']) - (now - to_ist(last_d))
+        if rem_d.total_seconds() > 0:
+            daily_label = f"ᴅᴀɪʟʏ ⏳ {format_countdown(rem_d)}"
+            
+    # Weekly Button
+    weekly_label = "ᴡᴇᴇᴋʟʏ 🎁"
+    if last_w := user.get('last_weekly_claim'):
+        rem_w = timedelta(hours=COOLDOWNS['weekly']) - (now - to_ist(last_w))
+        if rem_w.total_seconds() > 0:
+            weekly_label = f"ᴡᴇᴇᴋʟʏ ⏳ {format_countdown(rem_w)}"
+
+    rows.append([InlineKeyboardButton(daily_label, callback_data="bonus:daily")])
+    rows.append([InlineKeyboardButton(weekly_label, callback_data="bonus:weekly")])
+    rows.append([
+        InlineKeyboardButton("sᴛᴀᴛs", callback_data="bonus:stats"),
+        InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="bonus:close")
+    ])
     return InlineKeyboardMarkup(rows)
 
 
@@ -146,7 +158,7 @@ async def claim(update: Update, context: CallbackContext, kind: str):
         set_fields['bonus_streak'] = streak
         set_fields['bonus_highest_streak'] = max(streak, user.get('bonus_highest_streak', 0))
         reward = daily_reward(streak)
-        alert = f"🎁 +{reward:,} ᴄᴏɪɴs! sᴛʀᴇᴀᴋ: {streak}d"
+        alert = f"🎁 +{reward:,} ᴄᴏɪɴs! sᴛʀᴇᴀᴋ: {streak}ᴅ"
     else:
         reward = weekly_reward(streak)
         alert = f"🎁 +{reward:,} ᴄᴏɪɴs!"
@@ -163,11 +175,11 @@ async def show_stats(update: Update, context: CallbackContext):
 
     text = (
         "📊 <b>ʙᴏɴᴜs sᴛᴀᴛs</b>\n\n"
-        f"💰 <b>ʙᴀʟᴀɴᴄᴇ:</b> {user.get('balance', 0):,} ᴄᴏɪɴs\n"
-        f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> {streak} days\n"
-        f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> {user.get('bonus_highest_streak', 0)} ᴅᴀʏs\n\n"
-        f"🎁 <b>ɴᴇxᴛ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ:</b> {daily_reward(streak):,} ᴄᴏɪɴs\n"
-        f"🎁 <b>ɴᴇxᴛ ᴡᴇᴇᴋʟʏ ʀᴇᴡᴀʀᴅ:</b> {weekly_reward(streak):,} ᴄᴏɪɴs"
+        f"💸 <b>ʙᴀʟᴀɴᴄᴇ:</b> <b>{user.get('balance', 0):,} ᴄᴏɪɴs</b>\n"
+        f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{streak} ᴅᴀʏs</b>\n"
+        f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
+        f"🎁 <b>ɴᴇxᴛ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ:</b> <b>{daily_reward(streak):,} ᴄᴏɪɴs</b>\n"
+        f"🎁 <b>ɴᴇxᴛ ᴡᴇᴇᴋʟʏ ʀᴇᴡᴀʀᴅ:</b> <b>{weekly_reward(streak):,} ᴄᴏɪɴs</b>"
     )
     await query.answer()
     await query.edit_message_text(
@@ -198,14 +210,20 @@ HANDLERS = {
 
 async def bonus_callback(update: Update, context: CallbackContext):
     query = update.callback_query
+    
+    # Restrict other users from interacting with another user's menu
+    if query.message.reply_to_message and query.message.reply_to_message.from_user.id != query.from_user.id:
+        await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
+        return
+
     handler = HANDLERS.get(query.data.split(':', 1)[1])
     if not handler:
-        await query.answer("❌ ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
+        await query.answer("ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
         return
     try:
         await handler(update, context)
     except TelegramError as e:
-        await query.answer(f"❌ ᴇʀʀᴏʀ: {type(e).__name__}", show_alert=True)
+        await query.answer(f"ᴇʀʀᴏʀ: {type(e).__name__}", show_alert=True)
 
 
 application.add_handler(CommandHandler("bonus", bonus_command, block=False))
