@@ -124,7 +124,7 @@ def process_search(chars: List[Dict]) -> Dict:
 def card_caption(char: Char, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     return (
-        f"{bold_sc('ultimate waifu info ✨')}\n"
+        f"{bold_sc('ㅤ✨ ultimate w-h info ✨')}\n"
         "\n"
         f"🌸 {bold_sc('name ⬡')} <b>{escape(char.name)}</b>\n"
         f"🌟 {bold_sc('rarity ⬡')} {emoji} <b>{to_small_caps(text)}</b>\n"
