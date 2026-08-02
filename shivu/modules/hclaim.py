@@ -46,38 +46,25 @@ async def swaifu(update: Update, context: CallbackContext):
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
-        # Safe exclusion list (Mythic excluded, Sweet allowed)
-        excluded_rarities = [
-            "MYTHIC", "VALENTINE", "PEARL", "NEON", "PREMIUM EDITION", 
-            "COSMIC", "MYTHIC 🔮", "VALENTINE 💋", "PEARL 🐚", 
-            "NEON ⚡", "💎 PREMIUM EDITION", "🌌 COSMIC"
-        ]
+        # Using simpler python-side filtering instead of complex mongo aggregate match to prevent any crash
+        cursor = collection.find({})
+        all_chars = await cursor.to_list(length=None)
 
-        # Safe pipeline query to prevent aggregate crashes
-        pipeline = [
-            {
-                '$match': {
-                    'rarity': {
-                        '$nin': excluded_rarities
-                    }
-                }
-            },
-            {'$sample': {'size': 1}}
-        ]
+        excluded_rarities = ["mythic", "valentine", "pearl", "neon", "premium edition", "cosmic"]
         
-        cursor = collection.aggregate(pipeline)
-        result = await cursor.to_list(length=1)
+        valid_chars = [
+            c for c in all_chars 
+            if str(c.get('rarity', '')).strip().lower() not in excluded_rarities
+        ]
 
-        # Fallback if filtered list is empty
-        if not result:
-            cursor = collection.aggregate([{'$sample': {'size': 1}}])
-            result = await cursor.to_list(length=1)
+        if not valid_chars:
+            valid_chars = all_chars
 
-        if not result:
+        if not valid_chars:
             await update.message.reply_text(f"<b>{to_small_caps('No characters found in database!')}</b>", parse_mode=ParseMode.HTML)
             return
 
-        character = result[0]
+        character = random.choice(valid_chars)
         
         char_name = html.escape(to_small_caps(character.get('name', 'Unknown')))
         anime = html.escape(to_small_caps(character.get('anime', 'Unknown')))
@@ -96,7 +83,6 @@ async def swaifu(update: Update, context: CallbackContext):
             upsert=True
         )
 
-        # Tumhara exact custom format (iska text ab change nahi hoga)
         caption = (
             f"<b>{to_small_caps('Congratulations 🎉')}\n {safe_first_name}! {to_small_caps('You won')}🔥</b>\n"
             f"<b>◈ {to_small_caps('Name')}: {char_name}</b>\n"
@@ -159,7 +145,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         
     except Exception as e:
         logger.error(f"Claim Error: {e}", exc_info=True)
-        await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇﺭ.</b>", parse_mode=ParseMode.HTML)
 
 
 # Handlers
