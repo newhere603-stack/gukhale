@@ -124,11 +124,11 @@ def process_search(chars: List[Dict]) -> Dict:
 def card_caption(char: Char, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     return (
-        f"{bold_sc('ultimate waifu info')}\n"
+        f"{bold_sc('ultimate waifu info ✨')}\n"
         "\n"
-        f"🌸 {bold_sc('name ⬡')} <code>{escape(char.name)}</code>\n"
+        f"🌸 {bold_sc('name ⬡')} <b>{escape(char.name)}</b>\n"
         f"🌟 {bold_sc('rarity ⬡')} {emoji} <b>{to_small_caps(text)}</b>\n"
-        f"🎞️ {bold_sc('anime ⬡')} <i>{escape(char.anime)}</i>\n"
+        f"🎞️ {bold_sc('anime ⬡')} <b>{escape(char.anime)}</b>\n"
         f"🔖 {bold_sc('char id ⬡')} <code>{char.id}</code>\n"
         "\n"
         f"🌍 {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
@@ -142,14 +142,13 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     lines = [
-        f"🏆 {bold_sc('character owners')} 🏆",
-        "\n"
+        f"ㅤ🏆 {bold_sc('character owners')} 🏆",
     ]
     
     for i, o in enumerate(owners[start:end], start + 1):
         medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"<code>{i}.</code>")
         link = f"<a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a>"
-        lines.append(f"{medal} {link} ── <b>x{o['count']}</b>")
+        lines.append(f"{medal} {link} - <b>x{o['count']}</b>")
         
     lines.append(f"\n📄 {bold_sc(f'page {page+1}/{total_pages}')} • 🌍 {bold_sc('total:')} <code>{gcount}x</code>")
     return "\n".join(lines)
