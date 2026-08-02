@@ -142,8 +142,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     lines = [
-        f"ㅤ🏆 {bold_sc('character owners')} 🏆","\n"
-    ]
+        f"ㅤ🏆 {bold_sc('character owners')} 🏆","\n"]
     for i, o in enumerate(owners[start:end], start + 1):
         medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"<code>{i}.</code>")
         link = f"<b><a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a></b>"
