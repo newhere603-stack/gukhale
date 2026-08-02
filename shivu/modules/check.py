@@ -98,7 +98,7 @@ async def get_owners(cid: str) -> List[Dict]:
     ).to_list(length=None)
     owners = []
     for u in users:
-        cnt = sum(1 for c in u.get('characters', []) if c.get('id'] == cid)
+        cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
         if cnt:
             owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
                             'username': u.get('username'), 'count': cnt})
@@ -131,7 +131,7 @@ def card_caption(char: Char, gcount: int) -> str:
         f"🎞️ {bold_sc('anime ⬡')} <i>{escape(char.anime)}</i>\n"
         f"🔖 {bold_sc('char id ⬡')} <code>{char.id}</code>\n"
         "\n"
-        f" 🌍 {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
+        f"🌍 {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
     )
 
 
@@ -142,7 +142,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     lines = [
-        f" 🏆 {bold_sc('character owners')} 🏆",
+        f"🏆 {bold_sc('character owners')} 🏆",
         "\n"
     ]
     
@@ -157,12 +157,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
 
 def pagination_kb(cid: str, page: int, total: int, back=False) -> InlineKeyboardMarkup:
     kb = []
-    if total > 1 and not back:
-        row = []
-        if page > 0: row.append(InlineKeyboardButton(to_small_caps("⋞ prev"), callback_data=f"owners_{cid}_{page-1}"))
-        if page < total - 1: row.append(InlineKeyboardButton(to_small_caps("next ⋟"), callback_data=f"owners_{cid}_{page+1}"))
-        if row: kb.append(row)
-    elif total > 1 and back:
+    if total > 1:
         row = []
         if page > 0: row.append(InlineKeyboardButton(to_small_caps("⋞ prev"), callback_data=f"owners_{cid}_{page-1}"))
         if page < total - 1: row.append(InlineKeyboardButton(to_small_caps("next ⋟"), callback_data=f"owners_{cid}_{page+1}"))
@@ -214,7 +209,9 @@ async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not char:
         return await update.message.reply_text(bold_sc("character not found in database!"), parse_mode=ParseMode.HTML)
     gcount = await global_count(char.id)
-    await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, 1))
+    owners = await get_owners(char.id)
+    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, total_pages, back=False))
 
 
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -240,11 +237,11 @@ async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT
     if not char:
         return await q.answer("Character not found", show_alert=True)
     gcount = await global_count(cid)
-    total = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     await q.edit_message_caption(
         caption=owners_caption(char, owners, page, gcount),
-        reply_markup=pagination_kb(cid, page, total, back=True),
+        reply_markup=pagination_kb(cid, page, total_pages, back=True),
         parse_mode=ParseMode.HTML
     )
 
@@ -257,10 +254,12 @@ async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not char:
         return await q.answer("Character not found", show_alert=True)
     gcount = await global_count(cid)
+    owners = await get_owners(cid)
+    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     await q.edit_message_caption(
         caption=card_caption(char, gcount),
-        reply_markup=pagination_kb(cid, 0, 1, back=False),
+        reply_markup=pagination_kb(cid, 0, total_pages, back=False),
         parse_mode=ParseMode.HTML
     )
 
