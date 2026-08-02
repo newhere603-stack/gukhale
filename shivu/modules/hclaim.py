@@ -46,21 +46,19 @@ async def swaifu(update: Update, context: CallbackContext):
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
-        # Yahan 'MYTHIC' ko exclude kar diya hai aur 'SWEET' ko allow kar diya hai
+        # Safe exclusion list (Mythic excluded, Sweet allowed)
         excluded_rarities = [
             "MYTHIC", "VALENTINE", "PEARL", "NEON", "PREMIUM EDITION", 
             "COSMIC", "MYTHIC 🔮", "VALENTINE 💋", "PEARL 🐚", 
             "NEON ⚡", "💎 PREMIUM EDITION", "🌌 COSMIC"
         ]
 
+        # Safe pipeline query to prevent aggregate crashes
         pipeline = [
             {
                 '$match': {
                     'rarity': {
-                        '$not': {
-                            '$regex': '|'.join(excluded_rarities),
-                            '$options': 'i'
-                        }
+                        '$nin': excluded_rarities
                     }
                 }
             },
@@ -70,6 +68,7 @@ async def swaifu(update: Update, context: CallbackContext):
         cursor = collection.aggregate(pipeline)
         result = await cursor.to_list(length=1)
 
+        # Fallback if filtered list is empty
         if not result:
             cursor = collection.aggregate([{'$sample': {'size': 1}}])
             result = await cursor.to_list(length=1)
@@ -97,6 +96,7 @@ async def swaifu(update: Update, context: CallbackContext):
             upsert=True
         )
 
+        # Tumhara exact custom format (iska text ab change nahi hoga)
         caption = (
             f"<b>{to_small_caps('Congratulations 🎉')}\n {safe_first_name}! {to_small_caps('You won')}🔥</b>\n"
             f"<b>◈ {to_small_caps('Name')}: {char_name}</b>\n"
