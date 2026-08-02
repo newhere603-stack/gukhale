@@ -46,14 +46,13 @@ async def swaifu(update: Update, context: CallbackContext):
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
-        # Excluded rarities list (Valentine, Pearl, Neon, Premium, Cosmic, Sweet)
+        # Yahan 'MYTHIC' ko exclude kar diya hai aur 'SWEET' ko allow kar diya hai
         excluded_rarities = [
-            "VALENTINE", "PEARL", "NEON", "PREMIUM EDITION", 
-            "COSMIC", "SWEET", "VALENTINE 💋", "PEARL 🐚", 
-            "NEON ⚡", "💎 PREMIUM EDITION", "🌌 COSMIC", "🍭 SWEET"
+            "MYTHIC", "VALENTINE", "PEARL", "NEON", "PREMIUM EDITION", 
+            "COSMIC", "MYTHIC 🔮", "VALENTINE 💋", "PEARL 🐚", 
+            "NEON ⚡", "💎 PREMIUM EDITION", "🌌 COSMIC"
         ]
 
-        # Fetch a random character excluding specific rarities (case-insensitive check)
         pipeline = [
             {
                 '$match': {
@@ -71,7 +70,6 @@ async def swaifu(update: Update, context: CallbackContext):
         cursor = collection.aggregate(pipeline)
         result = await cursor.to_list(length=1)
 
-        # Fallback if filtered pool is empty
         if not result:
             cursor = collection.aggregate([{'$sample': {'size': 1}}])
             result = await cursor.to_list(length=1)
@@ -100,7 +98,7 @@ async def swaifu(update: Update, context: CallbackContext):
         )
 
         caption = (
-            f"<b>{to_small_caps('Congrats 🎉')} {safe_first_name}! {to_small_caps('You won')}🔥</b>\n"
+            f"<b>{to_small_caps('Congratulations 🎉')}\n {safe_first_name}! {to_small_caps('You won')}🔥</b>\n"
             f"<b>◈ {to_small_caps('Name')}: {char_name}</b>\n"
             f"<b>◈ {to_small_caps('Rarity')}: {rarity}</b>\n"
             f"<b>◈ {to_small_caps('Anime')}: {anime}</b>"
@@ -149,7 +147,6 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
             upsert=True
         )
 
-        # Updated message without user's name
         msg_text = (
             f"<b>🎉 {to_small_caps('Daily Reward Claimed!')} 🎉</b>\n\n"
             f"<b>✨ {to_small_caps('Your dedication pays off!')}</b>\n"
