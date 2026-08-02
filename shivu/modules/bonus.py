@@ -122,17 +122,20 @@ def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
 
 async def bonus_command(update: Update, context: CallbackContext):
     user = await UserDB.ensure(update.effective_user.id, update.effective_user.first_name, update.effective_user.username)
+    # Added reply_to_message_id so user validation works reliably
     await update.message.reply_text(
         build_bonus_text(user, update.effective_user.first_name),
         reply_markup=build_bonus_keyboard(user, now_ist()),
-        parse_mode='HTML'
+        parse_mode='HTML',
+        reply_to_message_id=update.message.message_id
     )
 
 
 async def refresh_menu(query, user_id: int, now: datetime):
     user = await UserDB.get(user_id)
+    first_name = user.get('first_name', 'User')
     await query.edit_message_text(
-        build_bonus_text(user, query.from_user.first_name),
+        build_bonus_text(user, first_name),
         reply_markup=build_bonus_keyboard(user, now),
         parse_mode='HTML'
     )
@@ -211,10 +214,12 @@ HANDLERS = {
 async def bonus_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
-    # Restrict other users from interacting with another user's menu
-    if query.message.reply_to_message and query.message.reply_to_message.from_user.id != query.from_user.id:
-        await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
-        return
+    # Check if the clicking user matches the owner of the command message
+    if query.message.reply_to_message:
+        owner_id = query.message.reply_to_message.from_user.id
+        if owner_id != query.from_user.id:
+            await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
+            return
 
     handler = HANDLERS.get(query.data.split(':', 1)[1])
     if not handler:
