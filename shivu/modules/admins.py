@@ -6,39 +6,91 @@ from shivu import application, user_collection, db
 OWNER_ID = 7657218453
 SUDO_USERS = [7657218453]
 
-
 def is_authorized(user_id):
     return user_id == OWNER_ID or user_id in SUDO_USERS
 
-
 bot_settings_collection = db['bot_settings']
 
-# NOTE ON CURRENCY FIELD:
-# Your propose/marry module deducts PROPOSAL_COST from the 'balance' field
-# (see propose.py), even though it's shown to users as "tokens" in the UI.
-# So /addt and /removet below operate on that same 'balance' field so they
-# actually affect what /propose checks. If your economy actually uses a
-# separate 'tokens' field elsewhere, just swap 'balance' for 'tokens' in
-# the two functions below.
-CURRENCY_FIELD = 'balance'
+# Economy Fields
+TOKEN_FIELD = 'balance'
+COIN_FIELD = 'coins'
+
+# --- Helper for adding/removing currency ---
+async def modify_currency(update: Update, context: CallbackContext, field: str, currency_name: str, is_add: bool):
+    try:
+        requester_id = update.effective_user.id
+        if not is_authorized(requester_id):
+            return  # Silent fail for unauthorized users
+            
+        target_id = None
+        amount = None
+        
+        # Check if replying to a user
+        if update.message.reply_to_message:
+            target_id = update.message.reply_to_message.from_user.id
+            if context.args:
+                amount = context.args[0]
+        else:
+            # Command with user ID and amount
+            if len(context.args) >= 2:
+                target_id = context.args[0]
+                amount = context.args[1]
+                
+        if target_id is None or amount is None:
+            await update.message.reply_text(
+                f"<b>usage: command [user_id] <amount> or reply to user with command <amount></b>", 
+                parse_mode='HTML'
+            )
+            return
+            
+        try:
+            target_id = int(target_id)
+            amount = int(amount)
+        except ValueError:
+            await update.message.reply_text("<b>invalid user id or amount.</b>", parse_mode='HTML')
+            return
+            
+        if is_add:
+            await user_collection.update_one({'id': target_id}, {'$inc': {field: amount}}, upsert=True)
+        else:
+            user = await user_collection.find_one({'id': target_id})
+            current = user.get(field, 0) if user else 0
+            new_balance = max(0, current - amount)
+            await user_collection.update_one({'id': target_id}, {'$set': {field: new_balance}}, upsert=True)
+            
+        user = await user_collection.find_one({'id': target_id})
+        new_balance = user.get(field, 0) if user else 0
+        
+        action = "added to" if is_add else "removed from"
+        await update.message.reply_text(
+            f"<b>success! {amount} {currency_name} {action} {target_id}. updated balance: {new_balance} {currency_name}.</b>",
+            parse_mode='HTML'
+        )
+    except Exception:
+        pass
 
 
-# --- /destroy <user_id> ---
+# --- /destroy <user_id> OR Reply ---
 async def destroy_cmd(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            await update.message.reply_text("🚫 You are not authorized to use this command.")
-            return
+            return  # Silent fail for unauthorized users
 
-        if not context.args:
-            await update.message.reply_text("Usage: /destroy <user_id>")
+        target_id = None
+        if update.message.reply_to_message:
+            target_id = update.message.reply_to_message.from_user.id
+        elif context.args:
+            target_id = context.args[0]
+
+        if not target_id:
+            await update.message.reply_text("<b>usage: /destroy <user_id> or reply to a user</b>", parse_mode='HTML')
             return
 
         try:
-            target_id = int(context.args[0])
+            target_id = int(target_id)
         except ValueError:
-            await update.message.reply_text("Invalid user id.")
+            await update.message.reply_text("<b>invalid user id.</b>", parse_mode='HTML')
             return
 
         user = await user_collection.find_one({'id': target_id})
@@ -51,7 +103,8 @@ async def destroy_cmd(update: Update, context: CallbackContext):
         )
 
         await update.message.reply_text(
-            f"Successfully destroyed {count} characters for user {target_id}"
+            f"<b>successfully destroyed {count} characters for user {target_id}</b>", 
+            parse_mode='HTML'
         )
     except Exception:
         pass
@@ -62,17 +115,16 @@ async def setded_cmd(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            await update.message.reply_text("🚫 You are not authorized to use this command.")
-            return
+            return  # Silent fail for unauthorized users
 
         if not context.args:
-            await update.message.reply_text("Usage: /setded <percentage>")
+            await update.message.reply_text("<b>usage: /setded <percentage></b>", parse_mode='HTML')
             return
 
         try:
             percentage = float(context.args[0])
         except ValueError:
-            await update.message.reply_text("Invalid percentage.")
+            await update.message.reply_text("<b>invalid percentage.</b>", parse_mode='HTML')
             return
 
         await bot_settings_collection.update_one(
@@ -82,14 +134,13 @@ async def setded_cmd(update: Update, context: CallbackContext):
         )
 
         await update.message.reply_text(
-            f"✅ DEDUCTION PERCENTAGE SET TO {percentage:.1f}%"
+            f"<b>deduction percentage set to {percentage:.1f}%</b>", 
+            parse_mode='HTML'
         )
     except Exception:
         pass
 
-
 async def get_deduction_percentage() -> float:
-    """Helper other modules can import to read the current deduction %."""
     try:
         doc = await bot_settings_collection.find_one({'_id': 'settings'})
         return doc.get('deduction_percentage', 0.0) if doc else 0.0
@@ -97,81 +148,24 @@ async def get_deduction_percentage() -> float:
         return 0.0
 
 
-# --- /addt <user_id> <amount> ---
-async def addt_cmd(update: Update, context: CallbackContext):
-    try:
-        requester_id = update.effective_user.id
-        if not is_authorized(requester_id):
-            await update.message.reply_text("🚫 You are not authorized to use this command.")
-            return
+# --- Economy Wrappers ---
+async def tadd_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, TOKEN_FIELD, 'tokens', True)
 
-        if len(context.args) < 2:
-            await update.message.reply_text("Usage: /addt <user_id> <amount>")
-            return
+async def cadd_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, COIN_FIELD, 'coins', True)
 
-        try:
-            target_id = int(context.args[0])
-            amount = int(context.args[1])
-        except ValueError:
-            await update.message.reply_text("Invalid user id or amount.")
-            return
+async def trem_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, TOKEN_FIELD, 'tokens', False)
 
-        await user_collection.update_one(
-            {'id': target_id},
-            {'$inc': {CURRENCY_FIELD: amount}},
-            upsert=True
-        )
-
-        user = await user_collection.find_one({'id': target_id})
-        new_balance = user.get(CURRENCY_FIELD, 0) if user else amount
-
-        await update.message.reply_text(
-            f"Success! {amount} Tokens added to user {target_id}. "
-            f"Updated balance: {new_balance} Tokens."
-        )
-    except Exception:
-        pass
-
-
-# --- /removet <amount> <user_id> ---
-async def removet_cmd(update: Update, context: CallbackContext):
-    try:
-        requester_id = update.effective_user.id
-        if not is_authorized(requester_id):
-            await update.message.reply_text("🚫 You are not authorized to use this command.")
-            return
-
-        if len(context.args) < 2:
-            await update.message.reply_text("Usage: /removet <amount> <user_id>")
-            return
-
-        try:
-            amount = int(context.args[0])
-            target_id = int(context.args[1])
-        except ValueError:
-            await update.message.reply_text("Invalid amount or user id.")
-            return
-
-        user = await user_collection.find_one({'id': target_id})
-        current = user.get(CURRENCY_FIELD, 0) if user else 0
-        new_balance = max(0, current - amount)
-
-        await user_collection.update_one(
-            {'id': target_id},
-            {'$set': {CURRENCY_FIELD: new_balance}},
-            upsert=True
-        )
-
-        await update.message.reply_text(
-            f"Success! {amount} Tokens removed from user {target_id}. "
-            f"Updated balance: {new_balance} Tokens."
-        )
-    except Exception:
-        pass
+async def crem_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, COIN_FIELD, 'coins', False)
 
 
 # Handlers registration
 application.add_handler(CommandHandler(['destroy'], destroy_cmd, block=False))
 application.add_handler(CommandHandler(['setded'], setded_cmd, block=False))
-application.add_handler(CommandHandler(['addt'], addt_cmd, block=False))
-application.add_handler(CommandHandler(['removet'], removet_cmd, block=False))
+application.add_handler(CommandHandler(['tadd'], tadd_cmd, block=False))
+application.add_handler(CommandHandler(['cadd'], cadd_cmd, block=False))
+application.add_handler(CommandHandler(['trem'], trem_cmd, block=False))
+application.add_handler(CommandHandler(['crem'], crem_cmd, block=False))
