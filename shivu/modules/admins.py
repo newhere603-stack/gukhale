@@ -20,7 +20,7 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            return  # Silent fail for unauthorized users
+            return  # Normal users completely ignored
             
         target_id = None
         amount = None
@@ -38,7 +38,7 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
                 
         if target_id is None or amount is None:
             await update.message.reply_text(
-                f"<b>usage: command [user_id] <amount> or reply to user with command <amount></b>", 
+                "<b>usage: /command userid amount or reply to user with /command amount</b>", 
                 parse_mode='HTML'
             )
             return
@@ -50,24 +50,31 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
             await update.message.reply_text("<b>invalid user id or amount.</b>", parse_mode='HTML')
             return
             
-        if is_add:
-            await user_collection.update_one({'id': target_id}, {'$inc': {field: amount}}, upsert=True)
-        else:
-            user = await user_collection.find_one({'id': target_id})
-            current = user.get(field, 0) if user else 0
-            new_balance = max(0, current - amount)
-            await user_collection.update_one({'id': target_id}, {'$set': {field: new_balance}}, upsert=True)
-            
+        # VERY IMPORTANT: Checking if user actually exists before updating.
+        # Removed upsert=True to prevent creating broken database entries.
         user = await user_collection.find_one({'id': target_id})
-        new_balance = user.get(field, 0) if user else 0
+        if not user:
+            await update.message.reply_text("<b>user not found in database. they need to start the bot first.</b>", parse_mode='HTML')
+            return
+
+        if is_add:
+            await user_collection.update_one({'id': target_id}, {'$inc': {field: amount}})
+        else:
+            current = user.get(field, 0)
+            new_balance = max(0, current - amount)
+            await user_collection.update_one({'id': target_id}, {'$set': {field: new_balance}})
+            
+        # Fetch updated balance
+        user = await user_collection.find_one({'id': target_id})
+        new_balance = user.get(field, 0)
         
         action = "added to" if is_add else "removed from"
         await update.message.reply_text(
             f"<b>success! {amount} {currency_name} {action} {target_id}. updated balance: {new_balance} {currency_name}.</b>",
             parse_mode='HTML'
         )
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Currency command error: {e}")
 
 
 # --- /destroy <user_id> OR Reply ---
@@ -75,7 +82,7 @@ async def destroy_cmd(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            return  # Silent fail for unauthorized users
+            return  # Normal users completely ignored
 
         target_id = None
         if update.message.reply_to_message:
@@ -84,7 +91,7 @@ async def destroy_cmd(update: Update, context: CallbackContext):
             target_id = context.args[0]
 
         if not target_id:
-            await update.message.reply_text("<b>usage: /destroy <user_id> or reply to a user</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>usage: /destroy userid or reply to a user</b>", parse_mode='HTML')
             return
 
         try:
@@ -94,20 +101,23 @@ async def destroy_cmd(update: Update, context: CallbackContext):
             return
 
         user = await user_collection.find_one({'id': target_id})
-        count = len(user.get('characters', [])) if user else 0
+        if not user:
+            await update.message.reply_text("<b>user not found in database.</b>", parse_mode='HTML')
+            return
+            
+        count = len(user.get('characters', []))
 
         await user_collection.update_one(
             {'id': target_id},
-            {'$set': {'characters': []}},
-            upsert=True
+            {'$set': {'characters': []}}
         )
 
         await update.message.reply_text(
             f"<b>successfully destroyed {count} characters for user {target_id}</b>", 
             parse_mode='HTML'
         )
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Destroy command error: {e}")
 
 
 # --- /setded <percentage> ---
@@ -115,10 +125,10 @@ async def setded_cmd(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            return  # Silent fail for unauthorized users
+            return  # Normal users completely ignored
 
         if not context.args:
-            await update.message.reply_text("<b>usage: /setded <percentage></b>", parse_mode='HTML')
+            await update.message.reply_text("<b>usage: /setded percentage</b>", parse_mode='HTML')
             return
 
         try:
@@ -137,15 +147,8 @@ async def setded_cmd(update: Update, context: CallbackContext):
             f"<b>deduction percentage set to {percentage:.1f}%</b>", 
             parse_mode='HTML'
         )
-    except Exception:
-        pass
-
-async def get_deduction_percentage() -> float:
-    try:
-        doc = await bot_settings_collection.find_one({'_id': 'settings'})
-        return doc.get('deduction_percentage', 0.0) if doc else 0.0
-    except Exception:
-        return 0.0
+    except Exception as e:
+        print(f"Setded command error: {e}")
 
 
 # --- Economy Wrappers ---
