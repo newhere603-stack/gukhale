@@ -55,25 +55,28 @@ PROPOSING_LOADING_TEXTS = [
     "<b>✨ ᴏᴘᴇɴɪɴɢ ᴛʜᴇ ʀɪɴɢ ʙᴏx....🎁</b>",
     "<b>👀 ʟᴏᴏᴋɪɴɢ ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....🕊️</b>"
 ]
+
 DICE_REJECT_TEXTS = [
-    "<b>{user}'s ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏsᴀʟ ᴡᴀs ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ sʜᴇ ʀᴀɴ ᴀᴡᴀʏ! 💔</b>",
-    "<b>sʜᴇ sᴀɪᴅ 'ᴇᴡᴡ, ɴᴏ!' ᴛᴏ {user} ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ᴛʜᴇᴍ ᴇᴠᴇʀʏᴡʜᴇʀᴇ! 🚫</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀᴛ {user} ᴀɴᴅ ᴡᴀʟᴋᴇᴅ ᴀᴡᴀʏ! 😂</b>",
-    "<b>sʜᴇ sᴀɪᴅ sʜᴇ ᴏɴʟʏ sᴇᴇs {user} ᴀs ᴀ ʙʀᴏᴛʜᴇʀ! 🫂</b>",
-    "<b>{user} ɢᴏᴛ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ ɪs ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ. 💔</b>"
-]
-PROPOSE_REJECT_TEXTS = [
-    "<b>sʜᴇ sᴀɪᴅ sʜᴇ'ʟʟ ᴅᴀᴛᴇ {user}... ɪɴ ʜᴇʀ ɴᴇxᴛ ʟɪғᴇ! 🔄</b>",
-    "<b>{user} ʜᴀs ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ᴛʜᴇʏ'ʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ! 🏙️</b>",
-    "<b>sʜᴇ ᴛᴏᴏᴋ {user}'s ᴄᴏɪɴs, ᴀᴛᴇ ᴛʜᴇɪʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' 🍟</b>",
-    "<b>sʜᴇ sᴀɪᴅ {user} ɪs ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ᴛʜᴇᴍ ᴏɴ ʀᴇᴀᴅ! 💔</b>",
-    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ, {user}. 🎬</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀᴛ {user}, sʟᴀᴘᴘᴇᴅ ᴛʜᴇᴍ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! 🚓💨</b>",
-    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴛᴏ {user} ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ᴛʜᴇᴍ! 🚫</b>"
+    "<b>ᴛʜᴇ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏsᴀʟ ᴡᴀs ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ sʜᴇ ʀᴀɴ ᴀᴡᴀʏ!</b>",
+    "<b>sʜᴇ sᴀɪᴅ 'ᴇᴡᴡ, ɴᴏ!' ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ ᴇᴠᴇʀʏᴡʜᴇʀᴇ!</b>",
+    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀɴᴅ ᴡᴀʟᴋᴇᴅ ᴀᴡᴀʏ! 😂</b>",
+    "<b>sʜᴇ sᴀɪᴅ sʜᴇ ᴏɴʟʏ sᴇᴇs ʏᴏᴜ ᴀs ᴀ ʙʀᴏᴛʜᴇʀ! 🫂</b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ ɪs ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.</b>"
 ]
 
-DICE_RARITIES = ["🟢 Common", "🟣 Rare", "🟡 Legendary"]
-PROPOSE_RARITIES = ["🔮 Celestial", "💫 Exclusive"]
+PROPOSE_REJECT_TEXTS = [
+    "<b>sʜᴇ sᴀɪᴅ sʜᴇ'ʟʟ ᴅᴀᴛᴇ ʏᴏᴜ... ɪɴ ʜᴇʀ ɴᴇxᴛ ʟɪғᴇ! 🔄</b>",
+    "<b>ʏᴏᴜ ʜᴀᴠᴇ ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ʏᴏᴜ ᴀʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ! 🏙️</b>",
+    "<b>sʜᴇ ᴛᴏᴏᴋ ʏᴏᴜʀ ᴄᴏɪɴs, ᴀᴛᴇ ʏᴏᴜʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' 🍟</b>",
+    "<b>sʜᴇ sᴀɪᴅ ʏᴏᴜ ᴀʀᴇ ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ʏᴏᴜ ᴏɴ ʀᴇᴀᴅ!</b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ. 🎬</b>",
+    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! 🚓💨</b>",
+    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
+]
+
+# (UPDATED) Marry me sirf low rarities, Propose ke liye khali list (taaki saare mil sakein)
+DICE_RARITIES = ["🟢 Common", "Common", "🟣 Rare", "Rare"]
+PROPOSE_RARITIES = [] 
 cooldowns = {"dice": {}, "propose": {}}
 
 
@@ -115,12 +118,20 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
         return False
 
 
+# (UPDATED) Ab agar rarities list khali (empty) aayegi, to ye har tarah ke characters (All Rarities) uthayega
 async def get_unique_char(user_id: int, rarities: list[str]):
     try:
         user = await user_collection.find_one({"id": user_id}) or {}
         owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
+        
+        match_query = {"id": {"$nin": owned}}
+        
+        # Agar rarities list di gayi hai, tabhi filter karo. Warna sab kuch le lo.
+        if rarities:
+            match_query["rarity"] = {"$in": rarities}
+            
         pipeline = [
-            {"$match": {"rarity": {"$in": rarities}, "id": {"$nin": owned}}},
+            {"$match": match_query},
             {"$sample": {"size": 1}},
         ]
         result = await collection.aggregate(pipeline).to_list(length=1)
@@ -147,7 +158,6 @@ async def add_char_to_user(user_id: int, username: str, first_name: str, char: d
 
 
 async def send_win_log(context: CallbackContext, user, char: dict, method: str):
-    # लॉग ग्रुप में एडमिन के लिए यूज़र प्रोफाइल का लिंक रहेगा
     user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
     text = (
         "<b>🏆 ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴄʟᴀɪᴍᴇᴅ!</b>\n━━━━━━━━━━━━━━━━━━━━\n"
@@ -162,7 +172,7 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
         pass
 
 
-# ---------------- /dice, /marry ----------------
+# ---------------- /dice, /marry (LOW RARITIES ONLY) ----------------
 async def dice_marry(update: Update, context: CallbackContext):
     fix_motor_loop() 
     if not update.message or not update.effective_user:
@@ -171,7 +181,7 @@ async def dice_marry(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     user = update.effective_user
     msg_id = update.message.message_id
-    plain_name = user.first_name  # बिना मेंशन वाला नाम
+    plain_name = user.first_name
 
     ok, rem = check_cooldown(user.id, "dice", DICE_COOLDOWN)
     if not ok:
@@ -187,7 +197,7 @@ async def dice_marry(update: Update, context: CallbackContext):
     await asyncio.sleep(3.5)
 
     if val not in (1, 6):
-        text = random.choice(DICE_REJECT_TEXTS).format(user=plain_name)
+        text = random.choice(DICE_REJECT_TEXTS)
         return await context.bot.send_message(
             chat_id=chat_id,
             text=text,
@@ -222,7 +232,7 @@ async def dice_marry(update: Update, context: CallbackContext):
     await send_win_log(context, user, char, "dice")
 
 
-# ---------------- /propose ----------------
+# ---------------- /propose (ALL RARITIES) ----------------
 async def propose(update: Update, context: CallbackContext):
     fix_motor_loop() 
     if not update.message or not update.effective_user:
@@ -231,7 +241,7 @@ async def propose(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     user = update.effective_user
     msg_id = update.message.message_id
-    plain_name = user.first_name  # बिना मेंशन वाला नाम
+    plain_name = user.first_name
 
     # FSub Check
     if not await is_user_joined(context, user.id):
@@ -298,7 +308,7 @@ async def propose(update: Update, context: CallbackContext):
 
     # Phase 3: Result (Rejection)
     if random.random() > PROPOSE_SUCCESS_RATE:
-        reject_text = random.choice(PROPOSE_REJECT_TEXTS).format(user=plain_name)
+        reject_text = random.choice(PROPOSE_REJECT_TEXTS)
         return await context.bot.send_photo(
             chat_id=chat_id,
             photo=random.choice(REJECT_IMAGES),
@@ -313,7 +323,7 @@ async def propose(update: Update, context: CallbackContext):
         await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ᴇxᴄʟᴜsɪᴠᴇ/ᴄᴇʟᴇsᴛɪᴀʟ ᴄʜᴀʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ.</b>",
+            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ.</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
@@ -321,7 +331,7 @@ async def propose(update: Update, context: CallbackContext):
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
     
     caption = (
-        f"<b>🎉 {char.get('name', 'Waifu')} ʜᴀs ᴀᴄᴄᴇᴘᴛᴇᴅ ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ! 💖</b>\n\n"
+        f"<b>🎉 ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ ʜᴀs ʙᴇᴇɴ ᴀᴄᴄᴇᴘᴛᴇᴅ! 💖</b>\n\n"
         f"<b>☘️ ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
         f"<b>🏵️ ʀᴀʀɪᴛʏ: {char.get('rarity', 'N/A')}</b>\n"
         f"<b>🎞 ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
@@ -374,7 +384,7 @@ async def cdm_cmd(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>🚫 ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ.</b>",
+            text=f"<b>ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ.</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
