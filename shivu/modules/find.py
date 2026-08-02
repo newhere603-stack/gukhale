@@ -55,7 +55,7 @@ def get_current_mp_day():
     return now.strftime('%Y-%m-%d')
 
 
-# --- Set Price Command ---
+# --- Set Price Command (FIXED) ---
 async def set_mp_price(update: Update, context: CallbackContext):
     try:
         if update.effective_user.id != OWNER_ID:
@@ -67,26 +67,26 @@ async def set_mp_price(update: Update, context: CallbackContext):
             await update.message.reply_text(f"<blockquote>{bold_sc(msg)}</blockquote>", parse_mode='HTML')
             return
             
-        char_id = context.args[0]
+        raw_char_id = context.args[0]
         try:
             price = int(context.args[1])
         except ValueError:
             await update.message.reply_text(bold_sc("Price must be in numbers."), parse_mode='HTML')
             return
             
-        result = await collection.update_one({'id': char_id}, {'$set': {'mp_price': price}})
-        if result.modified_count == 0 and char_id.isdigit():
-            result = await collection.update_one({'id': int(char_id)}, {'$set': {'mp_price': price}})
+        # Try updating both string and int formats to avoid type-mismatch bugs
+        query = {'$or': [{'id': raw_char_id}, {'id': int(raw_char_id)}]} if raw_char_id.isdigit() else {'id': raw_char_id}
+        result = await collection.update_many(query, {'$set': {'mp_price': price}})
             
-        if result.modified_count > 0:
-            await update.message.reply_text(bold_sc(f"Character ID {char_id} marketplace price set to {price:,}."), parse_mode='HTML')
+        if result.modified_count > 0 or result.matched_count > 0:
+            await update.message.reply_text(bold_sc(f"Character ID {raw_char_id} marketplace price set to {price:,}."), parse_mode='HTML')
         else:
-            await update.message.reply_text(bold_sc("Character ID not found, or price is already the same."), parse_mode='HTML')
+            await update.message.reply_text(bold_sc("Character ID not found."), parse_mode='HTML')
     except Exception as e:
         await update.message.reply_text(f"Error in setprice: {str(e)}")
 
 
-# --- Generate/Load User Deals ---
+# --- Generate/Load User Deals (FIXED) ---
 async def load_user_deals(user_id):
     user = await user_collection.find_one({'id': user_id})
     if not user:
@@ -95,6 +95,7 @@ async def load_user_deals(user_id):
     current_day = get_current_mp_day()
     mp_data = user.get('mp_data', {})
     
+    # If new day or no deal exists, pick new deals
     if mp_data.get('day') != current_day or not mp_data.get('chars'):
         total_chars = await collection.count_documents({})
         if total_chars < 2:
@@ -112,16 +113,48 @@ async def load_user_deals(user_id):
             orig = get_price(c)
             disc = random.randint(2, 15)
             sale = int(orig - (orig * (disc / 100)))
-            c['mp_orig'] = orig
-            c['mp_disc'] = disc
-            c['mp_sale'] = sale
-            c['is_sold'] = False
-            formatted_chars.append(c)
+            formatted_chars.append({
+                'id': c.get('id'),
+                'mp_orig': orig,
+                'mp_disc': disc,
+                'mp_sale': sale,
+                'is_sold': False
+            })
             
         mp_data = {'day': current_day, 'chars': formatted_chars}
         await user_collection.update_one({'id': user_id}, {'$set': {'mp_data': mp_data}})
         user['mp_data'] = mp_data
+
+    # FETCH FRESH DATA FROM DB ALWAYS (Fixes stale price issue)
+    updated_chars = []
+    need_db_update = False
+    
+    for item in user['mp_data']['chars']:
+        char_id = item.get('id')
+        query = {'$or': [{'id': char_id}, {'id': str(char_id)}]} if str(char_id).isdigit() else {'id': char_id}
+        db_char = await collection.find_one(query)
         
+        if db_char:
+            orig = get_price(db_char)
+            disc = item.get('mp_disc', 10)
+            sale = int(orig - (orig * (disc / 100)))
+            
+            db_char['mp_orig'] = orig
+            db_char['mp_disc'] = disc
+            db_char['mp_sale'] = sale
+            db_char['is_sold'] = item.get('is_sold', False)
+            updated_chars.append(db_char)
+
+            # Update cached prices inside user's deal if changed
+            if item.get('mp_orig') != orig:
+                item['mp_orig'] = orig
+                item['mp_sale'] = sale
+                need_db_update = True
+                
+    if need_db_update:
+        await user_collection.update_one({'id': user_id}, {'$set': {'mp_data': user['mp_data']}})
+
+    user['mp_data']['chars'] = updated_chars
     return user
 
 
@@ -246,12 +279,26 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 
             char['is_sold'] = True
             
+            # Save reduced character schema into user array
+            clean_char = {k: v for k, v in char.items() if k not in ['mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
+            
+            # Update user mp_data structure back to DB format
+            raw_mp_chars = []
+            for c in user['mp_data']['chars']:
+                raw_mp_chars.append({
+                    'id': c.get('id'),
+                    'mp_orig': c.get('mp_orig'),
+                    'mp_disc': c.get('mp_disc'),
+                    'mp_sale': c.get('mp_sale'),
+                    'is_sold': c.get('is_sold', False)
+                })
+            
             await user_collection.update_one(
                 {'id': user_id},
                 {
                     '$inc': {'balance': -price},
-                    '$push': {'characters': char},
-                    '$set': {'mp_data': user['mp_data']} 
+                    '$push': {'characters': clean_char},
+                    '$set': {'mp_data.chars': raw_mp_chars} 
                 }
             )
             
