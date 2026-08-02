@@ -394,7 +394,7 @@ async def show_stats(update: Update, context) -> None:
         kbd = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
-                InlineKeyboardButton(sc("owners"), callback_data=f"o.{cid}")
+                InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}")
             ], 
             [
                 InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
