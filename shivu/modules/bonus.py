@@ -86,8 +86,8 @@ def build_bonus_text(user: dict, first_name: str) -> str:
     return (
         "<b>🌸 ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ 🫧</b>\n\n"
         "🎮 <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
-        f"👤 <b>ᴜsᴇʀ:</b> <b>{first_name}</b>\n"
-        f"📅 <b>ᴅᴀᴛᴇ:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
+        f"👤 <b>User:</b> <b>{first_name}</b>\n"
+        f"📅 <b>Date:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
         f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
         f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
         "<b>sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ʙᴇʟᴏᴡ:</b>"
@@ -98,18 +98,18 @@ def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
     rows = []
     
     # Daily Button
-    daily_label = "ᴅᴀɪʟʏ 🎁"
+    daily_label = "Daily 🎁"
     if last_d := user.get('last_daily_claim'):
         rem_d = timedelta(hours=COOLDOWNS['daily']) - (now - to_ist(last_d))
         if rem_d.total_seconds() > 0:
-            daily_label = f"ᴅᴀɪʟʏ ⏳ {format_countdown(rem_d)}"
+            daily_label = f"Daily ⏳ {format_countdown(rem_d)}"
             
     # Weekly Button
-    weekly_label = "ᴡᴇᴇᴋʟʏ 🎁"
+    weekly_label = "Weekly 🎁"
     if last_w := user.get('last_weekly_claim'):
         rem_w = timedelta(hours=COOLDOWNS['weekly']) - (now - to_ist(last_w))
         if rem_w.total_seconds() > 0:
-            weekly_label = f"ᴡᴇᴇᴋʟʏ ⏳ {format_countdown(rem_w)}"
+            weekly_label = f"Weekly ⏳ {format_countdown(rem_w)}"
 
     rows.append([InlineKeyboardButton(daily_label, callback_data="bonus:daily")])
     rows.append([InlineKeyboardButton(weekly_label, callback_data="bonus:weekly")])
