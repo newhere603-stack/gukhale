@@ -22,13 +22,16 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
         if not is_authorized(requester_id):
             return  # Normal users completely ignored
             
+        # Get the actual command used (e.g., /tadd, /cadd)
+        command_used = update.message.text.split()[0]
+            
         target_id = None
         amount = None
         
         # Check if replying to a user
         if update.message.reply_to_message:
             target_id = update.message.reply_to_message.from_user.id
-            if context.args:
+            if len(context.args) >= 1:
                 amount = context.args[0]
         else:
             # Command with user ID and amount
@@ -38,7 +41,7 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
                 
         if target_id is None or amount is None:
             await update.message.reply_text(
-                "<b>usage: /command userid amount or reply to user with /command amount</b>", 
+                f"<b>ᴜsᴀɢᴇ: {command_used} ᴜsᴇʀ_ɪᴅ ᴀᴍᴏᴜɴᴛ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴜsᴇʀ ᴡɪᴛʜ {command_used} ᴀᴍᴏᴜɴᴛ</b>", 
                 parse_mode='HTML'
             )
             return
@@ -47,16 +50,16 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
             target_id = int(target_id)
             amount = int(amount)
         except ValueError:
-            await update.message.reply_text("<b>invalid user id or amount.</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ ᴏʀ ᴀᴍᴏᴜɴᴛ.</b>", parse_mode='HTML')
             return
             
-        # VERY IMPORTANT: Checking if user actually exists before updating.
-        # Removed upsert=True to prevent creating broken database entries.
+        # Check if user exists
         user = await user_collection.find_one({'id': target_id})
         if not user:
-            await update.message.reply_text("<b>user not found in database. they need to start the bot first.</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ᴜsᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ.</b>", parse_mode='HTML')
             return
 
+        # Update currency
         if is_add:
             await user_collection.update_one({'id': target_id}, {'$inc': {field: amount}})
         else:
@@ -68,13 +71,16 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
         user = await user_collection.find_one({'id': target_id})
         new_balance = user.get(field, 0)
         
-        action = "added to" if is_add else "removed from"
+        action = "ᴀᴅᴅᴇᴅ ᴛᴏ" if is_add else "ʀᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ"
+        c_name = "ᴛᴏᴋᴇɴs" if currency_name == 'tokens' else "ᴄᴏɪɴs"
+        
         await update.message.reply_text(
-            f"<b>success! {amount} {currency_name} {action} {target_id}. updated balance: {new_balance} {currency_name}.</b>",
+            f"<b>sᴜᴄᴄᴇss! {amount} {c_name} {action} {target_id}.\nᴜᴘᴅᴀᴛᴇᴅ ʙᴀʟᴀɴᴄᴇ: {new_balance} {c_name}.</b>",
             parse_mode='HTML'
         )
     except Exception as e:
-        print(f"Currency command error: {e}")
+        # Instead of failing silently, it will tell you the error
+        await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
 
 
 # --- /destroy <user_id> OR Reply ---
@@ -82,7 +88,7 @@ async def destroy_cmd(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            return  # Normal users completely ignored
+            return 
 
         target_id = None
         if update.message.reply_to_message:
@@ -91,18 +97,18 @@ async def destroy_cmd(update: Update, context: CallbackContext):
             target_id = context.args[0]
 
         if not target_id:
-            await update.message.reply_text("<b>usage: /destroy userid or reply to a user</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ᴜsᴀɢᴇ: /destroy ᴜsᴇʀ_ɪᴅ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ</b>", parse_mode='HTML')
             return
 
         try:
             target_id = int(target_id)
         except ValueError:
-            await update.message.reply_text("<b>invalid user id.</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ.</b>", parse_mode='HTML')
             return
 
         user = await user_collection.find_one({'id': target_id})
         if not user:
-            await update.message.reply_text("<b>user not found in database.</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ᴜsᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ.</b>", parse_mode='HTML')
             return
             
         count = len(user.get('characters', []))
@@ -113,11 +119,11 @@ async def destroy_cmd(update: Update, context: CallbackContext):
         )
 
         await update.message.reply_text(
-            f"<b>successfully destroyed {count} characters for user {target_id}</b>", 
+            f"<b>sᴜᴄᴄᴇssғᴜʟʟʏ ᴅᴇsᴛʀᴏʏᴇᴅ {count} ᴄʜᴀʀᴀᴄᴛᴇʀs ғᴏʀ ᴜsᴇʀ {target_id}</b>", 
             parse_mode='HTML'
         )
     except Exception as e:
-        print(f"Destroy command error: {e}")
+        await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
 
 
 # --- /setded <percentage> ---
@@ -125,16 +131,16 @@ async def setded_cmd(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            return  # Normal users completely ignored
+            return 
 
         if not context.args:
-            await update.message.reply_text("<b>usage: /setded percentage</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ᴜsᴀɢᴇ: /setded ᴘᴇʀᴄᴇɴᴛᴀɢᴇ</b>", parse_mode='HTML')
             return
 
         try:
             percentage = float(context.args[0])
         except ValueError:
-            await update.message.reply_text("<b>invalid percentage.</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴘᴇʀᴄᴇɴᴛᴀɢᴇ.</b>", parse_mode='HTML')
             return
 
         await bot_settings_collection.update_one(
@@ -144,11 +150,11 @@ async def setded_cmd(update: Update, context: CallbackContext):
         )
 
         await update.message.reply_text(
-            f"<b>deduction percentage set to {percentage:.1f}%</b>", 
+            f"<b>ᴅᴇᴅᴜᴄᴛɪᴏɴ ᴘᴇʀᴄᴇɴᴛᴀɢᴇ sᴇᴛ ᴛᴏ {percentage:.1f}%</b>", 
             parse_mode='HTML'
         )
     except Exception as e:
-        print(f"Setded command error: {e}")
+        await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
 
 
 # --- Economy Wrappers ---
