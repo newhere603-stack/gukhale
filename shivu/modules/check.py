@@ -142,7 +142,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     lines = [
-        f"ㅤㅤ🏆 {bold_sc('character owners')} 🏆",
+        f"ㅤ🏆 {bold_sc('character owners')} 🏆","\n"
     ]
     
     for i, o in enumerate(owners[start:end], start + 1):
