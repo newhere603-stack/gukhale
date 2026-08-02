@@ -22,6 +22,7 @@ user_collection = db['user_collection_lmaoooo']
 group_user_totals_collection = db['group_user_totalsssssss']
 top_global_groups_collection = db['top_global_groups']
 rarity_status_collection = db['rarity_status_settings']
+group_settings_collection = db['group_settings_db']
 
 MESSAGE_FREQUENCY = 70
 DESPAWN_TIME = 180
@@ -36,6 +37,7 @@ RARITIES = {
 }
 
 rarity_status_cache = {}
+group_settings_cache = {}  # {chat_id: {'grab_delete': True, 'miss_delete': True}}
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
 first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
@@ -78,8 +80,40 @@ async def set_rarity_status(key, enabled):
     )
 
 
+async def get_group_setting(chat_id, setting_name, default=True):
+    if chat_id not in group_settings_cache:
+        doc = await group_settings_collection.find_one({'chat_id': chat_id})
+        if doc:
+            group_settings_cache[chat_id] = doc.get('settings', {})
+        else:
+            group_settings_cache[chat_id] = {}
+    return group_settings_cache[chat_id].get(setting_name, default)
+
+
+async def set_group_setting(chat_id, setting_name, value):
+    if chat_id not in group_settings_cache:
+        group_settings_cache[chat_id] = {}
+    group_settings_cache[chat_id][setting_name] = value
+    await group_settings_collection.update_one(
+        {'chat_id': chat_id},
+        {'$set': {f'settings.{setting_name}': value}},
+        upsert=True
+    )
+
+
 def is_authorized(user_id):
     return user_id == OWNER_ID or user_id in SUDO_USERS
+
+
+async def is_admin(update: Update, context: CallbackContext) -> bool:
+    user_id = update.effective_user.id
+    if is_authorized(user_id):
+        return True
+    chat = update.effective_chat
+    if chat.type in ('private'):
+        return True
+    member = await context.bot.get_chat_member(chat.id, user_id)
+    return member.status in ('administrator', 'creator')
 
 
 async def is_character_allowed(character, chat_id=None):
@@ -110,26 +144,31 @@ async def despawn_character(chat_id, message_id, character, context):
         if chat_id in first_correct_guesses:
             return
 
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        except BadRequest:
-            pass
+        should_delete = await get_group_setting(chat_id, 'grab_delete', True)
+        if should_delete:
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            except BadRequest:
+                pass
 
         rarity = character.get('rarity', '🟢 Common')
         emoji = rarity.split(' ')[0] if isinstance(rarity, str) and ' ' in rarity else '🟢'
         caption = (
-            f"⏰ ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!\n\n"
-            f"{emoji} ɴᴀᴍᴇ: <b>{escape(character.get('name', 'Unknown'))}</b>\n"
-            f"⚡ ᴀɴɪᴍᴇ: <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
-            f"🎯 ʀᴀʀɪᴛʏ: <b>{escape(rarity)}</b>\n\n"
-            f"💔 ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!"
+            f"⏰ <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
+            f"{emoji} <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
+            f"⚡ <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
+            f"🎯 <b>ʀᴀʀɪᴛʏ:</b> <b>{escape(rarity)}</b>\n\n"
+            f"💔 <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
-        await asyncio.sleep(10)
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=missed_msg.message_id)
-        except BadRequest:
-            pass
+        
+        should_delete_miss = await get_group_setting(chat_id, 'miss_delete', True)
+        if should_delete_miss:
+            await asyncio.sleep(10)
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=missed_msg.message_id)
+            except BadRequest:
+                pass
     except Exception:
         LOGGER.exception(f"despawn_character failed for chat={chat_id}")
     finally:
@@ -184,7 +223,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         last_characters[chat_id] = character
         first_correct_guesses.pop(chat_id, None)
 
-        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀꜱ ᴀᴘᴘᴇᴀʀᴇᴅ!✨\nᴜꜱᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ɪɴ ʏᴏᴜʀ ʜᴀʀᴇᴍ.</b>"
+        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀᴘᴘᴇᴀʀᴇᴅ! ✨\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ɪɴ ʏᴏᴜʀ ʜᴀʀᴇᴍ.</b>"
         timeouts = dict(read_timeout=300, write_timeout=300, connect_timeout=60, pool_timeout=60)
         spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
 
@@ -223,7 +262,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
 
         if chat_id in first_correct_guesses:
             return await update.message.reply_html(
-                '<b>🚫 ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ ⚡. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>'
+                '<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ ⚡. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>'
             )
 
         guess_text = ' '.join(context.args).lower() if context.args else ''
@@ -248,7 +287,10 @@ async def guess(update: Update, context: CallbackContext) -> None:
             return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..❌</b>', reply_markup=kb)
 
         first_correct_guesses[chat_id] = user_id
-        if chat_id in spawn_messages:
+        
+        # Checking if group admin wants spawn msg auto-deleted on grab
+        should_delete = await get_group_setting(chat_id, 'grab_delete', True)
+        if should_delete and chat_id in spawn_messages:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=spawn_messages[chat_id])
             except BadRequest:
@@ -276,14 +318,14 @@ async def guess(update: Update, context: CallbackContext) -> None:
         r_emoji, r_name = (rarity.split(' ', 1) + [''])[:2] if isinstance(rarity, str) and ' ' in rarity else (rarity, '')
 
         success_message = (
-    f"✅ <b>{escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs 🎉\n"
-    "ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ</b> 🫧\n\n"
-    f"🌸 𝗡𝗔𝗠𝗘: {escape(character.get('name', 'Unknown'))}\n"
-    f"💮 𝗥𝗔𝗥𝗜𝗧𝗬: {escape(r_emoji)} {escape(r_name)}\n"
-    f"❇️ 𝗔𝗡𝗜𝗠𝗘: {escape(character.get('anime', 'Unknown'))}\n\n"
-    "⛩ <b>Check your /harem Now</b>"
-)
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🪼 ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
+            f"✅ <b>{escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs 🎉\n"
+            "ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ</b> 🫧\n\n"
+            f"🌸 <b>ɴᴀᴍᴇ:</b> {escape(character.get('name', 'Unknown'))}\n"
+            f"💮 <b>ʀᴀʀɪᴛʏ:</b> {escape(r_emoji)} {escape(r_name)}\n"
+            f"❇️ <b>ᴀɴɪᴍᴇ:</b> {escape(character.get('anime', 'Unknown'))}\n\n"
+            "⛩ <b>ᴄʜᴇᴄᴋ ʏᴏᴜʀ /harem ɴᴏᴡ</b>"
+        )
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
         await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
         spawn_message_links.pop(chat_id, None)
 
@@ -291,31 +333,59 @@ async def guess(update: Update, context: CallbackContext) -> None:
         LOGGER.exception(f"guess() failed for chat={chat_id}, user={user_id}")
 
 
+async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> None:
+    if not await is_admin(update, context):
+        return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ!</b>')
+    
+    chat_id = update.effective_chat.id
+    if not context.args or context.args[0].lower() not in ('on', 'off'):
+        return await update.message.reply_html('<b>💡 ᴜsᴀɢᴇ:</b> /grab_delete [on|off]')
+
+    mode = context.args[0].lower() == 'on'
+    await set_group_setting(chat_id, 'grab_delete', mode)
+    state = "<b>ᴇɴᴀʙʟᴇᴅ (sᴘᴀᴡɴɪɴɢ ᴍsɢ ᴡɪʟʟ ᴅᴇʟᴇᴛᴇ ᴏɴ ɢʀᴀʙ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (sᴘᴀᴡɴɪɴɢ ᴍsɢ ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
+    await update.message.reply_html(f'<b>⚙️ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ɢʀᴀʙ ɪs ɴᴏᴡ:</b> {state}')
+
+
+async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> None:
+    if not await is_admin(update, context):
+        return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ!</b>')
+    
+    chat_id = update.effective_chat.id
+    if not context.args or context.args[0].lower() not in ('on', 'off'):
+        return await update.message.reply_html('<b>💡 ᴜsᴀɢᴇ:</b> /miss_delete [on|off]')
+
+    mode = context.args[0].lower() == 'on'
+    await set_group_setting(chat_id, 'miss_delete', mode)
+    state = "<b>ᴇɴᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡɪʟʟ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
+    await update.message.reply_html(f'<b>⚙️ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ᴍɪss ɪs ɴᴏᴡ:</b> {state}')
+
+
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
-    lines = ["<b>🎯 Rarity Spawn Status</b>\n"]
+    lines = ["<b>🎯 ʀᴀʀɪᴛʏ sᴘᴀᴡɴ sᴛᴀᴛᴜs</b>\n"]
     for key, (emoji, name) in RARITIES.items():
-        state = "✅ ON" if rarity_status_cache.get(key, True) else "❌ OFF"
+        state = "✅ ᴏɴ" if rarity_status_cache.get(key, True) else "❌ ᴏғғ"
         lines.append(f"{emoji} <b>{escape(name)}</b> (<code>{key}</code>) — {state}")
-    lines.append("\nUse /rarity_on <key> or /rarity_off <key> to change.")
+    lines.append("\n<b>ᴜsᴇ /rarity_on <key> ᴏʀ /rarity_off <key> ᴛᴏ ᴄʜᴀɴɢᴇ.</b>")
     await update.message.reply_html("\n".join(lines))
 
 
 async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: bool) -> None:
     if not is_authorized(update.effective_user.id):
-        return await update.message.reply_html('<b>🚫 You are not authorized to use this command.</b>')
+        return await update.message.reply_html('<b>🚫 ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>')
     if not context.args:
         cmd = "/rarity_on" if enable else "/rarity_off"
-        return await update.message.reply_html(f'<b>Usage:</b> {cmd} &lt;rarity_key&gt;')
+        return await update.message.reply_html(f'<b>💡 ᴜsᴀɢᴇ:</b> {cmd} &lt;rarity_key&gt;')
 
     key = context.args[0].lower()
     if key not in RARITIES:
-        return await update.message.reply_html(f'<b>❌ Unknown rarity key:</b> <code>{escape(key)}</code>')
+        return await update.message.reply_html(f'<b>❌ ᴜɴᴋɴᴏᴡɴ ʀᴀʀɪᴛʏ ᴋᴇʏ:</b> <code>{escape(key)}</code>')
 
     await set_rarity_status(key, enable)
     emoji, name = RARITIES[key]
-    state = "ENABLED and can spawn" if enable else "DISABLED and will not spawn"
+    state = "ᴇɴᴀʙʟᴇᴅ ᴀɴᴅ ᴄᴀɴ sᴘᴀᴡɴ" if enable else "ᴅɪsᴀʙʟᴇᴅ ᴀɴᴅ ᴡɪʟʟ ɴᴏᴛ sᴘᴀᴡɴ"
     icon = "✅" if enable else "🚫"
-    await update.message.reply_html(f'<b>{icon} {emoji} {escape(name)} rarity is now {state}.</b>')
+    await update.message.reply_html(f'<b>{icon} {emoji} {escape(name)} ʀᴀʀɪᴛʏ ɪs ɴᴏᴡ {state}.</b>')
 
 
 async def rarity_on_cmd(update, context):
@@ -328,7 +398,7 @@ async def rarity_off_cmd(update, context):
 
 async def name_cmd(update: Update, context: CallbackContext) -> None:
     if not is_authorized(update.effective_user.id):
-        return await update.message.reply_html('<b>🚫 You are not authorized to use this command.</b>')
+        return await update.message.reply_html('<b>ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>')
 
     chat_id = update.effective_chat.id
     if chat_id not in last_characters:
@@ -336,12 +406,12 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
 
     c = last_characters[chat_id]
     text = (
-        "<b>🎭 CURRENT SPAWNED CHARACTER:</b>\n\n"
-        f"<b>🌸 NAME:</b> {escape(c.get('name', 'Unknown'))}\n"
-        f"<b>🧩 ANIME:</b> {escape(c.get('anime', 'Unknown'))}\n"
-        f"<b>✨ RARITY:</b> {escape(c.get('rarity', '🟢 Common'))}\n"
-        f"<b>🆔 ID:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
-        "<b>💡 USE /grab (NAME) TO ADD IT TO YOUR HAREM!</b>"
+        "<b>🎭 ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
+        f"<b>🌸 ɴᴀᴍᴇ:</b> {escape(c.get('name', 'Unknown'))}\n"
+        f"<b>🧩 ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
+        f"<b>✨ ʀᴀʀɪᴛʏ:</b> {escape(c.get('rarity', '🟢 Common'))}\n"
+        f"<b>🔖 ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
+        "<b>💡 ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
     )
     await update.message.reply_html(text)
 
@@ -352,6 +422,8 @@ async def main():
         await shivuu.start()
 
         application.add_handler(CommandHandler(["grab", "g"], guess, block=False))
+        application.add_handler(CommandHandler(["grab_delete"], toggle_grab_delete_cmd, block=False))
+        application.add_handler(CommandHandler(["miss_delete"], toggle_miss_delete_cmd, block=False))
         application.add_handler(CommandHandler(["rarity_status"], rarity_status_cmd, block=False))
         application.add_handler(CommandHandler(["rarity_on"], rarity_on_cmd, block=False))
         application.add_handler(CommandHandler(["rarity_off"], rarity_off_cmd, block=False))
