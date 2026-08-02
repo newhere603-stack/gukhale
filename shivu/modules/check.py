@@ -14,7 +14,7 @@ char_cache = TTLCache(maxsize=2000, ttl=600)
 anime_cache = TTLCache(maxsize=1000, ttl=900)
 user_cache = TTLCache(maxsize=500, ttl=300)
 
-USERS_PER_PAGE, CHARS_PER_PAGE = 10, 15
+USERS_PER_PAGE = 10
 
 
 @dataclass
@@ -68,6 +68,24 @@ async def global_count(cid: str) -> int:
     return n
 
 
+async def get_owners(cid: str) -> List[Dict]:
+    key = f"o_{cid}"
+    if key in user_cache:
+        return user_cache[key]
+    users = await user_collection.find(
+        {'characters.id': cid}, {'_id': 0, 'id': 1, 'first_name': 1, 'username': 1, 'characters': 1}
+    ).to_list(length=None)
+    owners = []
+    for u in users:
+        cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
+        if cnt:
+            owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
+                            'username': u.get('username'), 'count': cnt})
+    owners.sort(key=lambda x: x['count'], reverse=True)
+    user_cache[key] = owners
+    return owners
+
+
 def process_search(chars: List[Dict]) -> Dict:
     names, data, rarities = {}, {}, {}
     for c in chars:
@@ -81,23 +99,67 @@ def process_search(chars: List[Dict]) -> Dict:
     return {'names': names, 'data': data, 'rarities': rarities, 'unique': len(names), 'total': len(chars)}
 
 
-# --- ✨ COOL & AESTHETIC CARD INFO DESIGN ---
+# --- ✨ COOL CARD INFO DESIGN ---
 def card_caption(char: Char, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     return (
-        "┏━━ <b>ᴜʟᴛɪᴍᴀᴛᴇ ᴡᴀɪғᴜ ɪɴғᴏ</b>\n"
+        "ㅤㅤㅤㅤ<b>ᴜʟᴛɪᴍᴀᴛᴇ ᴡᴀɪғᴜ ɪɴғᴏ</b>\n"
         "┃\n"
-        f"┣ ⚡ <b>ɴᴀᴍᴇ ⬡</b> <code>{escape(char.name)}</code>\n"
+        f"┣ 🌸 <b>ɴᴀᴍᴇ ⬡</b> <code>{escape(char.name)}</code>\n"
         f"┣ 🌟 <b>ʀᴀʀɪᴛʏ ⬡</b> {emoji} <b>{text}</b>\n"
-        f"┣ 🎬 <b>ᴀɴɪᴍᴇ ⬡</b> <i>{escape(char.anime)}</i>\n"
-        f"┣ 🆔 <b>ᴄʜᴀʀ ɪᴅ ⬡</b> <code>{char.id}</code>\n"
+        f"┣ 🎞️ <b>ᴀɴɪᴍᴇ ⬡</b> <i>{escape(char.anime)}</i>\n"
+        f"┣ 🔖 <b>ᴄʜᴀʀ ɪᴅ ⬡</b> <code>{char.id}</code>\n"
         "┃\n"
         f"┗━━ 🌍 <b>ɢʟᴏʙᴀʟʟʏ ɢʀᴀʙʙᴇᴅ : {gcount}x</b>"
     )
 
 
+# --- 🏆 OWNERS LIST DESIGN ---
+def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> str:
+    emoji, text = rarity_parts(char.rarity)
+    start, end = page * USERS_PER_PAGE, page * USERS_PER_PAGE + USERS_PER_PAGE
+    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    
+    lines = [
+        "╔══ 🏆 <b>ᴄʜᴀʀᴀᴄᴛᴇʀ ᴏᴡɴᴇʀs</b> 🏆",
+        "║",
+        f"╠ 🌸 <b>ɴᴀᴍᴇ ⬡</b> <code>{escape(char.name)}</code>",
+        f"╠ 🌟 <b>ʀᴀʀɪᴛʏ ⬡</b> {emoji} <b>{text}</b>",
+        f"╠ 🎞️ <b>ᴀɴɪᴍᴇ ⬡</b> <i>{escape(char.anime)}</i>",
+        "╚════════════════════\n"
+    ]
+    
+    for i, o in enumerate(owners[start:end], start + 1):
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"<code>{i}.</code>")
+        link = f"<a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a>"
+        lines.append(f"{medal} {link} ── <b>x{o['count']}</b>")
+        
+    lines.append(f"\n📄 <b>ᴘᴀɢᴇ {page+1}/{total_pages}</b> • 🌍 <b>ᴛᴏᴛᴀʟ: {gcount}x</b>")
+    return "\n".join(lines)
+
+
+def pagination_kb(cid: str, page: int, total: int, back=False) -> InlineKeyboardMarkup:
+    kb = []
+    if total > 1 and not back:
+        row = []
+        if page > 0: row.append(InlineKeyboardButton("⬅️ ᴘʀᴇᴠ", callback_data=f"owners_{cid}_{page-1}"))
+        if page < total - 1: row.append(InlineKeyboardButton("ɴᴇxᴛ ➡️", callback_data=f"owners_{cid}_{page+1}"))
+        if row: kb.append(row)
+    elif total > 1 and back:
+        row = []
+        if page > 0: row.append(InlineKeyboardButton("⬅️ ᴘʀᴇᴠ", callback_data=f"owners_{cid}_{page-1}"))
+        if page < total - 1: row.append(InlineKeyboardButton("ɴᴇxᴛ ➡️", callback_data=f"owners_{cid}_{page+1}"))
+        if row: kb.append(row)
+        
+    if back:
+        kb.append([InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ɪɴғᴏ", callback_data=f"back_{cid}")])
+    else:
+        kb.append([InlineKeyboardButton("🏆 ᴏᴡɴᴇʀs", callback_data=f"owners_{cid}_0")])
+    return InlineKeyboardMarkup(kb)
+
+
 def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, int]:
-    total_pages = 1 if show_all else max(1, (r['unique'] + CHARS_PER_PAGE - 1) // CHARS_PER_PAGE)
+    total_pages = 1 if show_all else max(1, (r['unique'] + 15 - 1) // 15)
     lines = [
         "╔══ 🔍 <b>ᴀɴɪᴍᴇ sᴇᴀʀᴄʜ ʀᴇsᴜʟᴛs</b> 🔍",
         "║",
@@ -106,7 +168,7 @@ def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, i
         "╚═══════════════════════\n"
     ]
     items = sorted(r['names'].items())
-    s, e = (0, len(items)) if show_all else (page * CHARS_PER_PAGE, page * CHARS_PER_PAGE + CHARS_PER_PAGE)
+    s, e = (0, len(items)) if show_all else (page * 15, page * 15 + 15)
     for i, (name, cnt) in enumerate(items[s:e], s + 1):
         c = r['data'][name]
         emoji, text = rarity_parts(c.get('rarity', '🟢 Common'))
@@ -136,7 +198,7 @@ async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not char:
         return await update.message.reply_text("<b>ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ!</b>", parse_mode=ParseMode.HTML)
     gcount = await global_count(char.id)
-    await send_media(update, char, card_caption(char, gcount))
+    await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, 1))
 
 
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -151,6 +213,44 @@ async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
-# --- ✨ REGISTERING ONLY CHECK & ANIME COMMANDS ---
+# --- 🔄 CALLBACK HANDLERS FOR OWNERS BUTTON ---
+async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+    _, cid, page = q.data.split('_')
+    page = int(page)
+    char = await get_char(cid)
+    owners = await get_owners(cid)
+    if not char:
+        return await q.answer("Character not found", show_alert=True)
+    gcount = await global_count(cid)
+    total = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    
+    await q.edit_message_caption(
+        caption=owners_caption(char, owners, page, gcount),
+        reply_markup=pagination_kb(cid, page, total, back=True),
+        parse_mode=ParseMode.HTML
+    )
+
+
+async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+    cid = q.data.split('_')[1]
+    char = await get_char(cid)
+    if not char:
+        return await q.answer("Character not found", show_alert=True)
+    gcount = await global_count(cid)
+    
+    await q.edit_message_caption(
+        caption=card_caption(char, gcount),
+        reply_markup=pagination_kb(cid, 0, 1, back=False),
+        parse_mode=ParseMode.HTML
+    )
+
+
+# --- ✨ REGISTERING HANDLERS ---
 application.add_handler(CommandHandler("check", check_character, block=False))
 application.add_handler(CommandHandler("anime", find_anime, block=False))
+application.add_handler(CallbackQueryHandler(handle_owners_pagination, pattern=r"^owners_", block=False))
+application.add_handler(CallbackQueryHandler(handle_back_to_card, pattern=r"^back_", block=False))
