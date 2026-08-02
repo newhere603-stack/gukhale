@@ -309,7 +309,14 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 await user_collection.update_one({'id': user_id}, {'$set': changed})
             await user_collection.update_one({'id': user_id}, {'$push': {'characters': character}})
         else:
-            await user_collection.insert_one({'id': user_id, **user_fields, 'characters': [character]})
+            # Silent registration with balance and bot_started: False
+            await user_collection.insert_one({
+                'id': user_id, 
+                **user_fields, 
+                'characters': [character],
+                'balance': 500,
+                'bot_started': False
+            })
 
         await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
         await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
