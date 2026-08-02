@@ -37,16 +37,16 @@ try:
     collection.create_index([('name', TEXT), ('anime', TEXT)], background=True)
     user_collection.create_index([('id', ASCENDING)], unique=True, background=True)
     user_collection.create_index([('characters.id', ASCENDING)], background=True, sparse=True)
-except Exception as e:
-    print(f"Index creation error: {e}")
+except Exception: 
+    pass
 
-char_cache = TTLCache(maxsize=80000, ttl=2400)
-user_cache = TTLCache(maxsize=50000, ttl=1200)
-query_cache = LRUCache(maxsize=15000)
-count_cache = TTLCache(maxsize=30000, ttl=1800)
-feedback_cache = TTLCache(maxsize=10000, ttl=3600)
-view_cache = TTLCache(maxsize=5000, ttl=600)
-wishlist_cache = TTLCache(maxsize=5000, ttl=1800)
+char_cache = TTLCache(maxsize=100000, ttl=3600)
+user_cache = TTLCache(maxsize=60000, ttl=1800)
+query_cache = LRUCache(maxsize=20000)
+count_cache = TTLCache(maxsize=40000, ttl=2400)
+feedback_cache = TTLCache(maxsize=15000, ttl=4800)
+view_cache = TTLCache(maxsize=8000, ttl=900)
+wishlist_cache = TTLCache(maxsize=8000, ttl=2400)
 
 CAPS = str.maketrans('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 'ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ')
 
@@ -57,14 +57,14 @@ def sc(t: str) -> str:
 @lru_cache(maxsize=32768)
 def parse_rar(r: str) -> Rarity:
     if not r or not isinstance(r, str): 
-        return Rarity("🟢", "Common", 15)
+        return Rarity("🟢", sc("Common"), 15)
     rl = r.lower()
     for k, (e, v) in RARITY_MAP.items():
         if k in rl:
             n = r.split(' ', 1)[-1] if ' ' in r else k.title()
-            return Rarity(e, n, v)
+            return Rarity(e, sc(n), v)
     p = r.split(' ', 1)
-    return Rarity(p[0] if p else "🟢", p[1] if len(p) > 1 else "Common", 15)
+    return Rarity(p[0] if p else "🟢", sc(p[1] if len(p) > 1 else "Common"), 15)
 
 def trunc(t: str, l: int = 22) -> str: 
     return t[:l-2] + '..' if len(t) > l else t
@@ -175,17 +175,17 @@ def minimal_caption(ch: Dict, fav: bool = False, stats: Dict = None, uid: int = 
     r = parse_rar(ch.get('rarity', ''))
     
     cap = (
-        f"OwO! Check out this waifu!\n\n"
-        f"<b>{escape(an)}</b>\n"
-        f"<b>{cid}: {escape(nm)}</b>\n"
-        f"({r.emoji}<b>RARITY:</b> {r.name})"
+        f"<b>{sc('Character Info ✨')}</b>\n\n"
+        f"<b>{escape(sc(an))}</b>\n"
+        f"<b>{cid}: {escape(sc(nm))}</b>\n"
+        f"({r.emoji}<b>{sc('RARITY:')}</b> {r.name})"
     )
     return cap
 
 def owners_caption(ch: Dict, owners: List[Dict]) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
-    cap = f"<b>{escape(nm)}</b>\n\n👥 <b>{len(owners)}</b> ᴏᴡɴᴇʀs • <b>{total}×</b> ɢʀᴀʙʙᴇᴅ\n\n"
+    cap = f"<b>{escape(sc(nm))}</b>\n\n👥 <b>{len(owners)}</b> {sc('owners')} • <b>{total}×</b> {sc('grabbed')}\n\n"
     medals = {1: "🥇", 2: "🥈", 3: "🥉"}
     for i, o in enumerate(owners[:30], 1):
         medal = medals.get(i, f"{i}.")
@@ -197,9 +197,9 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
     avg = round(total / len(owners), 1) if owners else 0
-    cap = f"<b>{escape(nm)}</b>\n\n📊 <b>sᴛᴀᴛɪsᴛɪᴄs</b>\n🎯 <code>{total}×</code> ɢʀᴀʙʙᴇᴅ\n👥 <code>{len(owners)}</code> ᴏᴡɴᴇʀs\n📈 <code>{avg}×</code> ᴀᴠɢ\n"
+    cap = f"<b>{escape(sc(nm))}</b>\n\n📊 <b>{sc('statistics')}</b>\n🎯 <code>{total}×</code> {sc('grabbed')}\n👥 <code>{len(owners)}</code> {sc('owners')}\n📈 <code>{avg}×</code> {sc('avg')}\n"
     if owners:
-        cap += f"\n🏆 <b>ᴛᴏᴘ ᴄᴏʟʟᴇᴄᴛᴏʀs</b>\n"
+        cap += f"\n🏆 <b>{sc('top collectors')}</b>\n"
         for i, o in enumerate(owners[:10], 1):
             fn = escape(trunc(o.get('first_name', 'User'), 18))
             cap += f"{i}. {fn} • <code>×{o.get('count', 0)}</code>\n"
@@ -208,11 +208,11 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👥 ᴏᴡɴᴇʀs", callback_data=f"o.{cid}"),
-            InlineKeyboardButton("sᴛᴀᴛs", callback_data=f"s.{cid}")
+            InlineKeyboardButton(sc("♔ owners"), callback_data=f"o.{cid}"),
+            InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
         ],
         [
-            InlineKeyboardButton("⤿ sʜᴀʀᴇ", switch_inline_query=cid)
+            InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
         ]
     ])
 
@@ -238,7 +238,7 @@ async def inlinequery(update: Update, context) -> None:
             tuid = int(tid)
             usr = await get_user(tuid)
             if not usr:
-                await query.answer([InlineQueryResultArticle(id="nouser", title="❌ ɴᴏ ᴄᴏʟʟᴇᴄᴛɪᴏɴ", description="sᴛᴀʀᴛ ʏᴏᴜʀ ᴊᴏᴜʀɴᴇʏ", input_message_content=InputTextMessageContent("<b>🎮 sᴛᴀʀᴛ ᴄᴏʟʟᴇᴄᴛɪɴɢ!</b>", parse_mode=ParseMode.HTML))], cache_time=5)
+                await query.answer([InlineQueryResultArticle(id="nouser", title=sc("no collection"), description=sc("start your journey"), input_message_content=InputTextMessageContent(f"<b>🎮 {sc('start collecting!')}</b>", parse_mode=ParseMode.HTML))], cache_time=5)
                 return
             cd = {c['id']: c for c in usr.get('characters', []) if isinstance(c, dict) and c.get('id')}
             all_chars = list(cd.values())
@@ -310,9 +310,9 @@ async def inlinequery(update: Update, context) -> None:
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
             pop = ""
             if st and st.get('owners', 0) > 10: 
-                pop = f"🔥 {st['owners']} ᴏᴡɴᴇʀs"
+                pop = f"🔥 {st['owners']} {sc('owners')}"
             elif st and st.get('total', 0) > 5: 
-                pop = f"⭐ {st['total']}× ɢʀᴀʙs"
+                pop = f"⭐ {st['total']}× {sc('grabs')}"
             desc = f"{r.name} • {trunc(an, 20)}"
             if pop: 
                 desc = f"{pop} • {desc}"
@@ -322,10 +322,8 @@ async def inlinequery(update: Update, context) -> None:
             else:
                 results.append(InlineQueryResultPhoto(id=rid, photo_url=img, thumbnail_url=img, title=title, description=desc, caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd))
         
-        await query.answer(results, next_offset=noff, cache_time=90, is_personal=is_coll)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
+        await query.answer(results, next_offset=noff, cache_time=120, is_personal=is_coll)
+    except Exception:
         await update.inline_query.answer([], cache_time=5)
 
 async def chosen_inline_result(update: Update, context) -> None:
@@ -346,27 +344,25 @@ async def show_owners(update: Update, context) -> None:
         cid = q.data.split('.', 1)[1]
         ch = await collection.find_one({'id': cid}, {'_id': 0})
         if not ch:
-            await q.answer("ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
+            await q.answer(sc("not found"), show_alert=True)
             return
         owners = await get_owners(cid, 100)
         if not owners:
-            await q.answer("ɴᴏ ᴏᴡɴᴇʀs", show_alert=True)
+            await q.answer(sc("no owners"), show_alert=True)
             return
         cap = owners_caption(ch, owners)
         kbd = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data=f"b.{cid}"), 
-                InlineKeyboardButton("sᴛᴀᴛs", callback_data=f"s.{cid}")
+                InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
+                InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
             ], 
             [
-                InlineKeyboardButton("⤿ sʜᴀʀᴇ", switch_inline_query=cid)
+                InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
             ]
         ])
         await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        await q.answer("ᴇʀʀᴏʀ", show_alert=True)
+    except Exception:
+        await q.answer(sc("error"), show_alert=True)
 
 async def back_card(update: Update, context) -> None:
     q = update.callback_query
@@ -375,16 +371,14 @@ async def back_card(update: Update, context) -> None:
         cid = q.data.split('.', 1)[1]
         ch = await collection.find_one({'id': cid}, {'_id': 0})
         if not ch:
-            await q.answer("ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
+            await q.answer(sc("not found"), show_alert=True)
             return
         uid = q.from_user.id
         cap = minimal_caption(ch, uid=uid)
         kbd = create_kbd(cid, uid)
         await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        await q.answer("ᴇʀʀᴏʀ", show_alert=True)
+    except Exception:
+        await q.answer(sc("error"), show_alert=True)
 
 async def show_stats(update: Update, context) -> None:
     q = update.callback_query
@@ -393,24 +387,22 @@ async def show_stats(update: Update, context) -> None:
         cid = q.data.split('.', 1)[1]
         ch = await collection.find_one({'id': cid}, {'_id': 0})
         if not ch:
-            await q.answer("ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
+            await q.answer(sc("not found"), show_alert=True)
             return
         owners = await get_owners(cid, 100)
         cap = stats_caption(ch, owners)
         kbd = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data=f"b.{cid}"), 
-                InlineKeyboardButton("ᴏᴡɴᴇʀs", callback_data=f"o.{cid}")
+                InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
+                InlineKeyboardButton(sc("owners"), callback_data=f"o.{cid}")
             ], 
             [
-                InlineKeyboardButton("⤿ sʜᴀʀᴇ", switch_inline_query=cid)
+                InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
             ]
         ])
         await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        await q.answer("ᴇʀʀᴏʀ", show_alert=True)
+    except Exception:
+        await q.answer(sc("error"), show_alert=True)
 
 application.add_handler(InlineQueryHandler(inlinequery, block=False))
 application.add_handler(ChosenInlineResultHandler(chosen_inline_result, block=False))
