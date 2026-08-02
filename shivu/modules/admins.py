@@ -22,8 +22,14 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
         if not is_authorized(requester_id):
             return  # Normal users completely ignored
             
-        # Get the actual command used (e.g., /tadd, /cadd)
-        command_used = update.message.text.split()[0].lower()
+        # Context args ki jagah manual split use kar rahe hain taaki reply me number hamesha read ho
+        text = update.message.text or update.message.caption
+        if not text:
+            return
+            
+        parts = text.split()
+        command_used = parts[0].lower()
+        args = parts[1:]
             
         target_id = None
         amount = None
@@ -34,13 +40,14 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
             target_user = update.message.reply_to_message.from_user
             target_id = target_user.id
             target_name = target_user.first_name
-            if len(context.args) >= 1:
-                amount = context.args[0]
+            # Agar reply kiya hai, to pehla argument hi amount hoga
+            if len(args) >= 1:
+                amount = args[0]
         else:
-            # Command with user ID and amount
-            if len(context.args) >= 2:
-                target_id = context.args[0]
-                amount = context.args[1]
+            # Bina reply ke: Command + User ID + Amount
+            if len(args) >= 2:
+                target_id = args[0]
+                amount = args[1]
                 
         if target_id is None or amount is None:
             await update.message.reply_text(
@@ -51,7 +58,7 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
             
         try:
             target_id = int(target_id)
-            amount = int(float(amount)) # Float ko int me convert karne ke liye in case decimal aaye
+            amount = int(float(amount)) 
         except ValueError:
             await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ ᴏʀ ᴀᴍᴏᴜɴᴛ.</b>", parse_mode='HTML')
             return
@@ -105,6 +112,10 @@ async def destroy_cmd(update: Update, context: CallbackContext):
         if not is_authorized(requester_id):
             return 
 
+        text = update.message.text or update.message.caption
+        parts = text.split()
+        args = parts[1:]
+
         target_id = None
         target_name = "ᴜsᴇʀ"
 
@@ -112,8 +123,8 @@ async def destroy_cmd(update: Update, context: CallbackContext):
             target_user = update.message.reply_to_message.from_user
             target_id = target_user.id
             target_name = target_user.first_name
-        elif context.args:
-            target_id = context.args[0]
+        elif len(args) >= 1:
+            target_id = args[0]
 
         if not target_id:
             await update.message.reply_text("<b>ᴜsᴀɢᴇ: /destroy ᴜsᴇʀ_ɪᴅ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ</b>", parse_mode='HTML')
@@ -156,12 +167,16 @@ async def setded_cmd(update: Update, context: CallbackContext):
         if not is_authorized(requester_id):
             return 
 
-        if not context.args:
+        text = update.message.text or update.message.caption
+        parts = text.split()
+        args = parts[1:]
+
+        if len(args) < 1:
             await update.message.reply_text("<b>ᴜsᴀɢᴇ: /setded ᴘᴇʀᴄᴇɴᴛᴀɢᴇ</b>", parse_mode='HTML')
             return
 
         try:
-            percentage = float(context.args[0])
+            percentage = float(args[0])
         except ValueError:
             await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴘᴇʀᴄᴇɴᴛᴀɢᴇ.</b>", parse_mode='HTML')
             return
