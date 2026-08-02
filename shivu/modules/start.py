@@ -1,7 +1,8 @@
 import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ChatMemberStatus, ChatType, ParseMode
 from telegram.error import BadRequest, Forbidden, TelegramError
-from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
+from telegram.ext import ContextTypes, CallbackQueryHandler, CommandHandler
 from shivu import (
     BOT_USERNAME,
     LOGGER,
@@ -103,10 +104,10 @@ def get_main_caption(user_id: int, first_name: str) -> str:
 
 
 # Robust Force Sub Checker (Supports Groups Bypass & API Error Handling)
-async def is_force_sub_member(update: Update, context: CallbackContext) -> bool:
+async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
         # Group chats me force sub check mat karo
-        if update.effective_chat and update.effective_chat.type != "private":
+        if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
             return True
 
         user_id = update.effective_user.id
@@ -120,7 +121,7 @@ async def is_force_sub_member(update: Update, context: CallbackContext) -> bool:
         member = await context.bot.get_chat_member(
             chat_id=chat_identifier, user_id=user_id
         )
-        return member.status in ["member", "administrator", "creator"]
+        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
 
     except BadRequest as e:
         LOGGER.warning(f"Force-sub BadRequest for user: {e}")
@@ -180,7 +181,7 @@ def category_view(cat_key: str, page: int = 1):
 
 
 # Dynamic Credits View Fetching Owner & Sudo Users Directly from Database
-async def credits_view(context: CallbackContext):
+async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     kb = []
     added_ids = set()
 
@@ -216,6 +217,7 @@ def _new_user_doc(user_id, first_name, username):
         "first_name": first_name,
         "username": username,
         "balance": 500,
+        "bot_started": True,  # Yaha flag add kiya gaya hai
         "characters": [],
         "pass_data": {
             "tier": "free",
@@ -236,9 +238,10 @@ async def _ensure_user(user_id, first_name, username):
     try:
         user_data = await user_collection.find_one({"id": user_id})
         if user_data:
+            # Profile pehle se hai to update set me bot_started True kar do
             await user_collection.update_one(
                 {"id": user_id},
-                {"$set": {"first_name": first_name, "username": username}},
+                {"$set": {"first_name": first_name, "username": username, "bot_started": True}},
             )
             return False
         await user_collection.insert_one(
@@ -268,7 +271,7 @@ async def safe_track_bot_start(user_id, first_name, username, is_new_user):
         LOGGER.error(f"Error in safe_track_bot_start: {e}")
 
 
-async def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if not update or not update.effective_user or not update.effective_chat:
             return
@@ -283,7 +286,7 @@ async def start(update: Update, context: CallbackContext):
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=FORCE_SUB_TEXT,
-                parse_mode="HTML",
+                parse_mode=ParseMode.HTML,
                 reply_markup=FORCE_SUB_KEYBOARD,
             )
             return
@@ -307,7 +310,7 @@ async def start(update: Update, context: CallbackContext):
             video=START_VIDEO,
             caption=caption_text,
             reply_markup=MAIN_KEYBOARD,
-            parse_mode="HTML",
+            parse_mode=ParseMode.HTML,
             supports_streaming=True,
         )
 
@@ -317,13 +320,13 @@ async def start(update: Update, context: CallbackContext):
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
                 text="⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>",
-                parse_mode="HTML",
+                parse_mode=ParseMode.HTML,
             )
         except Exception:
             pass
 
 
-async def button_callback(update: Update, context: CallbackContext):
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try:
         await query.answer()
@@ -355,7 +358,7 @@ async def button_callback(update: Update, context: CallbackContext):
                 video=START_VIDEO,
                 caption=caption_text,
                 reply_markup=MAIN_KEYBOARD,
-                parse_mode="HTML",
+                parse_mode=ParseMode.HTML,
                 supports_streaming=True,
             )
             return
@@ -391,7 +394,7 @@ async def button_callback(update: Update, context: CallbackContext):
             return
 
         await query.edit_message_caption(
-            caption=text, parse_mode="HTML", reply_markup=markup
+            caption=text, parse_mode=ParseMode.HTML, reply_markup=markup
         )
 
     except Exception as e:
