@@ -46,9 +46,35 @@ async def swaifu(update: Update, context: CallbackContext):
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
-        pipeline = [{'$sample': {'size': 1}}]
+        # Excluded rarities list (Valentine, Pearl, Neon, Premium, Cosmic, Sweet)
+        excluded_rarities = [
+            "VALENTINE", "PEARL", "NEON", "PREMIUM EDITION", 
+            "COSMIC", "SWEET", "VALENTINE 💋", "PEARL 🐚", 
+            "NEON ⚡", "💎 PREMIUM EDITION", "🌌 COSMIC", "🍭 SWEET"
+        ]
+
+        # Fetch a random character excluding specific rarities (case-insensitive check)
+        pipeline = [
+            {
+                '$match': {
+                    'rarity': {
+                        '$not': {
+                            '$regex': '|'.join(excluded_rarities),
+                            '$options': 'i'
+                        }
+                    }
+                }
+            },
+            {'$sample': {'size': 1}}
+        ]
+        
         cursor = collection.aggregate(pipeline)
         result = await cursor.to_list(length=1)
+
+        # Fallback if filtered pool is empty
+        if not result:
+            cursor = collection.aggregate([{'$sample': {'size': 1}}])
+            result = await cursor.to_list(length=1)
 
         if not result:
             await update.message.reply_text(f"<b>{to_small_caps('No characters found in database!')}</b>", parse_mode=ParseMode.HTML)
@@ -74,7 +100,7 @@ async def swaifu(update: Update, context: CallbackContext):
         )
 
         caption = (
-            f"<b>{to_small_caps('Congratulations')}\n {safe_first_name}! {to_small_caps('You won')}🔥</b>\n"
+            f"<b>{to_small_caps('Congrats 🎉')} {safe_first_name}! {to_small_caps('You won')}🔥</b>\n"
             f"<b>◈ {to_small_caps('Name')}: {char_name}</b>\n"
             f"<b>◈ {to_small_caps('Rarity')}: {rarity}</b>\n"
             f"<b>◈ {to_small_caps('Anime')}: {anime}</b>"
@@ -98,7 +124,6 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
         raw_first_name = update.effective_user.first_name or "User"
-        safe_first_name = html.escape(to_small_caps(raw_first_name))
         now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         user_data = await user_collection.find_one({'id': user_id})
@@ -124,11 +149,12 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
             upsert=True
         )
 
+        # Updated message without user's name
         msg_text = (
             f"<b>🎉 {to_small_caps('Daily Reward Claimed!')} 🎉</b>\n\n"
-            f"<b>✨ {to_small_caps('Hey')} {safe_first_name}, {to_small_caps('your dedication pays off!')} </b>\n"
-            f"<b>💸 {to_small_caps('You just received')} {coins_won} {to_small_caps('coins!')} </b>\n\n"
-            f"<b>🏦 {to_small_caps('These have been securely added to your vault.')} </b>\n"
+            f"<b>✨ {to_small_caps('Your dedication pays off!')}</b>\n"
+            f"<b>💸 {to_small_caps('You just received')} {coins_won} {to_small_caps('coins!')}</b>\n\n"
+            f"<b>🏦 {to_small_caps('These have been securely added to your vault.')}</b>\n"
             f"<b>🌟 {to_small_caps('Keep coming back daily to grow your empire!')}</b>"
         )
 
@@ -139,6 +165,6 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>", parse_mode=ParseMode.HTML)
 
 
-# Yahan se maine block=False hata diya hai takki execution main loop me hi rahe.
+# Handlers
 application.add_handler(CommandHandler("swaifu", swaifu))
 application.add_handler(CommandHandler("claim", daily_claim_coins))
