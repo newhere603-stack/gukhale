@@ -8,7 +8,6 @@ async def get_or_init_user(uid: int):
     try:
         user = await user_collection.find_one({"id": uid})
         if user is None:
-            # Yahan bot_started: False set kar diya hai naye users ke liye
             new_user = {"id": uid, "balance": 0, "tokens": 0, "bot_started": False}
             await user_collection.update_one(
                 {"id": uid},
@@ -32,21 +31,19 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = await get_or_init_user(uid)
         
-        # 1. BINA START KIYE BALANCE CHECK KARNE PAR BUTTON DENA
-        if not user.get("bot_started", False):
+        if not user.get("bot_started", True):
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🚀 sᴛᴀʀᴛ ʙᴏᴛ ᴛᴏ ᴠɪᴇᴡ ʙᴀʟᴀɴᴄᴇ", url=f"https://t.me/{BOT_USERNAME}?start=True")]
+                [InlineKeyboardButton("sᴛᴀʀᴛ ʙᴏᴛ", url=f"https://t.me/{BOT_USERNAME}?start=True")]
             ])
             await update.message.reply_html(
-                "<b>⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ʏᴇᴛ!</b>\n\n"
-                "ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ᴛᴏ ᴠɪᴇᴡ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ.",
+                "<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ʏᴇᴛ!</b>\n\n"
+                "<b>ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ᴛᴏ ᴠɪᴇᴡ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ.</b>",
                 reply_markup=kb
             )
             return
 
         balance = user.get("balance", 0)
 
-        # Text: Small Caps + Bold | Number formatted with commas inside code block
         await update.message.reply_text(
             f"💸 <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance:,}</code></b>",
             parse_mode="HTML",
@@ -55,7 +52,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LOGGER.error(f"Critical error in balance_cmd: {e}")
         try:
             await update.message.reply_text(
-                "⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
+                "<b>⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
                 parse_mode="HTML",
             )
         except Exception:
@@ -72,21 +69,19 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = await get_or_init_user(uid)
         
-        # 1. BINA START KIYE TOKENS CHECK KARNE PAR BUTTON DENA
-        if not user.get("bot_started", False):
+        if not user.get("bot_started", True):
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🚀 sᴛᴀʀᴛ ʙᴏᴛ ᴛᴏ ᴠɪᴇᴡ ᴛᴏᴋᴇɴs", url=f"https://t.me/{BOT_USERNAME}?start=True")]
+                [InlineKeyboardButton("sᴛᴀʀᴛ ʙᴏᴛ", url=f"https://t.me/{BOT_USERNAME}?start=True")]
             ])
             await update.message.reply_html(
-                "<b>⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ʏᴇᴛ!</b>\n\n"
-                "ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ᴛᴏ ᴠɪᴇᴡ ʏᴏᴜʀ ᴛᴏᴋᴇɴs.",
+                "<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ʏᴇᴛ!</b>\n\n"
+                "<b>ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ᴛᴏ ᴠɪᴇᴡ ʏᴏᴜʀ ᴛᴏᴋᴇɴs.</b>",
                 reply_markup=kb
             )
             return
 
         tokens = user.get("tokens", 0)
 
-        # Text: Small Caps + Bold | Number formatted with commas inside code block
         await update.message.reply_text(
             f"💠 <b>ᴛᴏᴋᴇɴs: <code>{tokens:,}</code></b>",
             parse_mode="HTML",
@@ -95,14 +90,13 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LOGGER.error(f"Critical error in tokens_cmd: {e}")
         try:
             await update.message.reply_text(
-                "⚠️ <b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
+                "<b>⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
                 parse_mode="HTML",
             )
         except Exception:
             pass
 
 
-# Command Handlers Register
 application.add_handler(CommandHandler(["bal", "balance"], balance_cmd, block=False))
 application.add_handler(CommandHandler(["tokens", "tbal", "token"], tokens_cmd, block=False))
 
