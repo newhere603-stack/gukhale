@@ -46,22 +46,24 @@ async def swaifu(update: Update, context: CallbackContext):
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
-        # Using simpler python-side filtering instead of complex mongo aggregate match to prevent any crash
+        # Sirf yeh allowed rarities hi aayengi (case-insensitive check ke liye lowercase me)
+        allowed_rarities = [
+            "celestial", "exclusive", "legendary", 
+            "sweet", "special edition", "rare", "common"
+        ]
+
         cursor = collection.find({})
         all_chars = await cursor.to_list(length=None)
 
-        excluded_rarities = ["mythic", "valentine", "pearl", "neon", "premium edition", "cosmic"]
-        
-        valid_chars = [
-            c for c in all_chars 
-            if str(c.get('rarity', '')).strip().lower() not in excluded_rarities
-        ]
+        # Filter characters matching only the allowed rarities
+        valid_chars = []
+        for c in all_chars:
+            rarity_str = str(c.get('rarity', '')).strip().lower()
+            if any(allowed in rarity_str for allowed in allowed_rarities):
+                valid_chars.append(c)
 
         if not valid_chars:
-            valid_chars = all_chars
-
-        if not valid_chars:
-            await update.message.reply_text(f"<b>{to_small_caps('No characters found in database!')}</b>", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(f"<b>{to_small_caps('No characters found with specified rarities!')}</b>", parse_mode=ParseMode.HTML)
             return
 
         character = random.choice(valid_chars)
@@ -145,7 +147,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         
     except Exception as e:
         logger.error(f"Claim Error: {e}", exc_info=True)
-        await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇﺭ.</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>", parse_mode=ParseMode.HTML)
 
 
 # Handlers
