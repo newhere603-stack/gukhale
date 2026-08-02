@@ -17,6 +17,27 @@ user_cache = TTLCache(maxsize=500, ttl=300)
 USERS_PER_PAGE = 10
 
 
+# --- ✨ UNIVERSAL SMALL CAPS CONVERTER ---
+def to_small_caps(text: str) -> str:
+    mapping = {
+        'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
+        'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
+        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
+        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 
+        'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
+        'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
+        'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 
+        'Q': 'ǫ', 'R': 'ʀ', 'S': 'ꜱ', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 
+        'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ', '0': '0', '1': '1',
+        '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7',
+        '8': '8', '9': '9'
+    }
+    return "".join(mapping.get(c, c) for c in str(text))
+
+def bold_sc(text: str) -> str:
+    return f"<b>{to_small_caps(text)}</b>"
+
+
 @dataclass
 class Char:
     id: str; name: str; anime: str; rarity: str; img_url: str
@@ -77,7 +98,7 @@ async def get_owners(cid: str) -> List[Dict]:
     ).to_list(length=None)
     owners = []
     for u in users:
-        cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
+        cnt = sum(1 for c in u.get('characters', []) if c.get('id'] == cid)
         if cnt:
             owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
                             'username': u.get('username'), 'count': cnt})
@@ -99,34 +120,30 @@ def process_search(chars: List[Dict]) -> Dict:
     return {'names': names, 'data': data, 'rarities': rarities, 'unique': len(names), 'total': len(chars)}
 
 
-# --- ✨ COOL CARD INFO DESIGN ---
+# --- ✨ COOL CARD INFO DESIGN (SMALL CAPS + BOLD) ---
 def card_caption(char: Char, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     return (
-        "ㅤㅤㅤㅤ<b>ᴜʟᴛɪᴍᴀᴛᴇ ᴡᴀɪғᴜ ɪɴғᴏ</b>\n"
-        "┃\n"
-        f"┣ 🌸 <b>ɴᴀᴍᴇ ⬡</b> <code>{escape(char.name)}</code>\n"
-        f"┣ 🌟 <b>ʀᴀʀɪᴛʏ ⬡</b> {emoji} <b>{text}</b>\n"
-        f"┣ 🎞️ <b>ᴀɴɪᴍᴇ ⬡</b> <i>{escape(char.anime)}</i>\n"
-        f"┣ 🔖 <b>ᴄʜᴀʀ ɪᴅ ⬡</b> <code>{char.id}</code>\n"
-        "┃\n"
-        f"┗━━ 🌍 <b>ɢʟᴏʙᴀʟʟʏ ɢʀᴀʙʙᴇᴅ : {gcount}x</b>"
+        f"{bold_sc('ultimate waifu info')}\n"
+        "\n"
+        f"🌸 {bold_sc('name ⬡')} <code>{escape(char.name)}</code>\n"
+        f"🌟 {bold_sc('rarity ⬡')} {emoji} <b>{to_small_caps(text)}</b>\n"
+        f"🎞️ {bold_sc('anime ⬡')} <i>{escape(char.anime)}</i>\n"
+        f"🔖 {bold_sc('char id ⬡')} <code>{char.id}</code>\n"
+        "\n"
+        f" 🌍 {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
     )
 
 
-# --- 🏆 OWNERS LIST DESIGN ---
+# --- 🏆 OWNERS LIST DESIGN (SMALL CAPS + BOLD) ---
 def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     start, end = page * USERS_PER_PAGE, page * USERS_PER_PAGE + USERS_PER_PAGE
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     lines = [
-        "╔══ 🏆 <b>ᴄʜᴀʀᴀᴄᴛᴇʀ ᴏᴡɴᴇʀs</b> 🏆",
-        "║",
-        f"╠ 🌸 <b>ɴᴀᴍᴇ ⬡</b> <code>{escape(char.name)}</code>",
-        f"╠ 🌟 <b>ʀᴀʀɪᴛʏ ⬡</b> {emoji} <b>{text}</b>",
-        f"╠ 🎞️ <b>ᴀɴɪᴍᴇ ⬡</b> <i>{escape(char.anime)}</i>",
-        "╚════════════════════\n"
+        f" 🏆 {bold_sc('character owners')} 🏆",
+        "\n"
     ]
     
     for i, o in enumerate(owners[start:end], start + 1):
@@ -134,7 +151,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
         link = f"<a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a>"
         lines.append(f"{medal} {link} ── <b>x{o['count']}</b>")
         
-    lines.append(f"\n📄 <b>ᴘᴀɢᴇ {page+1}/{total_pages}</b> • 🌍 <b>ᴛᴏᴛᴀʟ: {gcount}x</b>")
+    lines.append(f"\n📄 {bold_sc(f'page {page+1}/{total_pages}')} • 🌍 {bold_sc('total:')} <code>{gcount}x</code>")
     return "\n".join(lines)
 
 
@@ -142,40 +159,39 @@ def pagination_kb(cid: str, page: int, total: int, back=False) -> InlineKeyboard
     kb = []
     if total > 1 and not back:
         row = []
-        if page > 0: row.append(InlineKeyboardButton("⬅️ ᴘʀᴇᴠ", callback_data=f"owners_{cid}_{page-1}"))
-        if page < total - 1: row.append(InlineKeyboardButton("ɴᴇxᴛ ➡️", callback_data=f"owners_{cid}_{page+1}"))
+        if page > 0: row.append(InlineKeyboardButton(to_small_caps("⋞ prev"), callback_data=f"owners_{cid}_{page-1}"))
+        if page < total - 1: row.append(InlineKeyboardButton(to_small_caps("next ⋟"), callback_data=f"owners_{cid}_{page+1}"))
         if row: kb.append(row)
     elif total > 1 and back:
         row = []
-        if page > 0: row.append(InlineKeyboardButton("⬅️ ᴘʀᴇᴠ", callback_data=f"owners_{cid}_{page-1}"))
-        if page < total - 1: row.append(InlineKeyboardButton("ɴᴇxᴛ ➡️", callback_data=f"owners_{cid}_{page+1}"))
+        if page > 0: row.append(InlineKeyboardButton(to_small_caps("⋞ prev"), callback_data=f"owners_{cid}_{page-1}"))
+        if page < total - 1: row.append(InlineKeyboardButton(to_small_caps("next ⋟"), callback_data=f"owners_{cid}_{page+1}"))
         if row: kb.append(row)
         
     if back:
-        kb.append([InlineKeyboardButton("🔙 ʙᴀᴄᴋ ᴛᴏ ɪɴғᴏ", callback_data=f"back_{cid}")])
+        kb.append([InlineKeyboardButton(to_small_caps("⟲ back to info"), callback_data=f"back_{cid}")])
     else:
-        kb.append([InlineKeyboardButton("🏆 ᴏᴡɴᴇʀs", callback_data=f"owners_{cid}_0")])
+        kb.append([InlineKeyboardButton(to_small_caps("🏆 owners"), callback_data=f"owners_{cid}_0")])
     return InlineKeyboardMarkup(kb)
 
 
 def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, int]:
     total_pages = 1 if show_all else max(1, (r['unique'] + 15 - 1) // 15)
     lines = [
-        "╔══ 🔍 <b>ᴀɴɪᴍᴇ sᴇᴀʀᴄʜ ʀᴇsᴜʟᴛs</b> 🔍",
-        "║",
-        f"╠ 📂 <b>ǫᴜᴇʀʏ ⬡</b> <i>{escape(query)}</i>",
-        f"╠ 📊 <b>ᴛᴏᴛᴀʟ ⬡</b> <code>{r['total']}</code> | <b>ᴜɴɪǫᴜᴇ ⬡</b> <code>{r['unique']}</code>",
-        "╚═══════════════════════\n"
+        f"{bold_sc('anime search results')}",
+        f"📂 {bold_sc('query ⬡')} <i>{escape(query)}</i>",
+        f"📊 {bold_sc('total ⬡')} <code>{r['total']}</code> | {bold_sc('unique ⬡')} <code>{r['unique']}</code>",
+        "\n"
     ]
     items = sorted(r['names'].items())
     s, e = (0, len(items)) if show_all else (page * 15, page * 15 + 15)
     for i, (name, cnt) in enumerate(items[s:e], s + 1):
         c = r['data'][name]
         emoji, text = rarity_parts(c.get('rarity', '🟢 Common'))
-        lines.append(f"<b>{i}.</b> <code>{escape(name)}</code> ⦅<code>{c.get('id','??')}</code>⦆ {emoji} <i>{text}</i>"
+        lines.append(f"<b>{i}.</b> <code>{escape(name)}</code> ⦅<code>{c.get('id','??')}</code>⦆ {emoji} <i>{to_small_caps(text)}</i>"
                       + (f" <b>(x{cnt})</b>" if cnt > 1 else ""))
     if not show_all and total_pages > 1:
-        lines.append(f"\n📄 <b>ᴘᴀɢᴇ {page+1}/{total_pages}</b>")
+        lines.append(f"\n📄 {bold_sc(f'page {page+1}/{total_pages}')}")
     return "\n".join(lines), total_pages
 
 
@@ -187,27 +203,27 @@ async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
             kwargs['reply_markup'] = kb
         await method(video=char.img_url, **kwargs) if char.is_video else await method(photo=char.img_url, **kwargs)
     except TelegramError as e:
-        await update.message.reply_text(f"{caption}\n\n⚠️ ᴍᴇᴅɪᴀ ᴇʀʀᴏʀ: {escape(str(e))}",
+        await update.message.reply_text(f"{caption}\n\n⚠️ {bold_sc('media error:')} {escape(str(e))}",
                                          reply_markup=kb, parse_mode=ParseMode.HTML)
 
 
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("✨ <b>ᴜsᴀɢᴇ:</b> <code>/check &lt;ɪᴅ&gt;</code>", parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(f"✨ {bold_sc('usage:')} <code>/check &lt;ɪᴅ&gt;</code>", parse_mode=ParseMode.HTML)
     char = await get_char(context.args[0])
     if not char:
-        return await update.message.reply_text("<b>ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ!</b>", parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(bold_sc("character not found in database!"), parse_mode=ParseMode.HTML)
     gcount = await global_count(char.id)
     await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, 1))
 
 
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text("✨ <b>ᴜsᴀɢᴇ:</b> <code>/anime &lt;ɴᴀᴍᴇ&gt;</code>", parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(f"✨ {bold_sc('usage:')} <code>/anime &lt;ɴᴀᴍᴇ&gt;</code>", parse_mode=ParseMode.HTML)
     name = ' '.join(context.args)
     chars = await find_by_anime(name)
     if not chars:
-        return await update.message.reply_text(f"<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ғᴏᴜɴᴅ ғʀᴏᴍ</b> <i>{escape(name)}</i>", parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(f"{bold_sc('no characters found from')} <i>{escape(name)}</i>", parse_mode=ParseMode.HTML)
     r = process_search(chars)
     text, _ = find_caption(name, r, 0, True)
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
