@@ -14,11 +14,11 @@ except ImportError:
 OWNER_ID = 7657218453
 
 DEFAULT_PRICES = {
-    "🟢 Common": 10000, "🔵 Rare": 20000, "🟠 Medium": 30000, 
-    "🟡 Legendary": 50000, "🪽 Celestial": 75000, "🥵 Spicy": 100000, 
-    "🥴 Seductive": 125000, "💎 Mythic": 150000, "🔮 Premium Edition": 200000, 
-    "🍭 Sweet": 250000, "💋 Erotic": 300000, "❄️ Winter": 350000, 
-    "⚡ Neon": 400000, "🐚 Summer": 450000, "🌌 Manga": 500000
+    "🟢 Common": 1000, "🔵 Rare": 32000, "🟠 Medium": 2900, 
+    "🟡 Legendary": 5000, "🪽 Celestial": 75000, "🥵 Spicy": 105000, 
+    "🥴 Seductive": 12000, "💎 Mythic": 315000, "🔮 Premium Edition": 530000, 
+    "🍭 Sweet": 25000, "💋 Erotic": 250000, "❄️ Winter": 70000, 
+    "⚡ Neon": 97000, "🐚 Summer": 120000, "🌌 Manga": 50000
 }
 
 # --- Formatting Functions ---
