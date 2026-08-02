@@ -1,6 +1,7 @@
 import asyncio
 import random
 import time
+import re
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -21,7 +22,7 @@ SUDO_USERS = {7657218453}
 PROPOSAL_COST = 2000
 DICE_COOLDOWN = 1800
 PROPOSE_COOLDOWN = 300
-PROPOSE_SUCCESS_RATE = 0.5  # 50% Win Rate
+PROPOSE_SUCCESS_RATE = 0.6  # 60% Win Rate
 
 UPDATE_GROUP_URL = "https://t.me/Anime_Group_hai"
 UPDATE_GROUP_ID = -1003087506512
@@ -74,9 +75,9 @@ PROPOSE_REJECT_TEXTS = [
     "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
 ]
 
-# (UPDATED) Marry me sirf low rarities, Propose ke liye khali list (taaki saare mil sakein)
-DICE_RARITIES = ["🟢 Common", "Common", "🟣 Rare", "Rare"]
-PROPOSE_RARITIES = [] 
+# (UPDATED) Added medium, epic, legendary. (Top rarities like Celestial/Exclusive are NOT here)
+DICE_RARITY_PATTERN = "common|rare|medium|epic|legendary"  
+PROPOSE_RARITY_PATTERN = None  # None means ALL rarities
 cooldowns = {"dice": {}, "propose": {}}
 
 
@@ -87,7 +88,7 @@ def fix_motor_loop():
         client = user_collection.database.client
         client.get_io_loop = asyncio.get_running_loop
     except Exception as e:
-        LOGGER.warning(f"Failed to patch motor loop: {e}")
+        pass
 
 
 # ---------------- HELPERS ----------------
@@ -113,22 +114,19 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
         if member.status in ("member", "administrator", "creator", "restricted"):
             return True
         return False
-    except Exception as e:
-        LOGGER.warning(f"FSub check failed for {user_id}: {e}")
+    except Exception:
         return False
 
 
-# (UPDATED) Ab agar rarities list khali (empty) aayegi, to ye har tarah ke characters (All Rarities) uthayega
-async def get_unique_char(user_id: int, rarities: list[str]):
+async def get_unique_char(user_id: int, rarity_pattern: str = None):
     try:
         user = await user_collection.find_one({"id": user_id}) or {}
         owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
         
         match_query = {"id": {"$nin": owned}}
         
-        # Agar rarities list di gayi hai, tabhi filter karo. Warna sab kuch le lo.
-        if rarities:
-            match_query["rarity"] = {"$in": rarities}
+        if rarity_pattern:
+            match_query["rarity"] = {"$regex": rarity_pattern, "$options": "i"}
             
         pipeline = [
             {"$match": match_query},
@@ -152,8 +150,7 @@ async def add_char_to_user(user_id: int, username: str, first_name: str, char: d
             upsert=True,
         )
         return True
-    except Exception as e:
-        LOGGER.error(f"add_char_to_user failed for {user_id}: {e}")
+    except Exception:
         return False
 
 
@@ -172,7 +169,7 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
         pass
 
 
-# ---------------- /dice, /marry (LOW RARITIES ONLY) ----------------
+# ---------------- /dice, /marry ----------------
 async def dice_marry(update: Update, context: CallbackContext):
     fix_motor_loop() 
     if not update.message or not update.effective_user:
@@ -193,10 +190,12 @@ async def dice_marry(update: Update, context: CallbackContext):
         )
 
     set_cooldown(user.id, "dice")
-    val = (await context.bot.send_dice(chat_id, emoji="🎲")).dice.value
+    
+    dice_msg = await context.bot.send_dice(chat_id=chat_id, emoji="🎲", reply_to_message_id=msg_id)
+    val = dice_msg.dice.value
     await asyncio.sleep(3.5)
 
-    if val not in (1, 6):
+    if val not in (1, 2, 5, 6):
         text = random.choice(DICE_REJECT_TEXTS)
         return await context.bot.send_message(
             chat_id=chat_id,
@@ -205,11 +204,12 @@ async def dice_marry(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    char = await get_unique_char(user.id, DICE_RARITIES)
+    char = await get_unique_char(user.id, DICE_RARITY_PATTERN)
     if not char:
+        cooldowns["dice"].pop(user.id, None) 
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>",
+            text=f"<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ! (Cooldown Reset)</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
@@ -232,7 +232,7 @@ async def dice_marry(update: Update, context: CallbackContext):
     await send_win_log(context, user, char, "dice")
 
 
-# ---------------- /propose (ALL RARITIES) ----------------
+# ---------------- /propose ----------------
 async def propose(update: Update, context: CallbackContext):
     fix_motor_loop() 
     if not update.message or not update.effective_user:
@@ -318,12 +318,13 @@ async def propose(update: Update, context: CallbackContext):
         )
 
     # Phase 3: Result (Win)
-    char = await get_unique_char(user.id, PROPOSE_RARITIES)
+    char = await get_unique_char(user.id, PROPOSE_RARITY_PATTERN)
     if not char:
         await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
+        cooldowns["propose"].pop(user.id, None) 
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ.</b>",
+            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ. (Cooldown Reset)</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
