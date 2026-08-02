@@ -153,19 +153,17 @@ def dedupe(chars: List[Dict]) -> List[Dict]:
             result.append(c)
     return result
 
+# ----------------- CAPTION DESIGN -----------------
 def minimal_caption(ch: Dict, fav: bool = False, stats: Dict = None, uid: int = None) -> str:
     cid, nm, an = ch.get('id', '??'), ch.get('name', 'Unknown'), ch.get('anime', 'Unknown')
     r = parse_rar(ch.get('rarity', ''))
-    wl = wishlist_cache.get(f'wl_{uid}', set()) if uid else set()
-    is_wl = cid in wl
     
-    cap = f"""{'💖 ' if fav else ''}{'⭐ ' if is_wl else ''}<b>{escape(nm)}</b>
-
-{r.emoji} <code>{sc(r.name)}</code> • 🆔 <code>{cid}</code>
-📺 <i>{escape(trunc(an, 38))}</i>"""
-    
-    if stats:
-        cap += f"\n\n👥 <code>{stats.get('owners', 0)}</code> • 🎯 <code>{stats.get('total', 0)}×</code>"
+    cap = (
+        f"OwO! Check out this waifu!\n\n"
+        f"<b>{escape(an)}</b>\n"
+        f"<b>{cid}: {escape(nm)}</b>\n"
+        f"({r.emoji}<b>RARITY:</b> {r.name})"
+    )
     return cap
 
 def owners_caption(ch: Dict, owners: List[Dict]) -> str:
@@ -191,13 +189,16 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
             cap += f"{i}. {fn} • <code>×{o.get('count', 0)}</code>\n"
     return cap
 
+# ----------------- INLINE KEYBOARD -----------------
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
-    wl = wishlist_cache.get(f'wl_{uid}', set()) if uid else set()
-    is_wl = cid in wl
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👥 ᴏᴡɴᴇʀs", callback_data=f"o.{cid}"), InlineKeyboardButton("📊 sᴛᴀᴛs", callback_data=f"s.{cid}")],
-        [InlineKeyboardButton("📋 ᴄᴏᴘʏ ɪᴅ", callback_data=f"c.{cid}"), InlineKeyboardButton(f"{'⭐ ʀᴇᴍᴏᴠᴇ' if is_wl else '⭐ ᴡɪsʜʟɪsᴛ'}", callback_data=f"w.{cid}")],
-        [InlineKeyboardButton("📤 sʜᴀʀᴇ", switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(query=cid, allow_user_chats=True, allow_group_chats=True, allow_channel_chats=False))]
+        [
+            InlineKeyboardButton("👥 ᴏᴡɴᴇʀs", callback_data=f"o.{cid}"),
+            InlineKeyboardButton("sᴛᴀᴛs", callback_data=f"s.{cid}")
+        ],
+        [
+            InlineKeyboardButton("⤿ sʜᴀʀᴇ", switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(query=cid, allow_user_chats=True, allow_group_chats=True, allow_channel_chats=False))
+        ]
     ])
 
 async def inlinequery(update: Update, context) -> None:
@@ -324,19 +325,27 @@ async def show_owners(update: Update, context) -> None:
         cid = q.data.split('.', 1)[1]
         ch = await collection.find_one({'id': cid}, {'_id': 0})
         if not ch:
-            await q.answer("❌ ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
+            await q.answer("ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
             return
         owners = await get_owners(cid, 100)
         if not owners:
-            await q.answer("ℹ️ ɴᴏ ᴏᴡɴᴇʀs", show_alert=True)
+            await q.answer("ɴᴏ ᴏᴡɴᴇʀs", show_alert=True)
             return
         cap = owners_caption(ch, owners)
-        kbd = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data=f"b.{cid}"), InlineKeyboardButton("📊 sᴛᴀᴛs", callback_data=f"s.{cid}")], [InlineKeyboardButton("📤 sʜᴀʀᴇ", switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(query=cid, allow_user_chats=True, allow_group_chats=True, allow_channel_chats=False))]])
+        kbd = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data=f"b.{cid}"), 
+                InlineKeyboardButton("sᴛᴀᴛs", callback_data=f"s.{cid}")
+            ], 
+            [
+                InlineKeyboardButton("⤿ sʜᴀʀᴇ", switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(query=cid, allow_user_chats=True, allow_group_chats=True, allow_channel_chats=False))
+            ]
+        ])
         await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
     except Exception as e:
         import traceback
         traceback.print_exc()
-        await q.answer("❌ ᴇʀʀᴏʀ", show_alert=True)
+        await q.answer("ᴇʀʀᴏʀ", show_alert=True)
 
 async def back_card(update: Update, context) -> None:
     q = update.callback_query
@@ -345,7 +354,7 @@ async def back_card(update: Update, context) -> None:
         cid = q.data.split('.', 1)[1]
         ch = await collection.find_one({'id': cid}, {'_id': 0})
         if not ch:
-            await q.answer("❌ ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
+            await q.answer("ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
             return
         uid = q.from_user.id
         cap = minimal_caption(ch, uid=uid)
@@ -354,7 +363,7 @@ async def back_card(update: Update, context) -> None:
     except Exception as e:
         import traceback
         traceback.print_exc()
-        await q.answer("❌ ᴇʀʀᴏʀ", show_alert=True)
+        await q.answer("ᴇʀʀᴏʀ", show_alert=True)
 
 async def show_stats(update: Update, context) -> None:
     q = update.callback_query
@@ -363,47 +372,28 @@ async def show_stats(update: Update, context) -> None:
         cid = q.data.split('.', 1)[1]
         ch = await collection.find_one({'id': cid}, {'_id': 0})
         if not ch:
-            await q.answer("❌ ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
+            await q.answer("ɴᴏᴛ ғᴏᴜɴᴅ", show_alert=True)
             return
         owners = await get_owners(cid, 100)
         cap = stats_caption(ch, owners)
-        kbd = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ ʙᴀᴄᴋ", callback_data=f"b.{cid}"), InlineKeyboardButton("👥 ᴏᴡɴᴇʀs", callback_data=f"o.{cid}")], [InlineKeyboardButton("📤 sʜᴀʀᴇ", switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(query=cid, allow_user_chats=True, allow_group_chats=True, allow_channel_chats=False))]])
+        kbd = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data=f"b.{cid}"), 
+                InlineKeyboardButton("ᴏᴡɴᴇʀs", callback_data=f"o.{cid}")
+            ], 
+            [
+                InlineKeyboardButton("⤿ sʜᴀʀᴇ", switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(query=cid, allow_user_chats=True, allow_group_chats=True, allow_channel_chats=False))
+            ]
+        ])
         await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
     except Exception as e:
         import traceback
         traceback.print_exc()
-        await q.answer("❌ ᴇʀʀᴏʀ", show_alert=True)
+        await q.answer("ᴇʀʀᴏʀ", show_alert=True)
 
-async def copy_id(update: Update, context) -> None:
-    q = update.callback_query
-    cid = q.data.split('.', 1)[1]
-    await q.answer(f"📋 ɪᴅ ᴄᴏᴘɪᴇᴅ: {cid}", show_alert=False)
-
-async def toggle_wishlist(update: Update, context) -> None:
-    q = update.callback_query
-    uid = q.from_user.id
-    cid = q.data.split('.', 1)[1]
-    wk = f'wl_{uid}'
-    wl = wishlist_cache.get(wk, set())
-    if cid in wl:
-        wl.remove(cid)
-        await q.answer("⭐ ʀᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ᴡɪsʜʟɪsᴛ", show_alert=False)
-    else:
-        wl.add(cid)
-        await q.answer("⭐ ᴀᴅᴅᴇᴅ ᴛᴏ ᴡɪsʜʟɪsᴛ", show_alert=False)
-    wishlist_cache[wk] = wl
-    try:
-        ch = await collection.find_one({'id': cid}, {'_id': 0})
-        if ch:
-            cap = minimal_caption(ch, uid=uid)
-            kbd = create_kbd(cid, uid)
-            await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
-    except: pass
 
 application.add_handler(InlineQueryHandler(inlinequery, block=False))
 application.add_handler(ChosenInlineResultHandler(chosen_inline_result, block=False))
 application.add_handler(CallbackQueryHandler(show_owners, pattern=r'^o\.', block=False))
 application.add_handler(CallbackQueryHandler(back_card, pattern=r'^b\.', block=False))
 application.add_handler(CallbackQueryHandler(show_stats, pattern=r'^s\.', block=False))
-application.add_handler(CallbackQueryHandler(copy_id, pattern=r'^c\.', block=False))
-application.add_handler(CallbackQueryHandler(toggle_wishlist, pattern=r'^w\.', block=False))
