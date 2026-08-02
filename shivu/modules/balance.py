@@ -1,6 +1,6 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, ContextTypes
-from shivu import application, user_collection, LOGGER
+from shivu import application, user_collection, LOGGER, BOT_USERNAME
 
 
 async def get_or_init_user(uid: int):
@@ -8,7 +8,8 @@ async def get_or_init_user(uid: int):
     try:
         user = await user_collection.find_one({"id": uid})
         if user is None:
-            new_user = {"id": uid, "balance": 0, "tokens": 0}
+            # Yahan bot_started: False set kar diya hai naye users ke liye
+            new_user = {"id": uid, "balance": 0, "tokens": 0, "bot_started": False}
             await user_collection.update_one(
                 {"id": uid},
                 {"$setOnInsert": new_user},
@@ -18,7 +19,7 @@ async def get_or_init_user(uid: int):
         return user
     except Exception as e:
         LOGGER.error(f"Error in get_or_init_user for uid {uid}: {e}")
-        return {"id": uid, "balance": 0, "tokens": 0}
+        return {"id": uid, "balance": 0, "tokens": 0, "bot_started": False}
 
 
 # --- COINS BALANCE COMMAND ---
@@ -30,6 +31,19 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         user = await get_or_init_user(uid)
+        
+        # 1. BINA START KIYE BALANCE CHECK KARNE PAR BUTTON DENA
+        if not user.get("bot_started", False):
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚀 sᴛᴀʀᴛ ʙᴏᴛ ᴛᴏ ᴠɪᴇᴡ ʙᴀʟᴀɴᴄᴇ", url=f"https://t.me/{BOT_USERNAME}?start=True")]
+            ])
+            await update.message.reply_html(
+                "<b>⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ʏᴇᴛ!</b>\n\n"
+                "ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ᴛᴏ ᴠɪᴇᴡ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ.",
+                reply_markup=kb
+            )
+            return
+
         balance = user.get("balance", 0)
 
         # Text: Small Caps + Bold | Number formatted with commas inside code block
@@ -57,6 +71,19 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         user = await get_or_init_user(uid)
+        
+        # 1. BINA START KIYE TOKENS CHECK KARNE PAR BUTTON DENA
+        if not user.get("bot_started", False):
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚀 sᴛᴀʀᴛ ʙᴏᴛ ᴛᴏ ᴠɪᴇᴡ ᴛᴏᴋᴇɴs", url=f"https://t.me/{BOT_USERNAME}?start=True")]
+            ])
+            await update.message.reply_html(
+                "<b>⚠️ ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ʏᴇᴛ!</b>\n\n"
+                "ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ᴛᴏ ᴠɪᴇᴡ ʏᴏᴜʀ ᴛᴏᴋᴇɴs.",
+                reply_markup=kb
+            )
+            return
+
         tokens = user.get("tokens", 0)
 
         # Text: Small Caps + Bold | Number formatted with commas inside code block
