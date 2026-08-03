@@ -1,4 +1,4 @@
-Import pytz
+import pytz
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -32,7 +32,9 @@ def now_ist() -> datetime:
 
 
 def to_ist(dt: datetime) -> datetime:
-    return pytz.UTC.localize(dt).astimezone(IST) if dt.tzinfo is None else dt.astimezone(IST)
+    if dt.tzinfo is None:
+        return pytz.UTC.localize(dt).astimezone(IST)
+    return dt.astimezone(IST)
 
 
 def daily_reward(streak: int) -> int:
@@ -66,18 +68,31 @@ class UserDB:
 
     @staticmethod
     async def ensure(user_id: int, first_name: str = None, username: str = None) -> dict:
-        return await UserDB.get(user_id) or await UserDB._create(user_id, first_name, username)
+        user = await UserDB.get(user_id)
+        if user:
+            return user
+        return await UserDB._create(user_id, first_name, username)
 
     @staticmethod
     async def _create(user_id: int, first_name: str, username: str) -> dict:
-        doc = {'id': user_id, 'first_name': first_name or 'Unknown', 'username': username,
-               'balance': 0, 'bonus_streak': 0, 'bonus_highest_streak': 0}
-        await user_collection.insert_one(doc)
-        return doc
+        doc = {
+            'id': user_id, 
+            'first_name': first_name or 'Unknown', 
+            'username': username,
+            'balance': 0, 
+            'bonus_streak': 0, 
+            'bonus_highest_streak': 0
+        }
+        await user_collection.update_one({'id': user_id}, {'$setOnInsert': doc}, upsert=True)
+        return await UserDB.get(user_id)
 
     @staticmethod
     async def update(user_id: int, inc: dict = None, set_: dict = None):
-        ops = {k: v for k, v in {'$inc': inc, '$set': set_}.items() if v}
+        ops = {}
+        if inc:
+            ops['$inc'] = inc
+        if set_:
+            ops['$set'] = set_
         if ops:
             await user_collection.update_one({'id': user_id}, ops, upsert=True)
 
@@ -122,7 +137,6 @@ def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
 
 async def bonus_command(update: Update, context: CallbackContext):
     user = await UserDB.ensure(update.effective_user.id, update.effective_user.first_name, update.effective_user.username)
-    # Added reply_to_message_id so user validation works reliably
     await update.message.reply_text(
         build_bonus_text(user, update.effective_user.first_name),
         reply_markup=build_bonus_keyboard(user, now_ist()),
@@ -133,7 +147,7 @@ async def bonus_command(update: Update, context: CallbackContext):
 
 async def refresh_menu(query, user_id: int, now: datetime):
     user = await UserDB.get(user_id)
-    first_name = user.get('first_name', 'User')
+    first_name = user.get('first_name', 'User') if user else 'User'
     await query.edit_message_text(
         build_bonus_text(user, first_name),
         reply_markup=build_bonus_keyboard(user, now),
@@ -214,17 +228,22 @@ HANDLERS = {
 async def bonus_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
-    # Check if the clicking user matches the owner of the command message
     if query.message.reply_to_message:
         owner_id = query.message.reply_to_message.from_user.id
         if owner_id != query.from_user.id:
             await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
             return
 
-    handler = HANDLERS.get(query.data.split(':', 1)[1])
+    data_parts = query.data.split(':', 1)
+    if len(data_parts) < 2:
+        await query.answer("ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
+        return
+
+    handler = HANDLERS.get(data_parts[1])
     if not handler:
         await query.answer("ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
         return
+    
     try:
         await handler(update, context)
     except TelegramError as e:
@@ -233,4 +252,3 @@ async def bonus_callback(update: Update, context: CallbackContext):
 
 application.add_handler(CommandHandler("bonus", bonus_command, block=False))
 application.add_handler(CallbackQueryHandler(bonus_callback, pattern=r'^bonus:', block=False))
-
