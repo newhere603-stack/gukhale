@@ -185,7 +185,8 @@ def minimal_caption(ch: Dict, fav: bool = False, stats: Dict = None, uid: int = 
 def owners_caption(ch: Dict, owners: List[Dict]) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
-    cap = f"<b>{escape(sc(nm))}</b>\n\n👥 <b>{len(owners)}</b> {sc('owners')} • <b>{total}×</b> {sc('grabbed')}\n\n"
+    # Changed here to wrap the whole owners/grabbed line in <b> tags
+    cap = f"<b>{escape(sc(nm))}</b>\n\n<b>🏆 {len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
     medals = {1: "🥇", 2: "🥈", 3: "🥉"}
     for i, o in enumerate(owners[:30], 1):
         medal = medals.get(i, f"{i}.")
@@ -198,7 +199,7 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
     avg = round(total / len(owners), 1) if owners else 0
-    cap = f"<b>{escape(sc(nm))}</b>\n\n📊 <b>{sc('statistics')}</b>\n🎯 <code>{total}×</code> {sc('grabbed')}\n👥 <code>{len(owners)}</code> {sc('owners')}\n📈 <code>{avg}×</code> {sc('avg')}\n"
+    cap = f"<b>{escape(sc(nm))}</b>\n\n📊 <b>{sc('statistics')}</b>\n🎯 <code>{total}×</code> {sc('grabbed')}\n🏆 <code>{len(owners)}</code> {sc('owners')}\n📈 <code>{avg}×</code> {sc('avg')}\n"
     if owners:
         cap += f"\n🏆 <b>{sc('top collectors')}</b>\n"
         for i, o in enumerate(owners[:10], 1):
