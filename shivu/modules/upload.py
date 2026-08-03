@@ -1,4 +1,4 @@
-""" v3 - Pure Catbox & Pixeldrain Direct Upload System """
+""" v3 - Fixed URL + Reply Multi-Service Uploader """
 
 import io
 import os
@@ -93,12 +93,11 @@ class RarityLevel(Enum):
 
 @dataclass(frozen=True)
 class Config:
-    MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB limit
+    MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
     DOWNLOAD_TIMEOUT: int = 300
     UPLOAD_TIMEOUT: int = 300
     CHUNK_SIZE: int = 65536
     MAX_RETRIES: int = 3
-    RETRY_DELAY: float = 1.0
     CONNECTION_LIMIT: int = 100
 
 
@@ -226,23 +225,9 @@ class SessionManager:
     async def get_session(cls):
         async with cls._lock:
             if cls._session is None or cls._session.closed:
-                connector = TCPConnector(
-                    limit=Config.CONNECTION_LIMIT,
-                    limit_per_host=30,
-                    ttl_dns_cache=300,
-                    enable_cleanup_closed=True
-                )
-                timeout = aiohttp.ClientTimeout(
-                    total=Config.DOWNLOAD_TIMEOUT,
-                    connect=60,
-                    sock_read=60
-                )
-                cls._session = ClientSession(
-                    connector=connector,
-                    timeout=timeout,
-                    raise_for_status=False
-                )
-
+                connector = TCPConnector(limit=Config.CONNECTION_LIMIT, ttl_dns_cache=300)
+                timeout = aiohttp.ClientTimeout(total=Config.DOWNLOAD_TIMEOUT)
+                cls._session = ClientSession(connector=connector, timeout=timeout)
         try:
             yield cls._session
         finally:
@@ -266,43 +251,57 @@ class SequenceGenerator:
             return str(value).zfill(2)
 
 
-class CatboxUploader:
-    """Primary Uploader: Catbox with Pixeldrain Fallback (No API Keys Required)"""
+class RobustUploader:
+    """Multi-Host Fallback Engine (Telegraph -> Pixeldrain -> Catbox)"""
 
     @staticmethod
-    async def _upload_catbox(file_bytes: bytes, filename: str) -> Optional[str]:
+    async def _upload_telegraph(file_bytes: bytes, filename: str) -> Optional[str]:
+        """Best for Images and Small GIFs (<5MB)"""
         try:
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
-                data.add_field('reqtype', 'fileupload')
-                data.add_field('fileToUpload', io.BytesIO(file_bytes), filename=filename or 'upload_file.bin')
-
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
-                }
-                async with session.post("https://catbox.moe/user/api.php", data=data, headers=headers, timeout=60) as response:
+                data.add_field('file', io.BytesIO(file_bytes), filename=filename or 'file.jpg')
+                async with session.post('https://telegra.ph/upload', data=data, timeout=30) as response:
                     if response.status == 200:
-                        text = (await response.text()).strip()
-                        if text.startswith("https://files.catbox.moe/"):
-                            return text
-        except Exception as e:
-            logger.warning("Catbox upload attempt failed: %s", e)
+                        res = await response.json()
+                        if isinstance(res, list) and len(res) > 0 and 'src' in res[0]:
+                            return f"https://telegra.ph{res[0]['src']}"
+        except Exception:
+            pass
         return None
 
     @staticmethod
     async def _upload_pixeldrain(file_bytes: bytes, filename: str) -> Optional[str]:
+        """Works for All Files & Videos up to 100MB"""
         try:
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
-                data.add_field('file', io.BytesIO(file_bytes), filename=filename or 'upload_file.bin')
-
+                data.add_field('file', io.BytesIO(file_bytes), filename=filename or 'file.bin')
                 async with session.post("https://pixeldrain.com/api/file", data=data, timeout=60) as response:
                     if response.status in (200, 201):
                         res = await response.json()
                         if res.get('id'):
                             return f"https://pixeldrain.com/api/file/{res['id']}"
-        except Exception as e:
-            logger.warning("Pixeldrain fallback failed: %s", e)
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    async def _upload_catbox(file_bytes: bytes, filename: str) -> Optional[str]:
+        """Fallback Service"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                data = aiohttp.FormData()
+                data.add_field('reqtype', 'fileupload')
+                data.add_field('fileToUpload', io.BytesIO(file_bytes), filename=filename or 'file.bin')
+                headers = {'User-Agent': 'Mozilla/5.0'}
+                async with session.post("https://catbox.moe/user/api.php", data=data, headers=headers, timeout=60) as response:
+                    if response.status == 200:
+                        text = (await response.text()).strip()
+                        if text.startswith("https://files.catbox.moe/"):
+                            return text
+        except Exception:
+            pass
         return None
 
     @classmethod
@@ -311,12 +310,16 @@ class CatboxUploader:
         if callback:
             await callback(0, total_size)
 
-        # 1. Try Catbox first
-        url = await cls._upload_catbox(file_bytes, filename)
-
-        # 2. Fallback to Pixeldrain if Catbox fails
+        # 1. Try Telegraph First
+        url = await cls._upload_telegraph(file_bytes, filename)
+        
+        # 2. Try Pixeldrain (Best for Video / Large Docs)
         if not url:
             url = await cls._upload_pixeldrain(file_bytes, filename)
+
+        # 3. Try Catbox as last resort
+        if not url:
+            url = await cls._upload_catbox(file_bytes, filename)
 
         if callback:
             await callback(total_size, total_size)
@@ -324,13 +327,33 @@ class CatboxUploader:
         return url
 
 
+class FileDownloader:
+    @staticmethod
+    async def download_from_url(url: str, callback=None) -> Optional[bytes]:
+        async with SessionManager.get_session() as session:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            async with session.get(url, headers=headers, allow_redirects=True) as response:
+                if response.status != 200:
+                    return None
+
+                total_size = int(response.headers.get('content-length', 0))
+                chunks = []
+                downloaded = 0
+
+                async for chunk in response.content.iter_chunked(Config.CHUNK_SIZE):
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    downloaded += len(chunk)
+                    if callback and total_size > 0:
+                        await callback(downloaded, total_size)
+
+                return b"".join(chunks) if chunks else None
+
+
 class TelegramUploader:
     @staticmethod
-    async def upload_character(
-        character: Character,
-        context: ContextTypes.DEFAULT_TYPE,
-        is_update: bool = False
-    ) -> None:
+    async def upload_character(character: Character, context: ContextTypes.DEFAULT_TYPE, is_update: bool = False) -> None:
         caption = character.get_caption(is_update)
 
         if character.media_file.file_bytes:
@@ -477,14 +500,10 @@ class CharacterUploadHandler:
             await processing_msg.edit_text('❌ Failed to extract media file.')
             return
 
-        if not media_file.is_valid_size:
-            await processing_msg.edit_text('❌ File exceeds maximum limit (100MB)!')
-            return
-
         progress = ProgressTracker(processing_msg)
-        await processing_msg.edit_text('⏳ Uploading file to Catbox...')
+        await processing_msg.edit_text('⏳ Uploading file to server...')
 
-        file_url = await CatboxUploader.upload_with_progress(
+        file_url = await RobustUploader.upload_with_progress(
             media_file.file_bytes,
             media_file.filename,
             progress.update
@@ -499,6 +518,64 @@ class CharacterUploadHandler:
 
         character = await CharacterFactory.create_from_args(
             context.args,
+            media_file,
+            str(update.effective_user.id),
+            update.effective_user.first_name
+        )
+
+        if not character:
+            await processing_msg.edit_text('❌ Invalid rarity number (1-15).')
+            return
+
+        await TelegramUploader.upload_character(character, context)
+
+        await processing_msg.edit_text(
+            f'✅ Character uploaded successfully!\n'
+            f'🆔 ID: {character.character_id}\n'
+            f'📁 Type: {character.media_file.media_type.value.title()}\n'
+            f'🔗 URL: {file_url}'
+        )
+
+    @staticmethod
+    async def handle_url_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if len(context.args) != 4:
+            await update.message.reply_text(
+                '❌ Format: `/upload URL character-name anime-name rarity-number`\n'
+                'Example: `/upload https://site.com/image.jpg muzan Demon-slayer 3`'
+            )
+            return
+
+        media_url = context.args[0]
+        processing_msg = await update.message.reply_text('⏳ Downloading from URL...')
+
+        progress = ProgressTracker(processing_msg)
+        file_bytes = await FileDownloader.download_from_url(media_url, progress.update)
+
+        if not file_bytes:
+            await processing_msg.edit_text('❌ Download failed. Make sure URL is direct & public!')
+            return
+
+        media_file = MediaFile(url=media_url, file_bytes=file_bytes)
+
+        if not media_file.is_valid_size:
+            await processing_msg.edit_text('❌ File exceeds limit (100MB)!')
+            return
+
+        await processing_msg.edit_text('⏳ Uploading file to server...')
+        file_url = await RobustUploader.upload_with_progress(
+            file_bytes,
+            media_file.filename,
+            progress.update
+        )
+
+        if not file_url:
+            file_url = media_url  # URL upload me backup same URL rakha jayega agar CDN fail ho
+
+        object.__setattr__(media_file, 'url', file_url)
+        await processing_msg.edit_text('✅ Uploaded!\n⏳ Saving character...')
+
+        character = await CharacterFactory.create_from_args(
+            context.args[1:],
             media_file,
             str(update.effective_user.id),
             update.effective_user.first_name
@@ -572,7 +649,7 @@ async def upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if update.message.reply_to_message:
             await CharacterUploadHandler.handle_reply_upload(update, context)
         else:
-            await update.message.reply_text('❌ Please reply to a photo, video, or document!')
+            await CharacterUploadHandler.handle_url_upload(update, context)
     except Exception as e:
         await update.message.reply_text(f'❌ Upload failed: {str(e)}')
 
