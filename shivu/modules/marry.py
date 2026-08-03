@@ -318,7 +318,20 @@ async def propose(update: Update, context: CallbackContext):
         )
 
     # Phase 3: Result (Win)
-    char = await get_unique_char(user.id, PROPOSE_RARITY_PATTERN)
+    
+    # ------------------ ADDED WEIGHTED RARITY ------------------
+    # Low rarity zyada milegi, high rarity kam (50% Common, 30% Rare, 14% Medium, 5% Epic, 1% Legendary)
+    rarities = ["common", "rare", "medium", "epic", "legendary"]
+    weights = [50, 30, 14, 5, 1] 
+    chosen_rarity = random.choices(rarities, weights=weights, k=1)[0]
+    
+    char = await get_unique_char(user.id, chosen_rarity)
+    
+    # Agar chosen rarity ka character nahi bacha hai, toh hum 'None' filter laga kar koi bhi bacha hua character de denge
+    if not char:
+        char = await get_unique_char(user.id, None)
+    # -------------------------------------------------------------
+
     if not char:
         await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
         cooldowns["propose"].pop(user.id, None) 
@@ -392,16 +405,26 @@ async def cdm_cmd(update: Update, context: CallbackContext):
 
     reply = update.message.reply_to_message if update.message else None
     target_id = None
+    target_name = "User"
     
+    # -------- ADDED USER NAME FETCHING LOGIC --------
     if reply and reply.from_user:
         target_id = reply.from_user.id
+        target_name = reply.from_user.first_name
     elif context.args and context.args[0].isdigit():
         target_id = int(context.args[0])
+        try:
+            # Agar bot us user ko janta hoga (group se) to ye naam nikaal lega
+            user_info = await context.bot.get_chat(target_id)
+            target_name = user_info.first_name or f"User {target_id}"
+        except Exception:
+            target_name = f"User {target_id}"
+    # ------------------------------------------------
 
     if target_id is None:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⚠️ ᴜsᴀɢᴇ: /cdm <user_id> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>",
+            text=f"<b>ᴜsᴀɢᴇ: /cdm <user_id> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
@@ -409,9 +432,10 @@ async def cdm_cmd(update: Update, context: CallbackContext):
     cooldowns["dice"].pop(target_id, None)
     cooldowns["propose"].pop(target_id, None)
     
+    # Updated text to mention the user name instead of just ID
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"<b>ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ ᴜsᴇʀ {target_id}.</b>",
+        text=f"<b>✅ ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ <a href='tg://user?id={target_id}'>{target_name}</a>.</b>",
         parse_mode="HTML",
         reply_to_message_id=msg_id
     )
