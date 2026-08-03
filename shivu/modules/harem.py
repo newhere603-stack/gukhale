@@ -25,16 +25,16 @@ def to_small_caps(text: str) -> str:
 
 RARITIES = {
     "common": ("🟢", "Common"),
-    "rare": ("🔵", "Rare"),
-    "legendary": ("🟠", "Legendary"),
-    "special": ("🟡", "Special Edition"),
+    "rare": ("🟠", "Rare"),
+    "legendary": ("🟡", "Legendary"),
+    "special": ("🔵", "Medium"),
     "celestial": ("🪽", "Celestial"),
-    "erotic": ("🥵", "Erotic"),
-    "exclusive": ("🥴", "Exclusive"),
-    "premium": ("💎", "Premium Edition"),
-    "mythic": ("🔮", "Mythic"),
+    "erotic": ("🥵", "Spicy"),
+    "exclusive": ("💮", "Exclusive"),
+    "premium": ("🔮", "Premium Edition"),
+    "mythic": ("💎", "Mythic"),
     "sweet": ("🍭", "Sweet"),
-    "valentine": ("💋", "Valentine"),
+    "valentine": ("💞", "Valentine"),
     "winter": ("❄️", "Winter"),
     "neon": ("⚡", "Neon"),
     "pearl": ("🐚", "Pearl"),
@@ -49,7 +49,7 @@ def rarity_display(key: str) -> str:
 
 def rarity_emoji(display: str) -> str:
     if not display:
-        return "🔮"
+        return "💎"
     return display.split(' ', 1)[0] if ' ' in display else display
 
 
@@ -93,7 +93,7 @@ class DisplayOptions:
 
 # YOUR ORIGINAL SYMBOLS WITH SCREENSHOT STRUCTURE
 DEFAULT_STYLE = {
-    'header': "<b>✨ {user_name}'s ʜᴀʀᴇᴍ — ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
+    'header': "<b>✨ {user_name}'s ʜᴀʀᴇᴍ - ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
     'anime_header': "<b>🎞 {anime}</b> ({user_count}/{total_count})\n",
     'separator': "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n",
     'character': "<b>➥ {id} | {rarity} | {name}{event} x{count}</b>\n",
@@ -283,17 +283,17 @@ class HaremHandler:
 
         collection = await self.load_user_collection(user_id)
         if not collection:
-            await message.reply_text("⚠️ ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!")
+            await message.reply_text("<b>⚠️ ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!</b>")
             return
         if not collection.characters:
-            await message.reply_text("📭 ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.")
+            await message.reply_text("<b>📭 ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>")
             return
 
         filtered = collection.get_filtered_characters()
         if not filtered:
             await message.reply_text(
-                f"❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ʀᴀʀɪᴛʏ: {rarity_display(collection.filter_mode)}\n"
-                f"💡 ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /smode"
+                f"<b> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ʀᴀʀɪᴛʏ:</b> {rarity_display(collection.filter_mode)}\n"
+                f"💡<b> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /smode </b>"
             )
             return
 
@@ -322,7 +322,7 @@ class HaremHandler:
                 await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
                 return
             except TelegramError as e:
-                LOGGER.warning(f" ᴇᴅɪᴛ ғᴀɪʟᴇᴅ, ʀᴇsᴇɴᴅɪɴɢ: {e}")
+                LOGGER.warning(f"<b> ᴇᴅɪᴛ ғᴀɪʟᴇᴅ, ʀᴇsᴇɴᴅɪɴɢ:</b> {e}")
 
         if media_url:
             await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
@@ -412,12 +412,12 @@ class UnfavHandler:
         user = await self.user_db.find_one({'id': user_id})
 
         if not user:
-            await update.message.reply_text('⚠️ ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ɢᴏᴛ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴇᴛ!')
+            await update.message.reply_text('⚠️<b> ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ɢᴏᴛ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴇᴛ!</b>')
             return
 
         fav = Character.from_dict(user.get('favorites'))
         if not fav:
-            await update.message.reply_text("💔 ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!")
+            await update.message.reply_text("💔<b> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!</b>")
             return
 
         buttons = [[
@@ -470,7 +470,7 @@ async def verify_owner(query, user_id_str: str) -> Optional[int]:
         await query.answer("❌ ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ!", show_alert=True)
         return None
     if query.from_user.id != owner_id:
-        await query.answer("⚠️ ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ!", show_alert=True)
+        await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ!", show_alert=True)
         return None
     return owner_id
 
