@@ -5,6 +5,7 @@ asyncio.set_event_loop(loop)
 
 import importlib
 import random
+import time  # Added time to calculate spawn duration
 import traceback
 from html import escape
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -43,6 +44,7 @@ locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
 first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
 currently_spawning = {}
+spawn_times = {}  # Added to track time taken
 
 for module_name in ALL_MODULES:
     try:
@@ -177,6 +179,7 @@ async def despawn_character(chat_id, message_id, character, context):
         spawn_messages.pop(chat_id, None)
         spawn_message_links.pop(chat_id, None)
         currently_spawning.pop(str(chat_id), None)
+        spawn_times.pop(chat_id, None)  # Clean up time on despawn
 
 
 async def message_counter(update: Update, context: CallbackContext) -> None:
@@ -191,7 +194,6 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     async with locks[chat_id]:
         message_counts[chat_id] = message_counts.get(chat_id, 0) + 1
         
-        # --- NEW LOGIC TO FETCH CUSTOM LIMIT SAFELY ---
         try:
             chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
             if chat_data and 'message_frequency' in chat_data:
@@ -201,7 +203,6 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
         except Exception as e:
             LOGGER.error(f"Error fetching message frequency: {e}")
             target_frequency = MESSAGE_FREQUENCY
-        # ----------------------------------------------
 
         LOGGER.info(f"[spawn] chat={chat_id} count={message_counts[chat_id]}/{target_frequency} spawning={currently_spawning.get(chat_id, False)}")
 
@@ -242,6 +243,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
 
         spawn_messages[chat_id] = spawn_msg.message_id
+        spawn_times[chat_id] = time.time()  # Record exactly when it spawned
         username = update.effective_chat.username
         spawn_message_links[chat_id] = (
             f"https://t.me/{username}/{spawn_msg.message_id}" if username
@@ -300,9 +302,13 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=spawn_message_links[chat_id])]])
             return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
+        # Calculate exact time taken
+        time_taken = 0
+        if chat_id in spawn_times:
+            time_taken = round(time.time() - spawn_times[chat_id])
+            
         first_correct_guesses[chat_id] = user_id
         
-        # Checking if group admin wants spawn msg auto-deleted on grab
         should_delete = await get_group_setting(chat_id, 'grab_delete', True)
         if should_delete and chat_id in spawn_messages:
             try:
@@ -323,7 +329,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 await user_collection.update_one({'id': user_id}, {'$set': changed})
             await user_collection.update_one({'id': user_id}, {'$push': {'characters': character}})
         else:
-            # Silent registration with balance and bot_started: False
             await user_collection.insert_one({
                 'id': user_id, 
                 **user_fields, 
@@ -338,17 +343,25 @@ async def guess(update: Update, context: CallbackContext) -> None:
         rarity = character.get('rarity', '🟢 Common')
         r_emoji, r_name = (rarity.split(' ', 1) + [''])[:2] if isinstance(rarity, str) and ' ' in rarity else (rarity, '')
 
+        # HTML formatted user mention
+        mention = f'<a href="tg://user?id={user_id}">{escape(eu.first_name)}</a>'
+
+        # Updated Message Format as Requested
         success_message = (
-            f"✅ <b>{escape(eu.first_name)}, ᴄᴏɴɢʀᴀᴛs 🎉\n"
-            "ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ</b> 🫧\n\n"
-            f"🌸 <b>ɴᴀᴍᴇ:</b> {escape(character.get('name', 'Unknown'))}\n"
-            f"💮 <b>ʀᴀʀɪᴛʏ:</b> {escape(r_emoji)} {escape(r_name)}\n"
-            f"❇️ <b>ᴀɴɪᴍᴇ:</b> {escape(character.get('anime', 'Unknown'))}\n\n"
-            "⛩ <b>ᴄʜᴇᴄᴋ ʏᴏᴜʀ /harem ɴᴏᴡ</b>"
+            f"✅ <b>{mention}, ᴄᴏɴɢʀᴀᴛs 🎉</b>\n"
+            f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧</b>\n\n"
+            f"🌸 𝗡𝗔𝗠𝗘:<b> {escape(character.get('name', 'Unknown'))}</b>\n"
+            f"{escape(r_emoji)} 𝗥𝗔𝗥𝗜𝗧𝗬:<b> {escape(r_name)}</b>\n"
+            f"🎞️ 𝗔𝗡𝗜𝗠𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
+            f"⌛️ 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {time_taken}s</code>"
         )
+        
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
         await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
+        
+        # Cleanup
         spawn_message_links.pop(chat_id, None)
+        spawn_times.pop(chat_id, None)
 
     except Exception:
         LOGGER.exception(f"guess() failed for chat={chat_id}, user={user_id}")
