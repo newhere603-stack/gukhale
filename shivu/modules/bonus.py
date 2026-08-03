@@ -13,10 +13,23 @@ from shivu import application
 
 IST = pytz.timezone('Asia/Kolkata')
 
-# MongoDB connection setup using pymongo to avoid event loop conflicts
-MONGO_URL = os.getenv("MONGO_URL") or os.getenv("MONGO_DB_URI")
+# Independent synchronous MongoDB connection to completely avoid loop mismatch
+MONGO_URL = os.getenv("MONGO_URL") or os.getenv("MONGO_DB_URI") or os.getenv("MONGO_URI")
+if not MONGO_URL:
+    try:
+        from shivu import MONGO_URL as _m_url
+        MONGO_URL = _m_url
+    except ImportError:
+        pass
+
 pymongo_client = pymongo.MongoClient(MONGO_URL) if MONGO_URL else None
-db = pymongo_client.get_default_database() if pymongo_client and pymongo_client.get_default_database() is not None else (pymongo_client['shivu'] if pymongo_client else None)
+try:
+    db = pymongo_client.get_default_database() if pymongo_client else None
+    if db is None and pymongo_client:
+        db = pymongo_client['shivu']
+except Exception:
+    db = pymongo_client['shivu'] if pymongo_client else None
+
 sync_user_collection = db['user_collection'] if db is not None else None
 
 
@@ -73,6 +86,8 @@ def format_countdown(remaining: timedelta) -> str:
 class UserDB:
     @staticmethod
     async def get(user_id: int) -> dict | None:
+        if sync_user_collection is None:
+            return None
         def _get():
             return sync_user_collection.find_one({'id': user_id})
         return await asyncio.to_thread(_get)
@@ -95,12 +110,16 @@ class UserDB:
             'bonus_highest_streak': 0
         }
         def _create_doc():
-            sync_user_collection.update_one({'id': user_id}, {'$setOnInsert': doc}, upsert=True)
-            return sync_user_collection.find_one({'id': user_id})
+            if sync_user_collection is not None:
+                sync_user_collection.update_one({'id': user_id}, {'$setOnInsert': doc}, upsert=True)
+                return sync_user_collection.find_one({'id': user_id})
+            return doc
         return await asyncio.to_thread(_create_doc)
 
     @staticmethod
     async def update(user_id: int, inc: dict = None, set_: dict = None):
+        if sync_user_collection is None:
+            return
         ops = {}
         if inc:
             ops['$inc'] = inc
@@ -244,7 +263,7 @@ async def bonus_callback(update: Update, context: CallbackContext):
     if query.message.reply_to_message:
         owner_id = query.message.reply_to_message.from_user.id
         if owner_id != query.from_user.id:
-            await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏ𝒑ᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
+            await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
             return
 
     data_parts = query.data.split(':', 1)
