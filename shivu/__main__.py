@@ -42,7 +42,8 @@ rarity_status_cache = {}
 group_settings_cache = {}  # {chat_id: {'grab_delete': True, 'miss_delete': True}}
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-first_correct_guesses, spawn_messages, spawn_message_links = {}, {}
+# FIXED: 3 variables, 3 empty dictionaries
+first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
 currently_spawning = {}
 spawn_times = {}  # Added to track time taken
 
