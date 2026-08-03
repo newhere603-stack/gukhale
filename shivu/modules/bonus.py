@@ -1,7 +1,6 @@
-import pytz
+Import pytz
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional, Dict
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
@@ -62,54 +61,32 @@ def format_countdown(remaining: timedelta) -> str:
 
 class UserDB:
     @staticmethod
-    async def get(user_id: int) -> Optional[Dict]:
+    async def get(user_id: int) -> dict | None:
         return await user_collection.find_one({'id': user_id})
 
     @staticmethod
     async def ensure(user_id: int, first_name: str = None, username: str = None) -> dict:
-        user = await UserDB.get(user_id)
-        if not user:
-            return await UserDB._create(user_id, first_name, username)
-        
-        # Agar user purana hai par balance field nahi hai, toh 2000 set kar do
-        if 'balance' not in user:
-            await user_collection.update_one({'id': user_id}, {'$set': {'balance': 2000}})
-            user['balance'] = 2000
-            
-        return user
+        return await UserDB.get(user_id) or await UserDB._create(user_id, first_name, username)
 
     @staticmethod
     async def _create(user_id: int, first_name: str, username: str) -> dict:
-        # Fixed: Added 'characters': [] to prevent errors in other bot commands
-        doc = {
-            'id': user_id, 
-            'first_name': first_name or 'Unknown', 
-            'username': username,
-            'characters': [], 
-            'balance': 2000, 
-            'bonus_streak': 0, 
-            'bonus_highest_streak': 0
-        }
+        doc = {'id': user_id, 'first_name': first_name or 'Unknown', 'username': username,
+               'balance': 0, 'bonus_streak': 0, 'bonus_highest_streak': 0}
         await user_collection.insert_one(doc)
         return doc
 
     @staticmethod
     async def update(user_id: int, inc: dict = None, set_: dict = None):
-        ops = {}
-        if inc:
-            ops['$inc'] = inc
-        if set_:
-            ops['$set'] = set_
+        ops = {k: v for k, v in {'$inc': inc, '$set': set_}.items() if v}
         if ops:
             await user_collection.update_one({'id': user_id}, ops, upsert=True)
 
 
 def build_bonus_text(user: dict, first_name: str) -> str:
-    fname = first_name or "User"
     return (
         "<b>🌸 ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ 🫧</b>\n\n"
         "🎮 <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
-        f"👤 <b>User:</b> <b>{fname}</b>\n"
+        f"👤 <b>User:</b> <b>{first_name}</b>\n"
         f"📅 <b>Date:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
         f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
         f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
@@ -145,15 +122,12 @@ def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
 
 async def bonus_command(update: Update, context: CallbackContext):
     user = await UserDB.ensure(update.effective_user.id, update.effective_user.first_name, update.effective_user.username)
-    
-    # Fixed safe message id checking
-    msg_id = update.message.message_id if update.message else None
-    
+    # Added reply_to_message_id so user validation works reliably
     await update.message.reply_text(
         build_bonus_text(user, update.effective_user.first_name),
         reply_markup=build_bonus_keyboard(user, now_ist()),
         parse_mode='HTML',
-        reply_to_message_id=msg_id
+        reply_to_message_id=update.message.message_id
     )
 
 
@@ -259,3 +233,4 @@ async def bonus_callback(update: Update, context: CallbackContext):
 
 application.add_handler(CommandHandler("bonus", bonus_command, block=False))
 application.add_handler(CallbackQueryHandler(bonus_callback, pattern=r'^bonus:', block=False))
+
