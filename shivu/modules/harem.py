@@ -37,7 +37,7 @@ RARITIES = {
     "valentine": ("💞", "Valentine"),
     "winter": ("❄️", "Winter"),
     "neon": ("⚡", "Neon"),
-    "pearl": ("🐚", "Pearl"),
+    "pearl": ("🐚", "Summer"),
     "cosmic": ("🌌", "Cosmic"),
 }
 
