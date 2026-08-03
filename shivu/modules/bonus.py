@@ -1,7 +1,4 @@
-import os
 import pytz
-import pymongo
-import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -9,28 +6,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.error import TelegramError
 
-from shivu import application
+from shivu import application, user_collection
 
 IST = pytz.timezone('Asia/Kolkata')
-
-# Independent synchronous MongoDB connection to completely avoid loop mismatch
-MONGO_URL = os.getenv("MONGO_URL") or os.getenv("MONGO_DB_URI") or os.getenv("MONGO_URI")
-if not MONGO_URL:
-    try:
-        from shivu import MONGO_URL as _m_url
-        MONGO_URL = _m_url
-    except ImportError:
-        pass
-
-pymongo_client = pymongo.MongoClient(MONGO_URL) if MONGO_URL else None
-try:
-    db = pymongo_client.get_default_database() if pymongo_client else None
-    if db is None and pymongo_client:
-        db = pymongo_client['shivu']
-except Exception:
-    db = pymongo_client['shivu'] if pymongo_client else None
-
-sync_user_collection = db['user_collection'] if db is not None else None
 
 
 @dataclass(frozen=True)
@@ -54,9 +32,7 @@ def now_ist() -> datetime:
 
 
 def to_ist(dt: datetime) -> datetime:
-    if dt.tzinfo is None:
-        return pytz.UTC.localize(dt).astimezone(IST)
-    return dt.astimezone(IST)
+    return pytz.UTC.localize(dt).astimezone(IST) if dt.tzinfo is None else dt.astimezone(IST)
 
 
 def daily_reward(streak: int) -> int:
@@ -86,57 +62,32 @@ def format_countdown(remaining: timedelta) -> str:
 class UserDB:
     @staticmethod
     async def get(user_id: int) -> dict | None:
-        if sync_user_collection is None:
-            return None
-        def _get():
-            return sync_user_collection.find_one({'id': user_id})
-        return await asyncio.to_thread(_get)
+        return await user_collection.find_one({'id': user_id})
 
     @staticmethod
     async def ensure(user_id: int, first_name: str = None, username: str = None) -> dict:
-        user = await UserDB.get(user_id)
-        if user:
-            return user
-        return await UserDB._create(user_id, first_name, username)
+        return await UserDB.get(user_id) or await UserDB._create(user_id, first_name, username)
 
     @staticmethod
     async def _create(user_id: int, first_name: str, username: str) -> dict:
-        doc = {
-            'id': user_id, 
-            'first_name': first_name or 'Unknown', 
-            'username': username,
-            'balance': 0, 
-            'bonus_streak': 0, 
-            'bonus_highest_streak': 0
-        }
-        def _create_doc():
-            if sync_user_collection is not None:
-                sync_user_collection.update_one({'id': user_id}, {'$setOnInsert': doc}, upsert=True)
-                return sync_user_collection.find_one({'id': user_id})
-            return doc
-        return await asyncio.to_thread(_create_doc)
+        doc = {'id': user_id, 'first_name': first_name or 'Unknown', 'username': username,
+               'balance': 0, 'bonus_streak': 0, 'bonus_highest_streak': 0}
+        await user_collection.insert_one(doc)
+        return doc
 
     @staticmethod
     async def update(user_id: int, inc: dict = None, set_: dict = None):
-        if sync_user_collection is None:
-            return
-        ops = {}
-        if inc:
-            ops['$inc'] = inc
-        if set_:
-            ops['$set'] = set_
+        ops = {k: v for k, v in {'$inc': inc, '$set': set_}.items() if v}
         if ops:
-            def _update():
-                sync_user_collection.update_one({'id': user_id}, ops, upsert=True)
-            await asyncio.to_thread(_update)
+            await user_collection.update_one({'id': user_id}, ops, upsert=True)
 
 
 def build_bonus_text(user: dict, first_name: str) -> str:
     return (
         "<b>🌸 ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ 🫧</b>\n\n"
         "🎮 <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
-        f"👤 <b>User:</b> <b>{first_name}</b>\n"
-        f"📅 <b>Date:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
+        f"👤 <b>ᴜsᴇʀ:</b> <b>{first_name}</b>\n"
+        f"📅 <b>ᴅᴀᴛᴇ:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
         f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
         f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
         "<b>sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ʙᴇʟᴏᴡ:</b>"
@@ -146,17 +97,19 @@ def build_bonus_text(user: dict, first_name: str) -> str:
 def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
     rows = []
     
-    daily_label = "Daily 🎁"
+    # Daily Button
+    daily_label = "ᴅᴀɪʟʏ 🎁"
     if last_d := user.get('last_daily_claim'):
         rem_d = timedelta(hours=COOLDOWNS['daily']) - (now - to_ist(last_d))
         if rem_d.total_seconds() > 0:
-            daily_label = f"Daily ⏳ {format_countdown(rem_d)}"
+            daily_label = f"ᴅᴀɪʟʏ ⏳ {format_countdown(rem_d)}"
             
-    weekly_label = "Weekly 🎁"
+    # Weekly Button
+    weekly_label = "ᴡᴇᴇᴋʟʏ 🎁"
     if last_w := user.get('last_weekly_claim'):
         rem_w = timedelta(hours=COOLDOWNS['weekly']) - (now - to_ist(last_w))
         if rem_w.total_seconds() > 0:
-            weekly_label = f"Weekly ⏳ {format_countdown(rem_w)}"
+            weekly_label = f"ᴡᴇᴇᴋʟʏ ⏳ {format_countdown(rem_w)}"
 
     rows.append([InlineKeyboardButton(daily_label, callback_data="bonus:daily")])
     rows.append([InlineKeyboardButton(weekly_label, callback_data="bonus:weekly")])
@@ -169,6 +122,7 @@ def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
 
 async def bonus_command(update: Update, context: CallbackContext):
     user = await UserDB.ensure(update.effective_user.id, update.effective_user.first_name, update.effective_user.username)
+    # Added reply_to_message_id so user validation works reliably
     await update.message.reply_text(
         build_bonus_text(user, update.effective_user.first_name),
         reply_markup=build_bonus_keyboard(user, now_ist()),
@@ -179,7 +133,7 @@ async def bonus_command(update: Update, context: CallbackContext):
 
 async def refresh_menu(query, user_id: int, now: datetime):
     user = await UserDB.get(user_id)
-    first_name = user.get('first_name', 'User') if user else 'User'
+    first_name = user.get('first_name', 'User')
     await query.edit_message_text(
         build_bonus_text(user, first_name),
         reply_markup=build_bonus_keyboard(user, now),
@@ -260,22 +214,17 @@ HANDLERS = {
 async def bonus_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
+    # Check if the clicking user matches the owner of the command message
     if query.message.reply_to_message:
         owner_id = query.message.reply_to_message.from_user.id
         if owner_id != query.from_user.id:
             await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
             return
 
-    data_parts = query.data.split(':', 1)
-    if len(data_parts) < 2:
-        await query.answer("ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
-        return
-
-    handler = HANDLERS.get(data_parts[1])
+    handler = HANDLERS.get(query.data.split(':', 1)[1])
     if not handler:
         await query.answer("ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
         return
-    
     try:
         await handler(update, context)
     except TelegramError as e:
