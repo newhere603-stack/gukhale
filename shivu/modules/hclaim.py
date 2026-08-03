@@ -70,7 +70,7 @@ async def swaifu(update: Update, context: CallbackContext):
         
         char_name = html.escape(to_small_caps(character.get('name', 'Unknown')))
         anime = html.escape(to_small_caps(character.get('anime', 'Unknown')))
-        rarity = html.escape(to_small_caps(character.get('rarity', '🟢 MEDIUM')))
+        rarity = html.escape(to_small_caps(character.get('rarity', ' MEDIUM 🔵')))
         img_url = character.get('img_url', '')
 
         await user_collection.update_one(
