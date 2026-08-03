@@ -1,33 +1,19 @@
 from pymongo import ReturnDocument
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
-from shivu import application, OWNER_ID, user_totals_collection, LOGGER, collection
-import random
-
-# Import send_image at module level to avoid repeated imports
-try:
-    from shivu.__main__ import send_image
-    LOGGER.info("✅ Successfully imported send_image from __main__")
-except ImportError:
-    try:
-        from shivu.main import send_image
-        LOGGER.info("✅ Successfully imported send_image from main")
-    except ImportError:
-        send_image = None
-        LOGGER.warning("⚠️ Could not import send_image - /spawn command may not work")
-
+from shivu import application, OWNER_ID, user_totals_collection, LOGGER
 
 async def change_time(update: Update, context: CallbackContext) -> None:
+    """Group Admins ke liye command (/changetime)"""
     user = update.effective_user
     chat = update.effective_chat
 
     try:
-        # Check if command is used in a group
         if chat.type not in ['group', 'supergroup']:
             await update.message.reply_text('This command can only be used in groups.')
             return
 
-        # Check if user is admin
+        # Check if user is admin or creator
         try:
             member = await chat.get_member(user.id)
             if member.status not in ('administrator', 'creator'):
@@ -38,30 +24,24 @@ async def change_time(update: Update, context: CallbackContext) -> None:
             await update.message.reply_text('Failed to verify your admin status. Please try again.')
             return
 
-        # Validate arguments
         args = context.args
         if len(args) != 1:
             await update.message.reply_text('Incorrect format. Please use: /changetime NUMBER\n\nExample: /changetime 100')
             return
 
-        # Parse frequency
         try:
             new_frequency = int(args[0])
         except ValueError:
             await update.message.reply_text('Invalid number. Please provide a valid integer.')
             return
 
-        # Validate frequency range
-        if new_frequency < 100:
-            await update.message.reply_text('The message frequency must be greater than or equal to 100.')
-            return
-
-        if new_frequency > 10000:
-            await update.message.reply_text('That\'s too much! Please use a value below 10000.')
+        # Group Admin Limits: 50 se 500 tak
+        if new_frequency < 50 or new_frequency > 500:
+            await update.message.reply_text('Group Admins ke liye message frequency 50 se 500 ke beech honi chahiye.')
             return
 
         # Update database
-        chat_frequency = await user_totals_collection.find_one_and_update(
+        await user_totals_collection.find_one_and_update(
             {'chat_id': str(chat.id)},
             {'$set': {'message_frequency': new_frequency}},
             upsert=True,
@@ -80,44 +60,37 @@ async def change_time(update: Update, context: CallbackContext) -> None:
 
 
 async def change_time_sudo(update: Update, context: CallbackContext) -> None:
-    sudo_user_ids = {7657218453}
+    """Bot Owner ke liye command (/ctime)"""
+    sudo_user_ids = {7657218453, OWNER_ID} # Added OWNER_ID fallback just in case
     user = update.effective_user
 
     try:
-        # Check sudo permission
         if user.id not in sudo_user_ids:
             await update.message.reply_text('You do not have permission to use this command.')
             return
 
-        # Check if command is used in a group
         if update.effective_chat.type not in ['group', 'supergroup']:
             await update.message.reply_text('This command can only be used in groups.')
             return
 
-        # Validate arguments
         args = context.args
         if len(args) != 1:
             await update.message.reply_text('Incorrect format. Please use: /ctime NUMBER\n\nExample: /ctime 50')
             return
 
-        # Parse frequency
         try:
             new_frequency = int(args[0])
         except ValueError:
             await update.message.reply_text('Invalid number. Please provide a valid integer.')
             return
 
-        # Validate frequency range (sudo users can set lower values)
-        if new_frequency < 1:
-            await update.message.reply_text('The message frequency must be greater than or equal to 1.')
-            return
-
-        if new_frequency > 10000:
-            await update.message.reply_text('That\'s too much! Please use a value below 10000.')
+        # Bot Owner (Sudo) Limits: 5 se 500 tak
+        if new_frequency < 5 or new_frequency > 500:
+            await update.message.reply_text('Bot Owner ke liye message frequency 5 se 500 ke beech honi chahiye.')
             return
 
         # Update database
-        chat_frequency = await user_totals_collection.find_one_and_update(
+        await user_totals_collection.find_one_and_update(
             {'chat_id': str(update.effective_chat.id)},
             {'$set': {'message_frequency': new_frequency}},
             upsert=True,
@@ -136,21 +109,19 @@ async def change_time_sudo(update: Update, context: CallbackContext) -> None:
 
 
 async def check_frequency(update: Update, context: CallbackContext) -> None:
-    """Check current spawn frequency for this group"""
     try:
         chat_id = str(update.effective_chat.id)
-
         chat_frequency = await user_totals_collection.find_one({'chat_id': chat_id})
 
-        if chat_frequency:
-            freq = chat_frequency.get('message_frequency', 70)
+        if chat_frequency and 'message_frequency' in chat_frequency:
+            freq = chat_frequency['message_frequency']
             await update.message.reply_text(
                 f'📊 Current spawn frequency: Every {freq} messages\n\n'
                 f'Use /changetime NUMBER to change it (admin only)'
             )
         else:
             await update.message.reply_text(
-                f'📊 Current spawn frequency: Every 70 messages (default)\n\n'
+                f'📊 Current spawn frequency: Every 100 messages (default)\n\n'
                 f'Use /changetime NUMBER to set a custom frequency (admin only)'
             )
 
@@ -160,69 +131,53 @@ async def check_frequency(update: Update, context: CallbackContext) -> None:
 
 
 async def force_spawn(update: Update, context: CallbackContext) -> None:
-    """Force spawn a character immediately (sudo only)"""
-    sudo_user_ids = {7657218453}
+    sudo_user_ids = {7657218453, OWNER_ID}
     user = update.effective_user
 
+    if user.id not in sudo_user_ids:
+        await update.message.reply_text('⛔ You do not have permission to use this command.')
+        return
+
+    # Dynamically import inside the function to avoid Circular Import Error
     try:
-        # Check sudo permission
-        if user.id not in sudo_user_ids:
-            await update.message.reply_text('⛔ You do not have permission to use this command.')
+        from shivu.__main__ import send_image
+    except ImportError:
+        try:
+            from shivu.main import send_image
+        except ImportError:
+            await update.message.reply_text('❌ Could not access spawn function.')
             return
 
-        # Check if command is used in a group
-        if update.effective_chat.type not in ['group', 'supergroup']:
-            await update.message.reply_text('This command can only be used in groups.')
-            return
-
-        # Check if send_image was imported successfully
-        if send_image is None:
-            await update.message.reply_text('❌ Spawn function not available. Please check bot configuration.')
-            LOGGER.error("send_image function not imported - cannot force spawn")
-            return
-
-        # Force spawn character
+    try:
         await update.message.reply_text('🎲 Spawning character...')
         await send_image(update, context)
-        LOGGER.info(f"[FORCE SPAWN] Character spawned by sudo user {user.id} in chat {update.effective_chat.id}")
-
     except Exception as e:
         LOGGER.error(f"Error in force_spawn: {e}")
-        import traceback
-        LOGGER.error(traceback.format_exc())
-        await update.message.reply_text('❌ Failed to spawn character. Please try again.')
+        await update.message.reply_text('❌ Failed to spawn character.')
 
 
 async def reset_message_count(update: Update, context: CallbackContext) -> None:
-    """Reset message counter to 0 (sudo only) - useful for testing"""
-    sudo_user_ids = {7657218453}
+    sudo_user_ids = {7657218453, OWNER_ID}
     user = update.effective_user
 
+    if user.id not in sudo_user_ids:
+        await update.message.reply_text('⛔ You do not have permission to use this command.')
+        return
+
+    # Dynamically import message_counts
     try:
-        if user.id not in sudo_user_ids:
-            await update.message.reply_text('⛔ You do not have permission to use this command.')
-            return
-
-        if update.effective_chat.type not in ['group', 'supergroup']:
-            await update.message.reply_text('This command can only be used in groups.')
-            return
-
-        # Import message_counts from main
+        from shivu.__main__ import message_counts
+    except ImportError:
         try:
-            from shivu.__main__ import message_counts
+            from shivu.main import message_counts
         except ImportError:
-            try:
-                from shivu.main import message_counts
-            except ImportError:
-                await update.message.reply_text('❌ Could not access message counter.')
-                return
+            await update.message.reply_text('❌ Could not access message counter.')
+            return
 
+    try:
         chat_id = str(update.effective_chat.id)
         message_counts[chat_id] = 0
-        
         await update.message.reply_text('✅ Message counter reset to 0!')
-        LOGGER.info(f"[RESET] Message counter reset for chat {chat_id} by user {user.id}")
-
     except Exception as e:
         LOGGER.error(f"Error in reset_message_count: {e}")
         await update.message.reply_text('❌ Failed to reset counter.')
