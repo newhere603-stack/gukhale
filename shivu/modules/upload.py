@@ -1,4 +1,4 @@
-""" v3 - Complete Upload, Update & Delete System """
+""" v3 - Complete Fixed Upload (Reply & URL), Update & Delete System """
 
 import io
 import os
@@ -262,8 +262,8 @@ class RobustUploader:
                         res = await response.json()
                         if isinstance(res, list) and len(res) > 0 and 'src' in res[0]:
                             return f"https://telegra.ph{res[0]['src']}"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Telegraph upload failed: {e}")
         return None
 
     @staticmethod
@@ -277,8 +277,8 @@ class RobustUploader:
                         res = await response.json()
                         if res.get('id'):
                             return f"https://pixeldrain.com/api/file/{res['id']}"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Pixeldrain upload failed: {e}")
         return None
 
     @staticmethod
@@ -294,8 +294,8 @@ class RobustUploader:
                         text = (await response.text()).strip()
                         if text.startswith("https://files.catbox.moe/"):
                             return text
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Catbox upload failed: {e}")
         return None
 
     @classmethod
@@ -471,8 +471,8 @@ class CharacterUploadHandler:
     @staticmethod
     async def handle_reply_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_msg = update.message.reply_to_message
-        if not (reply_msg.photo or reply_msg.video or reply_msg.document or reply_msg.animation):
-            await update.message.reply_text('❌ Please reply to a photo, video, animation, or document!')
+        if not reply_msg or not (reply_msg.photo or reply_msg.video or reply_msg.document or reply_msg.animation):
+            await update.message.reply_text('❌ Please reply to a valid photo, video, animation, or document!')
             return
 
         if len(context.args) != 3:
@@ -486,7 +486,7 @@ class CharacterUploadHandler:
 
         media_file = await CharacterUploadHandler._extract_media_from_reply(reply_msg, update)
         if not media_file:
-            await processing_msg.edit_text('❌ Failed to extract media file.')
+            await processing_msg.edit_text('❌ Failed to extract media file from reply.')
             return
 
         progress = ProgressTracker(processing_msg)
@@ -499,7 +499,7 @@ class CharacterUploadHandler:
         )
 
         if not file_url:
-            await processing_msg.edit_text('❌ Server upload failed! Please try again.')
+            await processing_msg.edit_text('❌ Server upload failed! Check bot logs for details.')
             return
 
         object.__setattr__(media_file, 'url', file_url)
@@ -617,7 +617,7 @@ class CharacterUploadHandler:
                 size=len(file_bytes)
             )
         except Exception as e:
-            logger.error(f"Error extracting media: {e}")
+            logger.error(f"Error extracting media from reply: {e}")
             return None
 
 
@@ -716,16 +716,10 @@ def require_sudo(func):
 @require_sudo
 async def upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        if update.message.reply_to_message and len(context.args) == 3:
+        if update.message.reply_to_message:
             await CharacterUploadHandler.handle_reply_upload(update, context)
-        elif len(context.args) == 4:
-            await CharacterUploadHandler.handle_url_upload(update, context)
         else:
-            await update.message.reply_text(
-                '❌ Invalid format!\n\n'
-                '👉 Reply to media: `/upload name anime rarity`\n'
-                '👉 Using URL: `/upload URL name anime rarity`'
-            )
+            await CharacterUploadHandler.handle_url_upload(update, context)
     except Exception as e:
         await update.message.reply_text(f'❌ Upload failed: {str(e)}')
 
