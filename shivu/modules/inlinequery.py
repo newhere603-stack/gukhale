@@ -190,7 +190,8 @@ def owners_caption(ch: Dict, owners: List[Dict]) -> str:
     for i, o in enumerate(owners[:30], 1):
         medal = medals.get(i, f"{i}.")
         fn = escape(trunc(o.get('first_name', 'User'), 18))
-        cap += f"{medal} {fn} • <code>×{o.get('count', 0)}</code>\n"
+        uid = o.get('id')
+        cap += f"{medal} <a href=\"tg://user?id={uid}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
     return cap
 
 def stats_caption(ch: Dict, owners: List[Dict]) -> str:
@@ -202,7 +203,8 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
         cap += f"\n🏆 <b>{sc('top collectors')}</b>\n"
         for i, o in enumerate(owners[:10], 1):
             fn = escape(trunc(o.get('first_name', 'User'), 18))
-            cap += f"{i}. {fn} • <code>×{o.get('count', 0)}</code>\n"
+            uid = o.get('id')
+            cap += f"{i}. <a href=\"tg://user?id={uid}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
     return cap
 
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
