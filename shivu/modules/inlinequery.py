@@ -24,11 +24,11 @@ class Rarity:
     value: int
 
 RARITY_MAP = {
-    "mythic": ("🔮", 1), "cosmic": ("🌌", 2), "celestial": ("🪽", 3),
-    "exclusive": ("🥴", 4), "legendary": ("🟠", 5), "premium": ("💎", 6),
+    "mythic": ("💎", 1), "cosmic": ("🌌", 2), "celestial": ("🪽", 3),
+    "exclusive": ("💮", 4), "legendary": ("🟡", 5), "premium": ("🔮", 6),
     "neon": ("⚡", 7), "pearl": ("🐚", 8), "sweet": ("🍭", 9),
-    "special": ("🟡", 10), "valentine": ("💋", 11), "winter": ("❄️", 12),
-    "erotic": ("🥵", 13), "rare": ("🔵", 14), "common": ("🟢", 15)
+    "special": ("🔵", 10), "valentine": ("💞", 11), "winter": ("❄️", 12),
+    "erotic": ("🥵", 13), "rare": ("🟠", 14), "common": ("🟢", 15)
 }
 
 try:
