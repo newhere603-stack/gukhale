@@ -11,7 +11,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, CallbackContext, MessageHandler, filters
 from telegram.error import BadRequest
 
-# Yahan user_totals_collection import add kiya hai
+# Added user_totals_collection here to fetch custom spawn time
 from shivu import db, shivuu, application, LOGGER, user_totals_collection
 from shivu.modules import ALL_MODULES
 
@@ -25,7 +25,7 @@ top_global_groups_collection = db['top_global_groups']
 rarity_status_collection = db['rarity_status_settings']
 group_settings_collection = db['group_settings_db']
 
-MESSAGE_FREQUENCY = 70  # Yeh ab sirf fallback/default ki tarah use hoga
+MESSAGE_FREQUENCY = 70
 DESPAWN_TIME = 180
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
@@ -41,7 +41,7 @@ rarity_status_cache = {}
 group_settings_cache = {}  # {chat_id: {'grab_delete': True, 'miss_delete': True}}
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-first_correct_guesses, spawn_messages, spawn_message_links = {}, {}
+first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
 currently_spawning = {}
 
 for module_name in ALL_MODULES:
@@ -191,17 +191,21 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     async with locks[chat_id]:
         message_counts[chat_id] = message_counts.get(chat_id, 0) + 1
         
-        # FIX: Database se custom limit fetch karna
-        chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
-        if chat_data and 'message_frequency' in chat_data:
-            limit = chat_data['message_frequency']
-        else:
-            limit = MESSAGE_FREQUENCY
+        # --- NEW LOGIC TO FETCH CUSTOM LIMIT SAFELY ---
+        try:
+            chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
+            if chat_data and 'message_frequency' in chat_data:
+                target_frequency = chat_data['message_frequency']
+            else:
+                target_frequency = MESSAGE_FREQUENCY
+        except Exception as e:
+            LOGGER.error(f"Error fetching message frequency: {e}")
+            target_frequency = MESSAGE_FREQUENCY
+        # ----------------------------------------------
 
-        LOGGER.info(f"[spawn] chat={chat_id} count={message_counts[chat_id]}/{limit} spawning={currently_spawning.get(chat_id, False)}")
+        LOGGER.info(f"[spawn] chat={chat_id} count={message_counts[chat_id]}/{target_frequency} spawning={currently_spawning.get(chat_id, False)}")
 
-        # FIX: Hardcoded limit ki jagah database 'limit' check ho rahi hai
-        if message_counts[chat_id] >= limit and not currently_spawning.get(chat_id):
+        if message_counts[chat_id] >= target_frequency and not currently_spawning.get(chat_id):
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
             asyncio.create_task(send_image(update, context))
@@ -293,8 +297,8 @@ async def guess(update: Update, context: CallbackContext) -> None:
         if not is_correct:
             kb = None
             if chat_id in spawn_message_links:
-                kb = InlineKeyboardMarkup([[InlineKeyboardButton("📍 ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=spawn_message_links[chat_id])]])
-            return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..❌</b>', reply_markup=kb)
+                kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=spawn_message_links[chat_id])]])
+            return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
         first_correct_guesses[chat_id] = user_id
         
@@ -389,7 +393,7 @@ async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
 
 async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: bool) -> None:
     if not is_authorized(update.effective_user.id):
-        return await update.message.reply_html('<b>🚫 ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>')
+        return await update.message.reply_html('<b>ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>')
     if not context.args:
         cmd = "/rarity_on" if enable else "/rarity_off"
         return await update.message.reply_html(f'<b>💡 ᴜsᴀɢᴇ:</b> {cmd} &lt;rarity_key&gt;')
