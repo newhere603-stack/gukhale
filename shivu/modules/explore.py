@@ -62,14 +62,14 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         
         if not user:
             await update.message.reply_text(
-                "<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴ ᴀᴄᴄᴏᴜɴᴛ ʏᴇᴛ!</b>", 
+                "<b>sᴛᴀʀᴛ ᴍᴇ ꜰɪʀsᴛ!</b>", 
                 parse_mode=ParseMode.HTML
             )
             return
 
         if user.get('balance', 0) < MIN_BALANCE:
             await update.message.reply_text(
-                f"<b>❌ ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀsᴛ {MIN_BALANCE} ᴄᴏɪɴs ᴛᴏ ᴇxᴘʟᴏʀᴇ!</b>",
+                f"<b>ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀsᴛ {MIN_BALANCE} ᴄᴏɪɴs ᴛᴏ ᴇxᴘʟᴏʀᴇ!</b>",
                 parse_mode=ParseMode.HTML
             )
             return
@@ -93,7 +93,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
     except Exception as e:
         await update.message.reply_text(
-            f"<b>❌ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>",
+            f"<b>ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>",
             parse_mode=ParseMode.HTML
         )
 
