@@ -8,12 +8,27 @@ from telegram.error import BadRequest
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from shivu import application, user_collection, collection, LOGGER
 
-# RARITIES Import Check
-try:
-    from shivu.modules.harem import RARITIES, rarity_display
-except ImportError:
-    RARITIES = {}
-    def rarity_display(k): return k.title()
+# ---------------- CUSTOM RARITIES ----------------
+RARITIES = {
+    "common": ("🟢", "Common"), "rare": ("🟠", "Rare"), "legendary": ("🟡", "Legendary"),
+    "special": ("🔵", "Medium"), "celestial": ("🪽", "Celestial"), "erotic": ("🥵", "Spicy"),
+    "exclusive": ("💮", "Exclusive"), "premium": ("🔮", "Premium Edition"), "mythic": ("💎", "Mythic"),
+    "sweet": ("🍭", "Sweet"), "valentine": ("💞", "Valentine"), "winter": ("❄️", "Winter"),
+    "neon": ("⚡", "Neon"), "pearl": ("🐚", "Summer"), "cosmic": ("🌌", "Cosmic"),
+}
+
+def get_rarity_display(rarity_str):
+    if not isinstance(rarity_str, str):
+        return "🟢 Common"
+    rarity_str = rarity_str.strip()
+    emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
+    name = name.strip().lower()
+    
+    for key, (r_emoji, r_name) in RARITIES.items():
+        if rarity_str.lower() == key or emoji == r_emoji or name == r_name.lower():
+            return f"{r_emoji} {r_name}"
+    
+    return rarity_str
 
 # ---------------- CONFIG ----------------
 OWNER_ID = 7657218453
@@ -156,12 +171,13 @@ async def add_char_to_user(user_id: int, username: str, first_name: str, char: d
 
 async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
+    display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
     text = (
         "<b>🏆 ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴄʟᴀɪᴍᴇᴅ!</b>\n━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>👤 ᴜsᴇʀ: {user_link}</b>\n"
         f"<b>🕹️ ᴍᴇᴛʜᴏᴅ: <code>/{method}</code></b>\n"
         f"<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b>💎 ʀᴀʀɪᴛʏ: <code>{char.get('rarity', 'N/A')}</code></b>\n━━━━━━━━━━━━━━━━━━━━"
+        f"<b>💎 ʀᴀʀɪᴛʏ: <code>{display_rarity}</code></b>\n━━━━━━━━━━━━━━━━━━━━"
     )
     try:
         await context.bot.send_photo(LOG_GROUP_ID, char["img_url"], caption=text, parse_mode="HTML")
@@ -216,10 +232,11 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
     
+    display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
     caption = (
         f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b>\n"
         f"<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b>💎 ʀᴀʀɪᴛʏ: {char.get('rarity', 'N/A')}</b>"
+        f"<b>💎 ʀᴀʀɪᴛʏ: {display_rarity}</b>"
     )
     
     await context.bot.send_photo(
@@ -344,10 +361,11 @@ async def propose(update: Update, context: CallbackContext):
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
     
+    display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
     caption = (
         f"<b>🎉 ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ ʜᴀs ʙᴇᴇɴ ᴀᴄᴄᴇᴘᴛᴇᴅ! 💖</b>\n\n"
         f"<b>☘️ ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b>🏵️ ʀᴀʀɪᴛʏ: {char.get('rarity', 'N/A')}</b>\n"
+        f"<b>🏵️ ʀᴀʀɪᴛʏ: {display_rarity}</b>\n"
         f"<b>🎞 ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
         f"<b>🔖 ɪᴅ: {char.get('id', 'N/A')}</b>"
     )
