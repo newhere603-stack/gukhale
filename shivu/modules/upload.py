@@ -46,20 +46,20 @@ class MediaType(Enum):
 
 
 class RarityLevel(Enum):
-    MYTHIC = (1, "🔮 Mythic")
+    MYTHIC = (1, "💎 Mythic")
     COSMIC = (2, "🌌 Cosmic")
     CELESTIAL = (3, "🪽 Celestial")
-    EXCLUSIVE = (4, "🥴 Exclusive")
-    LEGENDARY = (5, "🟠 Legendary")
-    PREMIUM = (6, "💎 Premium Edition")
+    EXCLUSIVE = (4, "💮 Exclusive")
+    LEGENDARY = (5, "🟡 Legendary")
+    PREMIUM = (6, "🔮 Premium Edition")
     NEON = (7, "⚡ Neon")
-    PEARL = (8, "🐚 Pearl")
+    PEARL = (8, "🐚 Summer")
     SWEET = (9, "🍭 Sweet")
-    SPECIAL_EDITION = (10, "🟡 Special Edition")
-    VALENTINE = (11, "💋 Valentine")
+    SPECIAL_EDITION = (10, "🔵 Medium")
+    VALENTINE = (11, "💞 Valentine")
     WINTER = (12, "❄️ Winter")
-    EROTIC = (13, "🥵 Erotic")
-    RARE = (14, "🔵 Rare")
+    EROTIC = (13, "🥵 Spicy")
+    RARE = (14, "🟠 Rare")
     COMMON = (15, "🟢 Common")
 
     def __init__(self, level: int, display: str):
