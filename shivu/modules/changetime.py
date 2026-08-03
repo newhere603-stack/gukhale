@@ -4,43 +4,39 @@ from telegram.ext import CommandHandler, CallbackContext
 from shivu import application, OWNER_ID, user_totals_collection, LOGGER
 
 async def change_time(update: Update, context: CallbackContext) -> None:
-    """Group Admins ke liye command (/changetime)"""
     user = update.effective_user
     chat = update.effective_chat
 
     try:
         if chat.type not in ['group', 'supergroup']:
-            await update.message.reply_text('This command can only be used in groups.')
+            await update.message.reply_text('<b>ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs.</b>', parse_mode='HTML')
             return
 
-        # Check if user is admin or creator
         try:
             member = await chat.get_member(user.id)
             if member.status not in ('administrator', 'creator'):
-                await update.message.reply_text('You do not have permission to use this command. Only admins can change spawn frequency.')
+                await update.message.reply_text('<b>ʏᴏᴜ ᴅᴏ ɴᴏᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ. ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴄʜᴀɴɢᴇ sᴘᴀᴡɴ ғʀᴇǫᴜᴇɴᴄʏ.</b>', parse_mode='HTML')
                 return
         except Exception as e:
             LOGGER.error(f"Error checking admin status: {e}")
-            await update.message.reply_text('Failed to verify your admin status. Please try again.')
+            await update.message.reply_text('<b>ғᴀɪʟᴇᴅ ᴛᴏ ᴠᴇʀɪғʏ ʏᴏᴜʀ ᴀᴅᴍɪɴ sᴛᴀᴛᴜs. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>', parse_mode='HTML')
             return
 
         args = context.args
         if len(args) != 1:
-            await update.message.reply_text('Incorrect format. Please use: /changetime NUMBER\n\nExample: /changetime 100')
+            await update.message.reply_text('<b>ɪɴᴄᴏʀʀᴇᴄᴛ ғᴏʀᴍᴀᴛ. ᴘʟᴇᴀsᴇ ᴜsᴇ: /changetime ɴᴜᴍʙᴇʀ\n\nᴇxᴀᴍᴘʟᴇ: /changetime 100</b>', parse_mode='HTML')
             return
 
         try:
             new_frequency = int(args[0])
         except ValueError:
-            await update.message.reply_text('Invalid number. Please provide a valid integer.')
+            await update.message.reply_text('<b>ɪɴᴠᴀʟɪᴅ ɴᴜᴍʙᴇʀ. ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴠᴀʟɪᴅ ɪɴᴛᴇɢᴇʀ.</b>', parse_mode='HTML')
             return
 
-        # Group Admin Limits: 50 se 500 tak
         if new_frequency < 50 or new_frequency > 500:
-            await update.message.reply_text('Group Admins ke liye message frequency 50 se 500 ke beech honi chahiye.')
+            await update.message.reply_text('<b>ғʀᴇǫᴜᴇɴᴄʏ ᴍᴜsᴛ ʙᴇ ʙᴇᴛᴡᴇᴇɴ 50 ᴀɴᴅ 500 ғᴏʀ ɢʀᴏᴜᴘ ᴀᴅᴍɪɴs.</b>', parse_mode='HTML')
             return
 
-        # Update database
         await user_totals_collection.find_one_and_update(
             {'chat_id': str(chat.id)},
             {'$set': {'message_frequency': new_frequency}},
@@ -49,47 +45,44 @@ async def change_time(update: Update, context: CallbackContext) -> None:
         )
 
         await update.message.reply_text(
-            f'✅ Successfully changed character spawn frequency to every {new_frequency} messages.\n\n'
-            f'Characters will now appear after every {new_frequency} messages in this group.'
+            f'<b>✅ sᴜᴄᴄᴇssғᴜʟʟʏ ᴄʜᴀɴɢᴇᴅ sᴘᴀᴡɴ ғʀᴇǫᴜᴇɴᴄʏ ᴛᴏ ᴇᴠᴇʀʏ {new_frequency} ᴍᴇssᴀɢᴇs.</b>',
+            parse_mode='HTML'
         )
         LOGGER.info(f"Changed spawn frequency for chat {chat.id} to {new_frequency}")
 
     except Exception as e:
         LOGGER.error(f"Error in change_time: {e}")
-        await update.message.reply_text('Failed to change character spawn frequency. Please try again later.')
+        await update.message.reply_text('<b>ғᴀɪʟᴇᴅ ᴛᴏ ᴄʜᴀɴɢᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴘᴀᴡɴ ғʀᴇǫᴜᴇɴᴄʏ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>', parse_mode='HTML')
 
 
 async def change_time_sudo(update: Update, context: CallbackContext) -> None:
-    """Bot Owner ke liye command (/ctime)"""
-    sudo_user_ids = {7657218453, OWNER_ID} # Added OWNER_ID fallback just in case
+    sudo_user_ids = {7657218453, OWNER_ID}
     user = update.effective_user
 
     try:
         if user.id not in sudo_user_ids:
-            await update.message.reply_text('You do not have permission to use this command.')
+            await update.message.reply_text('<b>ʏᴏᴜ ᴅᴏ ɴᴏᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>', parse_mode='HTML')
             return
 
         if update.effective_chat.type not in ['group', 'supergroup']:
-            await update.message.reply_text('This command can only be used in groups.')
+            await update.message.reply_text('<b>ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs.</b>', parse_mode='HTML')
             return
 
         args = context.args
         if len(args) != 1:
-            await update.message.reply_text('Incorrect format. Please use: /ctime NUMBER\n\nExample: /ctime 50')
+            await update.message.reply_text('<b>ɪɴᴄᴏʀʀᴇᴄᴛ ғᴏʀᴍᴀᴛ. ᴘʟᴇᴀsᴇ ᴜsᴇ: /ctime ɴᴜᴍʙᴇʀ\n\nᴇxᴀᴍᴘʟᴇ: /ctime 50</b>', parse_mode='HTML')
             return
 
         try:
             new_frequency = int(args[0])
         except ValueError:
-            await update.message.reply_text('Invalid number. Please provide a valid integer.')
+            await update.message.reply_text('<b>ɪɴᴠᴀʟɪᴅ ɴᴜᴍʙᴇʀ. ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴠᴀʟɪᴅ ɪɴᴛᴇɢᴇʀ.</b>', parse_mode='HTML')
             return
 
-        # Bot Owner (Sudo) Limits: 5 se 500 tak
         if new_frequency < 5 or new_frequency > 500:
-            await update.message.reply_text('Bot Owner ke liye message frequency 5 se 500 ke beech honi chahiye.')
+            await update.message.reply_text('<b>ғʀᴇǫᴜᴇɴᴄʏ ᴍᴜsᴛ ʙᴇ ʙᴇᴛᴡᴇᴇɴ 5 ᴀɴᴅ 500 ғᴏʀ ʙᴏᴛ ᴏᴡɴᴇʀs.</b>', parse_mode='HTML')
             return
 
-        # Update database
         await user_totals_collection.find_one_and_update(
             {'chat_id': str(update.effective_chat.id)},
             {'$set': {'message_frequency': new_frequency}},
@@ -98,14 +91,14 @@ async def change_time_sudo(update: Update, context: CallbackContext) -> None:
         )
 
         await update.message.reply_text(
-            f'✅ Successfully changed character spawn frequency to every {new_frequency} messages.\n\n'
-            f'Characters will now appear after every {new_frequency} messages in this group.'
+            f'<b>✅ sᴜᴄᴄᴇssғᴜʟʟʏ ᴄʜᴀɴɢᴇᴅ sᴘᴀᴡɴ ғʀᴇǫᴜᴇɴᴄʏ ᴛᴏ ᴇᴠᴇʀʏ {new_frequency} ᴍᴇssᴀɢᴇs.</b>',
+            parse_mode='HTML'
         )
         LOGGER.info(f"[SUDO] Changed spawn frequency for chat {update.effective_chat.id} to {new_frequency} by user {user.id}")
 
     except Exception as e:
         LOGGER.error(f"Error in change_time_sudo: {e}")
-        await update.message.reply_text('Failed to change character spawn frequency. Please try again later.')
+        await update.message.reply_text('<b>ғᴀɪʟᴇᴅ ᴛᴏ ᴄʜᴀɴɢᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴘᴀᴡɴ ғʀᴇǫᴜᴇɴᴄʏ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>', parse_mode='HTML')
 
 
 async def check_frequency(update: Update, context: CallbackContext) -> None:
@@ -116,18 +109,18 @@ async def check_frequency(update: Update, context: CallbackContext) -> None:
         if chat_frequency and 'message_frequency' in chat_frequency:
             freq = chat_frequency['message_frequency']
             await update.message.reply_text(
-                f'📊 Current spawn frequency: Every {freq} messages\n\n'
-                f'Use /changetime NUMBER to change it (admin only)'
+                f'<b>📊 ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴ ғʀᴇǫᴜᴇɴᴄʏ: ᴇᴠᴇʀʏ {freq} ᴍᴇssᴀɢᴇs\n\nᴜsᴇ /changetime ɴᴜᴍʙᴇʀ ᴛᴏ ᴄʜᴀɴɢᴇ ɪᴛ (ᴀᴅᴍɪɴ ᴏɴʟʏ)</b>',
+                parse_mode='HTML'
             )
         else:
             await update.message.reply_text(
-                f'📊 Current spawn frequency: Every 100 messages (default)\n\n'
-                f'Use /changetime NUMBER to set a custom frequency (admin only)'
+                '<b>📊 ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴ ғʀᴇǫᴜᴇɴᴄʏ: ᴇᴠᴇʀʏ 100 ᴍᴇssᴀɢᴇs (ᴅᴇғᴀᴜʟᴛ)\n\nᴜsᴇ /changetime ɴᴜᴍʙᴇʀ ᴛᴏ sᴇᴛ ᴀ ᴄᴜsᴛᴏᴍ ғʀᴇǫᴜᴇɴᴄʏ (ᴀᴅᴍɪɴ ᴏɴʟʏ)</b>',
+                parse_mode='HTML'
             )
 
     except Exception as e:
         LOGGER.error(f"Error in check_frequency: {e}")
-        await update.message.reply_text('Failed to check frequency.')
+        await update.message.reply_text('<b>ғᴀɪʟᴇᴅ ᴛᴏ ᴄʜᴇᴄᴋ ғʀᴇǫᴜᴇɴᴄʏ.</b>', parse_mode='HTML')
 
 
 async def force_spawn(update: Update, context: CallbackContext) -> None:
@@ -135,25 +128,24 @@ async def force_spawn(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
 
     if user.id not in sudo_user_ids:
-        await update.message.reply_text('⛔ You do not have permission to use this command.')
+        await update.message.reply_text('<b>ʏᴏᴜ ᴅᴏ ɴᴏᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>', parse_mode='HTML')
         return
 
-    # Dynamically import inside the function to avoid Circular Import Error
     try:
         from shivu.__main__ import send_image
     except ImportError:
         try:
             from shivu.main import send_image
         except ImportError:
-            await update.message.reply_text('❌ Could not access spawn function.')
+            await update.message.reply_text('<b>ᴄᴏᴜʟᴅ ɴᴏᴛ ᴀᴄᴄᴇss sᴘᴀᴡɴ ғᴜɴᴄᴛɪᴏɴ.</b>', parse_mode='HTML')
             return
 
     try:
-        await update.message.reply_text('🎲 Spawning character...')
+        await update.message.reply_text('<b>🎲 sᴘᴀᴡɴɪɴɢ ᴄʜᴀʀᴀᴄᴛᴇʀ...</b>', parse_mode='HTML')
         await send_image(update, context)
     except Exception as e:
         LOGGER.error(f"Error in force_spawn: {e}")
-        await update.message.reply_text('❌ Failed to spawn character.')
+        await update.message.reply_text('<b>ғᴀɪʟᴇᴅ ᴛᴏ sᴘᴀᴡɴ ᴄʜᴀʀᴀᴄᴛᴇʀ.</b>', parse_mode='HTML')
 
 
 async def reset_message_count(update: Update, context: CallbackContext) -> None:
@@ -161,26 +153,25 @@ async def reset_message_count(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
 
     if user.id not in sudo_user_ids:
-        await update.message.reply_text('⛔ You do not have permission to use this command.')
+        await update.message.reply_text('<b>ʏᴏᴜ ᴅᴏ ɴᴏᴛ ʜᴀᴠᴇ ᴘᴇʀᴍɪssɪᴏɴ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>', parse_mode='HTML')
         return
 
-    # Dynamically import message_counts
     try:
         from shivu.__main__ import message_counts
     except ImportError:
         try:
             from shivu.main import message_counts
         except ImportError:
-            await update.message.reply_text('❌ Could not access message counter.')
+            await update.message.reply_text('<b>ᴄᴏᴜʟᴅ ɴᴏᴛ ᴀᴄᴄᴇss ᴍᴇssᴀɢᴇ ᴄᴏᴜɴᴛᴇʀ.</b>', parse_mode='HTML')
             return
 
     try:
         chat_id = str(update.effective_chat.id)
         message_counts[chat_id] = 0
-        await update.message.reply_text('✅ Message counter reset to 0!')
+        await update.message.reply_text('<b>✅ ᴍᴇssᴀɢᴇ ᴄᴏᴜɴᴛᴇʀ ʀᴇsᴇᴛ ᴛᴏ 0!</b>', parse_mode='HTML')
     except Exception as e:
         LOGGER.error(f"Error in reset_message_count: {e}")
-        await update.message.reply_text('❌ Failed to reset counter.')
+        await update.message.reply_text('<b>ғᴀɪʟᴇᴅ ᴛᴏ ʀᴇsᴇᴛ ᴄᴏᴜɴᴛᴇʀ.</b>', parse_mode='HTML')
 
 
 # Register handlers
