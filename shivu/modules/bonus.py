@@ -66,12 +66,22 @@ class UserDB:
 
     @staticmethod
     async def ensure(user_id: int, first_name: str = None, username: str = None) -> dict:
-        return await UserDB.get(user_id) or await UserDB._create(user_id, first_name, username)
+        user = await UserDB.get(user_id)
+        if not user:
+            return await UserDB._create(user_id, first_name, username)
+        
+        # MAGIC CODE: Agar user purana hai par balance field nahi hai, toh 2000 set kar do
+        if 'balance' not in user:
+            await user_collection.update_one({'id': user_id}, {'$set': {'balance': 2000}})
+            user['balance'] = 2000
+            
+        return user
 
     @staticmethod
     async def _create(user_id: int, first_name: str, username: str) -> dict:
+        # MAGIC CODE: Naye user ko ab 0 nahi, default 2000 balance milega
         doc = {'id': user_id, 'first_name': first_name or 'Unknown', 'username': username,
-               'balance': 0, 'bonus_streak': 0, 'bonus_highest_streak': 0}
+               'balance': 2000, 'bonus_streak': 0, 'bonus_highest_streak': 0}
         await user_collection.insert_one(doc)
         return doc
 
