@@ -31,11 +31,11 @@ DESPAWN_TIME = 180
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
 RARITIES = {
-    "common": ("🟢", "Common"), "rare": ("🔵", "Rare"), "legendary": ("🟠", "Legendary"),
-    "special": ("🟡", "Special Edition"), "celestial": ("🪽", "Celestial"), "erotic": ("🥵", "Erotic"),
-    "exclusive": ("🥴", "Exclusive"), "premium": ("💎", "Premium Edition"), "mythic": ("🔮", "Mythic"),
-    "sweet": ("🍭", "Sweet"), "valentine": ("💋", "Valentine"), "winter": ("❄️", "Winter"),
-    "neon": ("⚡", "Neon"), "pearl": ("🐚", "Pearl"), "cosmic": ("🌌", "Cosmic"),
+    "common": ("🟢", "Common"), "rare": ("🟠", "Rare"), "legendary": ("🟡", "Legendary"),
+    "special": ("🔵", "Medium"), "celestial": ("🪽", "Celestial"), "erotic": ("🥵", "Spicy"),
+    "exclusive": ("💮", "Exclusive"), "premium": ("🔮", "Premium Edition"), "mythic": ("💎", "Mythic"),
+    "sweet": ("🍭", "Sweet"), "valentine": ("💞", "Valentine"), "winter": ("❄️", "Winter"),
+    "neon": ("⚡", "Neon"), "pearl": ("🐚", "Summer"), "cosmic": ("🌌", "Cosmic"),
 }
 
 rarity_status_cache = {}
