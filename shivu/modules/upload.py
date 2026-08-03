@@ -1,4 +1,4 @@
-""" v3 - Complete Fixed Upload (Reply & URL), Update & Delete System """
+""" v3 - Final Fixed Upload (Reply & URL), Update & Delete System """
 
 import io
 import os
@@ -17,7 +17,7 @@ from aiohttp import ClientSession, TCPConnector
 from pymongo import ReturnDocument
 from telegram import Update, InputFile, Message
 from telegram.ext import CommandHandler, ContextTypes
-from telegram.error import TelegramError
+from telegram.error import TelegramError, NetworkError, TimedOut
 
 from shivu import application, collection, db, CHARA_CHANNEL_ID, SUPPORT_CHAT, sudo_users
 
@@ -174,7 +174,7 @@ class Character:
     uploader_id: str
     uploader_name: str
     message_id: Optional[int] = None
-    file_id: Optional[str] = None
+    file_id: Optional[int] = None
     file_unique_id: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -215,6 +215,15 @@ class Character:
         )
 
 
+@dataclass
+class UploadResult:
+    success: bool
+    message: str
+    character_id: Optional[str] = None
+    character: Optional[Character] = None
+    error: Optional[Exception] = None
+
+
 class SessionManager:
     _session: Optional[ClientSession] = None
     _lock = asyncio.Lock()
@@ -251,6 +260,8 @@ class SequenceGenerator:
 
 
 class RobustUploader:
+    """Multi-Host Uploader (Telegraph -> Pixeldrain -> Catbox) Without API Key Issues"""
+
     @staticmethod
     async def _upload_telegraph(file_bytes: bytes, filename: str) -> Optional[str]:
         try:
@@ -342,18 +353,41 @@ class FileDownloader:
 
 class TelegramUploader:
     @staticmethod
-    async def upload_character(character: Character, context: ContextTypes.DEFAULT_TYPE, is_update: bool = False) -> None:
+    async def upload_character(character: Character, context: ContextTypes.DEFAULT_TYPE, is_update: bool = False) -> UploadResult:
         caption = character.get_caption(is_update)
 
-        if character.media_file.file_bytes:
-            fp = io.BytesIO(character.media_file.file_bytes)
-            fp.name = character.media_file.filename
-            message = await TelegramUploader._send_media_bytes(fp, character.media_file.media_type, caption, context)
-        else:
-            message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
+        try:
+            if character.media_file.file_bytes:
+                fp = io.BytesIO(character.media_file.file_bytes)
+                fp.name = character.media_file.filename
+                message = await TelegramUploader._send_media_bytes(fp, character.media_file.media_type, caption, context)
+            else:
+                message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
 
-        TelegramUploader._update_character_from_message(character, message)
-        await collection.insert_one(character.to_dict())
+            TelegramUploader._update_character_from_message(character, message)
+            await collection.insert_one(character.to_dict())
+
+            return UploadResult(
+                success=True,
+                message=(
+                    f'✅ Character uploaded successfully!\n'
+                    f'🆔 ID: {character.character_id}\n'
+                    f'📁 Type: {character.media_file.media_type.value.title()}'
+                ),
+                character_id=character.character_id,
+                character=character
+            )
+        except Exception as e:
+            logger.error(f"Telegram channel upload error: {e}")
+            try:
+                await collection.insert_one(character.to_dict())
+                return UploadResult(
+                    success=False,
+                    message=f"⚠️ Saved to DB, but channel upload failed: {type(e).__name__}",
+                    error=e
+                )
+            except Exception as db_err:
+                return UploadResult(success=False, message=f"❌ Critical failure: {db_err}", error=db_err)
 
     @staticmethod
     def _update_character_from_message(character: Character, message: Message):
@@ -374,31 +408,25 @@ class TelegramUploader:
     @staticmethod
     async def _send_media_bytes(fp: io.BytesIO, media_type: MediaType, caption: str, context: ContextTypes.DEFAULT_TYPE) -> Message:
         send_kwargs = {'chat_id': CHARA_CHANNEL_ID, 'caption': caption, 'parse_mode': 'HTML'}
-        try:
-            if media_type == MediaType.VIDEO:
-                return await context.bot.send_video(video=InputFile(fp), supports_streaming=True, **send_kwargs)
-            elif media_type == MediaType.ANIMATION:
-                return await context.bot.send_animation(animation=InputFile(fp), **send_kwargs)
-            elif media_type == MediaType.IMAGE:
-                return await context.bot.send_photo(photo=InputFile(fp), **send_kwargs)
-            else:
-                return await context.bot.send_document(document=InputFile(fp), **send_kwargs)
-        except TelegramError:
+        if media_type == MediaType.VIDEO:
+            return await context.bot.send_video(video=InputFile(fp), supports_streaming=True, **send_kwargs)
+        elif media_type == MediaType.ANIMATION:
+            return await context.bot.send_animation(animation=InputFile(fp), **send_kwargs)
+        elif media_type == MediaType.IMAGE:
+            return await context.bot.send_photo(photo=InputFile(fp), **send_kwargs)
+        else:
             return await context.bot.send_document(document=InputFile(fp), **send_kwargs)
 
     @staticmethod
     async def _send_media_url(url: str, media_type: MediaType, caption: str, context: ContextTypes.DEFAULT_TYPE) -> Message:
         send_kwargs = {'chat_id': CHARA_CHANNEL_ID, 'caption': caption, 'parse_mode': 'HTML'}
-        try:
-            if media_type == MediaType.VIDEO:
-                return await context.bot.send_video(video=url, supports_streaming=True, **send_kwargs)
-            elif media_type == MediaType.ANIMATION:
-                return await context.bot.send_animation(animation=url, **send_kwargs)
-            elif media_type == MediaType.IMAGE:
-                return await context.bot.send_photo(photo=url, **send_kwargs)
-            else:
-                return await context.bot.send_document(document=url, **send_kwargs)
-        except TelegramError:
+        if media_type == MediaType.VIDEO:
+            return await context.bot.send_video(video=url, supports_streaming=True, **send_kwargs)
+        elif media_type == MediaType.ANIMATION:
+            return await context.bot.send_animation(animation=url, **send_kwargs)
+        elif media_type == MediaType.IMAGE:
+            return await context.bot.send_photo(photo=url, **send_kwargs)
+        else:
             return await context.bot.send_document(document=url, **send_kwargs)
 
 
@@ -499,7 +527,7 @@ class CharacterUploadHandler:
         )
 
         if not file_url:
-            await processing_msg.edit_text('❌ Server upload failed! Check bot logs for details.')
+            await processing_msg.edit_text('❌ Server upload failed! Check logs for details.')
             return
 
         object.__setattr__(media_file, 'url', file_url)
@@ -516,13 +544,8 @@ class CharacterUploadHandler:
             await processing_msg.edit_text('❌ Invalid rarity number (1-15).')
             return
 
-        await TelegramUploader.upload_character(character, context)
-
-        await processing_msg.edit_text(
-            f'✅ Character uploaded successfully!\n'
-            f'🆔 ID: {character.character_id}\n'
-            f'📁 Type: {character.media_file.media_type.value.title()}'
-        )
+        result = await TelegramUploader.upload_character(character, context)
+        await processing_msg.edit_text(result.message)
 
     @staticmethod
     async def handle_url_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -573,13 +596,8 @@ class CharacterUploadHandler:
             await processing_msg.edit_text('❌ Invalid rarity number (1-15).')
             return
 
-        await TelegramUploader.upload_character(character, context)
-
-        await processing_msg.edit_text(
-            f'✅ Character uploaded successfully!\n'
-            f'🆔 ID: {character.character_id}\n'
-            f'📁 Type: {character.media_file.media_type.value.title()}'
-        )
+        result = await TelegramUploader.upload_character(character, context)
+        await processing_msg.edit_text(result.message)
 
     @staticmethod
     async def _extract_media_from_reply(reply_msg, update: Update) -> Optional[MediaFile]:
