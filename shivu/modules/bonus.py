@@ -94,56 +94,62 @@ def build_bonus_text(user: dict, first_name: str) -> str:
     )
 
 
-def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
+def build_bonus_keyboard(user: dict, now: datetime, user_id: int) -> InlineKeyboardMarkup:
     rows = []
     
     # Daily Button
-    daily_label = "ᴅᴀɪʟʏ 🎁"
+    daily_label = "Daily 🎁"
     if last_d := user.get('last_daily_claim'):
         rem_d = timedelta(hours=COOLDOWNS['daily']) - (now - to_ist(last_d))
         if rem_d.total_seconds() > 0:
-            daily_label = f"ᴅᴀɪʟʏ ⏳ {format_countdown(rem_d)}"
+            daily_label = f"Daily ⏳ {format_countdown(rem_d)}"
             
     # Weekly Button
-    weekly_label = "ᴡᴇᴇᴋʟʏ 🎁"
+    weekly_label = "Weekly 🎁"
     if last_w := user.get('last_weekly_claim'):
         rem_w = timedelta(hours=COOLDOWNS['weekly']) - (now - to_ist(last_w))
         if rem_w.total_seconds() > 0:
-            weekly_label = f"ᴡᴇᴇᴋʟʏ ⏳ {format_countdown(rem_w)}"
+            weekly_label = f"Weekly ⏳ {format_countdown(rem_w)}"
 
-    rows.append([InlineKeyboardButton(daily_label, callback_data="bonus:daily")])
-    rows.append([InlineKeyboardButton(weekly_label, callback_data="bonus:weekly")])
+    # Embed user_id inside callback_data to strictly secure buttons
+    rows.append([InlineKeyboardButton(daily_label, callback_data=f"bonus:daily:{user_id}")])
+    rows.append([InlineKeyboardButton(weekly_label, callback_data=f"bonus:weekly:{user_id}")])
     rows.append([
-        InlineKeyboardButton("sᴛᴀᴛs", callback_data="bonus:stats"),
-        InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="bonus:close")
+        InlineKeyboardButton("sᴛᴀᴛs", callback_data=f"bonus:stats:{user_id}"),
+        InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"bonus:close:{user_id}")
     ])
     return InlineKeyboardMarkup(rows)
 
 
 async def bonus_command(update: Update, context: CallbackContext):
-    user = await UserDB.ensure(update.effective_user.id, update.effective_user.first_name, update.effective_user.username)
-    # Added reply_to_message_id so user validation works reliably
+    user_id = update.effective_user.id
+    user = await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
     await update.message.reply_text(
         build_bonus_text(user, update.effective_user.first_name),
-        reply_markup=build_bonus_keyboard(user, now_ist()),
-        parse_mode='HTML',
-        reply_to_message_id=update.message.message_id
+        reply_markup=build_bonus_keyboard(user, now_ist(), user_id),
+        parse_mode='HTML'
     )
 
 
 async def refresh_menu(query, user_id: int, now: datetime):
     user = await UserDB.get(user_id)
-    first_name = user.get('first_name', 'User')
+    first_name = user.get('first_name', 'User') if user else query.from_user.first_name
     await query.edit_message_text(
-        build_bonus_text(user, first_name),
-        reply_markup=build_bonus_keyboard(user, now),
+        build_bonus_text(user or {}, first_name),
+        reply_markup=build_bonus_keyboard(user or {}, now, user_id),
         parse_mode='HTML'
     )
 
 
-async def claim(update: Update, context: CallbackContext, kind: str):
+async def claim(update: Update, context: CallbackContext, kind: str, owner_id: int):
     query = update.callback_query
     user_id = query.from_user.id
+
+    # Strict ownership check
+    if user_id != owner_id:
+        await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
+        return
+
     user = await UserDB.ensure(user_id, query.from_user.first_name, query.from_user.username)
     now = now_ist()
 
@@ -171,9 +177,15 @@ async def claim(update: Update, context: CallbackContext, kind: str):
     await refresh_menu(query, user_id, now)
 
 
-async def show_stats(update: Update, context: CallbackContext):
+async def show_stats(update: Update, context: CallbackContext, owner_id: int):
     query = update.callback_query
-    user = await UserDB.ensure(query.from_user.id, query.from_user.first_name, query.from_user.username)
+    user_id = query.from_user.id
+
+    if user_id != owner_id:
+        await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
+        return
+
+    user = await UserDB.ensure(user_id, query.from_user.first_name, query.from_user.username)
     streak = user.get('bonus_streak', 0)
 
     text = (
@@ -187,46 +199,52 @@ async def show_stats(update: Update, context: CallbackContext):
     await query.answer()
     await query.edit_message_text(
         text, parse_mode='HTML',
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data="bonus:menu")]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"bonus:menu:{user_id}")]])
     )
 
 
-async def back_to_menu(update: Update, context: CallbackContext):
+async def back_to_menu(update: Update, context: CallbackContext, owner_id: int):
     query = update.callback_query
+    if query.from_user.id != owner_id:
+        await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
+        return
     await query.answer()
-    await refresh_menu(query, query.from_user.id, now_ist())
+    await refresh_menu(query, owner_id, now_ist())
 
 
-async def close_menu(update: Update, context: CallbackContext):
-    await update.callback_query.answer()
-    await update.callback_query.message.delete()
-
-
-HANDLERS = {
-    'daily': lambda u, c: claim(u, c, 'daily'),
-    'weekly': lambda u, c: claim(u, c, 'weekly'),
-    'stats': show_stats,
-    'menu': back_to_menu,
-    'close': close_menu,
-}
+async def close_menu(update: Update, context: CallbackContext, owner_id: int):
+    query = update.callback_query
+    if query.from_user.id != owner_id:
+        await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
+        return
+    await query.answer()
+    await query.message.delete()
 
 
 async def bonus_callback(update: Update, context: CallbackContext):
     query = update.callback_query
+    data_parts = query.data.split(':')
     
-    # Check if the clicking user matches the owner of the command message
-    if query.message.reply_to_message:
-        owner_id = query.message.reply_to_message.from_user.id
-        if owner_id != query.from_user.id:
-            await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
-            return
-
-    handler = HANDLERS.get(query.data.split(':', 1)[1])
-    if not handler:
+    if len(data_parts) < 3:
         await query.answer("ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
         return
+
+    action = data_parts[1]
+    owner_id = int(data_parts[2])
+
     try:
-        await handler(update, context)
+        if action == 'daily':
+            await claim(update, context, 'daily', owner_id)
+        elif action == 'weekly':
+            await claim(update, context, 'weekly', owner_id)
+        elif action == 'stats':
+            await show_stats(update, context, owner_id)
+        elif action == 'menu':
+            await back_to_menu(update, context, owner_id)
+        elif action == 'close':
+            await close_menu(update, context, owner_id)
+        else:
+            await query.answer("ᴜɴᴋɴᴏᴡɴ ᴀᴄᴛɪᴏɴ", show_alert=True)
     except TelegramError as e:
         await query.answer(f"ᴇʀʀᴏʀ: {type(e).__name__}", show_alert=True)
 
