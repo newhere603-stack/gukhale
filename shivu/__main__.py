@@ -42,7 +42,7 @@ rarity_status_cache = {}
 group_settings_cache = {}  # {chat_id: {'grab_delete': True, 'miss_delete': True}}
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
+first_correct_guesses, spawn_messages, spawn_message_links = {}, {}
 currently_spawning = {}
 spawn_times = {}  # Added to track time taken
 
@@ -154,13 +154,22 @@ async def despawn_character(chat_id, message_id, character, context):
             except BadRequest:
                 pass
 
-        rarity = character.get('rarity', '🟢 Common')
-        emoji = rarity.split(' ')[0] if isinstance(rarity, str) and ' ' in rarity else '🟢'
+        # FIX APPLIED HERE: Fetch custom emoji for missed message
+        rarity_str = character.get('rarity', '🟢 Common')
+        r_key = get_rarity_key(rarity_str)
+        
+        if r_key and r_key in RARITIES:
+            emoji, r_name = RARITIES[r_key]
+            rarity_display = f"{emoji} {r_name}"
+        else:
+            emoji = rarity_str.split(' ')[0] if isinstance(rarity_str, str) and ' ' in rarity_str else '🟢'
+            rarity_display = rarity_str
+
         caption = (
             f"⏰ <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
             f"{emoji} <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
             f"⚡ <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
-            f"🎯 <b>ʀᴀʀɪᴛʏ:</b> <b>{escape(rarity)}</b>\n\n"
+            f"🎯 <b>ʀᴀʀɪᴛʏ:</b> <b>{escape(rarity_display)}</b>\n\n"
             f"💔 <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
@@ -340,8 +349,14 @@ async def guess(update: Update, context: CallbackContext) -> None:
         await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
         await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
 
-        rarity = character.get('rarity', '🟢 Common')
-        r_emoji, r_name = (rarity.split(' ', 1) + [''])[:2] if isinstance(rarity, str) and ' ' in rarity else (rarity, '')
+        # FIX APPLIED HERE: Force emoji and name from RARITIES dictionary on grab
+        rarity_str = character.get('rarity', '🟢 Common')
+        r_key = get_rarity_key(rarity_str)
+        
+        if r_key and r_key in RARITIES:
+            r_emoji, r_name = RARITIES[r_key]
+        else:
+            r_emoji, r_name = (rarity_str.split(' ', 1) + [''])[:2] if isinstance(rarity_str, str) and ' ' in rarity_str else (rarity_str, '')
 
         # HTML formatted user mention
         mention = f'<a href="tg://user?id={user_id}">{escape(eu.first_name)}</a>'
@@ -439,11 +454,21 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
         return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
 
     c = last_characters[chat_id]
+    
+    # FIX APPLIED HERE: Force custom rarity emoji for /name command too
+    rarity_str = c.get('rarity', '🟢 Common')
+    r_key = get_rarity_key(rarity_str)
+    if r_key and r_key in RARITIES:
+        r_emoji, r_name = RARITIES[r_key]
+        display_rarity = f"{r_emoji} {r_name}"
+    else:
+        display_rarity = rarity_str
+        
     text = (
         "<b>🎭 ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
         f"<b>🌸 ɴᴀᴍᴇ:</b> {escape(c.get('name', 'Unknown'))}\n"
         f"<b>🧩 ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
-        f"<b>✨ ʀᴀʀɪᴛʏ:</b> {escape(c.get('rarity', '🟢 Common'))}\n"
+        f"<b>✨ ʀᴀʀɪᴛʏ:</b> {escape(display_rarity)}\n"
         f"<b>🔖 ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
         "<b>💡 ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
     )
