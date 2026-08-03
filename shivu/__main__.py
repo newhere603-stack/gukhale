@@ -42,10 +42,10 @@ rarity_status_cache = {}
 group_settings_cache = {}  # {chat_id: {'grab_delete': True, 'miss_delete': True}}
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-# FIXED: 3 variables, 3 empty dictionaries
 first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
 currently_spawning = {}
 spawn_times = {}  # Added to track time taken
+grabbed_spawns = set()  # FIX: Track message_ids of grabbed characters specifically
 
 for module_name in ALL_MODULES:
     try:
@@ -145,7 +145,9 @@ async def _send_media(context, chat_id, character, caption, **timeouts):
 async def despawn_character(chat_id, message_id, character, context):
     await asyncio.sleep(DESPAWN_TIME)
     try:
-        if chat_id in first_correct_guesses:
+        # FIX: Check if this exact message_id was successfully grabbed
+        if message_id in grabbed_spawns:
+            grabbed_spawns.discard(message_id) # Cleanup memory
             return
 
         should_delete = await get_group_setting(chat_id, 'grab_delete', True)
@@ -155,7 +157,6 @@ async def despawn_character(chat_id, message_id, character, context):
             except BadRequest:
                 pass
 
-        # FIX APPLIED HERE: Fetch custom emoji for missed message
         rarity_str = character.get('rarity', '🟢 Common')
         r_key = get_rarity_key(rarity_str)
         
@@ -185,11 +186,14 @@ async def despawn_character(chat_id, message_id, character, context):
     except Exception:
         LOGGER.exception(f"despawn_character failed for chat={chat_id}")
     finally:
-        last_characters.pop(chat_id, None)
-        spawn_messages.pop(chat_id, None)
-        spawn_message_links.pop(chat_id, None)
-        currently_spawning.pop(str(chat_id), None)
-        spawn_times.pop(chat_id, None)  # Clean up time on despawn
+        # FIX: Only clear variables if a new spawn hasn't overwritten them
+        if spawn_messages.get(chat_id) == message_id:
+            last_characters.pop(chat_id, None)
+            spawn_messages.pop(chat_id, None)
+            spawn_message_links.pop(chat_id, None)
+            currently_spawning.pop(str(chat_id), None)
+            spawn_times.pop(chat_id, None)
+            first_correct_guesses.pop(chat_id, None)
 
 
 async def message_counter(update: Update, context: CallbackContext) -> None:
@@ -317,12 +321,17 @@ async def guess(update: Update, context: CallbackContext) -> None:
         if chat_id in spawn_times:
             time_taken = round(time.time() - spawn_times[chat_id])
             
+        # FIX: Mark this specific message as grabbed
+        spawn_msg_id = spawn_messages.get(chat_id)
+        if spawn_msg_id:
+            grabbed_spawns.add(spawn_msg_id)
+            
         first_correct_guesses[chat_id] = user_id
         
         should_delete = await get_group_setting(chat_id, 'grab_delete', True)
-        if should_delete and chat_id in spawn_messages:
+        if should_delete and spawn_msg_id:
             try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=spawn_messages[chat_id])
+                await context.bot.delete_message(chat_id=chat_id, message_id=spawn_msg_id)
             except BadRequest:
                 pass
             spawn_messages.pop(chat_id, None)
@@ -350,7 +359,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
         await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
         await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
 
-        # FIX APPLIED HERE: Force emoji and name from RARITIES dictionary on grab
         rarity_str = character.get('rarity', '🟢 Common')
         r_key = get_rarity_key(rarity_str)
         
@@ -362,7 +370,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
         # HTML formatted user mention
         mention = f'<a href="tg://user?id={user_id}">{escape(eu.first_name)}</a>'
 
-        # Updated Message Format as Requested
+        # Updated Message Format
         success_message = (
             f"✅ <b>{mention}, ᴄᴏɴɢʀᴀᴛs 🎉</b>\n"
             f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧</b>\n\n"
@@ -456,7 +464,6 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
 
     c = last_characters[chat_id]
     
-    # FIX APPLIED HERE: Force custom rarity emoji for /name command too
     rarity_str = c.get('rarity', '🟢 Common')
     r_key = get_rarity_key(rarity_str)
     if r_key and r_key in RARITIES:
