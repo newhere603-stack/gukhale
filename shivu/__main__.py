@@ -11,7 +11,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, CallbackContext, MessageHandler, filters
 from telegram.error import BadRequest
 
-from shivu import db, shivuu, application, LOGGER
+# Yahan user_totals_collection import add kiya hai
+from shivu import db, shivuu, application, LOGGER, user_totals_collection
 from shivu.modules import ALL_MODULES
 
 OWNER_ID = 7657218453
@@ -24,7 +25,7 @@ top_global_groups_collection = db['top_global_groups']
 rarity_status_collection = db['rarity_status_settings']
 group_settings_collection = db['group_settings_db']
 
-MESSAGE_FREQUENCY = 70
+MESSAGE_FREQUENCY = 70  # Yeh ab sirf fallback/default ki tarah use hoga
 DESPAWN_TIME = 180
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
@@ -40,7 +41,7 @@ rarity_status_cache = {}
 group_settings_cache = {}  # {chat_id: {'grab_delete': True, 'miss_delete': True}}
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
+first_correct_guesses, spawn_messages, spawn_message_links = {}, {}
 currently_spawning = {}
 
 for module_name in ALL_MODULES:
@@ -189,9 +190,18 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
 
     async with locks[chat_id]:
         message_counts[chat_id] = message_counts.get(chat_id, 0) + 1
-        LOGGER.info(f"[spawn] chat={chat_id} count={message_counts[chat_id]}/{MESSAGE_FREQUENCY} spawning={currently_spawning.get(chat_id, False)}")
+        
+        # FIX: Database se custom limit fetch karna
+        chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
+        if chat_data and 'message_frequency' in chat_data:
+            limit = chat_data['message_frequency']
+        else:
+            limit = MESSAGE_FREQUENCY
 
-        if message_counts[chat_id] >= MESSAGE_FREQUENCY and not currently_spawning.get(chat_id):
+        LOGGER.info(f"[spawn] chat={chat_id} count={message_counts[chat_id]}/{limit} spawning={currently_spawning.get(chat_id, False)}")
+
+        # FIX: Hardcoded limit ki jagah database 'limit' check ho rahi hai
+        if message_counts[chat_id] >= limit and not currently_spawning.get(chat_id):
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
             asyncio.create_task(send_image(update, context))
@@ -443,7 +453,7 @@ async def main():
         await application.start()
         await application.updater.start_polling(drop_pending_updates=True)
 
-        LOGGER.info("✅ ʏᴏɪᴄʜɪ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
+        LOGGER.info("✅ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
         await asyncio.Event().wait()
 
     except Exception:
