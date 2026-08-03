@@ -1,4 +1,7 @@
+import os
 import pytz
+import pymongo
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -6,9 +9,15 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.error import TelegramError
 
-from shivu import application, user_collection
+from shivu import application
 
 IST = pytz.timezone('Asia/Kolkata')
+
+# MongoDB connection setup using pymongo to avoid event loop conflicts
+MONGO_URL = os.getenv("MONGO_URL") or os.getenv("MONGO_DB_URI")
+pymongo_client = pymongo.MongoClient(MONGO_URL) if MONGO_URL else None
+db = pymongo_client.get_default_database() if pymongo_client and pymongo_client.get_default_database() is not None else (pymongo_client['shivu'] if pymongo_client else None)
+sync_user_collection = db['user_collection'] if db is not None else None
 
 
 @dataclass(frozen=True)
@@ -64,7 +73,9 @@ def format_countdown(remaining: timedelta) -> str:
 class UserDB:
     @staticmethod
     async def get(user_id: int) -> dict | None:
-        return await user_collection.find_one({'id': user_id})
+        def _get():
+            return sync_user_collection.find_one({'id': user_id})
+        return await asyncio.to_thread(_get)
 
     @staticmethod
     async def ensure(user_id: int, first_name: str = None, username: str = None) -> dict:
@@ -83,8 +94,10 @@ class UserDB:
             'bonus_streak': 0, 
             'bonus_highest_streak': 0
         }
-        await user_collection.update_one({'id': user_id}, {'$setOnInsert': doc}, upsert=True)
-        return await UserDB.get(user_id)
+        def _create_doc():
+            sync_user_collection.update_one({'id': user_id}, {'$setOnInsert': doc}, upsert=True)
+            return sync_user_collection.find_one({'id': user_id})
+        return await asyncio.to_thread(_create_doc)
 
     @staticmethod
     async def update(user_id: int, inc: dict = None, set_: dict = None):
@@ -94,7 +107,9 @@ class UserDB:
         if set_:
             ops['$set'] = set_
         if ops:
-            await user_collection.update_one({'id': user_id}, ops, upsert=True)
+            def _update():
+                sync_user_collection.update_one({'id': user_id}, ops, upsert=True)
+            await asyncio.to_thread(_update)
 
 
 def build_bonus_text(user: dict, first_name: str) -> str:
@@ -112,14 +127,12 @@ def build_bonus_text(user: dict, first_name: str) -> str:
 def build_bonus_keyboard(user: dict, now: datetime) -> InlineKeyboardMarkup:
     rows = []
     
-    # Daily Button
     daily_label = "Daily 🎁"
     if last_d := user.get('last_daily_claim'):
         rem_d = timedelta(hours=COOLDOWNS['daily']) - (now - to_ist(last_d))
         if rem_d.total_seconds() > 0:
             daily_label = f"Daily ⏳ {format_countdown(rem_d)}"
             
-    # Weekly Button
     weekly_label = "Weekly 🎁"
     if last_w := user.get('last_weekly_claim'):
         rem_w = timedelta(hours=COOLDOWNS['weekly']) - (now - to_ist(last_w))
@@ -231,7 +244,7 @@ async def bonus_callback(update: Update, context: CallbackContext):
     if query.message.reply_to_message:
         owner_id = query.message.reply_to_message.from_user.id
         if owner_id != query.from_user.id:
-            await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏᴘᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
+            await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ʙᴏɴᴜs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴛʏ𝒑ᴇ /bonus ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ.", show_alert=True)
             return
 
     data_parts = query.data.split(':', 1)
