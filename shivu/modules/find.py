@@ -14,11 +14,11 @@ except ImportError:
 OWNER_ID = 7657218453
 
 DEFAULT_PRICES = {
-    "🟢 Common": 1000, "🔵 Rare": 32000, "🟠 Medium": 2900, 
-    "🟡 Legendary": 5000, "🪽 Celestial": 75000, "🥵 Spicy": 105000, 
-    "🥴 Seductive": 12000, "💎 Mythic": 315000, "🔮 Premium Edition": 530000, 
-    "🍭 Sweet": 25000, "💋 Erotic": 250000, "❄️ Winter": 70000, 
-    "⚡ Neon": 97000, "🐚 Summer": 120000, "🌌 Manga": 50000
+    "🟢 Common": 1000, "🟠 Rare": 3200, "🔵 Medium": 2900, 
+    "🟡 Legendary": 5000, "🪽 Celestial": 70000, "🥵 Spicy": 15000, 
+    "💮 Exclusive": 12000, "💎 Mythic": 35000, "🔮 Premium Edition": 20000, 
+    "🍭 Sweet": 52000, "💞 Valentine": 90000, "❄️ Winter": 55000, 
+    "⚡ Neon": 67000, "🐚 Summer": 60000, "🌌 Cosmic": 90000
 }
 
 # --- Formatting Functions ---
@@ -302,7 +302,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 }
             )
             
-            await query.answer(to_small_caps(f"Transaction successful! You bought {char.get('name')}."), show_alert=True)
+            await query.answer(to_small_caps(f"✅ Transaction successful! You bought {char.get('name')}."), show_alert=True)
             await render_mp_message(query, user, index, is_edit=True)
             return
 
