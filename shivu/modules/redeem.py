@@ -14,7 +14,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 from shivu import collection, user_collection, application, db
 from shivu.modules.database.sudo import is_user_sudo
 
-LOG_GROUP_ID = -1003110990230
+LOG_GROUP_ID = -1003893927065
 OWNER_ID = 7657218453
 CODE_TTL_DAYS = 30
 
@@ -30,6 +30,20 @@ CHAR_CAPTION = (
     "💮 𝙍𝙖𝙧𝙞𝙩𝙮: {rarity}\n"
     "🎞 𝘼𝙣𝙞𝙢𝙚: {anime}"
 )
+
+
+def create_log_message(title: str, data: Dict[str, Any]) -> str:
+    """Beautiful bold and small-caps log designer."""
+    timestamp = datetime.now().strftime("%I:%M %p • %d/%m/%y")
+    base = f"<b>{title}</b>\n\n"
+    
+    items = list(data.items())
+    for i, (key, value) in enumerate(items):
+        prefix = "<b>╰</b>" if i == len(items) - 1 else "<b>├</b>"
+        base += f"{prefix} <b>{key} :</b> {value}\n"
+        
+    base += f"\n<b>⌚ ᴛɪᴍᴇ :</b> <b>{timestamp}</b>"
+    return base
 
 
 async def setup_redeem_code_indexes():
@@ -53,7 +67,7 @@ async def generate_unique_code(attempts: int = 10) -> str:
 
 async def send_log(context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
     try:
-        await context.bot.send_message(LOG_GROUP_ID, text, parse_mode=ParseMode.HTML)
+        await context.bot.send_message(LOG_GROUP_ID, text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     except TelegramError as e:
         print(f"Log error: {e}")
 
@@ -96,9 +110,9 @@ def rate_ok(user_id: int, cooldown: float = 2.0) -> bool:
 
 
 async def require_auth(update: Update) -> bool:
+    """Returns True if authorized, else returns False silently without replying."""
     if await is_authorized(update.effective_user.id):
         return True
-    await update.message.reply_text("⛔ <b>Access Denied</b>", parse_mode=ParseMode.HTML)
     return False
 
 
@@ -117,7 +131,8 @@ async def save_code(msg, data: dict) -> bool:
 async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     if not await require_auth(update):
-        return
+        return  # Silent exit for normal users
+
     if len(context.args) < 2:
         await msg.reply_text("Usage: <code>/gen [Amount] [Quantity]</code>", parse_mode=ParseMode.HTML)
         return
@@ -140,38 +155,38 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     fa = fmt_amount(amount)
     await msg.reply_text(
         f"✅ <b>Currency Code Created!</b>\n\n"
-        f"🎫 <b>Code:</b> <code>{code}</code>\n💰 <b>Value:</b> {fa}\n"
+        f"🎫 <b>Code:</b> <code>{code}</code>\n💸 <b>Value:</b> {fa}\n"
         f"👥 <b>Claims:</b> {quantity}\n⏰ <b>Expires:</b> {CODE_TTL_DAYS}d",
         parse_mode=ParseMode.HTML
     )
-    await send_log(
-        context,
-        f"📢 <b>#CURRENCY_GEN</b>\nAdmin: {html.escape(msg.from_user.first_name)} (<code>{msg.from_user.id}</code>)\n"
-        f"Amount: {fa} | Qty: {quantity}\nCode: <code>{code}</code>"
-    )
+    
+    log_data = {
+        "ᴀᴅᴍɪɴ": f"<b><a href='tg://user?id={msg.from_user.id}'>{html.escape(msg.from_user.first_name)}</a></b>",
+        "ɪᴅ": f"<code>{msg.from_user.id}</code>",
+        "ᴛʏᴘᴇ": "<b>ᴄᴜʀʀᴇɴᴄʏ ɢᴇɴ</b>",
+        "ᴀᴍᴏᴜɴᴛ": f"<b>{fa} ᴄᴏɪɴs</b>",
+        "ǫᴜ𝙖ɴᴛɪᴛʏ": f"<b>{quantity}</b>",
+        "ᴄᴏᴅᴇ": f"<code>{code}</code>"
+    }
+    await send_log(context, create_log_message("˹ ᴄᴜʀʀᴇɴᴄʏ ɢᴇɴᴇʀᴀᴛᴇᴅ ˼ 💸", log_data))
 
 
 async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
-
     if not await require_auth(update):
-        return
+        return  # Silent exit
 
     if len(context.args) < 2:
-        await msg.reply_text(
-            "Usage: <code>/tgen [Amount] [Quantity]</code>", parse_mode=ParseMode.HTML)
+        await msg.reply_text("Usage: <code>/tgen [Amount] [Quantity]</code>", parse_mode=ParseMode.HTML)
         return
 
     try:
         amount = float(context.args[0])
         quantity = int(context.args[1])
-
         if amount <= 0 or quantity <= 0:
             raise ValueError
-
     except ValueError:
-        await msg.reply_text(
-            "❌ Invalid amount/quantity.", parse_mode=ParseMode.HTML)
+        await msg.reply_text("❌ Invalid amount/quantity.", parse_mode=ParseMode.HTML)
         return
 
     code = await generate_unique_code()
@@ -191,20 +206,23 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"⏰ <b>Expires:</b> {CODE_TTL_DAYS}d",
         parse_mode=ParseMode.HTML
     )
-    await send_log(
-        context,
-        f"📢 <b>#TOKEN_GEN</b>\n"
-        f"Admin: {html.escape(msg.from_user.first_name)} "
-        f"(<code>{msg.from_user.id}</code>)\n"
-        f"Tokens: {fa} | Qty: {quantity}\n"
-        f"Code: <code>{code}</code>"
-    )
+    
+    log_data = {
+        "ᴀᴅᴍɪɴ": f"<b><a href='tg://user?id={msg.from_user.id}'>{html.escape(msg.from_user.first_name)}</a></b>",
+        "ɪᴅ": f"<code>{msg.from_user.id}</code>",
+        "ᴛʏᴘᴇ": "<b>ᴛᴏᴋᴇɴ ɢᴇɴ</b>",
+        "ᴛᴏᴋᴇɴs": f"<b>{fa} ᴛᴏᴋᴇɴs</b>",
+        "ǫᴜᴀɴᴛɪᴛʏ": f"<b>{quantity}</b>",
+        "ᴄᴏᴅᴇ": f"<code>{code}</code>"
+    }
+    await send_log(context, create_log_message("˹ ᴛᴏᴋᴇɴ ɢᴇɴᴇʀᴀᴛᴇᴅ ˼ 💠", log_data))
 
 
 async def waifu_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     if not await require_auth(update):
-        return
+        return  # Silent exit
+
     if len(context.args) < 2:
         await msg.reply_text("Usage: <code>/sgen [Character_ID] [Quantity]</code>", parse_mode=ParseMode.HTML)
         return
@@ -238,16 +256,22 @@ async def waifu_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         f"🏷️ <b>ID:</b> <code>{char_id}</code>\n👥 <b>Claims:</b> {quantity}\n⏰ <b>Expires:</b> {CODE_TTL_DAYS}d",
         parse_mode=ParseMode.HTML
     )
-    await send_log(
-        context,
-        f"📢 <b>#CHARACTER_GEN</b>\nAdmin: {html.escape(msg.from_user.first_name)} (<code>{msg.from_user.id}</code>)\n"
-        f"Character: {name} (<code>{char_id}</code>)\nCode: <code>{code}</code>"
-    )
+    
+    log_data = {
+        "ᴀᴅᴍɪɴ": f"<b><a href='tg://user?id={msg.from_user.id}'>{html.escape(msg.from_user.first_name)}</a></b>",
+        "ɪᴅ": f"<code>{msg.from_user.id}</code>",
+        "ᴄʜᴀʀᴀᴄᴛᴇʀ": f"<b>{name}</b>",
+        "ᴄʜᴀʀ ɪᴅ": f"<code>{char_id}</code>",
+        "ǫᴜᴀɴᴛɪᴛʏ": f"<b>{quantity}</b>",
+        "ᴄᴏᴅᴇ": f"<code>{code}</code>"
+    }
+    await send_log(context, create_log_message("˹ ᴄʜᴀʀᴀᴄᴛᴇʀ ɢᴇɴᴇʀᴀᴛᴇᴅ ˼ 🌸", log_data))
 
 
 async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     user_id = msg.from_user.id
+    user_name = html.escape(msg.from_user.first_name)
 
     if not rate_ok(user_id):
         await msg.reply_text("⏳ <b>Wait 2 seconds between redeems.</b>", parse_mode=ParseMode.HTML)
@@ -289,11 +313,11 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await user_collection.update_one({'id': user_id}, {'$inc': {'balance': amount}}, upsert=True)
             fa = fmt_amount(amount)
             await msg.reply_text(
-                f"🎉 <b>Successfully Redeemed!</b>\n\n💰 <b>Received:</b> {fa} Coins\n"
+                f"🎉 <b>Successfully Redeemed!</b>\n\n💸 <b>Received:</b> {fa} Coins\n"
                 f"🔗 <b>Powered by:</b> <a href='https://t.me/AlisaWaifusBot'>˹ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ˼</a>",
                 parse_mode=ParseMode.HTML, disable_web_page_preview=True
             )
-            log_detail = f"Amount: {fa}"
+            log_detail = f"<b>{fa} ᴄᴏɪɴs</b>"
             
         elif code_info['type'] == 'tokens':
             amount = float(code_info['amount'])
@@ -304,13 +328,14 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 f"💠 <b>Received:</b> {fa} Tokens",
                 parse_mode=ParseMode.HTML
             )
-            log_detail = f"Tokens: {fa}"
+            log_detail = f"<b>{fa} ᴛᴏᴋᴇɴs</b>"
         
         elif code_info['type'] == 'character':
             w = code_info['waifu_data']
             await user_collection.update_one({'id': user_id}, {'$addToSet': {'characters': w}}, upsert=True)
+            char_name = html.escape(w['name'])
             caption = CHAR_CAPTION.format(
-                name=html.escape(w['name']),
+                name=char_name,
                 rarity=w.get('rarity', 'Common'),
                 anime=html.escape(w.get('anime', 'Unknown'))
             )
@@ -322,7 +347,7 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             except TelegramError as e:
                 await msg.reply_text(caption, parse_mode=ParseMode.HTML)
                 print(f"Photo send error: {e}")
-            log_detail = f"Character: {html.escape(w['name'])}"
+            log_detail = f"<b>{char_name}</b> (<code>{w.get('id', 'N/A')}</code>)"
 
         else:
             await codes_collection.update_one({'code': code}, {'$pull': {'claimed_by': user_id}})
@@ -335,18 +360,25 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         print(f"Reward error: {e}")
         return
 
-    total = len(code_info.get('claimed_by', [])) + 1
-    await send_log(
-        context,
-        f"📢 <b>#REDEEM_LOG</b>\nUser: {html.escape(msg.from_user.first_name)} (<code>{user_id}</code>)\n"
-        f"Code: <code>{code}</code>\nReward: {log_detail}\nClaims: {total}/{code_info['quantity']}"
-    )
+    updated_doc = await codes_collection.find_one({'code': code})
+    total_claims = len(updated_doc.get('claimed_by', [])) if updated_doc else 1
+    max_claims = code_info['quantity']
+
+    log_data = {
+        "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{user_name}</a></b>",
+        "ɪᴅ": f"<code>{user_id}</code>",
+        "ᴄᴏᴅᴇ": f"<code>{code}</code>",
+        "ʀᴇᴡᴀʀᴅ": log_detail,
+        "ᴄʟᴀɪᴍs": f"<b>{total_claims}/{max_claims}</b>"
+    }
+    await send_log(context, create_log_message("˹ ʀᴇᴅᴇᴇᴍ sᴜᴄᴄᴇssғᴜʟ ˼ 🎉", log_data))
 
 
 async def revoke_code_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     if not await require_auth(update):
-        return
+        return  # Silent exit
+
     if not context.args:
         await msg.reply_text("Usage: <code>/revoke [Code]</code>", parse_mode=ParseMode.HTML)
         return
@@ -355,11 +387,13 @@ async def revoke_code_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     result = await codes_collection.delete_one({'code': code})
     if result.deleted_count > 0:
         await msg.reply_text(f"🗑️ <b>Code Revoked:</b> <code>{code}</code>", parse_mode=ParseMode.HTML)
-        await send_log(
-            context,
-            f"🗑️ <b>#CODE_REVOKED</b>\nCode: <code>{code}</code>\n"
-            f"By: {html.escape(msg.from_user.first_name)} (<code>{msg.from_user.id}</code>)"
-        )
+        
+        log_data = {
+            "ᴀᴅᴍɪɴ": f"<b><a href='tg://user?id={msg.from_user.id}'>{html.escape(msg.from_user.first_name)}</a></b>",
+            "ɪᴅ": f"<code>{msg.from_user.id}</code>",
+            "ᴄᴏᴅᴇ": f"<code>{code}</code>"
+        }
+        await send_log(context, create_log_message("˹ ᴄᴏᴅᴇ ʀᴇᴠᴏᴋᴇᴅ ˼ 🗑️", log_data))
     else:
         await msg.reply_text(f"❌ <b>Code Not Found:</b> <code>{code}</code>", parse_mode=ParseMode.HTML)
 
@@ -367,7 +401,8 @@ async def revoke_code_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def list_codes_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     if not await require_auth(update):
-        return
+        return  # Silent exit
+
     try:
         codes = await codes_collection.find().sort('created_at', -1).limit(20).to_list(length=20)
     except PyMongoError as e:
