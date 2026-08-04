@@ -86,8 +86,8 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
         action = random.choice(EXPLORE_ACTIONS)
         await update.message.reply_text(
-            f"<b>🗺️ ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ 💸 {reward} ᴄᴏɪɴs!</b>\n"
-            f"<b>💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: 💸 {FEE} ᴄᴏɪɴs</b>",
+            f"<b><tg-emoji emoji-id='6093547287139590167'></tg-emoji> ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ <tg-emoji emoji-id='5472030678633684592'></tg-emoji> {reward} ᴄᴏɪɴs!</b>\n"
+f"<b><tg-emoji emoji-id='5472030678633684592'></tg-emoji> ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: <tg-emoji emoji-id='5472030678633684592'></tg-emoji> {FEE} ᴄᴏɪɴs</b>",
             parse_mode=ParseMode.HTML
         )
 
