@@ -1,10 +1,8 @@
 import asyncio
 from typing import Dict, Any
 from datetime import datetime
-
 from telegram import Update
-from telegram.ext import ChatMemberHandler, ContextTypes
-
+from telegram.ext import MessageHandler, filters, ContextTypes
 from shivu import user_collection, application, LOGGER
 
 LOG_GROUP_ID = -1003893927065
@@ -78,58 +76,57 @@ async def log_admin_action(action_name: str, admin_name: str, admin_id: int, det
         LOGGER.error(f"Admin log error: {e}")
 
 
-# --- 3. GROUP JOIN AND LEAVE LOGS ---
-async def on_bot_membership_changed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- 3. GROUP JOIN AND LEAVE LOGS (Direct Service Message Handler) ---
+async def track_group_membership(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        result = update.my_chat_member
-        if not result:
+        message = update.message
+        if not message:
             return
 
-        print("⚡ ChatMember event received from Telegram!") # Debug print
-        
-        chat = result.chat
-        old_status = result.old_chat_member.status
-        new_status = result.new_chat_member.status
-        action_by = result.from_user
+        bot_id = context.bot.id
 
-        chat_title = f"<b>{chat.title}</b>"
-        chat_username = f"<b>@{chat.username}</b>" if chat.username else "<b>ᴘʀɪᴠᴀᴛᴇ</b>"
-        action_user = f"<b><a href='tg://user?id={action_by.id}'>{action_by.first_name}</a></b>" if action_by else "<b>ᴜɴᴋɴᴏᴡɴ</b>"
-
-        # BOT ADDED
-        if old_status not in ['member', 'administrator'] and new_status in ['member', 'administrator']:
-            print(f"✅ Bot added to group: {chat.title}")
-            try:
-                count = await chat.get_member_count()
-                member_count = f"<b>{count}</b>"
-            except:
-                member_count = "<b>N/A</b>"
+        # Check if bot was added to the group
+        if message.new_chat_members:
+            if any(member.id == bot_id for member in message.new_chat_members):
+                chat = message.chat
+                added_by = message.from_user
+                added_by_mention = f"<b><a href='tg://user?id={added_by.id}'>{added_by.first_name}</a></b>" if added_by else "<b>ᴜɴᴋɴᴏᴡɴ</b>"
                 
-            data = {
-                "ᴄʜᴀᴛ": chat_title,
-                "ɪᴅ": f"<code>{chat.id}</code>",
-                "ᴜsᴇʀɴᴀᴍᴇ": chat_username,
-                "ᴍᴇᴍʙᴇʀs": member_count,
-                "ᴀᴅᴅᴇᴅ by": action_user
-            }
-            log = create_log_message("˹ ɢʀᴀʙʙɪɴɢ ʏᴏᴜʀ ᴡᴀɪғᴜ ˼ 🥀", data)
-            await send_log_to_group(log)
-            
-        # BOT REMOVED / LEFT
-        elif old_status in ['member', 'administrator'] and new_status in ['kicked', 'left', 'restricted']:
-            print(f"❌ Bot removed from group: {chat.title}")
-            data = {
-                "ᴄʜᴀᴛ": chat_title,
-                "ɪᴅ": f"<code>{chat.id}</code>",
-                "ᴜsᴇʀɴᴀᴍᴇ": chat_username,
-                "ʀᴇᴍᴏᴠᴇᴅ ʙʏ": action_user
-            }
-            log = create_log_message("˹ ʟᴇғᴛ ɢʀᴏᴜᴘ ˼ ✫", data)
-            await send_log_to_group(log)
+                try:
+                    count = await context.bot.get_chat_members_count(chat.id)
+                    member_count = f"<b>{count}</b>"
+                except:
+                    member_count = "<b>N/A</b>"
+
+                data = {
+                    "ᴄʜᴀᴛ": f"<b>{chat.title}</b>",
+                    "ɪᴅ": f"<code>{chat.id}</code>",
+                    "ᴜsᴇʀɴᴀᴍᴇ": f"<b>@{chat.username}</b>" if chat.username else "<b>ᴘʀɪᴠᴀᴛᴇ</b>",
+                    "ᴍᴇᴍʙᴇʀs": member_count,
+                    "ᴀᴅᴅᴇᴅ ʙʏ": added_by_mention
+                }
+                log = create_log_message("˹ ɢʀᴀʙʙɪɴɢ ʏᴏᴜʀ ᴡᴀɪғᴜ ˼ 🥀", data)
+                await send_log_to_group(log)
+
+        # Check if bot was removed / left the group
+        if message.left_chat_member:
+            if message.left_chat_member.id == bot_id:
+                chat = message.chat
+                removed_by = message.from_user
+                removed_by_mention = f"<b><a href='tg://user?id={removed_by.id}'>{removed_by.first_name}</a></b>" if removed_by else "<b>ᴜɴᴋɴᴏᴡɴ</b>"
+
+                data = {
+                    "ᴄʜᴀᴛ": f"<b>{chat.title}</b>",
+                    "ɪᴅ": f"<code>{chat.id}</code>",
+                    "ᴜsᴇʀɴᴀᴍᴇ": f"<b>@{chat.username}</b>" if chat.username else "<b>ᴘʀɪᴠᴀᴛᴇ</b>",
+                    "ʀᴇᴍᴏᴠᴇᴅ ʙʏ": removed_by_mention
+                }
+                log = create_log_message("˹ ʟᴇғᴛ ɢʀᴏᴜᴘ ˼ ✫", data)
+                await send_log_to_group(log)
 
     except Exception as e:
-        LOGGER.error(f"❌ Membership update error: {e}", exc_info=True)
+        LOGGER.error(f"Group membership tracking error: {e}", exc_info=True)
 
-# Register handler
-application.add_handler(ChatMemberHandler(on_bot_membership_changed, ChatMemberHandler.MY_CHAT_MEMBER))
-LOGGER.info("✓ Chatlog module loaded successfully with ChatMemberHandler")
+# Register the message handler for status updates
+application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS | filters.StatusUpdate.LEFT_CHAT_MEMBER, track_group_membership))
+LOGGER.info("✓ Chatlog module loaded with direct MessageHandler service detection")
