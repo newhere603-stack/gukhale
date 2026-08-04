@@ -1,5 +1,6 @@
 import asyncio
 import shivu.modules.balance
+import shivu.modules.chatlog
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
