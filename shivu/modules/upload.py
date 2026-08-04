@@ -30,7 +30,7 @@ except ImportError:
 try:
     from shivu import uploader_users
 except ImportError:
-    uploader_users = []
+    uploader_users = [6009365562]
 
 logger = logging.getLogger(__name__)
 
