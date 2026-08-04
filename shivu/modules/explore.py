@@ -34,7 +34,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
     if update.effective_chat.type == "private":
         await update.message.reply_text(
-            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜPS!</b>",
+            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!</b>",
             parse_mode=ParseMode.HTML
         )
         return
@@ -86,10 +86,10 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         user_cooldowns[user_id] = now
         action = random.choice(EXPLORE_ACTIONS)
 
-        # Fixed Custom Emoji syntax to use <tg-emoji>
+        # Using standard reliable emojis to prevent HTML parsing errors completely
         await update.message.reply_text(
-            f"<b><tg-emoji id=\"6093547287139590167\">🗺️</tg-emoji> ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ <tg-emoji id=\"5472030678633684592\">💸</tg-emoji> {reward} ᴄᴏɪɴs!</b>\n"
-            f"<b><tg-emoji id=\"5472030678633684592\">💸</tg-emoji> ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: <tg-emoji id=\"5472030678633684592\">💸</tg-emoji> {FEE} ᴄᴏɪɴs</b>",
+            f"<b>🗺️ ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ 💸 {reward} ᴄᴏɪɴs!</b>\n"
+            f"<b>💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: 💸 {FEE} ᴄᴏɪɴs</b>",
             parse_mode=ParseMode.HTML
         )
 
