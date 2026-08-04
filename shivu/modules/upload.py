@@ -1,4 +1,4 @@
-""" v3 - Final Clean & Error-Free Upload, Update & Delete System with ImgBB """
+""" v3 - Final Clean & Error-Free Upload, Update & Delete System with ImgBB + Uploader Role """
 
 import io
 import os
@@ -21,11 +21,16 @@ from telegram.error import TelegramError
 
 from shivu import application, collection, db, CHARA_CHANNEL_ID, SUPPORT_CHAT, sudo_users
 
-# Import the in-memory cache list to update it instantly
+# Import characters and uploader_users from shivu safely
 try:
     from shivu import characters
 except ImportError:
     characters = None
+
+try:
+    from shivu import uploader_users
+except ImportError:
+    uploader_users = []
 
 logger = logging.getLogger(__name__)
 
@@ -612,7 +617,6 @@ class CharacterDeletionHandler:
 
 
 class CharacterUpdateHandler:
-    # Only 'media' is needed for both reply and URL
     VALID_FIELDS = {'name', 'anime', 'rarity', 'media'}
 
     @staticmethod
@@ -625,7 +629,6 @@ class CharacterUpdateHandler:
         char_id = args[0]
         field = args[1].lower()
         
-        # In case someone types 'img_url' out of habit, handle it as 'media'
         if field == 'img_url':
             field = 'media'
 
@@ -643,11 +646,9 @@ class CharacterUpdateHandler:
         try:
             update_data = {}
             
-            # Logic for updating media (Both Reply & Link)
             if field == 'media':
                 reply_msg = update.message.reply_to_message
                 
-                # Check if it's a URL first
                 if len(args) >= 3:
                     new_url = args[2]
                     await processing_msg.edit_text('<b>⏳ Downloading from link...</b>', parse_mode='HTML')
@@ -659,15 +660,12 @@ class CharacterUpdateHandler:
                     
                     media_file = MediaFile(url=new_url, file_bytes=file_bytes)
                 
-                # Check if it's a reply
                 elif reply_msg and (reply_msg.photo or reply_msg.video or reply_msg.document or reply_msg.animation):
                     await processing_msg.edit_text('<b>⏳ Extracting new media...</b>', parse_mode='HTML')
                     media_file = await CharacterUploadHandler._extract_media_from_reply(reply_msg, update)
                     if not media_file:
                         await processing_msg.edit_text('<b>Failed to extract media!</b>', parse_mode='HTML')
                         return
-                
-                # No URL and no valid reply
                 else:
                     await processing_msg.edit_text('<b>Please either reply to a photo/video OR provide a link! (e.g., /update 01 media LINK)</b>', parse_mode='HTML')
                     return
@@ -684,7 +682,6 @@ class CharacterUpdateHandler:
                 update_data['media_type'] = media_file.media_type.value
                 update_data['file_hash'] = media_file.hash
 
-            # Logic for updating everything else (Name, Anime, Rarity)
             else:
                 if len(args) < 3:
                     await processing_msg.edit_text('<b>Please provide the new value!</b>', parse_mode='HTML')
@@ -704,10 +701,8 @@ class CharacterUpdateHandler:
             from datetime import datetime
             update_data['updated_at'] = datetime.utcnow().isoformat()
 
-            # Update Database
             await collection.find_one_and_update({'id': char_id}, {'$set': update_data})
             
-            # Instantly update Cache so /check reflects it immediately
             if characters is not None:
                 for c in characters:
                     if str(c.get('id')) == str(char_id):
@@ -719,6 +714,7 @@ class CharacterUpdateHandler:
             await processing_msg.edit_text(f'<b>Update failed: {str(e)}</b>', parse_mode='HTML')
 
 
+# Decorator for Sudo Users (Delete & Update ke liye)
 def require_sudo(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -730,7 +726,19 @@ def require_sudo(func):
     return wrapper
 
 
-@require_sudo
+# Decorator for Uploaders OR Sudo Users (Sirf Upload ke liye)
+def require_uploader_or_sudo(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = str(update.effective_user.id)
+        if user_id not in sudo_users and user_id not in uploader_users:
+            await update.message.reply_text('<b>Access Denied: You are not authorized to upload characters.</b>', parse_mode='HTML')
+            return
+        return await func(update, context)
+    return wrapper
+
+
+@require_uploader_or_sudo
 async def upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         if update.message.reply_to_message:
