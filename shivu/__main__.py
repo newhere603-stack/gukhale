@@ -5,14 +5,13 @@ asyncio.set_event_loop(loop)
 
 import importlib
 import random
-import time  # Added time to calculate spawn duration
+import time  
 import traceback
 from html import escape
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, CallbackContext, MessageHandler, filters
 from telegram.error import BadRequest
 
-# Added user_totals_collection here to fetch custom spawn time
 from shivu import db, shivuu, application, LOGGER, user_totals_collection
 from shivu.modules import ALL_MODULES
 
@@ -39,13 +38,13 @@ RARITIES = {
 }
 
 rarity_status_cache = {}
-group_settings_cache = {}  # {chat_id: {'grab_delete': True, 'miss_delete': True}}
+group_settings_cache = {}  
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
 first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
 currently_spawning = {}
-spawn_times = {}  # Added to track time taken
-grabbed_spawns = set()  # FIX: Track message_ids of grabbed characters specifically
+spawn_times = {}  
+grabbed_spawns = set()  
 
 for module_name in ALL_MODULES:
     try:
@@ -145,9 +144,8 @@ async def _send_media(context, chat_id, character, caption, **timeouts):
 async def despawn_character(chat_id, message_id, character, context):
     await asyncio.sleep(DESPAWN_TIME)
     try:
-        # FIX: Check if this exact message_id was successfully grabbed
         if message_id in grabbed_spawns:
-            grabbed_spawns.discard(message_id) # Cleanup memory
+            grabbed_spawns.discard(message_id) 
             return
 
         should_delete = await get_group_setting(chat_id, 'grab_delete', True)
@@ -186,7 +184,6 @@ async def despawn_character(chat_id, message_id, character, context):
     except Exception:
         LOGGER.exception(f"despawn_character failed for chat={chat_id}")
     finally:
-        # FIX: Only clear variables if a new spawn hasn't overwritten them
         if spawn_messages.get(chat_id) == message_id:
             last_characters.pop(chat_id, None)
             spawn_messages.pop(chat_id, None)
@@ -215,10 +212,7 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
             else:
                 target_frequency = MESSAGE_FREQUENCY
         except Exception as e:
-            LOGGER.error(f"Error fetching message frequency: {e}")
             target_frequency = MESSAGE_FREQUENCY
-
-        LOGGER.info(f"[spawn] chat={chat_id} count={message_counts[chat_id]}/{target_frequency} spawning={currently_spawning.get(chat_id, False)}")
 
         if message_counts[chat_id] >= target_frequency and not currently_spawning.get(chat_id):
             currently_spawning[chat_id] = True
@@ -233,7 +227,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
     try:
         all_characters = await collection.find({}).to_list(length=None)
         if not all_characters:
-            LOGGER.warning("[spawn] characters collection is EMPTY - add characters first")
             return
 
         sent_characters.setdefault(chat_id, [])
@@ -244,7 +237,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         allowed = [c for c in available if await is_character_allowed(c, chat_id)]
 
         if not allowed:
-            LOGGER.warning(f"[spawn] no allowed characters for chat={chat_id} — check /rarity_status")
             return
 
         character = random.choice(allowed)
@@ -257,17 +249,16 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
 
         spawn_messages[chat_id] = spawn_msg.message_id
-        spawn_times[chat_id] = time.time()  # Record exactly when it spawned
+        spawn_times[chat_id] = time.time()  
         username = update.effective_chat.username
         spawn_message_links[chat_id] = (
             f"https://t.me/{username}/{spawn_msg.message_id}" if username
             else f"https://t.me/c/{chat_id_str.replace('-100', '')}/{spawn_msg.message_id}"
         )
         asyncio.create_task(despawn_character(chat_id, spawn_msg.message_id, character, context))
-        LOGGER.info(f"[spawn] spawned '{character.get('name')}' in chat={chat_id}")
 
     except Exception:
-        LOGGER.exception(f"[spawn] send_image failed for chat={chat_id}")
+        pass
     finally:
         currently_spawning[chat_id_str] = False
 
@@ -316,12 +307,10 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=spawn_message_links[chat_id])]])
             return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
-        # Calculate exact time taken
         time_taken = 0
         if chat_id in spawn_times:
             time_taken = round(time.time() - spawn_times[chat_id])
             
-        # FIX: Mark this specific message as grabbed
         spawn_msg_id = spawn_messages.get(chat_id)
         if spawn_msg_id:
             grabbed_spawns.add(spawn_msg_id)
@@ -367,10 +356,8 @@ async def guess(update: Update, context: CallbackContext) -> None:
         else:
             r_emoji, r_name = (rarity_str.split(' ', 1) + [''])[:2] if isinstance(rarity_str, str) and ' ' in rarity_str else (rarity_str, '')
 
-        # HTML formatted user mention
         mention = f'<a href="tg://user?id={user_id}">{escape(eu.first_name)}</a>'
 
-        # Updated Message Format
         success_message = (
             f"✅ <b>{mention}, ᴄᴏɴɢʀᴀᴛs 🎉</b>\n"
             f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧</b>\n\n"
@@ -383,12 +370,11 @@ async def guess(update: Update, context: CallbackContext) -> None:
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
         await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
         
-        # Cleanup
         spawn_message_links.pop(chat_id, None)
         spawn_times.pop(chat_id, None)
 
     except Exception:
-        LOGGER.exception(f"guess() failed for chat={chat_id}, user={user_id}")
+        pass
 
 
 async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> None:
@@ -496,7 +482,6 @@ async def main():
         application.add_handler(CommandHandler(["rarity_off"], rarity_off_cmd, block=False))
         application.add_handler(CommandHandler(["name"], name_cmd, block=False))
 
-        # separate group so it never blocks the commands above
         application.add_handler(MessageHandler(filters.ALL, message_counter, block=False), group=1)
 
         await application.initialize()
@@ -504,6 +489,22 @@ async def main():
         await application.updater.start_polling(drop_pending_updates=True)
 
         LOGGER.info("✅ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
+
+        # --- DIRECT STARTUP LOG TRIGGER ---
+        try:
+            from shivu.modules.chatlog import send_log_to_group, create_log_message
+            bot_info = await application.bot.get_me()
+            data = {
+                "Bot": f"<b>@{bot_info.username}</b>",
+                "Status": "<b>Online & Ready ⚡</b>"
+            }
+            log_msg = create_log_message("˹ Bot Restarted ˼ 🔄", data)
+            asyncio.create_task(send_log_to_group(log_msg))
+            LOGGER.info("Startup log queued successfully!")
+        except Exception as e:
+            LOGGER.error(f"Failed to queue startup log: {e}")
+        # -----------------------------------
+
         await asyncio.Event().wait()
 
     except Exception:
