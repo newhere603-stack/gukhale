@@ -45,7 +45,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         balance = user.get("balance", 0)
 
         await update.message.reply_text(
-            f"💸 <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance:,}</code></b>",
+            f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji> <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance:,}</code></b>',
             parse_mode="HTML",
         )
     except Exception as e:
@@ -83,7 +83,7 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tokens = user.get("tokens", 0)
 
         await update.message.reply_text(
-            f"💠 <b>ᴛᴏᴋᴇɴs: <code>{tokens:,}</code></b>",
+            f'<tg-emoji emoji-id="6332379101231323246">💠</tg-emoji> <b>ᴛᴏᴋᴇɴs: <code>{tokens:,}</code></b>',
             parse_mode="HTML",
         )
     except Exception as e:
