@@ -216,7 +216,7 @@ def _new_user_doc(user_id, first_name, username):
         "id": user_id,
         "first_name": first_name,
         "username": username,
-        "balance": 500,
+        "balance": 5000,
         "bot_started": True,  # Yaha flag add kiya gaya hai
         "characters": [],
         "pass_data": {
