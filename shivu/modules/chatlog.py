@@ -1,12 +1,11 @@
 import asyncio
 from typing import Dict, Any
 from datetime import datetime
-from pyrogram import Client
-from pyrogram.types import ChatMemberUpdated
-from pyrogram.enums import ChatMemberStatus
 
-# Importing both Pyrogram (app) and PTB (application)
-from shivu import user_collection, shivuu as app, application
+from telegram import Update
+from telegram.ext import ChatMemberHandler, ContextTypes
+
+from shivu import user_collection, application
 
 LOG_GROUP_ID = -1003893927065
 
@@ -25,10 +24,7 @@ def create_log_message(title: str, data: Dict[str, Any]) -> str:
 
 
 async def send_log_to_group(text: str):
-    """
-    Sends logs using PTB (application.bot). 
-    This bypasses Pyrogram's peer cache, preventing 'PeerIdInvalid' errors completely.
-    """
+    """Sends logs using PTB (application.bot) directly"""
     try:
         await application.bot.send_message(
             chat_id=LOG_GROUP_ID,
@@ -42,38 +38,7 @@ async def send_log_to_group(text: str):
         return False
 
 
-# --- 1. BOT RESTART LOG (Bulletproof Startup) ---
-async def startup_log_task():
-    """Waits for the bot to fully initialize before sending the restart log."""
-    print("Waiting for bot to come online to send startup log...")
-    
-    # Loop continuously until the bot is officially online
-    while True:
-        try:
-            bot_info = await application.bot.get_me()
-            if bot_info:
-                break
-        except Exception:
-            await asyncio.sleep(5)  # Wait 5 seconds and check again
-    
-    try:
-        data = {
-            "ʙᴏᴛ": f"<b>@{bot_info.username}</b>",
-            "sᴛᴀᴛᴜs": "<b>ᴏɴʟɪɴᴇ & ʀᴇᴀᴅʏ ⚡</b>"
-        }
-        log = create_log_message("˹ ʙᴏᴛ ʀᴇsᴛᴀʀᴛᴇᴅ ˼ 🔄", data)
-        await send_log_to_group(log)
-        print("Startup log sent successfully!")
-    except Exception as e:
-        print(f"Startup log error: {e}")
-
-# Create the startup task securely in the event loop
-loop = asyncio.get_event_loop()
-if loop.is_running():
-    loop.create_task(startup_log_task())
-
-
-# --- 2. USER START LOG ---
+# --- 1. USER START LOG ---
 async def track_bot_start(user_id: int, first_name: str, username: str, is_new: bool):
     try:
         user_mention = f"<b><a href='tg://user?id={user_id}'>{first_name}</a></b>"
@@ -99,72 +64,68 @@ async def track_bot_start(user_id: int, first_name: str, username: str, is_new: 
         print(f"Track start error: {e}")
 
 
-# --- 3. ADMIN / SUDO ACTION LOGS ---
+# --- 2. ADMIN / SUDO ACTION LOGS ---
 async def log_admin_action(action_name: str, admin_name: str, admin_id: int, details: Dict[str, Any]):
-    """You can import and call this function from your sudo/redeem modules."""
     try:
         data = {
             "ᴀᴅᴍɪɴ": f"<b><a href='tg://user?id={admin_id}'>{admin_name}</a></b>",
             "ɪᴅ": f"<code>{admin_id}</code>"
         }
-        # Safely bold all details
         data.update({k: f"<b>{v}</b>" if not str(v).startswith("<") else v for k, v in details.items()})
         
         log = create_log_message(f"˹ ᴀᴅᴍɪɴ ᴀᴄᴛɪᴏɴ ˼ ⚡", data)
         await send_log_to_group(log)
     except Exception as e:
-        print(f"Admin log error: {e}")
+        pass
 
 
-# --- 4 & 5. GROUP JOIN AND LEAVE LOGS (API Level Detection) ---
-@app.on_chat_member_updated()
-async def bot_added_or_removed(client: Client, update: ChatMemberUpdated):
+# --- 3. GROUP JOIN AND LEAVE LOGS (PTB Native Handler) ---
+async def on_bot_membership_changed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    This uses ChatMemberUpdated instead of reading chat messages. 
-    It triggers reliably straight from Telegram's servers.
+    PTB ka MyChatMember handler. Ye strictly tab trigger hoga 
+    jab bot ko kisi group me add ya remove kiya jayega.
     """
-    try:
-        bot = await client.get_me()
-        
-        # We only care if the update is about our bot
-        if not update.new_chat_member or update.new_chat_member.user.id != bot.id:
-            return
+    result = update.my_chat_member
+    if not result:
+        return
 
-        old_status = update.old_chat_member.status if update.old_chat_member else None
-        new_status = update.new_chat_member.status
+    chat = result.chat
+    old_status = result.old_chat_member.status
+    new_status = result.new_chat_member.status
+    action_by = result.from_user
 
-        chat_title = f"<b>{update.chat.title}</b>"
-        chat_username = f"<b>@{update.chat.username}</b>" if update.chat.username else "<b>ᴘʀɪᴠᴀᴛᴇ</b>"
-        action_by = f"<b><a href='tg://user?id={update.from_user.id}'>{update.from_user.first_name}</a></b>" if update.from_user else "<b>ᴜɴᴋɴᴏᴡɴ</b>"
+    chat_title = f"<b>{chat.title}</b>"
+    chat_username = f"<b>@{chat.username}</b>" if chat.username else "<b>ᴘʀɪᴠᴀᴛᴇ</b>"
+    action_user = f"<b><a href='tg://user?id={action_by.id}'>{action_by.first_name}</a></b>" if action_by else "<b>ᴜɴᴋɴᴏᴡɴ</b>"
+
+    # CONDITION A: BOT WAS ADDED TO A GROUP
+    if old_status not in ['member', 'administrator'] and new_status in ['member', 'administrator']:
+        try:
+            count = await chat.get_member_count()
+            member_count = f"<b>{count}</b>"
+        except:
+            member_count = "<b>N/A</b>"
+            
+        data = {
+            "ᴄʜᴀᴛ": chat_title,
+            "ɪᴅ": f"<code>{chat.id}</code>",
+            "ᴜsᴇʀɴᴀᴍᴇ": chat_username,
+            "ᴍᴇᴍʙᴇʀs": member_count,
+            "ᴀᴅᴅᴇᴅ ʙʏ": action_user
+        }
+        log = create_log_message("˹ ɢʀᴀʙʙɪɴɢ ʏᴏᴜʀ ᴡᴀɪғᴜ ˼ 🥀", data)
+        await send_log_to_group(log)
         
-        # CONDITION A: BOT WAS ADDED TO A GROUP
-        if new_status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR] and old_status not in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR]:
-            try:
-                count = await client.get_chat_members_count(update.chat.id)
-                member_count = f"<b>{count}</b>"
-            except:
-                member_count = "<b>N/A</b>"
-                
-            data = {
-                "ᴄʜᴀᴛ": chat_title,
-                "ɪᴅ": f"<code>{update.chat.id}</code>",
-                "ᴜsᴇʀɴᴀᴍᴇ": chat_username,
-                "ᴍᴇᴍʙᴇʀs": member_count,
-                "ᴀᴅᴅᴇᴅ ʙʏ": action_by
-            }
-            log = create_log_message("˹ ɢʀᴀʙʙɪɴɢ ʏᴏᴜʀ ᴡᴀɪғᴜ ˼ 🥀", data)
-            await send_log_to_group(log)
-            
-        # CONDITION B: BOT WAS REMOVED FROM A GROUP
-        elif new_status in [ChatMemberStatus.BANNED, ChatMemberStatus.LEFT, ChatMemberStatus.RESTRICTED] and old_status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR]:
-            data = {
-                "ᴄʜᴀᴛ": chat_title,
-                "ɪᴅ": f"<code>{update.chat.id}</code>",
-                "ᴜsᴇʀɴᴀᴍᴇ": chat_username,
-                "ʀᴇᴍᴏᴠᴇᴅ ʙʏ": action_by
-            }
-            log = create_log_message("˹ ʟᴇғᴛ ɢʀᴏᴜᴘ ˼ ✫", data)
-            await send_log_to_group(log)
-            
-    except Exception as e:
-        print(f"Membership update error: {e}")
+    # CONDITION B: BOT WAS REMOVED / KICKED FROM A GROUP
+    elif old_status in ['member', 'administrator'] and new_status in ['kicked', 'left', 'restricted']:
+        data = {
+            "ᴄʜᴀᴛ": chat_title,
+            "ɪᴅ": f"<code>{chat.id}</code>",
+            "ᴜsᴇʀɴᴀᴍᴇ": chat_username,
+            "ʀᴇᴍᴏᴠᴇᴅ ʙʏ": action_user
+        }
+        log = create_log_message("˹ ʟᴇғᴛ ɢʀᴏᴜᴘ ˼ ✫", data)
+        await send_log_to_group(log)
+
+# Add handler to application
+application.add_handler(ChatMemberHandler(on_bot_membership_changed, ChatMemberHandler.MY_CHAT_MEMBER))
