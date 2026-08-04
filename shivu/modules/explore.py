@@ -86,7 +86,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         user_cooldowns[user_id] = now
         action = random.choice(EXPLORE_ACTIONS)
 
-        # Using standard reliable emojis to prevent HTML parsing errors completely
+        # Standard emojis used to ensure zero parsing errors
         await update.message.reply_text(
             f"<b>🗺️ ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ 💸 {reward} ᴄᴏɪɴs!</b>\n"
             f"<b>💸 ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: 💸 {FEE} ᴄᴏɪɴs</b>",
