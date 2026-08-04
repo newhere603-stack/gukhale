@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 # Tweak imports according to your main file
 from shivu import application, user_collection, collection
 
+LOG_GROUP_ID = -1003893927065
+
 def to_small_caps(text: str) -> str:
     if not text:
         return "ᴜɴᴋɴᴏᴡɴ"
@@ -27,7 +29,45 @@ def get_safe_time(dt):
         return dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
 
-COOLDOWN_HOURS = 24
+def create_log_message(title: str, data: dict) -> str:
+    timestamp = datetime.now().strftime("%I:%M %p • %d/%m/%y")
+    base = f"<b>{title}</b>\n\n"
+    items = list(data.items())
+    for i, (key, value) in enumerate(items):
+        prefix = "<b>╰</b>" if i == len(items) - 1 else "<b>├</b>"
+        base += f"{prefix} <b>{key} :</b> {value}\n"
+    base += f"\n<b>⌚ ᴛɪᴍᴇ :</b> <b>{timestamp}</b>"
+    return base
+
+async def send_log(context: CallbackContext, text: str):
+    try:
+        await context.bot.send_message(
+            chat_id=LOG_GROUP_ID,
+            text=text,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True
+        )
+    except Exception as e:
+        logger.error(f"Log error: {e}")
+
+def can_claim_today(last_claim_dt) -> bool:
+    """Checks if the current time has crossed 4:00 AM since the last claim."""
+    if not last_claim_dt:
+        return True
+    
+    now = datetime.now()
+    
+    # Calculate today's 4:00 AM reset milestone
+    today_4am = now.replace(hour=4, minute=0, second=0, microsecond=0)
+    
+    # If current time is before 4 AM, the current reset cycle actually started at 4 AM yesterday
+    if now < today_4am:
+        reset_threshold = today_4am - timedelta(days=1)
+    else:
+        reset_threshold = today_4am
+        
+    return last_claim_dt < reset_threshold
+
 
 async def swaifu(update: Update, context: CallbackContext):
     try:
@@ -35,18 +75,16 @@ async def swaifu(update: Update, context: CallbackContext):
         raw_first_name = update.effective_user.first_name or "User"
         safe_first_name = html.escape(to_small_caps(raw_first_name))
         
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-
+        now = datetime.now()
         user_data = await user_collection.find_one({'id': user_id})
         
         if user_data and 'last_swaifu_claim' in user_data:
             last_claim = get_safe_time(user_data['last_swaifu_claim'])
-            if last_claim and (now - last_claim) < timedelta(hours=COOLDOWN_HOURS):
-                msg = f"<b>{to_small_caps('You have already claimed your waifu today! Come back tomorrow.')}</b>"
+            if not can_claim_today(last_claim):
+                msg = f"<b>{to_small_caps('You have already claimed your waifu today! Come back after 4:00 AM.')}</b>"
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
-        # Sirf yeh allowed rarities hi aayengi (case-insensitive check ke liye lowercase me)
         allowed_rarities = [
             "celestial", "exclusive", "legendary", 
             "sweet", "special edition", "rare", "common"
@@ -55,7 +93,6 @@ async def swaifu(update: Update, context: CallbackContext):
         cursor = collection.find({})
         all_chars = await cursor.to_list(length=None)
 
-        # Filter characters matching only the allowed rarities
         valid_chars = []
         for c in all_chars:
             rarity_str = str(c.get('rarity', '')).strip().lower()
@@ -101,6 +138,15 @@ async def swaifu(update: Update, context: CallbackContext):
             logger.warning(f"Image send failed, falling back to text: {img_err}")
             await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
 
+        # Log Swaifu Claim
+        log_data = {
+            "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
+            "ɪᴅ": f"<code>{user_id}</code>",
+            "ᴄʜᴀʀᴀᴄᴛᴇʀ": f"<b>{character.get('name', 'Unknown')}</b>",
+            "ʀᴀʀɪᴛʏ": f"<b>{character.get('rarity', 'Common')}</b>"
+        }
+        await send_log(context, create_log_message("˹ sᴡᴀɪꜰᴜ ᴄʟᴀɪᴍᴇᴅ ˼ 🌸", log_data))
+
     except Exception as e:
         logger.error(f"Swaifu Error: {e}", exc_info=True)
         await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>", parse_mode=ParseMode.HTML)
@@ -110,14 +156,14 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
         raw_first_name = update.effective_user.first_name or "User"
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now()
 
         user_data = await user_collection.find_one({'id': user_id})
         
         if user_data and 'last_coin_claim' in user_data:
             last_claim = get_safe_time(user_data['last_coin_claim'])
-            if last_claim and (now - last_claim) < timedelta(hours=COOLDOWN_HOURS):
-                msg = f"<b>{to_small_caps('You have already claimed your daily coins! Try again later.')}</b>"
+            if not can_claim_today(last_claim):
+                msg = f"<b>{to_small_caps('You have already claimed your daily coins! Try again after 4:00 AM.')}</b>"
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
@@ -145,6 +191,14 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 
         await update.message.reply_text(msg_text, parse_mode=ParseMode.HTML)
         
+        # Log Coin Claim
+        log_data = {
+            "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
+            "ɪᴅ": f"<code>{user_id}</code>",
+            "ʀᴇᴡᴀʀᴅ": f"<b>💸 {coins_won:,} ᴄᴏɪɴs</b>"
+        }
+        await send_log(context, create_log_message("˹ ᴅᴀɪʟʏ ᴄʟᴀɪᴍ sᴜᴄᴄᴇssғᴜʟ ˼ 💰", log_data))
+
     except Exception as e:
         logger.error(f"Claim Error: {e}", exc_info=True)
         await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>", parse_mode=ParseMode.HTML)
