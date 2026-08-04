@@ -81,7 +81,7 @@ async def swaifu(update: Update, context: CallbackContext):
         if user_data and 'last_swaifu_claim' in user_data:
             last_claim = get_safe_time(user_data['last_swaifu_claim'])
             if not can_claim_today(last_claim):
-                msg = f"<b>{to_small_caps('You have already claimed your waifu today! Come back after 4:00 AM.')}</b>"
+                msg = f"<b>{to_small_caps('You have already claimed your waifu today! Come back tomorrow.')}</b>"
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
@@ -163,7 +163,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         if user_data and 'last_coin_claim' in user_data:
             last_claim = get_safe_time(user_data['last_coin_claim'])
             if not can_claim_today(last_claim):
-                msg = f"<b>{to_small_caps('You have already claimed your daily coins! Try again after 4:00 AM.')}</b>"
+                msg = f"<b>{to_small_caps('You have already claimed your daily coins!')}</b>"
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
@@ -197,7 +197,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
             "ɪᴅ": f"<code>{user_id}</code>",
             "ʀᴇᴡᴀʀᴅ": f"<b>💸 {coins_won:,} ᴄᴏɪɴs</b>"
         }
-        await send_log(context, create_log_message("˹ ᴅᴀɪʟʏ ᴄʟᴀɪᴍ sᴜᴄᴄᴇssғᴜʟ ˼ 💰", log_data))
+        await send_log(context, create_log_message("˹ ᴅᴀɪʟʏ ᴄʟᴀɪᴍ sᴜᴄᴄᴇssғᴜʟ ˼ 💸", log_data))
 
     except Exception as e:
         logger.error(f"Claim Error: {e}", exc_info=True)
