@@ -153,7 +153,7 @@ class MediaFile:
         return mime or 'application/octet-stream'
 
     def _compute_hash(self) -> str:
-        return hashlib.sha256(self.file_bytes).hexdigest()
+        return hashlib.sha256(self.file_bytes).hexdigest() if self.file_bytes else ""
 
     @property
     def is_video(self) -> bool:
@@ -261,7 +261,7 @@ class MasterUploader:
                 data = aiohttp.FormData()
                 data.add_field('image', io.BytesIO(file_bytes), filename=filename or 'image.jpg')
                 data.add_field('key', MasterUploader.IMGBB_KEY)
-                async with session.post("https://api.imgbb.com/1/upload", data=data, timeout=30) as response:
+                async with session.post("https://api.imgbb.com/1/upload", data=data, timeout=Config.UPLOAD_TIMEOUT) as response:
                     if response.status == 200:
                         res = await response.json()
                         if res.get('success'):
@@ -276,7 +276,7 @@ class MasterUploader:
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
                 data.add_field('file', io.BytesIO(file_bytes), filename=filename or 'file.bin')
-                async with session.post("https://pixeldrain.com/api/file", data=data, timeout=60) as response:
+                async with session.post("https://pixeldrain.com/api/file", data=data, timeout=Config.UPLOAD_TIMEOUT) as response:
                     if response.status in (200, 201):
                         res = await response.json()
                         if res.get('id'):
@@ -293,7 +293,7 @@ class MasterUploader:
                 data.add_field('reqtype', 'fileupload')
                 data.add_field('fileToUpload', io.BytesIO(file_bytes), filename=filename or 'file.bin')
                 headers = {'User-Agent': 'Mozilla/5.0'}
-                async with session.post("https://catbox.moe/user/api.php", data=data, headers=headers, timeout=60) as response:
+                async with session.post("https://catbox.moe/user/api.php", data=data, headers=headers, timeout=Config.UPLOAD_TIMEOUT) as response:
                     if response.status == 200:
                         text = (await response.text()).strip()
                         if text.startswith("https://files.catbox.moe/"):
@@ -304,7 +304,6 @@ class MasterUploader:
 
     @classmethod
     async def upload_file(cls, file_bytes: bytes, filename: str = "", media_type: MediaType = MediaType.IMAGE) -> Optional[str]:
-        # For videos/documents prioritize Pixeldrain/Catbox, for images prioritize ImgBB
         if media_type == MediaType.VIDEO:
             url = await cls._upload_pixeldrain(file_bytes, filename)
             if not url: url = await cls._upload_catbox(file_bytes, filename)
@@ -456,18 +455,18 @@ class CharacterUploadHandler:
     async def handle_reply_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_msg = update.message.reply_to_message
         if not reply_msg or not (reply_msg.photo or reply_msg.video or reply_msg.document or reply_msg.animation):
-            await update.message.reply_text('<b>❌ Please reply to a valid photo, video, or document!</b>', parse_mode='HTML')
+            await update.message.reply_text('<b>Please reply to a valid photo, video, or document!</b>', parse_mode='HTML')
             return
 
         if len(context.args) != 3:
-            await update.message.reply_text('<b>❌ Format: /upload name anime rarity</b>', parse_mode='HTML')
+            await update.message.reply_text('<b>Format: /upload name anime rarity</b>', parse_mode='HTML')
             return
 
         processing_msg = await update.message.reply_text('<b>⏳ Extracting media...</b>', parse_mode='HTML')
         media_file = await CharacterUploadHandler._extract_media_from_reply(reply_msg, update)
         
         if not media_file:
-            await processing_msg.edit_text('<b>❌ Failed to extract media!</b>', parse_mode='HTML')
+            await processing_msg.edit_text('<b>Failed to extract media!</b>', parse_mode='HTML')
             return
 
         progress = ProgressTracker(processing_msg)
@@ -475,7 +474,7 @@ class CharacterUploadHandler:
 
         file_url = await MasterUploader.upload_file(media_file.file_bytes, media_file.filename, media_file.media_type)
         if not file_url:
-            await processing_msg.edit_text('<b>❌ Server upload failed!</b>', parse_mode='HTML')
+            await processing_msg.edit_text('<b>Server upload failed!</b>', parse_mode='HTML')
             return
 
         object.__setattr__(media_file, 'url', file_url)
@@ -486,7 +485,7 @@ class CharacterUploadHandler:
         )
 
         if not character:
-            await processing_msg.edit_text('<b>❌ Invalid rarity number (1-15)!</b>', parse_mode='HTML')
+            await processing_msg.edit_text('<b>Invalid rarity number (1-15)!</b>', parse_mode='HTML')
             return
 
         await TelegramUploader.upload_character(character, context)
@@ -498,7 +497,7 @@ class CharacterUploadHandler:
     @staticmethod
     async def handle_url_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if len(context.args) != 4:
-            await update.message.reply_text('<b>❌ Format: /upload URL name anime rarity</b>', parse_mode='HTML')
+            await update.message.reply_text('<b>Format: /upload URL name anime rarity</b>', parse_mode='HTML')
             return
 
         media_url = context.args[0]
@@ -508,7 +507,7 @@ class CharacterUploadHandler:
         file_bytes = await FileDownloader.download_from_url(media_url, progress.update)
 
         if not file_bytes:
-            await processing_msg.edit_text('<b>❌ Download failed. Check URL!</b>', parse_mode='HTML')
+            await processing_msg.edit_text('<b>Download failed. Check URL!</b>', parse_mode='HTML')
             return
 
         media_file = MediaFile(url=media_url, file_bytes=file_bytes)
@@ -526,7 +525,7 @@ class CharacterUploadHandler:
         )
 
         if not character:
-            await processing_msg.edit_text('<b>❌ Invalid rarity number (1-15)!</b>', parse_mode='HTML')
+            await processing_msg.edit_text('<b>Invalid rarity number (1-15)!</b>', parse_mode='HTML')
             return
 
         await TelegramUploader.upload_character(character, context)
@@ -569,7 +568,7 @@ class CharacterDeletionHandler:
     @staticmethod
     async def delete_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if len(context.args) != 1:
-            await update.message.reply_text('<b>❌ Format: /delete ID</b>', parse_mode='HTML')
+            await update.message.reply_text('<b>Format: /delete ID</b>', parse_mode='HTML')
             return
 
         char_id = context.args[0]
@@ -577,7 +576,7 @@ class CharacterDeletionHandler:
 
         character = await collection.find_one_and_delete({'id': char_id})
         if not character:
-            await processing_msg.edit_text(f'<b>❌ Character {char_id} not found.</b>', parse_mode='HTML')
+            await processing_msg.edit_text(f'<b>Character {char_id} not found.</b>', parse_mode='HTML')
             return
 
         try:
@@ -593,43 +592,94 @@ class CharacterDeletionHandler:
 
 
 class CharacterUpdateHandler:
-    VALID_FIELDS = {'img_url', 'name', 'anime', 'rarity'}
+    # Only 'media' is needed for both reply and URL
+    VALID_FIELDS = {'name', 'anime', 'rarity', 'media'}
 
     @staticmethod
     async def update_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        if len(context.args) != 3:
-            await update.message.reply_text('<b>❌ Format: /update ID field value</b>', parse_mode='HTML')
+        args = context.args
+        if len(args) < 2:
+            await update.message.reply_text('<b>Format: /update ID field [value]\n(For Media: Reply with "media" OR type "/update ID media URL")</b>', parse_mode='HTML')
             return
 
-        char_id, field, new_value = context.args
+        char_id = args[0]
+        field = args[1].lower()
+        
+        # In case someone types 'img_url' out of habit, handle it as 'media'
+        if field == 'img_url':
+            field = 'media'
+
         if field not in CharacterUpdateHandler.VALID_FIELDS:
-            await update.message.reply_text('<b>❌ Invalid field!</b>', parse_mode='HTML')
+            await update.message.reply_text('<b>Invalid field! Valid: name, anime, rarity, media</b>', parse_mode='HTML')
             return
 
         character_data = await collection.find_one({'id': char_id})
         if not character_data:
-            await update.message.reply_text(f'<b>❌ Character {char_id} not found.</b>', parse_mode='HTML')
+            await update.message.reply_text(f'<b>Character {char_id} not found.</b>', parse_mode='HTML')
             return
 
         processing_msg = await update.message.reply_text(f'<b>⏳ Updating {field}...</b>', parse_mode='HTML')
 
         try:
             update_data = {}
-            if field in ['name', 'anime']:
-                update_data[field] = TextFormatter.format_name(new_value)
-            elif field == 'rarity':
-                rarity = RarityLevel.from_number(int(new_value))
-                if not rarity:
-                    await processing_msg.edit_text('<b>❌ Invalid rarity number!</b>', parse_mode='HTML')
+            
+            # Logic for updating media (Both Reply & Link)
+            if field == 'media':
+                reply_msg = update.message.reply_to_message
+                
+                # Check if it's a URL first
+                if len(args) >= 3:
+                    new_url = args[2]
+                    await processing_msg.edit_text('<b>⏳ Downloading from link...</b>', parse_mode='HTML')
+                    
+                    file_bytes = await FileDownloader.download_from_url(new_url)
+                    if not file_bytes:
+                        await processing_msg.edit_text('<b>Failed to download from URL. Check if it is a direct media link.</b>', parse_mode='HTML')
+                        return
+                    
+                    media_file = MediaFile(url=new_url, file_bytes=file_bytes)
+                
+                # Check if it's a reply
+                elif reply_msg and (reply_msg.photo or reply_msg.video or reply_msg.document or reply_msg.animation):
+                    await processing_msg.edit_text('<b>⏳ Extracting new media...</b>', parse_mode='HTML')
+                    media_file = await CharacterUploadHandler._extract_media_from_reply(reply_msg, update)
+                    if not media_file:
+                        await processing_msg.edit_text('<b>Failed to extract media!</b>', parse_mode='HTML')
+                        return
+                
+                # No URL and no valid reply
+                else:
+                    await processing_msg.edit_text('<b>Please either reply to a photo/video OR provide a link! (e.g., /update 01 media LINK)</b>', parse_mode='HTML')
                     return
-                update_data[field] = rarity.display_name
-            elif field == 'img_url':
-                file_bytes = await FileDownloader.download_from_url(new_value)
-                if not file_bytes:
-                    await processing_msg.edit_text('<b>❌ Failed to download new image URL.</b>', parse_mode='HTML')
+                    
+                await processing_msg.edit_text('<b>⏳ Uploading new media to server...</b>', parse_mode='HTML')
+                file_url = await MasterUploader.upload_file(media_file.file_bytes, media_file.filename, media_file.media_type)
+                
+                if not file_url:
+                    await processing_msg.edit_text('<b>Server upload failed!</b>', parse_mode='HTML')
                     return
-                file_url = await MasterUploader.upload_file(file_bytes)
-                update_data['img_url'] = file_url or new_value
+                    
+                update_data['img_url'] = file_url
+                update_data['is_video'] = media_file.is_video
+                update_data['media_type'] = media_file.media_type.value
+                update_data['file_hash'] = media_file.hash
+
+            # Logic for updating everything else (Name, Anime, Rarity)
+            else:
+                if len(args) < 3:
+                    await processing_msg.edit_text('<b>Please provide the new value!</b>', parse_mode='HTML')
+                    return
+                    
+                new_value = " ".join(args[2:])
+
+                if field in ['name', 'anime']:
+                    update_data[field] = TextFormatter.format_name(new_value)
+                elif field == 'rarity':
+                    rarity = RarityLevel.from_number(int(new_value))
+                    if not rarity:
+                        await processing_msg.edit_text('<b>Invalid rarity number!</b>', parse_mode='HTML')
+                        return
+                    update_data[field] = rarity.display_name
 
             from datetime import datetime
             update_data['updated_at'] = datetime.utcnow().isoformat()
@@ -637,7 +687,7 @@ class CharacterUpdateHandler:
             await collection.find_one_and_update({'id': char_id}, {'$set': update_data})
             await processing_msg.edit_text(f'<b>✅ Character {char_id} updated successfully!</b>', parse_mode='HTML')
         except Exception as e:
-            await processing_msg.edit_text(f'<b>❌ Update failed: {str(e)}</b>', parse_mode='HTML')
+            await processing_msg.edit_text(f'<b>Update failed: {str(e)}</b>', parse_mode='HTML')
 
 
 def require_sudo(func):
@@ -645,7 +695,7 @@ def require_sudo(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = str(update.effective_user.id)
         if user_id not in sudo_users:
-            await update.message.reply_text('<b>❌ Access Denied: Sudo required.</b>', parse_mode='HTML')
+            await update.message.reply_text('<b>Access Denied: Sudo required.</b>', parse_mode='HTML')
             return
         return await func(update, context)
     return wrapper
@@ -659,7 +709,7 @@ async def upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         else:
             await CharacterUploadHandler.handle_url_upload(update, context)
     except Exception as e:
-        await update.message.reply_text(f'<b>❌ Upload failed: {str(e)}</b>', parse_mode='HTML')
+        await update.message.reply_text(f'<b>Upload failed: {str(e)}</b>', parse_mode='HTML')
 
 
 @require_sudo
@@ -667,7 +717,7 @@ async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         await CharacterDeletionHandler.delete_character(update, context)
     except Exception as e:
-        await update.message.reply_text(f'<b>❌ Deletion failed: {str(e)}</b>', parse_mode='HTML')
+        await update.message.reply_text(f'<b>Deletion failed: {str(e)}</b>', parse_mode='HTML')
 
 
 @require_sudo
@@ -675,7 +725,7 @@ async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         await CharacterUpdateHandler.update_character(update, context)
     except Exception as e:
-        await update.message.reply_text(f'<b>❌ Update failed: {str(e)}</b>', parse_mode='HTML')
+        await update.message.reply_text(f'<b>Update failed: {str(e)}</b>', parse_mode='HTML')
 
 
 application.add_handler(CommandHandler('upload', upload_command, block=False))
