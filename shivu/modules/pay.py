@@ -1,6 +1,35 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
+from datetime import datetime
+from typing import Dict, Any
 from shivu import application, user_collection
+
+LOG_GROUP_ID = -1003893927065
+
+def create_log_message(title: str, data: Dict[str, Any]) -> str:
+    """Beautiful bold and small-caps log designer."""
+    timestamp = datetime.now().strftime("%I:%M %p • %d/%m/%y")
+    base = f"<b>{title}</b>\n\n"
+    
+    items = list(data.items())
+    for i, (key, value) in enumerate(items):
+        prefix = "<b>╰</b>" if i == len(items) - 1 else "<b>├</b>"
+        base += f"{prefix} <b>{key} :</b> {value}\n"
+        
+    base += f"\n<b>⌚ ᴛɪᴍᴇ :</b> <b>{timestamp}</b>"
+    return base
+
+
+async def send_log(context: CallbackContext, text: str):
+    try:
+        await context.bot.send_message(
+            chat_id=LOG_GROUP_ID,
+            text=text,
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+    except Exception as e:
+        print(f"Log Error: {e}")
 
 
 # ==========================================
@@ -61,16 +90,31 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
 
     try:
+        sender_user = await context.bot.get_chat(sender_id)
+        sender_name = sender_user.first_name
         receiver_user = await context.bot.get_chat(receiver_id)
         receiver_mention = receiver_user.mention_html()
+        receiver_name = receiver_user.first_name
     except Exception:
+        sender_name = "User"
         receiver_mention = f"<code>{receiver_id}</code>"
+        receiver_name = "User"
 
     await q.edit_message_text(
         f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
         parse_mode="HTML"
     )
     await q.answer()
+
+    # Log the successful coin transfer
+    log_data = {
+        "sᴇɴᴅᴇʀ": f"<b><a href='tg://user?id={sender_id}'>{sender_name}</a></b>",
+        "sᴇɴᴅᴇʀ ɪᴅ": f"<code>{sender_id}</code>",
+        "ʀᴇᴄᴇɪᴠᴇʀ": f"<b><a href='tg://user?id={receiver_id}'>{receiver_name}</a></b>",
+        "ʀᴇᴄᴇɪᴠᴇʀ ɪᴅ": f"<code>{receiver_id}</code>",
+        "ᴀᴍᴏᴜɴᴛ": f"<b>💸 {amount} ᴄᴏɪɴꜱ</b>"
+    }
+    await send_log(context, create_log_message("˹ ᴄᴏɪɴs ᴛʀᴀɴsғᴇʀʀᴇᴅ ˼ 💸", log_data))
 
 
 # ==========================================
@@ -131,16 +175,31 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
     await user_collection.update_one({'id': receiver_id}, {'$inc': {'tokens': amount}}, upsert=True)
 
     try:
+        sender_user = await context.bot.get_chat(sender_id)
+        sender_name = sender_user.first_name
         receiver_user = await context.bot.get_chat(receiver_id)
         receiver_mention = receiver_user.mention_html()
+        receiver_name = receiver_user.first_name
     except Exception:
+        sender_name = "User"
         receiver_mention = f"<code>{receiver_id}</code>"
+        receiver_name = "User"
 
     await q.edit_message_text(
         f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
         parse_mode="HTML"
     )
     await q.answer()
+
+    # Log the successful token transfer
+    log_data = {
+        "sᴇɴᴅᴇʀ": f"<b><a href='tg://user?id={sender_id}'>{sender_name}</a></b>",
+        "sᴇɴᴅᴇʀ ɪᴅ": f"<code>{sender_id}</code>",
+        "ʀᴇᴄᴇɪᴠᴇʀ": f"<b><a href='tg://user?id={receiver_id}'>{receiver_name}</a></b>",
+        "ʀᴇᴄᴇɪᴠᴇʀ ɪᴅ": f"<code>{receiver_id}</code>",
+        "ᴀᴍᴏᴜɴᴛ": f"<b>💠 {amount} ᴛᴏᴋᴇɴꜱ</b>"
+    }
+    await send_log(context, create_log_message("˹ ᴛᴏᴋᴇɴs ᴛʀᴀɴsғᴇʀʀᴇᴅ ˼ 💠", log_data))
 
 
 # Handlers Registration
