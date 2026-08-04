@@ -127,15 +127,15 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('select the top list')}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("<tg-emoji emoji-id=\"6339033929718177895\">👤</tg-emoji> ᴘʀᴏꜰɪ𝗟ᴇ", callback_data="lb_profile"),
-            InlineKeyboardButton("<tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
+            InlineKeyboardButton("👤 ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"),
+            InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
         ],
         [
-            InlineKeyboardButton("<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
+            InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
         ],
         [
-            InlineKeyboardButton("<tg-emoji emoji-id=\"6339312947973595391\">👁</tg-emoji> ᴄᴛᴏᴘ", callback_data="lb_chars"),
-            InlineKeyboardButton("<tg-emoji emoji-id=\"5449885771420934013\">🌱</tg-emoji> ɢᴛᴏᴘ", callback_data="lb_gtop")
+            InlineKeyboardButton("👁 ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")
         ],
     ])
     await send_or_edit(update, context, text, kb, edit)
@@ -275,7 +275,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     text = (
         f"<tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji> 𝗨𝗦𝗘𝗥 𝗣𝗥𝗢𝗙𝗜𝗟𝗘 <tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<tg-emoji emoji-id=\"6339033929718177895\">👤</tg-emoji> <b>{sc('nane')} :</b> {link}\n"
+        f"<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji> <b>{sc('nane')} :</b> {link}\n"
         f"<tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> <b>{sc('id')} :</b> <code>{user_id}</code>\n"
         f"<tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji> <b>{sc('badge')} :</b> <b>{badge}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -292,8 +292,8 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
 
     profile_kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("<tg-emoji emoji-id=\"6339312947973595391\">👁</tg-emoji> ᴄᴛᴏᴘ", callback_data="lb_chars"),
-            InlineKeyboardButton("<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ʙᴛᴏᴘ", callback_data="lb_bal")
+            InlineKeyboardButton("👁 ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")
         ],
         [
             InlineKeyboardButton("⟳", callback_data="lb_profile"),
