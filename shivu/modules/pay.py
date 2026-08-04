@@ -58,7 +58,7 @@ async def pay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"py_n_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 💸 {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
+        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -101,7 +101,7 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
         receiver_name = "User"
 
     await q.edit_message_text(
-        f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ 💸 {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
+        f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
         parse_mode="HTML"
     )
     await q.answer()
@@ -112,7 +112,7 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
         "sᴇɴᴅᴇʀ ɪᴅ": f"<code>{sender_id}</code>",
         "ʀᴇᴄᴇɪᴠᴇʀ": f"<b><a href='tg://user?id={receiver_id}'>{receiver_name}</a></b>",
         "ʀᴇᴄᴇɪᴠᴇʀ ɪᴅ": f"<code>{receiver_id}</code>",
-        "ᴀᴍᴏᴜɴᴛ": f"<b>💸 {amount} ᴄᴏɪɴꜱ</b>"
+        "ᴀᴍᴏᴜɴᴛ": f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ</b>"
     }
     await send_log(context, create_log_message("˹ ᴄᴏɪɴs ᴛʀᴀɴsғᴇʀʀᴇᴅ ˼ 💸", log_data))
 
@@ -143,7 +143,7 @@ async def tpay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pt_n_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
+        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -186,7 +186,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         receiver_name = "User"
 
     await q.edit_message_text(
-        f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ 💠 {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
+        f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver_mention}<b>.</b>",
         parse_mode="HTML"
     )
     await q.answer()
@@ -197,7 +197,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         "sᴇɴᴅᴇʀ ɪᴅ": f"<code>{sender_id}</code>",
         "ʀᴇᴄᴇɪᴠᴇʀ": f"<b><a href='tg://user?id={receiver_id}'>{receiver_name}</a></b>",
         "ʀᴇᴄᴇɪᴠᴇʀ ɪᴅ": f"<code>{receiver_id}</code>",
-        "ᴀᴍᴏᴜɴᴛ": f"<b>💠 {amount} ᴛᴏᴋᴇɴꜱ</b>"
+        "ᴀᴍᴏᴜɴᴛ": f"<b><tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ</b>"
     }
     await send_log(context, create_log_message("˹ ᴛᴏᴋᴇɴs ᴛʀᴀɴsғᴇʀʀᴇᴅ ˼ 💠", log_data))
 
