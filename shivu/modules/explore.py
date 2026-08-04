@@ -34,7 +34,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
     if update.effective_chat.type == "private":
         await update.message.reply_text(
-            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!</b>",
+            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜPS!</b>",
             parse_mode=ParseMode.HTML
         )
         return
@@ -86,10 +86,10 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         user_cooldowns[user_id] = now
         action = random.choice(EXPLORE_ACTIONS)
 
-        # Premium Emojis Integrated without log channel messaging
+        # Fixed Custom Emoji syntax to use <tg-emoji>
         await update.message.reply_text(
-            f"<b><emoji id=6093547287139590167>🗺️</emoji> ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ <emoji id=5472030678633684592>💸</emoji> {reward} ᴄᴏɪɴs!</b>\n"
-            f"<b><emoji id=5472030678633684592>💸</emoji> ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: <emoji id=5472030678633684592>💸</emoji> {FEE} ᴄᴏɪɴs</b>",
+            f"<b><tg-emoji id=\"6093547287139590167\">🗺️</tg-emoji> ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ <tg-emoji id=\"5472030678633684592\">💸</tg-emoji> {reward} ᴄᴏɪɴs!</b>\n"
+            f"<b><tg-emoji id=\"5472030678633684592\">💸</tg-emoji> ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: <tg-emoji id=\"5472030678633684592\">💸</tg-emoji> {FEE} ᴄᴏɪɴs</b>",
             parse_mode=ParseMode.HTML
         )
 
