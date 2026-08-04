@@ -2,6 +2,7 @@ import logging
 import os
 from pyrogram import Client 
 from telegram.ext import Application
+from telegram import Intents  # Added to catch join/leave events
 from motor.motor_asyncio import AsyncIOMotorClient
 
 logging.basicConfig(
@@ -16,7 +17,6 @@ logging.getLogger("pyrate_limiter").setLevel(logging.ERROR)
 LOGGER = logging.getLogger(__name__)
 
 from shivu.config import Development as Config
-
 
 api_id = Config.api_id
 api_hash = Config.api_hash
@@ -33,7 +33,10 @@ OWNER_ID = Config.OWNER_ID
 JOINLOGS = "-1003893927065"
 LEAVELOGS = "-1003893927065"
 
-application = Application.builder().token(TOKEN).build()
+# FIXED: Enabled all intents so the bot can receive join/leave updates
+intents = Intents.all()
+application = Application.builder().token(TOKEN).intents(intents).build()
+
 shivuu = Client("Shivu", api_id, api_hash, bot_token=TOKEN)
 lol = AsyncIOMotorClient(mongo_url)
 db = lol['Character_catcher']
