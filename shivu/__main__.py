@@ -486,7 +486,8 @@ async def main():
 
         await application.initialize()
         await application.start()
-        await application.updater.start_polling(drop_pending_updates=True)
+        await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+
 
         LOGGER.info("✅ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
 
