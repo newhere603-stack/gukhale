@@ -275,7 +275,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     text = (
         f"<tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji> 𝗨𝗦𝗘𝗥 𝗣𝗥𝗢𝗙𝗜𝗟𝗘 <tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji> <b>{sc('nane')} :</b> {link}\n"
+        f"<tg-emoji emoji-id=\"5217822164362739968\">👑</tg-emoji> <b>{sc('nane')} :</b> {link}\n"
         f"<tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> <b>{sc('id')} :</b> <code>{user_id}</code>\n"
         f"<tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji> <b>{sc('badge')} :</b> <b>{badge}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
