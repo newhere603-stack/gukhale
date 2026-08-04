@@ -21,6 +21,12 @@ from telegram.error import TelegramError
 
 from shivu import application, collection, db, CHARA_CHANNEL_ID, SUPPORT_CHAT, sudo_users
 
+# Import the in-memory cache list to update it instantly
+try:
+    from shivu import characters
+except ImportError:
+    characters = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -365,7 +371,13 @@ class TelegramUploader:
             character.file_id = message.animation.file_id
             character.file_unique_id = message.animation.file_unique_id
 
-        await collection.insert_one(character.to_dict())
+        # Insert to MongoDB
+        char_dict = character.to_dict()
+        await collection.insert_one(char_dict)
+        
+        # Update Cache instantly for fast drops and checking
+        if characters is not None:
+            characters.append(char_dict)
 
     @staticmethod
     async def _send_media_bytes(fp: io.BytesIO, media_type: MediaType, caption: str, context: ContextTypes.DEFAULT_TYPE) -> Message:
@@ -575,6 +587,14 @@ class CharacterDeletionHandler:
         processing_msg = await update.message.reply_text(f'<b>⏳ Deleting character {char_id}...</b>', parse_mode='HTML')
 
         character = await collection.find_one_and_delete({'id': char_id})
+        
+        # Remove from Cache instantly
+        if characters is not None and character:
+            for i, c in enumerate(characters):
+                if str(c.get('id')) == str(char_id):
+                    del characters[i]
+                    break
+
         if not character:
             await processing_msg.edit_text(f'<b>Character {char_id} not found.</b>', parse_mode='HTML')
             return
@@ -684,7 +704,16 @@ class CharacterUpdateHandler:
             from datetime import datetime
             update_data['updated_at'] = datetime.utcnow().isoformat()
 
+            # Update Database
             await collection.find_one_and_update({'id': char_id}, {'$set': update_data})
+            
+            # Instantly update Cache so /check reflects it immediately
+            if characters is not None:
+                for c in characters:
+                    if str(c.get('id')) == str(char_id):
+                        c.update(update_data)
+                        break
+
             await processing_msg.edit_text(f'<b>✅ Character {char_id} updated successfully!</b>', parse_mode='HTML')
         except Exception as e:
             await processing_msg.edit_text(f'<b>Update failed: {str(e)}</b>', parse_mode='HTML')
