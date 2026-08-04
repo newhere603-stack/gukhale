@@ -93,7 +93,7 @@ class DisplayOptions:
 
 # YOUR ORIGINAL SYMBOLS WITH SCREENSHOT STRUCTURE
 DEFAULT_STYLE = {
-    'header': "<b>✨ {user_mention}'s ʜᴀʀᴇᴍ - ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
+    'header': "<b>{user_mention}'s ʜᴀʀᴇᴍ - ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
     'anime_header': "<b>🎞 {anime}</b> ({user_count}/{total_count})\n",
     'separator': "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n",
     'character': "<b>➥ {id} | {rarity} | {name}{event} x{count}</b>\n",
@@ -243,7 +243,33 @@ class HaremHandler:
             return None
 
         characters = [c for c in (Character.from_dict(c) for c in user.get('characters', [])) if c]
+        
+        # --- LIVE SYNC FIX: Fetch latest character info from global db to ensure rarities match ---
+        if characters:
+            unique_ids = list({c.id for c in characters})
+            live_cursor = self.collection_db.find({"id": {"$in": unique_ids}})
+            live_docs = await live_cursor.to_list(length=None)
+            live_map = {str(doc.get('id')): doc for doc in live_docs}
+            
+            for c in characters:
+                if c.id in live_map:
+                    doc = live_map[c.id]
+                    c.name = doc.get('name', c.name)
+                    c.anime = doc.get('anime', c.anime)
+                    c.rarity = doc.get('rarity', c.rarity)  # Updates rarity dynamically from live DB
+                    if doc.get('img_url'):
+                        c.img_url = doc.get('img_url')
+                    c.is_video = doc.get('is_video', c.is_video)
+
         favorite = Character.from_dict(user.get('favorites')) if user.get('favorites') else None
+        if favorite and favorite.id in live_map:
+            doc = live_map[favorite.id]
+            favorite.name = doc.get('name', favorite.name)
+            favorite.anime = doc.get('anime', favorite.anime)
+            favorite.rarity = doc.get('rarity', favorite.rarity)
+            if doc.get('img_url'):
+                favorite.img_url = doc.get('img_url')
+            favorite.is_video = doc.get('is_video', favorite.is_video)
 
         if favorite and not any(c.id == favorite.id for c in characters):
             await self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}})
