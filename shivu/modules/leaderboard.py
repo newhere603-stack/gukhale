@@ -48,7 +48,6 @@ def extract_balance(user_doc):
     if not user_doc or not isinstance(user_doc, dict):
         return 0
     
-    # Common keys used across shivu / anime character collector bots
     for key in ['balance', 'coins', 'wallet', 'money', 'gold', 'bal']:
         val = user_doc.get(key)
         if val is not None:
@@ -80,11 +79,11 @@ def extract_tokens(user_doc):
 
 def get_rank_badge(rank: int) -> str:
     if rank == 1:
-        return "🥇 ᴄʀᴏᴡɴ ʟᴇɢᴇɴᴅ"
+        return "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji> ᴄʀᴏᴡɴ ʟᴇɢᴇɴᴅ"
     elif rank == 2:
-        return "🥈 ᴍᴀsᴛᴇʀ"
+        return "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji> ᴍᴀsᴛᴇʀ"
     elif rank == 3:
-        return "🥉 ᴇʟɪᴛᴇ"
+        return "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji> ᴇʟɪᴛᴇ"
     elif rank <= 10:
         return "🎖️ ᴛᴏᴘ 10"
     elif rank <= 50:
@@ -101,7 +100,7 @@ def generate_progress_bar(current: int, total: int, length: int = 8) -> str:
 
 
 def format_list(title, rows):
-    header = f"🏆 <b>{sc('top')} {len(rows)} {sc(title)}</b> 🏆\n\n"
+    header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('top')} {len(rows)} {sc(title)}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
     return header + "\n".join(rows)
 
 
@@ -125,18 +124,18 @@ def back_close_buttons(refresh_cb, extra_row=None):
 # ---------- /tops menu ----------
 
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
-    text = f"🏆 <b>{sc('select the top list')}</b> 🏆"
+    text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('select the top list')}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👤 ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"),
-            InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
+            InlineKeyboardButton("<tg-emoji emoji-id=\"6339033929718177895\">👤</tg-emoji> ᴘʀᴏꜰɪ𝗟ᴇ", callback_data="lb_profile"),
+            InlineKeyboardButton("<tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
         ],
         [
-            InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
+            InlineKeyboardButton("<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
         ],
         [
-            InlineKeyboardButton("🎴 ᴄᴛᴏᴘ", callback_data="lb_chars"),
-            InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")
+            InlineKeyboardButton("<tg-emoji emoji-id=\"6339312947973595391\">👁</tg-emoji> ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("<tg-emoji emoji-id=\"5449885771420934013\">🌱</tg-emoji> ɢᴛᴏᴘ", callback_data="lb_gtop")
         ],
     ])
     await send_or_edit(update, context, text, kb, edit)
@@ -145,13 +144,11 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
 # ---------- Top by balance ----------
 
 async def top_balance(update: Update, context: CallbackContext, edit=False):
-    # Fetch top 50 to sort accurately in python if DB field name varies
     data = await user_collection.find({}).limit(50).to_list(50)
 
     if not data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
 
-    # Sort users by extracted balance
     sorted_data = sorted(data, key=lambda x: extract_balance(x), reverse=True)[:10]
 
     rows = []
@@ -164,7 +161,7 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
         name = u.get('first_name', 'Unknown')
         link = mention_html(uid, name)
         bal = extract_balance(u)
-        rows.append(f"<b>{i}. {link} - 💸 {bal:,}</b>")
+        rows.append(f"<b>{i}. {link} - <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bal:,}</b>")
     
     text = format_list("users by coins", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
@@ -188,7 +185,7 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
         name = u.get("first_name", "Unknown")
         link = mention_html(uid, name)
         tokens = extract_tokens(u)
-        rows.append(f"<b>{i}. {link} - 💠 {tokens:,}</b>")
+        rows.append(f"<b>{i}. {link} - <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {tokens:,}</b>")
 
     text = format_list("users by tokens", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
@@ -229,7 +226,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     if not data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
 
-    rows = [f"<b>{i}. {escape(g.get('group_name', 'Unknown'))} - {g.get('count', 0):,}👥</b>"
+    rows = [f"<b>{i}. {escape(g.get('group_name', 'Unknown'))} - {g.get('count', 0):,} <tg-emoji emoji-id=\"5453957997418004470\">👥</tg-emoji></b>"
             for i, g in enumerate(data, 1)]
     text = format_list("groups", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
@@ -243,10 +240,10 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
 
     if not user:
         text = (
-            f"🏆 <b>{sc('profile not found')}</b> 🏆\n"
+            f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('profile not found')}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>❌ {sc('start me first!')}</b>\n"
-            f"<b>🌱 {sc('start guessing characters in groups to build your profile.')}</b>"
+            f"<b><tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> {sc('start me first!')}</b>\n"
+            f"<b><tg-emoji emoji-id=\"5449885771420934013\">🌱</tg-emoji> {sc('start guessing characters in groups to build your profile.')}</b>"
         )
         return await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
 
@@ -276,27 +273,27 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     link = update.effective_user.mention_html()
 
     text = (
-        f"✨ 𝗨𝗦𝗘𝗥 𝗣𝗥𝗢𝗙𝗜𝗟𝗘 ✨\n"
+        f"<tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji> 𝗨𝗦𝗘𝗥 𝗣𝗥𝗢𝗙𝗜𝗟𝗘 <tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 <b>{sc('nane')} :</b> {link}\n"
-        f"🔖 <b>{sc('id')} :</b> <code>{user_id}</code>\n"
-        f"📛 <b>{sc('badge')} :</b> <b>{badge}</b>\n"
+        f"<tg-emoji emoji-id=\"6339033929718177895\">👤</tg-emoji> <b>{sc('nane')} :</b> {link}\n"
+        f"<tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> <b>{sc('id')} :</b> <code>{user_id}</code>\n"
+        f"<tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji> <b>{sc('badge')} :</b> <b>{badge}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📊 <b>{sc('collection stats')}</b>\n"
+        f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> <b>{sc('collection stats')}</b>\n"
         f"├ <b>{sc('rank')} :</b> <b>#{rank:,}</b> / <b>{total_collectors:,}</b>\n"
-        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> 🎴\n"
+        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6339312947973595391\">👁</tg-emoji>\n"
         f"└ <b>{sc('progress')} :</b> [<code>{progress_bar}</code>] <b>{completion_pct}%</b>\n\n"
-        f"🏛️ <b>{sc('vault & wallet')}</b>\n"
-        f"├ <b>{sc('balance')} :</b> <b>💸 {balance:,}</b>\n"
-        f"└ <b>{sc('tokens')} :</b> <b>💠 {tokens:,}</b>\n"
+        f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> <b>{sc('vault & wallet')}</b>\n"
+        f"├ <b>{sc('balance')} :</b> <b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {balance:,}</b>\n"
+        f"└ <b>{sc('tokens')} :</b> <b><tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {tokens:,}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<i><b>{sc('keep grabbing to reach top 10!')}</b></i>"
     )
 
     profile_kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🎴 ᴄᴛᴏᴘ", callback_data="lb_chars"),
-            InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")
+            InlineKeyboardButton("<tg-emoji emoji-id=\"6339312947973595391\">👁</tg-emoji> ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ʙᴛᴏᴘ", callback_data="lb_bal")
         ],
         [
             InlineKeyboardButton("⟳", callback_data="lb_profile"),
@@ -332,7 +329,7 @@ async def stats(update: Update, context: CallbackContext, edit=False):
     total_chars = total_chars_result[0]['total'] if total_chars_result else 0
 
     text = (
-        f"📊 <b>{sc('system stats')}</b> 📊\n\n"
+        f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> <b>{sc('system stats')}</b> <tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji>\n\n"
         f"<b>{sc('users')}</b>: <b>{users:,}</b>\n"
         f"<b>{sc('grabbers')}</b>: <b>{collectors:,}</b>\n"
         f"<b>{sc('groups')}</b>: <b>{groups:,}</b>\n"
