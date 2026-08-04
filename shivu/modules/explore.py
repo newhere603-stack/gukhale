@@ -1,13 +1,16 @@
 import random
+import html
+import logging
 from datetime import datetime, timezone
-
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, CallbackContext
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 from shivu import application, user_collection
 
-# Basic Settings
 COOLDOWN_SEC = 73
 FEE = 300
 MIN_REWARD = 600
@@ -31,14 +34,14 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
     if update.effective_chat.type == "private":
         await update.message.reply_text(
-            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!</b>", 
+            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!</b>",
             parse_mode=ParseMode.HTML
         )
         return
 
     if update.message.reply_to_message:
         await update.message.reply_text(
-            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴɴᴏᴛ ʙᴇ ᴜsᴇᴅ ᴀs ᴀ ʀᴇᴘʟʏ!</b>", 
+            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴɴᴏᴛ ʙᴇ ᴜsᴇᴅ ᴀs ᴀ ʀᴇᴘʟʏ!</b>",
             parse_mode=ParseMode.HTML
         )
         return
@@ -59,10 +62,9 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
     try:
         user = await user_collection.find_one({'id': user_id})
-        
         if not user:
             await update.message.reply_text(
-                "<b>sᴛᴀʀᴛ ᴍᴇ ꜰɪʀsᴛ!</b>", 
+                "<b>sᴛᴀʀᴛ ᴍᴇ ꜰɪʀsᴛ!</b>",
                 parse_mode=ParseMode.HTML
             )
             return
@@ -81,17 +83,18 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             {'id': user_id},
             {'$inc': {'balance': net_reward}}
         )
-
         user_cooldowns[user_id] = now
-
         action = random.choice(EXPLORE_ACTIONS)
+
+        # Premium Emojis Integrated without log channel messaging
         await update.message.reply_text(
-            f"<b><tg-emoji emoji-id='6093547287139590167'></tg-emoji> ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ <tg-emoji emoji-id='5472030678633684592'></tg-emoji> {reward} ᴄᴏɪɴs!</b>\n"
-f"<b><tg-emoji emoji-id='5472030678633684592'></tg-emoji> ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: <tg-emoji emoji-id='5472030678633684592'></tg-emoji> {FEE} ᴄᴏɪɴs</b>",
+            f"<b><emoji id=6093547287139590167>🗺️</emoji> ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ <emoji id=5472030678633684592>💸</emoji> {reward} ᴄᴏɪɴs!</b>\n"
+            f"<b><emoji id=5472030678633684592>💸</emoji> ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: <emoji id=5472030678633684592>💸</emoji> {FEE} ᴄᴏɪɴs</b>",
             parse_mode=ParseMode.HTML
         )
 
     except Exception as e:
+        logger.error(f"Explore error: {e}")
         await update.message.reply_text(
             f"<b>ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>",
             parse_mode=ParseMode.HTML
