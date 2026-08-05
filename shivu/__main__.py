@@ -54,7 +54,8 @@ rarity_status_cache = {}
 group_settings_cache = {}  
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-first_correct_guesses, spawn_messages, spawn_message_links = {}, {}
+# Fixed line below: added the 3rd {}
+first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
 currently_spawning = {}
 spawn_times = {}  
 grabbed_spawns = set()  
