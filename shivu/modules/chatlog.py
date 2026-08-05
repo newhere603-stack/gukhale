@@ -1,15 +1,18 @@
 import asyncio
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from telegram import Update
 from telegram.ext import MessageHandler, filters, ContextTypes
 from shivu import user_collection, application, LOGGER
 
 LOG_GROUP_ID = -1003893927065
 
+# Indian Standard Time (IST -> UTC +5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
+
 def create_log_message(title: str, data: Dict[str, Any]) -> str:
     """Beautiful bold and small-caps log designer."""
-    timestamp = datetime.now().strftime("%I:%M %p • %d/%m/%y")
+    timestamp = datetime.now(IST).strftime("%I:%M %p • %d/%m/%y")
     base = f"<b>{title}</b>\n\n"
     
     items = list(data.items())
