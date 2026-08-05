@@ -170,7 +170,7 @@ async def despawn_character(chat_id, message_id, character, context):
             f"⏰ <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
             f"{emoji} <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
             f"⚡ <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
-            f"🎯 <b>ʀᴀʀɪᴛʏ:</b> <b>{escape(rarity_display)}</b>\n\n"
+            f"{escape(r_emoji)} <b>ʀᴀʀɪᴛʏ:</b> <b>{escape(rarity_display)}</b>\n\n"
             f"💔 <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
