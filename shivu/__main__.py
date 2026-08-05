@@ -245,7 +245,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         last_characters[chat_id] = character
         first_correct_guesses.pop(chat_id, None)
 
-        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀᴘᴘᴇᴀʀᴇᴅ!\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ.</b>"
+        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀᴘᴘᴇᴀʀᴇᴅ!\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ 🔥</b>"
         timeouts = dict(read_timeout=300, write_timeout=300, connect_timeout=60, pool_timeout=60)
         spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
 
