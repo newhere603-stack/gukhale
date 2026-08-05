@@ -90,9 +90,13 @@ CONFIG = GameConfig()
 game_state = GameState()
 
 GAME_EMOJIS = {
-    GameType.COINFLIP: "🪙", GameType.DICE: "🎲", GameType.GAMBLE: "🎰",
-    GameType.BASKET: "🏀", GameType.DART: "🎯", GameType.CONTRACT: "🤝",
-    GameType.RIDDLE: "🧩"
+    GameType.COINFLIP: '<tg-emoji emoji-id="5379600444098093058">🪙</tg-emoji>', 
+    GameType.DICE: '<tg-emoji emoji-id="6055198348787324579">🎲</tg-emoji>', 
+    GameType.GAMBLE: '<tg-emoji emoji-id="5235989279024373566">🎰</tg-emoji>',
+    GameType.BASKET: '<tg-emoji emoji-id="5384088040677319401">🏀</tg-emoji>', 
+    GameType.DART: '<tg-emoji emoji-id="5350460637182993292">🎯</tg-emoji>', 
+    GameType.CONTRACT: '<tg-emoji emoji-id="6332514633219315005">🤝</tg-emoji>',
+    GameType.RIDDLE: '<tg-emoji emoji-id="5265120027853481187">🧩</tg-emoji>'
 }
 
 
@@ -181,7 +185,7 @@ class GameUI:
 
     @staticmethod
     def format_result(result: GameResult, emoji: str) -> str:
-        status = "<b>✅ ᴡɪɴ</b>" if result.won else "<b>❌ ʟᴏsᴇ</b>"
+        status = "<b><tg-emoji emoji-id=\"6068616612599044781\">✅</tg-emoji> ᴡɪɴ</b>" if result.won else "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ʟᴏsᴇ</b>"
         msg = f"<b>{emoji} ɢᴀᴍᴇ ʀᴇsᴜʟᴛ</b>\n{status}\n"
         if result.display_outcome:
             msg += f"<b>ᴏᴜᴛᴄᴏᴍᴇ: {result.display_outcome}</b>\n"
@@ -195,7 +199,7 @@ class GameUI:
                 rewards.append(f"+{result.tokens_gained} ᴛᴏᴋᴇɴ")
             
             if rewards:
-                msg += f"\n🎁 <b>ʙᴏɴᴜs: {' | '.join(rewards)}</b>"
+                msg += f"\n<tg-emoji emoji-id=\"5199749070830197566\">🎁</tg-emoji> <b>ʙᴏɴᴜs: {' | '.join(rewards)}</b>"
                 
         return msg
 
@@ -228,8 +232,8 @@ class GameLogic:
         if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dice_multiplier
-            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome=f"🎲 {dice}")
-        return GameResult(False, 0, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome=f"🎲 {dice}")
+            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome=f'<tg-emoji emoji-id="6055198348787324579">🎲</tg-emoji> {dice}')
+        return GameResult(False, 0, message=f"ʀᴏʟʟᴇᴅ {dice} ({res_str})\nʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome=f'<tg-emoji emoji-id="6055198348787324579">🎲</tg-emoji> {dice}')
 
     @staticmethod
     def gamble(pick: str, amount: int) -> GameResult:
@@ -258,7 +262,7 @@ class GameLogic:
         if roll < CONFIG.dart_bullseye_rate:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dart_bullseye_multiplier
-            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʙᴜʟʟsᴇʏᴇ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="🎯 ʙᴜʟʟsᴇʏᴇ")
+            return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʙᴜʟʟsᴇʏᴇ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome='<tg-emoji emoji-id="5350460637182993292">🎯</tg-emoji> ʙᴜʟʟsᴇʏᴇ')
         elif roll < (CONFIG.dart_bullseye_rate + CONFIG.dart_hit_rate):
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dart_hit_multiplier
@@ -296,6 +300,7 @@ async def send_or_edit_response(update: Update, text: str, markup=None):
 async def check_cooldown(update: Update, user_id: int) -> bool:
     if remaining := game_state.check_cooldown(user_id):
         if update.callback_query:
+            # HTML tags do not work in callback_query answer, kept as plain emoji
             await update.callback_query.answer(
                 f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ!", 
                 show_alert=True
@@ -303,7 +308,7 @@ async def check_cooldown(update: Update, user_id: int) -> bool:
         else:
             await send_or_edit_response(
                 update, 
-                f"<b>⏱ ᴄᴏᴏʟᴅᴏᴡɴ ᴀᴄᴛɪᴠᴇ</b>\n<b>ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ.</b>"
+                f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ᴄᴏᴏʟᴅᴏᴡɴ ᴀᴄᴛɪᴠᴇ</b>\n<b>ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ.</b>"
             )
         return True
     return False
@@ -311,17 +316,17 @@ async def check_cooldown(update: Update, user_id: int) -> bool:
 
 async def validate_amount(update: Update, amount: int, user_id: int) -> bool:
     if amount <= 0:
-        await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
         return False
     
     user = await UserDB.get(user_id)
     if not user:
-        await send_or_edit_response(update, "<b>❌ ᴀᴄᴄᴏᴜɴᴛ ɴᴏᴛ ғᴏᴜɴᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ʀᴇɢɪsᴛᴇʀ/ɢᴜᴇss ғɪʀsᴛ!</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴀᴄᴄᴏᴜɴᴛ ɴᴏᴛ ғᴏᴜɴᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ʀᴇɢɪsᴛᴇʀ/ɢᴜᴇss ғɪʀsᴛ!</b>")
         return False
 
     balance = await UserDB.get_balance(user_id)
     if balance < amount:
-        await send_or_edit_response(update, f"<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {balance:,})</b>")
+        await send_or_edit_response(update, f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {balance:,})</b>")
         return False
     return True
 
@@ -337,7 +342,7 @@ async def process_game(update: Update, context: CallbackContext, game_type: Game
     game_state.record_play(user_id, game_type.value)
     game_state.set_cooldown(user_id)
     
-    emoji = GAME_EMOJIS.get(game_type, "🎮")
+    emoji = GAME_EMOJIS.get(game_type, '<tg-emoji emoji-id="6091632796877463207">🧩</tg-emoji>')
     msg = GameUI.format_result(result, emoji)
     
     curr_bal = await UserDB.get_balance(user_id)
@@ -366,19 +371,19 @@ async def sbet(update: Update, context: CallbackContext, override_args: List[str
     try:
         amount, guess = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
-        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/sbet &lt;amount&gt; heads|tails</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /sbet 100 heads</b></i>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/sbet &lt;amount&gt; heads|tails</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /sbet 100 heads</b></i>")
         return
     
     guess = 'heads' if guess in ('h', 'head', 'heads') else ('tails' if guess in ('t', 'tail', 'tails') else None)
     if not guess:
-        await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'heads' ᴏʀ 'tails'</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'heads' ᴏʀ 'tails'</b>")
         return
     
     if not await validate_amount(update, amount, user_id):
         return
     
     if not await UserDB.change_balance(user_id, -amount):
-        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
         return
 
     result = GameLogic.coinflip(guess, amount)
@@ -394,19 +399,19 @@ async def roll_cmd(update: Update, context: CallbackContext, override_args: List
     try:
         amount, choice = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
-        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/roll &lt;amount&gt; odd|even</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /roll 50 odd</b></i>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/roll &lt;amount&gt; odd|even</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /roll 50 odd</b></i>")
         return
     
     choice = 'odd' if choice in ('o', 'odd') else ('even' if choice in ('e', 'even') else None)
     if not choice:
-        await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'odd' ᴏʀ 'even'</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'odd' ᴏʀ 'even'</b>")
         return
     
     if not await validate_amount(update, amount, user_id):
         return
     
     if not await UserDB.change_balance(user_id, -amount):
-        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
         return
 
     result = GameLogic.dice_roll(choice, amount)
@@ -422,11 +427,11 @@ async def gamble(update: Update, context: CallbackContext, override_args: List[s
     try:
         amount, pick = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
-        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/gamble &lt;amount&gt; l|r</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /gamble 100 l</b></i>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/gamble &lt;amount&gt; l|r</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /gamble 100 l</b></i>")
         return
     
     if pick not in ('l', 'r', 'left', 'right'):
-        await send_or_edit_response(update, "<b>❌ ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'l' ᴏʀ 'r'</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'l' ᴏʀ 'r'</b>")
         return
     
     pick = 'l' if pick.startswith('l') else 'r'
@@ -434,7 +439,7 @@ async def gamble(update: Update, context: CallbackContext, override_args: List[s
         return
     
     if not await UserDB.change_balance(user_id, -amount):
-        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
         return
 
     result = GameLogic.gamble(pick, amount)
@@ -450,14 +455,14 @@ async def basket(update: Update, context: CallbackContext, override_args: List[s
     try:
         amount = int(args[0])
     except (IndexError, ValueError):
-        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
         return
     
     if not await validate_amount(update, amount, user_id):
         return
     
     if not await UserDB.change_balance(user_id, -amount):
-        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
         return
 
     result = GameLogic.basketball(amount)
@@ -473,14 +478,14 @@ async def dart(update: Update, context: CallbackContext, override_args: List[str
     try:
         amount = int(args[0])
     except (IndexError, ValueError):
-        await send_or_edit_response(update, "<b>📖 ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
         return
     
     if not await validate_amount(update, amount, user_id):
         return
     
     if not await UserDB.change_balance(user_id, -amount):
-        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
         return
 
     result = GameLogic.darts(amount)
@@ -496,7 +501,7 @@ async def stour(update: Update, context: CallbackContext, override_args: List[st
         return
     
     if not await UserDB.change_balance(user_id, -CONFIG.stour_entry_fee):
-        await send_or_edit_response(update, "<b>💸 ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ.</b>")
         return
 
     result = GameLogic.contract()
@@ -510,7 +515,7 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
     
     question, answer = GameLogic.generate_riddle()
     text = (
-        f"<b>🧩 ʀɪᴅᴅʟᴇ ᴛɪᴍᴇ</b>\n"
+        f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> ʀɪᴅᴅʟᴇ ᴛɪᴍᴇ</b>\n"
         f"<b>sᴏʟᴠᴇ: {question}</b>\n"
         f"<b>ᴛɪᴍᴇ: <code>{CONFIG.riddle_timeout}s</code> | ʀᴇᴡᴀʀᴅ: <code>50</code> ᴄᴏɪɴs + <code>1</code> ᴛᴏᴋᴇɴ</b>\n"
         f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜᴍʙᴇʀ</b></i>"
@@ -531,7 +536,7 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
                 try:
                     await application.bot.send_message(
                         pending.chat_id, 
-                        f"<b>⏳ ᴛɪᴍᴇ's ᴜᴘ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {answer}</b>", 
+                        f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {answer}</b>", 
                         parse_mode="HTML"
                     )
                 except Exception:
@@ -572,13 +577,13 @@ async def riddle_answer(update: Update, context: CallbackContext):
             rewards_str += f" <b>& {total_tokens} ᴛᴏᴋᴇɴ!</b>"
             
         await update.message.reply_text(
-            f"<b>✅ ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
+            f"<b><tg-emoji emoji-id=\"6068616612599044781\">✅</tg-emoji> ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
             parse_mode="HTML"
         )
         game_state.riddles.pop(user_id, None)
     elif text.isdigit() or (text.startswith('-') and text[1:].isdigit()):
         await update.message.reply_text(
-            f"<b>❌ ᴡʀᴏɴɢ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {pending.answer}</b>",
+            f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴡʀᴏɴɢ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {pending.answer}</b>",
             parse_mode="HTML"
         )
         game_state.riddles.pop(user_id, None)
@@ -586,7 +591,7 @@ async def riddle_answer(update: Update, context: CallbackContext):
 
 async def games_menu(update: Update, context: CallbackContext):
     text = (
-        f"<b>ᴀᴠᴀɪʟᴀʙʟᴇ ɢᴀᴍᴇs 🎮</b>\n"
+        f"<b>ᴀᴠᴀɪʟᴀʙʟᴇ ɢᴀᴍᴇs <tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji></b>\n"
         f"<b>ᴄᴏɪɴ ғʟɪᴘ • ᴅɪᴄᴇ ʀᴏʟʟ</b>\n"
         f"<b>ɢᴀᴍʙʟᴇ • ʙᴀsᴋᴇᴛʙᴀʟʟ</b>\n"
         f"<b>ᴅᴀʀᴛs • ᴄᴏɴᴛʀᴀᴄᴛ</b>\n"
@@ -601,7 +606,7 @@ async def game_stats(update: Update, context: CallbackContext):
     stats = game_state.stats.get(user_id, {})
     
     if not stats:
-        await send_or_edit_response(update, "<b>📊 ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
+        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
         return
 
     stat_lines = [f"• {game.upper()}: {count} ᴘʟᴀʏ(s)" for game, count in stats.items()]
@@ -611,7 +616,7 @@ async def game_stats(update: Update, context: CallbackContext):
     tok = user.get('tokens', 0) if user else 0
 
     text = (
-        f"<b>📊 ɢᴀᴍᴇ sᴛᴀᴛɪsᴛɪᴄs</b>\n"
+        f"<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɢᴀᴍᴇ sᴛᴀᴛɪsᴛɪᴄs</b>\n"
         f"<b>ᴜsᴇʀ: {name}</b>\n\n"
         f"<b>{stats_str}</b>\n\n"
         f"<b>ᴄᴜʀʀᴇɴᴛ ʙᴀʟᴀɴᴄᴇ: <code>{bal:,}</code> ᴄᴏɪɴs</b>\n"
@@ -638,13 +643,13 @@ async def games_callback(update: Update, context: CallbackContext):
         await query.answer()
         game_cmd = parts[2]
         info_texts = {
-            "sbet": "<b>🪙 ᴄᴏɪɴ ғʟɪᴘ</b>\nUsage: <code>/sbet &lt;amount&gt; heads|tails</code>",
-            "roll": "<b>🎲 ᴅɪᴄᴇ ʀᴏʟʟ</b>\nUsage: <code>/roll &lt;amount&gt; odd|even</code>",
-            "gamble": "<b>🎰 ɢᴀᴍʙʟᴇ</b>\nUsage: <code>/gamble &lt;amount&gt; l|r</code>",
-            "basket": "<b>🏀 ʙᴀsᴋᴇᴛʙᴀʟʟ</b>\nUsage: <code>/basket &lt;amount&gt;</code>",
-            "dart": "<b>🎯 ᴅᴀʀᴛs</b>\nUsage: <code>/dart &lt;amount&gt;</code>",
-            "stour": f"<b>🤝 ᴄᴏɴᴛʀᴀᴄᴛ</b>\nUsage: <code>/stour</code>\nFee: {CONFIG.stour_entry_fee} coins",
-            "riddle": "<b>🧩 ʀɪᴅᴅʟᴇ</b>\nUsage: <code>/riddle</code>"
+            "sbet": "<b><tg-emoji emoji-id=\"5379600444098093058\">🪙</tg-emoji> ᴄᴏɪɴ ғʟɪᴘ</b>\nUsage: <code>/sbet &lt;amount&gt; heads|tails</code>",
+            "roll": "<b><tg-emoji emoji-id=\"6055198348787324579\">🎲</tg-emoji> ᴅɪᴄᴇ ʀᴏʟʟ</b>\nUsage: <code>/roll &lt;amount&gt; odd|even</code>",
+            "gamble": "<b><tg-emoji emoji-id=\"5235989279024373566\">🎰</tg-emoji> ɢᴀᴍʙʟᴇ</b>\nUsage: <code>/gamble &lt;amount&gt; l|r</code>",
+            "basket": "<b><tg-emoji emoji-id=\"5384088040677319401\">🏀</tg-emoji> ʙᴀsᴋᴇᴛʙᴀʟʟ</b>\nUsage: <code>/basket &lt;amount&gt;</code>",
+            "dart": "<b><tg-emoji emoji-id=\"5350460637182993292\">🎯</tg-emoji> ᴅᴀʀᴛs</b>\nUsage: <code>/dart &lt;amount&gt;</code>",
+            "stour": f"<b><tg-emoji emoji-id=\"6332514633219315005\">🤝</tg-emoji> ᴄᴏɴᴛʀᴀᴄᴛ</b>\nUsage: <code>/stour</code>\nFee: {CONFIG.stour_entry_fee} coins",
+            "riddle": "<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> ʀɪᴅᴅʟᴇ</b>\nUsage: <code>/riddle</code>"
         }
         await query.message.reply_text(info_texts.get(game_cmd, "Unknown Game"), parse_mode="HTML")
 
