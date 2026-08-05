@@ -30,19 +30,31 @@ MESSAGE_FREQUENCY = 70
 DESPAWN_TIME = 180
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
+# [BUG FIX]: Dictionary modified to hold 3 values (Database Emoji, Premium Emoji, Name)
+# This fixes the Rarity Status matching issue.
 RARITIES = {
-    "common": ("🟢", "Common"), "rare": ("🟠", "Rare"), "legendary": ("🟡", "Legendary"),
-    "special": ("🔵", "Medium"), "celestial": ("🪽", "Celestial"), "erotic": ("🥵", "Spicy"),
-    "exclusive": ("💮", "Exclusive"), "premium": ("🔮", "Premium Edition"), "mythic": ("💎", "Mythic"),
-    "sweet": ("🍭", "Sweet"), "valentine": ("💞", "Valentine"), "winter": ("❄️", "Winter"),
-    "neon": ("⚡", "Neon"), "pearl": ("🐚", "Summer"), "cosmic": ("🌌", "Cosmic"),
+    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
+    "legendary": ("🟡", '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji>', "Legendary"),
+    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"), 
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"), 
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"), 
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"), 
+    "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"), 
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"), 
+    "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"), 
+    "pearl": ("🐚", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
 }
 
 rarity_status_cache = {}
 group_settings_cache = {}  
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
+first_correct_guesses, spawn_messages, spawn_message_links = {}, {}
 currently_spawning = {}
 spawn_times = {}  
 grabbed_spawns = set()  
@@ -58,10 +70,10 @@ def get_rarity_key(rarity_str):
     if not isinstance(rarity_str, str):
         return None
     rarity_str = rarity_str.strip()
-    emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
+    db_emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
     name = name.strip().lower()
-    for key, (r_emoji, r_name) in RARITIES.items():
-        if rarity_str == key or emoji == r_emoji or name == r_name.lower():
+    for key, (r_db_emoji, _, r_name) in RARITIES.items():
+        if rarity_str.lower() == key or db_emoji == r_db_emoji or name == r_name.lower():
             return key
     return None
 
@@ -160,18 +172,18 @@ async def despawn_character(chat_id, message_id, character, context):
         r_key = get_rarity_key(rarity_str)
         
         if r_key and r_key in RARITIES:
-            emoji, r_name = RARITIES[r_key]
-            rarity_display = f"{emoji} {r_name}"
+            _, r_display_emoji, r_name = RARITIES[r_key]
+            rarity_display = f"{r_display_emoji} {escape(r_name)}"
         else:
-            emoji = rarity_str.split(' ')[0] if isinstance(rarity_str, str) and ' ' in rarity_str else '🟢'
-            rarity_display = rarity_str
+            db_emoji = rarity_str.split(' ')[0] if isinstance(rarity_str, str) and ' ' in rarity_str else '🟢'
+            rarity_display = escape(rarity_str)
 
         caption = (
-            f"⏰ <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
-            f"🌸 <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
-            f"🎞️ <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
-            f"{escape(r_emoji)} <b>ʀᴀʀɪᴛʏ:</b> <b>{escape(rarity_display)}</b>\n\n"
-            f"💔 <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
+            f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
+            f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
+            f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
+            f"<b>ʀᴀʀɪᴛʏ:</b> <b>{rarity_display}</b>\n\n"
+            f"<tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
         
@@ -245,7 +257,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         last_characters[chat_id] = character
         first_correct_guesses.pop(chat_id, None)
 
-        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀᴘᴘᴇᴀʀᴇᴅ!\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ 🔥</b>"
+        caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀᴘᴘᴇᴀʀᴇᴅ!\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
         timeouts = dict(read_timeout=300, write_timeout=300, connect_timeout=60, pool_timeout=60)
         spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
 
@@ -284,14 +296,14 @@ async def guess(update: Update, context: CallbackContext) -> None:
 
         if chat_id in first_correct_guesses:
             return await update.message.reply_html(
-                '<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ ⚡. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>'
+                '<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642\">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>'
             )
 
         guess_text = ' '.join(context.args).lower() if context.args else ''
         if not guess_text:
             return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ɴᴀᴍᴇ!</b>')
         if "()" in guess_text or "&" in guess_text:
-            return await update.message.reply_html("<b>ɴᴀʜʜ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴛʜɪs ᴛʏᴘᴇs ᴏғ ᴡᴏʀᴅs...❌</b>")
+            return await update.message.reply_html("<b>ɴᴀʜʜ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴛʜɪs ᴛʏᴘᴇs ᴏғ ᴡᴏʀᴅs...<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>")
 
         character = last_characters[chat_id]
         char_name = character.get('name', '').lower()
@@ -362,19 +374,22 @@ async def guess(update: Update, context: CallbackContext) -> None:
         r_key = get_rarity_key(rarity_str)
         
         if r_key and r_key in RARITIES:
-            r_emoji, r_name = RARITIES[r_key]
+            _, r_display_emoji, r_name = RARITIES[r_key]
+            r_name = escape(r_name)
         else:
-            r_emoji, r_name = (rarity_str.split(' ', 1) + [''])[:2] if isinstance(rarity_str, str) and ' ' in rarity_str else (rarity_str, '')
+            db_emoji, r_name = (rarity_str.split(' ', 1) + [''])[:2] if isinstance(rarity_str, str) and ' ' in rarity_str else (rarity_str, '')
+            r_display_emoji = escape(db_emoji)
+            r_name = escape(r_name)
 
         mention = f'<a href="tg://user?id={user_id}">{escape(eu.first_name)}</a>'
 
         success_message = (
-            f"✅ <b>{mention}, ᴄᴏɴɢʀᴀᴛs 🎉</b>\n"
-            f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ 🫧</b>\n\n"
-            f"🌸 𝗡𝗔𝗠𝗘:<b> {escape(character.get('name', 'Unknown'))}</b>\n"
-            f"{escape(r_emoji)} 𝗥𝗔𝗥𝗜𝗧𝗬:<b> {escape(r_name)}</b>\n"
-            f"🎞️ 𝗔𝗡𝗜𝗠𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
-            f"⌛️ 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {time_taken}s</code>"
+            f"<tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji> <b>{mention}, ᴄᴏɴɢʀᴀᴛs <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n"
+            f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji></b>\n\n"
+            f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> 𝗡𝗔𝗠𝗘:<b> {escape(character.get('name', 'Unknown'))}</b>\n"
+            f"{r_display_emoji} 𝗥𝗔𝗥𝗜𝗧𝗬:<b> {r_name}</b>\n"
+            f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> 𝗔𝗡𝗜𝗠𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
+            f"<tg-emoji emoji-id=\"6332497311616209557\">⏳</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {time_taken}s</code>"
         )
         
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
@@ -393,7 +408,7 @@ async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> No
     
     chat_id = update.effective_chat.id
     if not context.args or context.args[0].lower() not in ('on', 'off'):
-        return await update.message.reply_html('<b>💡 ᴜsᴀɢᴇ:</b> /grab_delete [on|off]')
+        return await update.message.reply_html('<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> /grab_delete [on|off]')
 
     mode = context.args[0].lower() == 'on'
     await set_group_setting(chat_id, 'grab_delete', mode)
@@ -407,7 +422,7 @@ async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> No
     
     chat_id = update.effective_chat.id
     if not context.args or context.args[0].lower() not in ('on', 'off'):
-        return await update.message.reply_html('<b>💡 ᴜsᴀɢᴇ:</b> /miss_delete [on|off]')
+        return await update.message.reply_html('<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> /miss_delete [on|off]')
 
     mode = context.args[0].lower() == 'on'
     await set_group_setting(chat_id, 'miss_delete', mode)
@@ -416,10 +431,10 @@ async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> No
 
 
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
-    lines = ["<b>🎯 ʀᴀʀɪᴛʏ sᴘᴀᴡɴ sᴛᴀᴛᴜs</b>\n"]
-    for key, (emoji, name) in RARITIES.items():
-        state = "✅ ᴏɴ" if rarity_status_cache.get(key, True) else "❌ ᴏғғ"
-        lines.append(f"{emoji} <b>{escape(name)}</b> (<code>{key}</code>) — {state}")
+    lines = ["<b><tg-emoji emoji-id=\"5256131095094652290\">🎯</tg-emoji> ʀᴀʀɪᴛʏ sᴘᴀᴡɴ sᴛᴀᴛᴜs</b>\n"]
+    for key, (_, display_emoji, name) in RARITIES.items():
+        state = "<tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji> ᴏɴ" if rarity_status_cache.get(key, True) else "<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴏғғ"
+        lines.append(f"{display_emoji} <b>{escape(name)}</b> (<code>{key}</code>) — {state}")
     lines.append("\n<b>ᴜsᴇ /rarity_on <key> ᴏʀ /rarity_off <key> ᴛᴏ ᴄʜᴀɴɢᴇ.</b>")
     await update.message.reply_html("\n".join(lines))
 
@@ -430,17 +445,17 @@ async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: b
 
     if not context.args:
         cmd = "/rarity_on" if enable else "/rarity_off"
-        return await update.message.reply_html(f'<b>💡 ᴜsᴀɢᴇ:</b> {cmd} &lt;rarity_key&gt;')
+        return await update.message.reply_html(f'<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> {cmd} &lt;rarity_key&gt;')
 
     key = context.args[0].lower()
     if key not in RARITIES:
-        return await update.message.reply_html(f'<b>❌ ᴜɴᴋɴᴏᴡɴ ʀᴀʀɪᴛʏ ᴋᴇʏ:</b> <code>{escape(key)}</code>')
+        return await update.message.reply_html(f'<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴜɴᴋɴᴏᴡɴ ʀᴀʀɪᴛʏ ᴋᴇʏ:</b> <code>{escape(key)}</code>')
 
     await set_rarity_status(key, enable)
-    emoji, name = RARITIES[key]
+    _, display_emoji, name = RARITIES[key]
     state = "ᴇɴᴀʙʟᴇᴅ ᴀɴᴅ ᴄᴀɴ sᴘᴀᴡɴ" if enable else "ᴅɪsᴀʙʟᴇᴅ ᴀɴᴅ ᴡɪʟʟ ɴᴏᴛ sᴘᴀᴡɴ"
-    icon = "✅" if enable else "🚫"
-    await update.message.reply_html(f'<b>{icon} {emoji} {escape(name)} ʀᴀʀɪᴛʏ ɪs ɴᴏᴡ {state}.</b>')
+    icon = "<tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji>" if enable else "<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji>"
+    await update.message.reply_html(f'<b>{icon} {display_emoji} {escape(name)} ʀᴀʀɪᴛʏ ɪs ɴᴏᴡ {state}.</b>')
 
 
 async def rarity_on_cmd(update, context):
@@ -463,19 +478,20 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
     
     rarity_str = c.get('rarity', '🟢 Common')
     r_key = get_rarity_key(rarity_str)
+    
     if r_key and r_key in RARITIES:
-        r_emoji, r_name = RARITIES[r_key]
-        display_rarity = f"{r_emoji} {r_name}"
+        _, r_display_emoji, r_name = RARITIES[r_key]
+        display_rarity = f"{r_display_emoji} {escape(r_name)}"
     else:
-        display_rarity = rarity_str
+        display_rarity = escape(rarity_str)
         
     text = (
-        "<b>🎭 ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
-        f"<b>🌸 ɴᴀᴍᴇ:</b> {escape(c.get('name', 'Unknown'))}\n"
-        f"<b>🎞️ ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
-        f"<b>{escape(r_emoji)} ʀᴀʀɪᴛʏ:</b> {escape(display_rarity)}\n"
-        f"<b>🔖 ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
-        "<b>💡 ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
+        "<b><tg-emoji emoji-id=\"5359441070201513074\">🎭</tg-emoji> ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
+        f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ:</b> {escape(c.get('name', 'Unknown'))}\n"
+        f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
+        f"<b>ʀᴀʀɪᴛʏ:</b> {display_rarity}\n"
+        f"<b><tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
+        "<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
     )
     await update.message.reply_html(text)
 
@@ -508,7 +524,7 @@ async def main():
             bot_info = await application.bot.get_me()
             data = {
                 "Bot": f"<b>@{bot_info.username}</b>",
-                "Status": "<b>Online & Ready ⚡</b>"
+                "Status": "<b>Online & Ready <tg-emoji emoji-id=\"6093708348413189642\">⚡️</tg-emoji></b>"
             }
             log_msg = create_log_message("˹ Bot Restarted ˼ 🔄", data)
             asyncio.create_task(send_log_to_group(log_msg))
