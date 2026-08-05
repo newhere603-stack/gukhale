@@ -55,7 +55,7 @@ def get_current_mp_day():
     return now.strftime('%Y-%m-%d')
 
 
-# --- Set Price Command (FIXED) ---
+# --- Set Price Command ---
 async def set_mp_price(update: Update, context: CallbackContext):
     try:
         if update.effective_user.id != OWNER_ID:
@@ -74,7 +74,6 @@ async def set_mp_price(update: Update, context: CallbackContext):
             await update.message.reply_text(bold_sc("Price must be in numbers."), parse_mode='HTML')
             return
             
-        # Try updating both string and int formats to avoid type-mismatch bugs
         query = {'$or': [{'id': raw_char_id}, {'id': int(raw_char_id)}]} if raw_char_id.isdigit() else {'id': raw_char_id}
         result = await collection.update_many(query, {'$set': {'mp_price': price}})
             
@@ -86,7 +85,7 @@ async def set_mp_price(update: Update, context: CallbackContext):
         await update.message.reply_text(f"Error in setprice: {str(e)}")
 
 
-# --- Generate/Load User Deals (FIXED) ---
+# --- Generate/Load User Deals ---
 async def load_user_deals(user_id):
     user = await user_collection.find_one({'id': user_id})
     if not user:
@@ -95,7 +94,6 @@ async def load_user_deals(user_id):
     current_day = get_current_mp_day()
     mp_data = user.get('mp_data', {})
     
-    # If new day or no deal exists, pick new deals
     if mp_data.get('day') != current_day or not mp_data.get('chars'):
         total_chars = await collection.count_documents({})
         if total_chars < 2:
@@ -125,7 +123,6 @@ async def load_user_deals(user_id):
         await user_collection.update_one({'id': user_id}, {'$set': {'mp_data': mp_data}})
         user['mp_data'] = mp_data
 
-    # FETCH FRESH DATA FROM DB ALWAYS (Fixes stale price issue)
     updated_chars = []
     need_db_update = False
     
@@ -145,7 +142,6 @@ async def load_user_deals(user_id):
             db_char['is_sold'] = item.get('is_sold', False)
             updated_chars.append(db_char)
 
-            # Update cached prices inside user's deal if changed
             if item.get('mp_orig') != orig:
                 item['mp_orig'] = orig
                 item['mp_sale'] = sale
@@ -158,7 +154,7 @@ async def load_user_deals(user_id):
     return user
 
 
-# --- UI Renderer ---
+# --- UI Renderer (Fixed with Safe Image Fallback) ---
 async def render_mp_message(update_obj, user, index, is_edit=False):
     chars = user['mp_data']['chars']
     if index >= len(chars): index = 0
@@ -201,8 +197,8 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     img_url = char.get('img_url')
 
     if is_edit:
-        if update_obj.message.photo:
-            if img_url:
+        try:
+            if update_obj.message.photo and img_url and str(img_url).startswith("http"):
                 try:
                     await update_obj.edit_message_media(
                         media=InputMediaPhoto(media=img_url, caption=caption, parse_mode='HTML'),
@@ -211,13 +207,22 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
                 except Exception:
                     await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
             else:
-                await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
-        else:
+                try:
+                    await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                except Exception:
+                    await update_obj.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+        except Exception:
             await update_obj.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
     else:
-        if img_url:
-            await update_obj.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
-        else:
+        sent_as_photo = False
+        if img_url and str(img_url).startswith("http"):
+            try:
+                await update_obj.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                sent_as_photo = True
+            except Exception:
+                sent_as_photo = False
+        
+        if not sent_as_photo:
             await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
 
 
@@ -279,10 +284,8 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 
             char['is_sold'] = True
             
-            # Save reduced character schema into user array
             clean_char = {k: v for k, v in char.items() if k not in ['mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
             
-            # Update user mp_data structure back to DB format
             raw_mp_chars = []
             for c in user['mp_data']['chars']:
                 raw_mp_chars.append({
