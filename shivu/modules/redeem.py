@@ -3,7 +3,7 @@ import string
 import html
 import time
 import asyncio
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 from telegram import Update
 from telegram.constants import ParseMode
@@ -17,6 +17,9 @@ from shivu.modules.database.sudo import is_user_sudo
 LOG_GROUP_ID = -1003893927065
 OWNER_ID = 7657218453
 CODE_TTL_DAYS = 30
+
+# Indian Standard Time (IST -> UTC +5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 codes_collection = db['redeem_codes']
 
@@ -34,7 +37,7 @@ CHAR_CAPTION = (
 
 def create_log_message(title: str, data: Dict[str, Any]) -> str:
     """Beautiful bold and small-caps log designer."""
-    timestamp = datetime.now().strftime("%I:%M %p • %d/%m/%y")
+    timestamp = datetime.now(IST).strftime("%I:%M %p • %d/%m/%y")
     base = f"<b>{title}</b>\n\n"
     
     items = list(data.items())
@@ -147,7 +150,7 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     code = await generate_unique_code()
     data = {
         'code': code, 'type': 'currency', 'amount': amount, 'quantity': quantity,
-        'claimed_by': [], 'created_at': datetime.now(UTC), 'created_by': msg.from_user.id,
+        'claimed_by': [], 'created_at': datetime.now(IST), 'created_by': msg.from_user.id,
     }
     if not await save_code(msg, data):
         return
@@ -192,7 +195,7 @@ async def token_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     code = await generate_unique_code()
     data = {
         'code': code, 'type': 'tokens', 'amount': amount, 'quantity': quantity,
-        'claimed_by': [], 'created_at': datetime.now(UTC), 'created_by': msg.from_user.id,
+        'claimed_by': [], 'created_at': datetime.now(IST), 'created_by': msg.from_user.id,
     }
     if not await save_code(msg, data):
         return
@@ -244,7 +247,7 @@ async def waifu_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     code = await generate_unique_code()
     data = {
         'code': code, 'type': 'character', 'character_id': char_id, 'waifu_data': waifu_data,
-        'quantity': quantity, 'claimed_by': [], 'created_at': datetime.now(UTC), 'created_by': msg.from_user.id,
+        'quantity': quantity, 'claimed_by': [], 'created_at': datetime.now(IST), 'created_by': msg.from_user.id,
     }
     if not await save_code(msg, data):
         return
@@ -292,7 +295,7 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     result = await codes_collection.update_one(
         {'code': code, 'claimed_by': {'$ne': user_id}, '$expr': {'$lt': [{'$size': '$claimed_by'}, '$quantity']}},
-        {'$push': {'claimed_by': user_id}, '$set': {'last_claimed_at': datetime.now(UTC)}}
+        {'$push': {'claimed_by': user_id}, '$set': {'last_claimed_at': datetime.now(IST)}}
     )
 
     if result.modified_count == 0:
@@ -369,7 +372,7 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "ɪᴅ": f"<code>{user_id}</code>",
         "ᴄᴏᴅᴇ": f"<code>{code}</code>",
         "ʀᴇᴡᴀʀᴅ": log_detail,
-        "ᴄʟᴀɪᴍs": f"<b>{total_claims}/{max_claims}</b>"
+        "ᴄʟᴀɪᴍส": f"<b>{total_claims}/{max_claims}</b>"
     }
     await send_log(context, create_log_message("˹ ʀᴇᴅᴇᴇᴍ sᴜᴄᴄᴇssғᴜʟ ˼ 🎉", log_data))
 
