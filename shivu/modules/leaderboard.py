@@ -99,8 +99,8 @@ def generate_progress_bar(current: int, total: int, length: int = 8) -> str:
     return "█" * filled + "░" * (length - filled)
 
 
-def format_list(title, rows):
-    header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('top')} {len(rows)} {sc(title)}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+def format_custom_header(heading: str, rows):
+    header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{heading}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
     return header + "\n".join(rows)
 
 
@@ -117,25 +117,25 @@ def back_close_buttons(refresh_cb, extra_row=None):
     rows = [[InlineKeyboardButton("⟳", callback_data=refresh_cb), InlineKeyboardButton("≼", callback_data="lb_menu")]]
     if extra_row:
         rows.append(extra_row)
-    rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close", icon_custom_emoji_id="5210952531676504517")])
+    rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")])
     return InlineKeyboardMarkup(rows)
 
 
 # ---------- /tops menu ----------
 
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
-    text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('select the top list')}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
+    text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>𝗦𝗘𝗟𝗘𝗖𝗧 𝗧𝗛𝗘 𝗧𝗢𝗣 𝗟𝗜𝗦𝗧</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile", icon_custom_emoji_id="6339033929718177895"),
-            InlineKeyboardButton("ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens", icon_custom_emoji_id="6332379101231323246")
+            InlineKeyboardButton("👤 ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"),
+            InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
         ],
         [
-            InlineKeyboardButton("ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal", icon_custom_emoji_id="5472030678633684592")
+            InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
         ],
         [
-            InlineKeyboardButton("ᴄᴛᴏᴘ", callback_data="lb_chars", icon_custom_emoji_id="6093434630147415641"),
-            InlineKeyboardButton("ɢᴛᴏᴘ", callback_data="lb_gtop", icon_custom_emoji_id="5449885771420934013")
+            InlineKeyboardButton("👁 ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")
         ],
     ])
     await send_or_edit(update, context, text, kb, edit)
@@ -163,7 +163,7 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
         bal = extract_balance(u)
         rows.append(f"<b>{i}. {link} - <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bal:,}</b>")
     
-    text = format_list("users by coins", rows)
+    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗖𝗢𝗜𝗡 𝗛𝗢𝗟𝗗𝗘𝗥𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
 
 
@@ -187,7 +187,7 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
         tokens = extract_tokens(u)
         rows.append(f"<b>{i}. {link} - <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {tokens:,}</b>")
 
-    text = format_list("users by tokens", rows)
+    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗧𝗢𝗞𝗘𝗡 𝗛𝗢𝗟𝗗𝗘𝗥𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
 
 
@@ -214,7 +214,7 @@ async def top_characters(update: Update, context: CallbackContext, edit=False):
         link = mention_html(uid, name)
         rows.append(f"<b>{i}. {link} - {u['count']:,}</b>")
 
-    text = format_list("users by grabbers", rows)
+    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗥𝗔𝗕𝗕𝗘𝗥𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_chars"), edit)
 
 
@@ -228,7 +228,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
 
     rows = [f"<b>{i}. {escape(g.get('group_name', 'Unknown'))} - {g.get('count', 0):,} <tg-emoji emoji-id=\"5453957997418004470\">👥</tg-emoji></b>"
             for i, g in enumerate(data, 1)]
-    text = format_list("groups", rows)
+    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗥𝗢𝗨𝗣𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
 
 
@@ -281,7 +281,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> <b>{sc('collection stats')}</b>\n"
         f"├ <b>{sc('rank')} :</b> <b>#{rank:,}</b> / <b>{total_collectors:,}</b>\n"
-        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6093434630147415641\">👁</tg-emoji>\n"
+        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6339312947973595391\">👁</tg-emoji>\n"
         f"└ <b>{sc('progress')} :</b> [<code>{progress_bar}</code>] <b>{completion_pct}%</b>\n\n"
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> <b>{sc('vault & wallet')}</b>\n"
         f"├ <b>{sc('balance')} :</b> <b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {balance:,}</b>\n"
@@ -292,15 +292,15 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
 
     profile_kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("ᴄᴛᴏᴘ", callback_data="lb_chars", icon_custom_emoji_id="6093434630147415641"),
-            InlineKeyboardButton("ʙᴛᴏᴘ", callback_data="lb_bal", icon_custom_emoji_id="5472030678633684592")
+            InlineKeyboardButton("👁 ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")
         ],
         [
             InlineKeyboardButton("⟳", callback_data="lb_profile"),
             InlineKeyboardButton("⋞", callback_data="lb_menu")
         ],
         [
-            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close", icon_custom_emoji_id="5210952531676504517")
+            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")
         ]
     ])
 
@@ -338,7 +338,7 @@ async def stats(update: Update, context: CallbackContext, edit=False):
     )
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("⟳", callback_data="lb_stats")],
-        [InlineKeyboardButton("×", callback_data="lb_close", icon_custom_emoji_id="5210952531676504517")]
+        [InlineKeyboardButton("×", callback_data="lb_close")]
     ])
     await send_or_edit(update, context, text, kb, edit)
 
