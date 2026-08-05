@@ -212,7 +212,7 @@ async def top_characters(update: Update, context: CallbackContext, edit=False):
             pass
         name = u.get('first_name', 'Unknown')
         link = mention_html(uid, name)
-        rows.append(f"<b>{i}. {link} - {u['count']:,}</b>")
+        rows.append(f"<b>{i}. {link} - {u['count']:,}</b> <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji>")
 
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗥𝗔𝗕𝗕𝗘𝗥𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_chars"), edit)
