@@ -168,8 +168,8 @@ async def despawn_character(chat_id, message_id, character, context):
 
         caption = (
             f"⏰ <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
-            f"{emoji} <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
-            f"⚡ <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
+            f"🌸 <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
+            f"🎞️ <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
             f"{escape(r_emoji)} <b>ʀᴀʀɪᴛʏ:</b> <b>{escape(rarity_display)}</b>\n\n"
             f"💔 <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
@@ -245,7 +245,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         last_characters[chat_id] = character
         first_correct_guesses.pop(chat_id, None)
 
-        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀᴘᴘᴇᴀʀᴇᴅ! ✨\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ɪɴ ʏᴏᴜʀ ʜᴀʀᴇᴍ.</b>"
+        caption = "<b>✨ ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀᴘᴘᴇᴀʀᴇᴅ!\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ.</b>"
         timeouts = dict(read_timeout=300, write_timeout=300, connect_timeout=60, pool_timeout=60)
         spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
 
@@ -472,8 +472,8 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
     text = (
         "<b>🎭 ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
         f"<b>🌸 ɴᴀᴍᴇ:</b> {escape(c.get('name', 'Unknown'))}\n"
-        f"<b>🧩 ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
-        f"<b>✨ ʀᴀʀɪᴛʏ:</b> {escape(display_rarity)}\n"
+        f"<b>🎞️ ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
+        f"<b>{escape(r_emoji)} ʀᴀʀɪᴛʏ:</b> {escape(display_rarity)}\n"
         f"<b>🔖 ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
         "<b>💡 ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
     )
