@@ -414,7 +414,7 @@ async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> No
     mode = context.args[0].lower() == 'on'
     await set_group_setting(chat_id, 'grab_delete', mode)
     state = "<b>ᴇɴᴀʙʟᴇᴅ (sᴘᴀᴡɴɪɴɢ ᴍsɢ ᴡɪʟʟ ᴅᴇʟᴇᴛᴇ ᴏɴ ɢʀᴀʙ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (sᴘᴀᴡɴɪɴɢ ᴍsɢ ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
-    await update.message.reply_html(f'<b>⚙️ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ɢʀᴀʙ ɪs ɴᴏᴡ:</b> {state}')
+    await update.message.reply_html(f'<b><tg-emoji emoji-id="6307567066572396133\">⚙</tg-emoji> ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ɢʀᴀʙ ɪs ɴᴏᴡ:</b> {state}')
 
 
 async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> None:
@@ -428,7 +428,7 @@ async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> No
     mode = context.args[0].lower() == 'on'
     await set_group_setting(chat_id, 'miss_delete', mode)
     state = "<b>ᴇɴᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡɪʟʟ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
-    await update.message.reply_html(f'<b>⚙️ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ᴍɪss ɪs ɴᴏᴡ:</b> {state}')
+    await update.message.reply_html(f'<b><tg-emoji emoji-id="6307567066572396133\">⚙</tg-emoji> ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ᴍɪss ɪs ɴᴏᴡ:</b> {state}')
 
 
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
