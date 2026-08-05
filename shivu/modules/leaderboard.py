@@ -96,7 +96,7 @@ def generate_progress_bar(current: int, total: int, length: int = 8) -> str:
         return "░" * length
     percentage = min(1.0, current / total)
     filled = int(round(length * percentage))
-    return "█" * filled + "░" * (length - filled)
+    return "▬" * filled + "┈" * (length - filled)
 
 
 def format_custom_header(heading: str, rows):
