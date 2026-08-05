@@ -346,6 +346,15 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 'bot_started': False
             })
 
+        # --- CACHE CLEAR FOR INSTANT INLINE UPDATE ---
+        try:
+            from shivu.modules.inline import user_cache, query_cache
+            user_cache.pop(f"u{user_id}", None)
+            query_cache.clear()
+        except Exception:
+            pass
+        # ---------------------------------------------
+
         await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
         await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
 
