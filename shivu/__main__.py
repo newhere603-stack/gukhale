@@ -426,7 +426,8 @@ async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
 
 async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: bool) -> None:
     if not is_authorized(update.effective_user.id):
-        return await update.message.reply_html('<b>ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>')
+        return  # Silent exit if not authorized
+
     if not context.args:
         cmd = "/rarity_on" if enable else "/rarity_off"
         return await update.message.reply_html(f'<b>💡 ᴜsᴀɢᴇ:</b> {cmd} &lt;rarity_key&gt;')
@@ -452,7 +453,7 @@ async def rarity_off_cmd(update, context):
 
 async def name_cmd(update: Update, context: CallbackContext) -> None:
     if not is_authorized(update.effective_user.id):
-        return await update.message.reply_html('<b>ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>')
+        return  # Silent exit if not authorized
 
     chat_id = update.effective_chat.id
     if chat_id not in last_characters:
