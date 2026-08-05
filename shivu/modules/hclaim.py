@@ -14,6 +14,9 @@ from shivu import application, user_collection, collection
 
 LOG_GROUP_ID = -1003893927065
 
+# Indian Standard Time (IST -> UTC +5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
+
 def to_small_caps(text: str) -> str:
     if not text:
         return "ᴜɴᴋɴᴏᴡɴ"
@@ -26,11 +29,11 @@ def get_safe_time(dt):
     if dt is None:
         return None
     if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
-        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt.astimezone(IST).replace(tzinfo=None)
     return dt
 
 def create_log_message(title: str, data: dict) -> str:
-    timestamp = datetime.now().strftime("%I:%M %p • %d/%m/%y")
+    timestamp = datetime.now(IST).strftime("%I:%M %p • %d/%m/%y")
     base = f"<b>{title}</b>\n\n"
     items = list(data.items())
     for i, (key, value) in enumerate(items):
@@ -51,13 +54,18 @@ async def send_log(context: CallbackContext, text: str):
         logger.error(f"Log error: {e}")
 
 def can_claim_today(last_claim_dt) -> bool:
-    """Checks if the current time has crossed 4:00 AM since the last claim."""
+    """Checks if the current time has crossed 4:00 AM IST since the last claim."""
     if not last_claim_dt:
         return True
     
-    now = datetime.now()
+    now = datetime.now(IST)
     
-    # Calculate today's 4:00 AM reset milestone
+    if last_claim_dt.tzinfo is None:
+        last_claim_dt = last_claim_dt.replace(tzinfo=IST)
+    else:
+        last_claim_dt = last_claim_dt.astimezone(IST)
+    
+    # Calculate today's 4:00 AM reset milestone in IST
     today_4am = now.replace(hour=4, minute=0, second=0, microsecond=0)
     
     # If current time is before 4 AM, the current reset cycle actually started at 4 AM yesterday
@@ -75,7 +83,7 @@ async def swaifu(update: Update, context: CallbackContext):
         raw_first_name = update.effective_user.first_name or "User"
         safe_first_name = html.escape(to_small_caps(raw_first_name))
         
-        now = datetime.now()
+        now = datetime.now(IST)
         user_data = await user_collection.find_one({'id': user_id})
         
         if user_data and 'last_swaifu_claim' in user_data:
@@ -156,7 +164,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
         raw_first_name = update.effective_user.first_name or "User"
-        now = datetime.now()
+        now = datetime.now(IST)
 
         user_data = await user_collection.find_one({'id': user_id})
         
