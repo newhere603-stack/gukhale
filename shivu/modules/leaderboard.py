@@ -134,7 +134,7 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
             InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
         ],
         [
-            InlineKeyboardButton("👁 ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("🧧 ᴄᴛᴏᴘ", callback_data="lb_chars"),
             InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")
         ],
     ])
@@ -281,7 +281,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> <b>{sc('collection stats')}</b>\n"
         f"├ <b>{sc('rank')} :</b> <b>#{rank:,}</b> / <b>{total_collectors:,}</b>\n"
-        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6339312947973595391\">👁</tg-emoji>\n"
+        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji>\n"
         f"└ <b>{sc('progress')} :</b> [<code>{progress_bar}</code>] <b>{completion_pct}%</b>\n\n"
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> <b>{sc('vault & wallet')}</b>\n"
         f"├ <b>{sc('balance')} :</b> <b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {balance:,}</b>\n"
@@ -292,7 +292,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
 
     profile_kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👁 ᴄᴛᴏᴘ", callback_data="lb_chars"),
+            InlineKeyboardButton("🧧 ᴄᴛᴏᴘ", callback_data="lb_chars"),
             InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")
         ],
         [
