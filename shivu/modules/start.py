@@ -58,10 +58,10 @@ CATEGORIES = {
             ("/grab", "ɢʀᴀʙ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ"),
             ("/fav", "ᴀᴅᴅ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴛᴏ ʏᴏᴜʀ ғᴀᴠᴏᴜʀɪᴛᴇ"),
             ("/claim", "ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ"),
-            ("/pay", "ɢɪᴠᴇ ᴄᴏɪɴs💸 ᴛᴏ ᴏᴛʜᴇʀ ᴜsᴇʀs"),
+            ("/pay", "ɢɪᴠᴇ ᴄᴏɪɴs ᴛᴏ ᴏᴛʜᴇʀ ᴜsᴇʀs"),
             ("/bal", "sᴇᴇ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ"),
             ("/harem", "sᴇᴇ ʏᴏᴜʀ ᴄʜᴀʀᴀᴄᴛᴇʀ's ᴄᴏʟʟᴇᴄᴛɪᴏɴ"),
-            ("/gift", "ɢɪғᴛ ʏᴏᴜʀ ᴡᴀɪғᴜ ᴛᴏ sᴏᴍᴇᴏɴᴇ 🎀"),
+            ("/gift", "ɢɪғᴛ ʏᴏᴜʀ ᴡᴀɪғᴜ ᴛᴏ sᴏᴍᴇᴏɴᴇ"),
             ("/trade", "ᴛʀᴀᴅᴇ ᴄʜᴀʀᴀᴄᴛᴇʀs ʙᴇᴛᴡᴇᴇɴ ᴜsᴇʀs"),
             ("/top", "ᴠɪᴇᴡ ᴛʜᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ"),
             ("/sprofile", "ᴠɪᴇᴡ ʏᴏᴜʀ ᴘʀᴏғɪʟᴇ"),
@@ -98,8 +98,8 @@ CATEGORIES = {
 def get_main_caption(user_id: int, first_name: str) -> str:
     user_mention = f'<a href="tg://user?id={user_id}">{first_name}</a>'
     return (
-        f"<b>✨ Hᴇʏ {user_mention},\nɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.</b>\n\n"
-        f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!</b>"
+        f"<b>✨ Hᴇʏ {user_mention},🎀\nɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ.😈</b>\n\n"
+        f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ!⚡</b>"
     )
 
 
@@ -208,7 +208,7 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
                 added_ids.add(u_id)
 
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
-    return "<b>sᴜᴅᴏ:</b>", InlineKeyboardMarkup(kb)
+    return "<b>sᴜᴅᴏ:✅</b>", InlineKeyboardMarkup(kb)
 
 
 def _new_user_doc(user_id, first_name, username):
