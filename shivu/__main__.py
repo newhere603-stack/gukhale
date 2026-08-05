@@ -46,7 +46,7 @@ RARITIES = {
     "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"), 
     "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
     "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"), 
-    "pearl": ("🐚", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
+    "pearl": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
 }
 
@@ -258,7 +258,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         last_characters[chat_id] = character
         first_correct_guesses.pop(chat_id, None)
 
-        caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴀ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀᴘᴘᴇᴀʀᴇᴅ!\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
+        caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴘᴘᴇᴀʀᴇᴅ! <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji>\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
         timeouts = dict(read_timeout=300, write_timeout=300, connect_timeout=60, pool_timeout=60)
         spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
 
@@ -385,12 +385,12 @@ async def guess(update: Update, context: CallbackContext) -> None:
         mention = f'<a href="tg://user?id={user_id}">{escape(eu.first_name)}</a>'
 
         success_message = (
-            f"<tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji> <b>{mention}, ᴄᴏɴɢʀᴀᴛs <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n"
+            f"<tg-emoji emoji-id=\"6068790301076493707\">✅</tg-emoji> <b>{mention}, ᴄᴏɴɢʀᴀᴛs <tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji></b>\n"
             f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji></b>\n\n"
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> 𝗡𝗔𝗠𝗘:<b> {escape(character.get('name', 'Unknown'))}</b>\n"
             f"{r_display_emoji} 𝗥𝗔𝗥𝗜𝗧𝗬:<b> {r_name}</b>\n"
-            f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> 𝗔𝗡𝗜𝗠𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
-            f"<tg-emoji emoji-id=\"6332497311616209557\">⏳</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {time_taken}s</code>"
+            f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> 𝗔𝗡𝗜𝗠𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
+            f"<tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {time_taken}s</code>"
         )
         
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
