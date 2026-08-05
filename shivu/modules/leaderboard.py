@@ -117,7 +117,7 @@ def back_close_buttons(refresh_cb, extra_row=None):
     rows = [[InlineKeyboardButton("⟳", callback_data=refresh_cb), InlineKeyboardButton("≼", callback_data="lb_menu")]]
     if extra_row:
         rows.append(extra_row)
-    rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")])
+    rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close", icon_custom_emoji_id="5210952531676504517")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -127,15 +127,15 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('select the top list')}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👤 ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"),
-            InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
+            InlineKeyboardButton("ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile", icon_custom_emoji_id="6339033929718177895"),
+            InlineKeyboardButton("ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens", icon_custom_emoji_id="6332379101231323246")
         ],
         [
-            InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")
+            InlineKeyboardButton("ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal", icon_custom_emoji_id="5472030678633684592")
         ],
         [
-            InlineKeyboardButton("👁 ᴄᴛᴏᴘ", callback_data="lb_chars"),
-            InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")
+            InlineKeyboardButton("ᴄᴛᴏᴘ", callback_data="lb_chars", icon_custom_emoji_id="6093434630147415641"),
+            InlineKeyboardButton("ɢᴛᴏᴘ", callback_data="lb_gtop", icon_custom_emoji_id="5449885771420934013")
         ],
     ])
     await send_or_edit(update, context, text, kb, edit)
@@ -281,7 +281,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> <b>{sc('collection stats')}</b>\n"
         f"├ <b>{sc('rank')} :</b> <b>#{rank:,}</b> / <b>{total_collectors:,}</b>\n"
-        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6339312947973595391\">👁</tg-emoji>\n"
+        f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6093434630147415641\">👁</tg-emoji>\n"
         f"└ <b>{sc('progress')} :</b> [<code>{progress_bar}</code>] <b>{completion_pct}%</b>\n\n"
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> <b>{sc('vault & wallet')}</b>\n"
         f"├ <b>{sc('balance')} :</b> <b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {balance:,}</b>\n"
@@ -292,15 +292,15 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
 
     profile_kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👁 ᴄᴛᴏᴘ", callback_data="lb_chars"),
-            InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")
+            InlineKeyboardButton("ᴄᴛᴏᴘ", callback_data="lb_chars", icon_custom_emoji_id="6093434630147415641"),
+            InlineKeyboardButton("ʙᴛᴏᴘ", callback_data="lb_bal", icon_custom_emoji_id="5472030678633684592")
         ],
         [
             InlineKeyboardButton("⟳", callback_data="lb_profile"),
             InlineKeyboardButton("⋞", callback_data="lb_menu")
         ],
         [
-            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")
+            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close", icon_custom_emoji_id="5210952531676504517")
         ]
     ])
 
@@ -338,7 +338,7 @@ async def stats(update: Update, context: CallbackContext, edit=False):
     )
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("⟳", callback_data="lb_stats")],
-        [InlineKeyboardButton("×", callback_data="lb_close")]
+        [InlineKeyboardButton("×", callback_data="lb_close", icon_custom_emoji_id="5210952531676504517")]
     ])
     await send_or_edit(update, context, text, kb, edit)
 
