@@ -133,7 +133,7 @@ async def swaifu(update: Update, context: CallbackContext):
         )
 
         caption = (
-            f"<b>{to_small_caps('Congratulations')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji>\n {safe_first_name}! {to_small_caps('You won')}<tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>\n"
+            f"<b>{to_small_caps('Congratulations')} <tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji>\n{safe_first_name}! {to_small_caps('You won')}<tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>\n"
             f"<b>◈ {to_small_caps('Name')}: {char_name}</b>\n"
             f"<b>◈ {to_small_caps('Rarity')}: {rarity}</b>\n"
             f"<b>◈ {to_small_caps('Anime')}: {anime}</b>"
@@ -191,7 +191,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         )
 
         msg_text = (
-            f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {to_small_caps('Daily Reward Claimed!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
+            f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> {to_small_caps('Daily Reward Claimed!')} <tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji></b>\n\n"
             f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {to_small_caps('Your dedication pays off!')}</b>\n"
             f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {to_small_caps('You just received')} {coins_won} {to_small_caps('coins!')}</b>\n\n"
             f"<b><tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> {to_small_caps('These have been securely added to your vault.')}</b>\n"
