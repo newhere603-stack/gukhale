@@ -1,6 +1,7 @@
 import random
 import html
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
@@ -216,9 +217,8 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 # ==========================================
 
 active_tic_games = {}
-play_again_cooldowns = {} # Cooldown track karne ke liye dictionary
+play_again_cooldowns = {} 
 
-# Custom Premium Emoji Tags
 PREMIUM_GAME = '<tg-emoji emoji-id="6311820827952162567">🎮</tg-emoji>'
 PREMIUM_USER = '<tg-emoji emoji-id="6104892988712820269">👤</tg-emoji>'
 PREMIUM_WAIT = '<tg-emoji emoji-id="6161365177225712754">⏳</tg-emoji>'
@@ -261,7 +261,6 @@ def check_win(board):
 
 async def start_tic(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    # Note: Using direct name, removing small caps to fix font issue
     safe_name = html.escape(update.effective_user.first_name or "User")
 
     game = {
@@ -269,12 +268,10 @@ async def start_tic(update: Update, context: CallbackContext):
         'player_1_name': safe_name,
         'player_1_sym': '🔴',
         'player_1_tg_sym': PREMIUM_O,
-        
         'player_2_id': None,
         'player_2_name': None,
         'player_2_sym': '❌',
         'player_2_tg_sym': PREMIUM_X,
-        
         'board': [" "] * 9,
         'turn': user_id,
         'status': 'waiting'
@@ -299,11 +296,9 @@ async def tic_callback(update: Update, context: CallbackContext):
         await query.answer()
         return
 
-    # Handle Play Again Action (Fresh Game in New Message)
     if query.data == "tic_play_again":
         now = datetime.now(IST)
         
-        # Check cooldown (10 seconds limit)
         if user_id in play_again_cooldowns:
             time_passed = (now - play_again_cooldowns[user_id]).total_seconds()
             if time_passed < 10:
@@ -311,9 +306,7 @@ async def tic_callback(update: Update, context: CallbackContext):
                 await query.answer(to_small_caps(f"Please wait {remaining} seconds before playing again!"), show_alert=True)
                 return
         
-        # Update timestamp for user
         play_again_cooldowns[user_id] = now
-
         safe_name = html.escape(query.from_user.first_name or "User")
 
         game = {
@@ -356,7 +349,6 @@ async def tic_callback(update: Update, context: CallbackContext):
 
     game = active_tic_games[key]
 
-    # Handle join
     if query.data == "tic_join":
         if user_id == game['player_1_id']:
             await query.answer(to_small_caps("You cannot join your own game as Player 2!"), show_alert=True)
@@ -379,7 +371,6 @@ async def tic_callback(update: Update, context: CallbackContext):
         await query.answer(to_small_caps("✅ You have joined the game!"))
         return
 
-    # Handle moves
     if query.data.startswith("tic_move_"):
         if game['status'] != 'playing':
             await query.answer(to_small_caps("The game is already over!"), show_alert=True)
@@ -399,7 +390,6 @@ async def tic_callback(update: Update, context: CallbackContext):
             await query.answer(to_small_caps("This box is already filled!"), show_alert=True)
             return
 
-        # Mark the move with the correct standard emoji for the array
         symbol = game['player_1_sym'] if user_id == game['player_1_id'] else game['player_2_sym']
         game['board'][index] = symbol
 
@@ -416,7 +406,6 @@ async def tic_callback(update: Update, context: CallbackContext):
                     f"{PREMIUM_DRAW} <b>{to_small_caps('Game Draw! Well played both.')}</b>"
                 )
             else:
-                # Find out who won and lost for displaying custom emojis
                 if winner == game['player_1_sym']:
                     win_name = game['player_1_name']
                     lose_name = game['player_2_name']
@@ -435,7 +424,6 @@ async def tic_callback(update: Update, context: CallbackContext):
                     f"{PREMIUM_WIN} <b>{to_small_caps('Winner')}: {win_name}</b>"
                 )
 
-            # Replaces the grid with a single Play Again button
             replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{to_small_caps('Play Again')} ⟳", callback_data="tic_play_again")]])
             
             await query.message.edit_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
@@ -443,7 +431,6 @@ async def tic_callback(update: Update, context: CallbackContext):
             await query.answer(to_small_caps("Game Over!"))
             return
 
-        # Switch Turn Logic
         if user_id == game['player_1_id']:
             game['turn'] = game['player_2_id']
             next_turn_name = game['player_2_name']
@@ -463,6 +450,197 @@ async def tic_callback(update: Update, context: CallbackContext):
         await query.answer()
 
 # ==========================================
+# MINES GAME HANDLERS
+# ==========================================
+
+active_mines_games = {}
+
+def get_mines_multiplier(found_cash: int, mines=5, total=25) -> float:
+    """Calculate dynamic multiplier based on cash tiles found."""
+    if found_cash == 0:
+        return 1.00
+    
+    total_combs = math.comb(total, found_cash)
+    safe_combs = math.comb(total - mines, found_cash)
+    odds = total_combs / safe_combs
+    
+    multiplier = odds * 0.95
+    return round(max(1.0, multiplier), 2)
+
+def get_mines_keyboard(game: dict, show_all: bool = False):
+    keyboard = []
+    board = game['board']
+    revealed = game['revealed']
+    
+    for i in range(0, 25, 5):
+        row = []
+        for j in range(5):
+            idx = i + j
+            if show_all or revealed[idx]:
+                if board[idx] == 'mine':
+                    text = "💣"
+                else:
+                    text = "💸"
+            else:
+                text = "🟦" 
+            
+            cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
+            row.append(InlineKeyboardButton(text, callback_data=cb_data))
+        keyboard.append(row)
+    
+    if game['status'] == 'playing' and game['found'] > 0:
+        mult = get_mines_multiplier(game['found'])
+        win_amount = int(game['bet'] * mult)
+        btn_text = f"{to_small_caps('Cash Out')} ({mult}x | 💰 {win_amount})"
+        keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout")])
+        
+    return InlineKeyboardMarkup(keyboard)
+
+async def start_mines(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    
+    if not context.args or not context.args[0].isdigit():
+        msg = f"<b>⚠️ {to_small_caps('Usage:')} /mines [bet_amount]</b>\n<i>Example: /mines 20</i>"
+        await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+        return
+        
+    bet = int(context.args[0])
+    if bet < 10:
+        await update.message.reply_text(f"<b>⚠️ {to_small_caps('Minimum bet is 10 coins!')}</b>", parse_mode=ParseMode.HTML)
+        return
+
+    user_data = await user_collection.find_one({'id': user_id})
+    balance = user_data.get('balance', 0) if user_data else 0
+
+    if balance < bet:
+        await update.message.reply_text(f"<b>❌ {to_small_caps('You do not have enough coins!')}</b>\n💸 Balance: {balance}", parse_mode=ParseMode.HTML)
+        return
+
+    await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -bet}})
+
+    board = ['mine'] * 5 + ['safe'] * 20
+    random.shuffle(board)
+
+    game = {
+        'user_id': user_id,
+        'user_name': html.escape(update.effective_user.first_name or "User"),
+        'bet': bet,
+        'board': board,
+        'revealed': [False] * 25,
+        'status': 'playing',
+        'found': 0,
+        'mines_count': 5
+    }
+
+    text = (
+        f"<b>🎮 {to_small_caps('Mines Game Active!')}</b>\n\n"
+        f"💸 <b>{to_small_caps('Bet')}:</b> {bet}\n"
+        f"💣 <b>{to_small_caps('Mines')}:</b> 5\n"
+        f"💸 <b>{to_small_caps('Found')}:</b> 0\n"
+        f"📈 <b>{to_small_caps('Multiplier')}:</b> 1.00x\n\n"
+        f"<b>{to_small_caps('Potential Winnings')}:</b> 💸 {bet}"
+    )
+
+    msg = await update.message.reply_text(text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
+    key = f"{update.effective_chat.id}_{msg.message_id}"
+    active_mines_games[key] = game
+
+async def mines_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+    
+    if data == "mines_ignore":
+        await query.answer()
+        return
+
+    key = f"{query.message.chat.id}_{query.message.message_id}"
+    
+    if key not in active_mines_games:
+        await query.answer(to_small_caps("This game session has expired!"), show_alert=True)
+        return
+        
+    game = active_mines_games[key]
+    
+    if user_id != game['user_id']:
+        await query.answer(to_small_caps("You cannot play someone else's game!"), show_alert=True)
+        return
+        
+    if game['status'] != 'playing':
+        await query.answer(to_small_caps("This game is already over!"), show_alert=True)
+        return
+
+    if data == "mines_cashout":
+        mult = get_mines_multiplier(game['found'])
+        win_amount = int(game['bet'] * mult)
+        
+        await user_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
+        game['status'] = 'cashed_out'
+        
+        text = (
+            f"<b>💸 {to_small_caps('Cashed Out!')} 💸</b>\n\n"
+            f"💸 <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
+            f"✅ <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
+            f"🏆 <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
+            f"<b>{to_small_caps('Final Board')}:</b>"
+        )
+        
+        await query.message.edit_text(text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+        del active_mines_games[key]
+        await query.answer(f"Cashed out {win_amount} coins! 💸")
+        return
+
+    if data.startswith("mines_click_"):
+        idx = int(data.split("_")[2])
+        
+        if game['board'][idx] == 'mine':
+            game['status'] = 'busted'
+            game['revealed'][idx] = True
+            
+            text = (
+                f"<b>💥 {to_small_caps('BOOM! You hit a mine!')} 💥</b>\n\n"
+                f"💸 <b>{to_small_caps('Lost Bet')}:</b> {game['bet']} coins\n"
+                f"💸 <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
+                f"<b>{to_small_caps('Final Board')}:</b>"
+            )
+            await query.message.edit_text(text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+            del active_mines_games[key]
+            await query.answer("BOOM! You lost the bet. 💥")
+            return
+            
+        else:
+            game['revealed'][idx] = True
+            game['found'] += 1
+            mult = get_mines_multiplier(game['found'])
+            win_amount = int(game['bet'] * mult)
+            
+            if game['found'] == 20:
+                await user_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
+                game['status'] = 'cashed_out'
+                text = (
+                    f"<b>🎉 {to_small_caps('PERFECT GAME!')} 🎉</b>\n\n"
+                    f"💸 <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
+                    f"✅ <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
+                    f"🏆 <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
+                    f"<b>{to_small_caps('Final Board')}:</b>"
+                )
+                await query.message.edit_text(text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                del active_mines_games[key]
+                await query.answer("Incredible! You found all the money! 💸")
+                return
+
+            text = (
+                f"<b>🎮 {to_small_caps('Mines Game Active!')}</b>\n\n"
+                f"💸 <b>{to_small_caps('Bet')}:</b> {game['bet']}\n"
+                f"💣 <b>{to_small_caps('Mines')}:</b> 5\n"
+                f"💸 <b>{to_small_caps('Found')}:</b> {game['found']}\n"
+                f"📈 <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
+                f"<b>{to_small_caps('Potential Winnings')}:</b> 💸 {win_amount}"
+            )
+            await query.message.edit_text(text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
+            await query.answer("Safe! 💸")
+
+# ==========================================
 # HANDLER REGISTRATION
 # ==========================================
 
@@ -470,3 +648,6 @@ application.add_handler(CommandHandler("swaifu", swaifu))
 application.add_handler(CommandHandler("claim", daily_claim_coins))
 application.add_handler(CommandHandler("tic", start_tic))
 application.add_handler(CallbackQueryHandler(tic_callback, pattern="^tic_"))
+application.add_handler(CommandHandler("mines", start_mines))
+application.add_handler(CallbackQueryHandler(mines_callback, pattern="^mines_"))
+
