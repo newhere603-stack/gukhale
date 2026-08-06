@@ -54,7 +54,6 @@ async def send_log(context: CallbackContext, text: str):
         logger.error(f"Log error: {e}")
 
 def can_claim_today(last_claim_dt) -> bool:
-    """Checks if the current time has crossed 4:00 AM IST since the last claim."""
     if not last_claim_dt:
         return True
     
@@ -73,6 +72,7 @@ def can_claim_today(last_claim_dt) -> bool:
         reset_threshold = today_4am
         
     return last_claim_dt < reset_threshold
+
 
 # ==========================================
 # SWAIFU & CLAIM HANDLERS
@@ -217,9 +217,20 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 
 active_tic_games = {}
 
+# Custom Premium Emoji Tags
+PREMIUM_GAME = '<tg-emoji emoji-id="6311820827952162567">🎮</tg-emoji>'
+PREMIUM_USER = '<tg-emoji emoji-id="6104892988712820269">👤</tg-emoji>'
+PREMIUM_WAIT = '<tg-emoji emoji-id="6161365177225712754">⏳</tg-emoji>'
+PREMIUM_O    = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
+PREMIUM_X    = '<tg-emoji emoji-id="5465665476971471368">❌</tg-emoji>'
+PREMIUM_TURN = '<tg-emoji emoji-id="6102908426059258223">👉</tg-emoji>'
+PREMIUM_WIN  = '<tg-emoji emoji-id="6053140037250323814">🏆</tg-emoji>'
+PREMIUM_DRAW = '<tg-emoji emoji-id="6053383162464050605">🤝</tg-emoji>'
+PREMIUM_CRY  = '<tg-emoji emoji-id="5922641759518593935">😭</tg-emoji>'
+
 def get_tic_board(game):
     if game['status'] == 'waiting':
-        btn_text = to_small_caps("Join Game (Player 2)")
+        btn_text = to_small_caps("Join Game")
         return InlineKeyboardMarkup([[InlineKeyboardButton(f"🎮 {btn_text}", callback_data="tic_join")]])
 
     board = game['board']
@@ -249,23 +260,29 @@ def check_win(board):
 
 async def start_tic(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    first_name = update.effective_user.first_name or "User"
-    safe_name = html.escape(to_small_caps(first_name))
+    # Note: Using direct name, removing small caps to fix font issue
+    safe_name = html.escape(update.effective_user.first_name or "User")
 
     game = {
-        'player_x_id': user_id,
-        'player_x_name': safe_name,
-        'player_o_id': None,
-        'player_o_name': None,
+        'player_1_id': user_id,
+        'player_1_name': safe_name,
+        'player_1_sym': '🔴',
+        'player_1_tg_sym': PREMIUM_O,
+        
+        'player_2_id': None,
+        'player_2_name': None,
+        'player_2_sym': '❌',
+        'player_2_tg_sym': PREMIUM_X,
+        
         'board': [" "] * 9,
         'turn': user_id,
         'status': 'waiting'
     }
 
     text = (
-        f"🎮 <b>{to_small_caps('Tic-Tac-Toe Game Started!')}</b>\n\n"
-        f"👤 <b>{to_small_caps('Player 1')} (❌): {game['player_x_name']}</b>\n"
-        f"⏳ <i><b>{to_small_caps('Waiting for Player 2 to join...')}</b></i>"
+        f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe Game Started!')}</b>\n\n"
+        f"{PREMIUM_USER} <b>{to_small_caps('Player 1')} ({PREMIUM_O}): {game['player_1_name']}</b>\n"
+        f"{PREMIUM_WAIT} <i><b>{to_small_caps('Waiting for Player 2 to join...')}</b></i>"
     )
 
     msg = await update.message.reply_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
@@ -281,32 +298,68 @@ async def tic_callback(update: Update, context: CallbackContext):
         await query.answer()
         return
 
+    # Handle Play Again Action (Fresh Game in New Message)
+    if query.data == "tic_play_again":
+        safe_name = html.escape(query.from_user.first_name or "User")
+
+        game = {
+            'player_1_id': user_id,
+            'player_1_name': safe_name,
+            'player_1_sym': '🔴',
+            'player_1_tg_sym': PREMIUM_O,
+            'player_2_id': None,
+            'player_2_name': None,
+            'player_2_sym': '❌',
+            'player_2_tg_sym': PREMIUM_X,
+            'board': [" "] * 9,
+            'turn': user_id,
+            'status': 'waiting'
+        }
+
+        text = (
+            f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe Game Started!')}</b>\n\n"
+            f"{PREMIUM_USER} <b>{to_small_caps('Player 1')} ({PREMIUM_O}): {game['player_1_name']}</b>\n"
+            f"{PREMIUM_WAIT} <i><b>{to_small_caps('Waiting for Player 2 to join...')}</b></i>"
+        )
+
+        msg = await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=text,
+            reply_markup=get_tic_board(game),
+            parse_mode=ParseMode.HTML
+        )
+        
+        new_key = f"{msg.chat_id}_{msg.message_id}"
+        active_tic_games[new_key] = game
+        await query.answer(to_small_caps("New game started below!"))
+        return
+
     key = f"{query.message.chat.id}_{query.message.message_id}"
 
     if key not in active_tic_games:
-        await query.answer(to_small_caps("⚠️ This game session has expired!"), show_alert=True)
+        await query.answer(to_small_caps("This game session has expired!"), show_alert=True)
         return
 
     game = active_tic_games[key]
 
     # Handle join
     if query.data == "tic_join":
-        if user_id == game['player_x_id']:
-            await query.answer(to_small_caps("❌ You cannot join your own game as Player 2!"), show_alert=True)
+        if user_id == game['player_1_id']:
+            await query.answer(to_small_caps("You cannot join your own game as Player 2!"), show_alert=True)
             return
         if game['status'] != 'waiting':
-            await query.answer(to_small_caps("⚠️ The game has already started!"), show_alert=True)
+            await query.answer(to_small_caps("The game has already started!"), show_alert=True)
             return
 
-        game['player_o_id'] = user_id
-        game['player_o_name'] = html.escape(to_small_caps(query.from_user.first_name or "User"))
+        game['player_2_id'] = user_id
+        game['player_2_name'] = html.escape(query.from_user.first_name or "User")
         game['status'] = 'playing'
 
         text = (
-            f"🎮 <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-            f"❌ <b>{game['player_x_name']}</b>\n"
-            f"⭕️ <b>{game['player_o_name']}</b>\n\n"
-            f"👉 <b>{to_small_caps('Turn')}: {game['player_x_name']} (❌)</b>"
+            f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+            f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
+            f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
+            f"{PREMIUM_TURN} <b>{to_small_caps('Turn')}: {game['player_1_name']} ({PREMIUM_O})</b>"
         )
         await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
         await query.answer(to_small_caps("✅ You have joined the game!"))
@@ -315,11 +368,11 @@ async def tic_callback(update: Update, context: CallbackContext):
     # Handle moves
     if query.data.startswith("tic_move_"):
         if game['status'] != 'playing':
-            await query.answer(to_small_caps("⚠️ The game is already over!"), show_alert=True)
+            await query.answer(to_small_caps("The game is already over!"), show_alert=True)
             return
 
-        if user_id not in [game['player_x_id'], game['player_o_id']]:
-            await query.answer(to_small_caps("🚫 You are not a player in this game!"), show_alert=True)
+        if user_id not in [game['player_1_id'], game['player_2_id']]:
+            await query.answer(to_small_caps("You are not a player in this game!"), show_alert=True)
             return
 
         if user_id != game['turn']:
@@ -329,51 +382,68 @@ async def tic_callback(update: Update, context: CallbackContext):
         index = int(query.data.split("_")[2])
         
         if game['board'][index] != " ":
-            await query.answer(to_small_caps("❌ This box is already filled!"), show_alert=True)
+            await query.answer(to_small_caps("This box is already filled!"), show_alert=True)
             return
 
-        symbol = "❌" if user_id == game['player_x_id'] else "⭕️"
+        # Mark the move with the correct standard emoji for the array
+        symbol = game['player_1_sym'] if user_id == game['player_1_id'] else game['player_2_sym']
         game['board'][index] = symbol
 
         winner = check_win(game['board'])
+        
         if winner:
             game['status'] = 'finished'
+            
             if winner == "Draw":
                 text = (
-                    f"🎮 <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-                    f"❌ <b>{game['player_x_name']}</b>\n"
-                    f"⭕️ <b>{game['player_o_name']}</b>\n\n"
-                    f"🤝 <b>{to_small_caps('Game Draw! Well played both.')}</b>"
+                    f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+                    f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
+                    f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
+                    f"{PREMIUM_DRAW} <b>{to_small_caps('Game Draw! Well played both.')}</b>"
                 )
             else:
-                win_name = game['player_x_name'] if winner == "❌" else game['player_o_name']
+                # Find out who won and lost for displaying custom emojis
+                if winner == game['player_1_sym']:
+                    win_name = game['player_1_name']
+                    lose_name = game['player_2_name']
+                    win_sym = PREMIUM_O
+                    lose_sym = PREMIUM_X
+                else:
+                    win_name = game['player_2_name']
+                    lose_name = game['player_1_name']
+                    win_sym = PREMIUM_X
+                    lose_sym = PREMIUM_O
+
                 text = (
-                    f"🎮 <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-                    f"❌ <b>{game['player_x_name']}</b>\n"
-                    f"⭕️ <b>{game['player_o_name']}</b>\n\n"
-                    f"🏆 <b>{to_small_caps('Winner')}: {win_name} ({winner})</b>"
+                    f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+                    f"{win_sym} <b>{win_name}</b> {PREMIUM_WIN}\n"
+                    f"{lose_sym} <b>{lose_name}</b> {PREMIUM_CRY}\n\n"
+                    f"{PREMIUM_WIN} <b>{to_small_caps('Winner')}: {win_name}</b>"
                 )
 
-            await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+            # Replaces the grid with a single Play Again button
+            replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{to_small_caps('Play Again')} ⟳", callback_data="tic_play_again")]])
+            
+            await query.message.edit_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
             del active_tic_games[key]
             await query.answer(to_small_caps("Game Over!"))
             return
 
-        # Switch Turn
-        if user_id == game['player_x_id']:
-            game['turn'] = game['player_o_id']
-            next_turn_name = game['player_o_name']
-            next_symbol = "⭕️"
+        # Switch Turn Logic
+        if user_id == game['player_1_id']:
+            game['turn'] = game['player_2_id']
+            next_turn_name = game['player_2_name']
+            next_symbol = PREMIUM_X
         else:
-            game['turn'] = game['player_x_id']
-            next_turn_name = game['player_x_name']
-            next_symbol = "❌"
+            game['turn'] = game['player_1_id']
+            next_turn_name = game['player_1_name']
+            next_symbol = PREMIUM_O
 
         text = (
-            f"🎮 <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-            f"❌ <b>{game['player_x_name']}</b>\n"
-            f"⭕️ <b>{game['player_o_name']}</b>\n\n"
-            f"👉 <b>{to_small_caps('Turn')}: {next_turn_name} ({next_symbol})</b>"
+            f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+            f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
+            f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
+            f"{PREMIUM_TURN} <b>{to_small_caps('Turn')}: {next_turn_name} ({next_symbol})</b>"
         )
         await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
         await query.answer()
