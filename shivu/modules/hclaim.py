@@ -2,8 +2,8 @@ import random
 import html
 import logging
 from datetime import datetime, timedelta, timezone
-from telegram import Update
-from telegram.ext import CommandHandler, CallbackContext
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.constants import ParseMode
 
 logging.basicConfig(level=logging.INFO)
@@ -65,10 +65,8 @@ def can_claim_today(last_claim_dt) -> bool:
     else:
         last_claim_dt = last_claim_dt.astimezone(IST)
     
-    # Calculate today's 4:00 AM reset milestone in IST
     today_4am = now.replace(hour=4, minute=0, second=0, microsecond=0)
     
-    # If current time is before 4 AM, the current reset cycle actually started at 4 AM yesterday
     if now < today_4am:
         reset_threshold = today_4am - timedelta(days=1)
     else:
@@ -76,6 +74,9 @@ def can_claim_today(last_claim_dt) -> bool:
         
     return last_claim_dt < reset_threshold
 
+# ==========================================
+# SWAIFU & CLAIM HANDLERS
+# ==========================================
 
 async def swaifu(update: Update, context: CallbackContext):
     try:
@@ -146,7 +147,6 @@ async def swaifu(update: Update, context: CallbackContext):
             logger.warning(f"Image send failed, falling back to text: {img_err}")
             await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
 
-        # Log Swaifu Claim
         log_data = {
             "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
             "ɪᴅ": f"<code>{user_id}</code>",
@@ -157,7 +157,7 @@ async def swaifu(update: Update, context: CallbackContext):
 
     except Exception as e:
         logger.error(f"Swaifu Error: {e}", exc_info=True)
-        await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>⚠️ {to_small_caps('An error occurred! Try again later.')}</b>", parse_mode=ParseMode.HTML)
 
 
 async def daily_claim_coins(update: Update, context: CallbackContext):
@@ -199,7 +199,6 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 
         await update.message.reply_text(msg_text, parse_mode=ParseMode.HTML)
         
-        # Log Coin Claim
         log_data = {
             "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
             "ɪᴅ": f"<code>{user_id}</code>",
@@ -209,9 +208,181 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 
     except Exception as e:
         logger.error(f"Claim Error: {e}", exc_info=True)
-        await update.message.reply_text("<b>⚠️ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ! ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>⚠️ {to_small_caps('An error occurred! Try again later.')}</b>", parse_mode=ParseMode.HTML)
 
 
-# Handlers
+# ==========================================
+# TIC-TAC-TOE GAME HANDLERS
+# ==========================================
+
+active_tic_games = {}
+
+def get_tic_board(game):
+    if game['status'] == 'waiting':
+        btn_text = to_small_caps("Join Game (Player 2)")
+        return InlineKeyboardMarkup([[InlineKeyboardButton(f"🎮 {btn_text}", callback_data="tic_join")]])
+
+    board = game['board']
+    keyboard = []
+    for i in range(0, 9, 3):
+        row = []
+        for j in range(3):
+            val = board[i+j]
+            text = val if val != " " else "⬜️"
+            cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
+            row.append(InlineKeyboardButton(text, callback_data=cb_data))
+        keyboard.append(row)
+    return InlineKeyboardMarkup(keyboard)
+
+def check_win(board):
+    win_combos = [
+        (0, 1, 2), (3, 4, 5), (6, 7, 8), 
+        (0, 3, 6), (1, 4, 7), (2, 5, 8), 
+        (0, 4, 8), (2, 4, 6)             
+    ]
+    for a, b, c in win_combos:
+        if board[a] == board[b] == board[c] and board[a] != " ":
+            return board[a]
+    if " " not in board:
+        return "Draw"
+    return None
+
+async def start_tic(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    first_name = update.effective_user.first_name or "User"
+    safe_name = html.escape(to_small_caps(first_name))
+
+    game = {
+        'player_x_id': user_id,
+        'player_x_name': safe_name,
+        'player_o_id': None,
+        'player_o_name': None,
+        'board': [" "] * 9,
+        'turn': user_id,
+        'status': 'waiting'
+    }
+
+    text = (
+        f"🎮 <b>{to_small_caps('Tic-Tac-Toe Game Started!')}</b>\n\n"
+        f"👤 <b>{to_small_caps('Player 1')} (❌): {game['player_x_name']}</b>\n"
+        f"⏳ <i><b>{to_small_caps('Waiting for Player 2 to join...')}</b></i>"
+    )
+
+    msg = await update.message.reply_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+    key = f"{update.effective_chat.id}_{msg.message_id}"
+    active_tic_games[key] = game
+
+
+async def tic_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    if query.data == "tic_ignore":
+        await query.answer()
+        return
+
+    key = f"{query.message.chat.id}_{query.message.message_id}"
+
+    if key not in active_tic_games:
+        await query.answer(to_small_caps("⚠️ This game session has expired!"), show_alert=True)
+        return
+
+    game = active_tic_games[key]
+
+    # Handle join
+    if query.data == "tic_join":
+        if user_id == game['player_x_id']:
+            await query.answer(to_small_caps("❌ You cannot join your own game as Player 2!"), show_alert=True)
+            return
+        if game['status'] != 'waiting':
+            await query.answer(to_small_caps("⚠️ The game has already started!"), show_alert=True)
+            return
+
+        game['player_o_id'] = user_id
+        game['player_o_name'] = html.escape(to_small_caps(query.from_user.first_name or "User"))
+        game['status'] = 'playing'
+
+        text = (
+            f"🎮 <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+            f"❌ <b>{game['player_x_name']}</b>\n"
+            f"⭕️ <b>{game['player_o_name']}</b>\n\n"
+            f"👉 <b>{to_small_caps('Turn')}: {game['player_x_name']} (❌)</b>"
+        )
+        await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+        await query.answer(to_small_caps("✅ You have joined the game!"))
+        return
+
+    # Handle moves
+    if query.data.startswith("tic_move_"):
+        if game['status'] != 'playing':
+            await query.answer(to_small_caps("⚠️ The game is already over!"), show_alert=True)
+            return
+
+        if user_id not in [game['player_x_id'], game['player_o_id']]:
+            await query.answer(to_small_caps("🚫 You are not a player in this game!"), show_alert=True)
+            return
+
+        if user_id != game['turn']:
+            await query.answer(to_small_caps("⏳ It is not your turn yet! Please wait."), show_alert=True)
+            return
+
+        index = int(query.data.split("_")[2])
+        
+        if game['board'][index] != " ":
+            await query.answer(to_small_caps("❌ This box is already filled!"), show_alert=True)
+            return
+
+        symbol = "❌" if user_id == game['player_x_id'] else "⭕️"
+        game['board'][index] = symbol
+
+        winner = check_win(game['board'])
+        if winner:
+            game['status'] = 'finished'
+            if winner == "Draw":
+                text = (
+                    f"🎮 <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+                    f"❌ <b>{game['player_x_name']}</b>\n"
+                    f"⭕️ <b>{game['player_o_name']}</b>\n\n"
+                    f"🤝 <b>{to_small_caps('Game Draw! Well played both.')}</b>"
+                )
+            else:
+                win_name = game['player_x_name'] if winner == "❌" else game['player_o_name']
+                text = (
+                    f"🎮 <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+                    f"❌ <b>{game['player_x_name']}</b>\n"
+                    f"⭕️ <b>{game['player_o_name']}</b>\n\n"
+                    f"🏆 <b>{to_small_caps('Winner')}: {win_name} ({winner})</b>"
+                )
+
+            await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+            del active_tic_games[key]
+            await query.answer(to_small_caps("Game Over!"))
+            return
+
+        # Switch Turn
+        if user_id == game['player_x_id']:
+            game['turn'] = game['player_o_id']
+            next_turn_name = game['player_o_name']
+            next_symbol = "⭕️"
+        else:
+            game['turn'] = game['player_x_id']
+            next_turn_name = game['player_x_name']
+            next_symbol = "❌"
+
+        text = (
+            f"🎮 <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+            f"❌ <b>{game['player_x_name']}</b>\n"
+            f"⭕️ <b>{game['player_o_name']}</b>\n\n"
+            f"👉 <b>{to_small_caps('Turn')}: {next_turn_name} ({next_symbol})</b>"
+        )
+        await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+        await query.answer()
+
+# ==========================================
+# HANDLER REGISTRATION
+# ==========================================
+
 application.add_handler(CommandHandler("swaifu", swaifu))
 application.add_handler(CommandHandler("claim", daily_claim_coins))
+application.add_handler(CommandHandler("tic", start_tic))
+application.add_handler(CallbackQueryHandler(tic_callback, pattern="^tic_"))
