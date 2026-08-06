@@ -308,10 +308,10 @@ class HaremHandler:
 
         collection = await self.load_user_collection(user_id)
         if not collection:
-            await message.reply_text("<b>⚠️ ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!</b>")
+            await message.reply_text("⚠️ ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!")
             return
         if not collection.characters:
-            await message.reply_text("<b>📭 ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>")
+            await message.reply_text("📭 ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.")
             return
 
         filtered = collection.get_filtered_characters()
