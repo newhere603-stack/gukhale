@@ -14,16 +14,16 @@ async def handle_trade_command(update: Update, context: CallbackContext):
     sender_id = message.from_user.id
 
     if not message.reply_to_message:
-        await message.reply_html("<b>you need to reply to a user's message to trade a character!</b>")
+        await message.reply_html("<b>ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜꜱᴇʀ'ꜱ ᴍᴇꜱꜱᴀɢᴇ ᴛᴏ ᴛʀᴀᴅᴇ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ!</b>")
         return
 
     receiver_id = message.reply_to_message.from_user.id
     if sender_id == receiver_id:
-        await message.reply_html("<b>you can't trade a character with yourself!</b>")
+        await message.reply_html("<b>ʏᴏᴜ ᴄᴀɴ'ᴛ ᴛʀᴀᴅᴇ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴡɪᴛʜ ʏᴏᴜʀꜱᴇʟꜰ!</b>")
         return
 
     if len(context.args) != 2:
-        await message.reply_html("<b>you need to provide two character ids! (your_id their_id)</b>")
+        await message.reply_html("<b>ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ᴘʀᴏᴠɪᴅᴇ ᴛᴡᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅꜱ! (ʏᴏᴜʀ_ɪᴅ ᴛʜᴇɪʀ_ɪᴅ)</b>")
         return
 
     sender_character_id, receiver_character_id = context.args[0], context.args[1]
@@ -33,24 +33,24 @@ async def handle_trade_command(update: Update, context: CallbackContext):
 
     # Ensure users exist and 'characters' is a list
     if not sender or not isinstance(sender.get('characters'), list):
-        await message.reply_html("<b>your characters data is corrupted or not found!</b>")
+        await message.reply_html("<b>ʏᴏᴜʀ ᴄʜᴀʀᴀᴄᴛᴇʀꜱ ᴅᴀᴛᴀ ɪꜱ ᴄᴏʀʀᴜᴘᴛᴇᴅ ᴏʀ ɴᴏᴛ ꜰᴏᴜɴᴅ!</b>")
         return
     if not receiver or not isinstance(receiver.get('characters'), list):
-        await message.reply_html("<b>the other user's characters data is corrupted or not found!</b>")
+        await message.reply_html("<b>ᴛʜᴇ ᴏᴛʜᴇʀ ᴜꜱᴇʀ'ꜱ ᴄʜᴀʀᴀᴄᴛᴇʀꜱ ᴅᴀᴛᴀ ɪꜱ ᴄᴏʀʀᴜᴘᴛᴇᴅ ᴏʀ ɴᴏᴛ ꜰᴏᴜɴᴅ!</b>")
         return
 
     sender_character = next((character for character in sender['characters'] if character['id'] == sender_character_id), None)
     receiver_character = next((character for character in receiver['characters'] if character['id'] == receiver_character_id), None)
 
     if not sender_character:
-        await message.reply_html("<b>you don't have the character you're trying to trade!</b>")
+        await message.reply_html("<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴏᴜ'ʀᴇ ᴛʀʏɪɴɢ ᴛᴏ ᴛʀᴀᴅᴇ!</b>")
         return
     if not receiver_character:
-        await message.reply_html("<b>the other user doesn't have the character they're trying to trade!</b>")
+        await message.reply_html("<b>ᴛʜᴇ ᴏᴛʜᴇʀ ᴜꜱᴇʀ ᴅᴏᴇꜱɴ'ᴛ ʜᴀᴠᴇ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴛʜᴇʏ'ʀᴇ ᴛʀʏɪɴɢ ᴛᴏ ᴛʀᴀᴅᴇ!</b>")
         return
 
     if (sender_id, receiver_id) in pending_trades:
-        await message.reply_html("<b>there is already a pending trade between you and this user.</b>")
+        await message.reply_html("<b>ᴛʜᴇʀᴇ ɪꜱ ᴀʟʀᴇᴀᴅʏ ᴀ ᴘᴇɴᴅɪɴɢ ᴛʀᴀᴅᴇ ʙᴇᴛᴡᴇᴇɴ ʏᴏᴜ ᴀɴᴅ ᴛʜɪꜱ ᴜꜱᴇʀ.</b>")
         return
 
     pending_trades[(sender_id, receiver_id)] = {
@@ -58,16 +58,16 @@ async def handle_trade_command(update: Update, context: CallbackContext):
         'receiver_character_id': receiver_character_id
     }
 
-    # Sender ID callback data mein bhej rahe hain taaki on_callback_query me easily identify ho
+    # Sender ID callback data mein bhej rahe hain
     keyboard = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("Confirm ✅", callback_data=f"confirm_trade_{sender_id}")],
-            [InlineKeyboardButton("Cancel ❌", callback_data=f"cancel_trade_{sender_id}")]
+            [InlineKeyboardButton("ᴄᴏɴꜰɪʀᴍ ✅", callback_data=f"confirm_trade_{sender_id}")],
+            [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ ❌", callback_data=f"cancel_trade_{sender_id}")]
         ]
     )
 
     mention = mention_html(receiver_id, message.reply_to_message.from_user.first_name)
-    await message.reply_html(f"<b>{mention}, do you accept this trade?</b>", reply_markup=keyboard)
+    await message.reply_html(f"<b>{mention}, ᴅᴏ ʏᴏᴜ ᴀᴄᴄᴇᴘᴛ ᴛʜɪꜱ ᴛʀᴀᴅᴇ?</b>", reply_markup=keyboard)
 
 async def on_callback_query(update: Update, context: CallbackContext):
     callback_query = update.callback_query
@@ -81,7 +81,7 @@ async def on_callback_query(update: Update, context: CallbackContext):
     sender_id = int(data.split("_")[2])
 
     if (sender_id, receiver_id) not in pending_trades:
-        await callback_query.answer("this trade is not for you or has expired!", show_alert=True)
+        await callback_query.answer("ᴛʜɪꜱ ᴛʀᴀᴅᴇ ɪꜱ ɴᴏᴛ ꜰᴏʀ ʏᴏᴜ ᴏʀ ʜᴀꜱ ᴇxᴘɪʀᴇᴅ!", show_alert=True)
         return
 
     trade_data = pending_trades[(sender_id, receiver_id)]
@@ -98,11 +98,11 @@ async def on_callback_query(update: Update, context: CallbackContext):
         receiver_character = next((char for char in receiver.get('characters', []) if char['id'] == receiver_character_id), None)
 
         if not sender_character or not receiver_character:
-            await callback_query.message.edit_text("<b>one of the characters in the trade no longer exists!</b>", parse_mode='HTML')
+            await callback_query.message.edit_text("<b>ᴏɴᴇ ᴏꜰ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀꜱ ɪɴ ᴛʜᴇ ᴛʀᴀᴅᴇ ɴᴏ ʟᴏɴɢᴇʀ ᴇxɪꜱᴛꜱ!</b>", parse_mode='HTML')
             del pending_trades[(sender_id, receiver_id)]
             return
 
-        # MongoDB ke $pull aur $push methods se fast and safe update
+        # MongoDB update
         await user_collection.update_one({'id': sender_id}, {'$pull': {'characters': {'id': sender_character_id}}})
         await user_collection.update_one({'id': receiver_id}, {'$pull': {'characters': {'id': receiver_character_id}}})
 
@@ -111,13 +111,12 @@ async def on_callback_query(update: Update, context: CallbackContext):
 
         del pending_trades[(sender_id, receiver_id)]
 
-        await callback_query.message.edit_text("<b>🎁 you have successfully traded your character!</b>", parse_mode='HTML')
+        await callback_query.message.edit_text("<b>🎁 ʏᴏᴜ ʜᴀᴠᴇ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴛʀᴀᴅᴇᴅ ʏᴏᴜʀ ᴄʜᴀʀᴀᴄᴛᴇʀ!</b>", parse_mode='HTML')
 
     elif data.startswith("cancel_trade_"):
         del pending_trades[(sender_id, receiver_id)]
-        await callback_query.message.edit_text("<b>❌️ trade canceled.</b>", parse_mode='HTML')
+        await callback_query.message.edit_text("<b>ᴛʀᴀᴅᴇ ᴄᴀɴᴄᴇʟᴇᴅ.</b>", parse_mode='HTML')
 
 
 application.add_handler(CommandHandler("trade", handle_trade_command, block=False))
-# Pattern update kiya gaya hai taaki naye callback data (confirm_trade_12345) ko pakad sake
 application.add_handler(CallbackQueryHandler(on_callback_query, pattern='^(confirm_trade_|cancel_trade_)', block=False))
