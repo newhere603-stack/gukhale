@@ -161,7 +161,7 @@ async def destroy_cmd(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
 
 
-# --- /fixrarity <char_id> (DYNAMIC UPDATE) ---
+# --- /fixrarity <char_id> (ADVANCED DYNAMIC UPDATE & ID FIX) ---
 async def fixrarity_cmd(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
@@ -176,43 +176,62 @@ async def fixrarity_cmd(update: Update, context: CallbackContext):
             await update.message.reply_text("<b>⚠️ ᴜsᴀɢᴇ:</b> <code>/fixrarity [ᴄʜᴀʀ_ɪᴅ]</code>", parse_mode='HTML')
             return
 
-        char_id = str(args[0])
+        char_id_input = str(args[0])
+        
+        # Sabhi possible ID formats bana rahe hain ('02', '2', 2)
+        search_ids = [char_id_input]
+        if char_id_input.isdigit():
+            search_ids.append(str(int(char_id_input))) # "2"
+            search_ids.append(int(char_id_input))      # 2
 
         # 1. Main collection se LIVE data uthana
-        global_char = await collection.find_one({'id': char_id})
+        global_char = await collection.find_one({'id': {'$in': search_ids}})
         
         if not global_char:
-            await update.message.reply_text(f"<b>❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ <code>{char_id}</code> ᴍᴀɪɴ ᴅᴀᴛᴀʙᴀsᴇ ᴍᴇ ɴᴀʜɪ ᴍɪʟᴀ!</b>", parse_mode='HTML')
+            await update.message.reply_text(f"<b>❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ <code>{char_id_input}</code> ᴍᴀɪɴ ᴅᴀᴛᴀʙᴀsᴇ ᴍᴇ ɴᴀʜɪ ᴍɪʟᴀ!</b>", parse_mode='HTML')
             return
 
-        # Current time pe jo data hai wahi extract hoga
         current_rarity = global_char.get('rarity', 'Unknown')
         current_name = global_char.get('name', 'Unknown')
 
-        # 2. Sabhi users ke database me ja kar update kar dena
-        result = await user_collection.update_many(
-            {"characters.id": char_id},
-            {"$set": {
-                "characters.$[elem].rarity": current_rarity,
-                "characters.$[elem].name": current_name
-            }},
-            array_filters=[{"elem.id": char_id}]
-        )
+        # 2. Safely users ko dhundhna jinke paas kisi bhi format me ye ID ho
+        users_cursor = user_collection.find({"characters.id": {"$in": search_ids}})
+        affected_count = 0
+        
+        # Har affected user ke data ko manually Python me theek karke save karna
+        async for user in users_cursor:
+            updated_chars = []
+            modified = False
+            for c in user.get('characters', []):
+                # Agar ID humare format list mein milti hai toh replace karo
+                if c.get('id') in search_ids:
+                    c['rarity'] = current_rarity
+                    c['name'] = current_name
+                    modified = True
+                updated_chars.append(c)
+            
+            if modified:
+                await user_collection.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"characters": updated_chars}}
+                )
+                affected_count += 1
 
         # 3. Success Message
         success_msg = (
             f"<b>✅ ᴅᴀᴛᴀʙᴀsᴇ ᴜᴘᴅᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>🆔 ᴄʜᴀʀ ɪᴅ:</b> <code>{char_id}</code>\n"
+            f"<b>🆔 ᴄʜᴀʀ ɪᴅ:</b> <code>{char_id_input}</code>\n"
             f"<b>📝 ᴄʜᴀʀ ɴᴀᴍᴇ:</b> <code>{current_name}</code>\n"
             f"<b>✨ ᴄᴜʀʀᴇɴᴛ ʀᴀʀɪᴛʏ:</b> <code>{current_rarity}</code>\n"
-            f"<b>👥 ᴜsᴇʀs ᴀғғᴇᴄᴛᴇᴅ:</b> <code>{result.modified_count}</code> ᴘʟᴀʏᴇʀs\n"
+            f"<b>👥 ᴜsᴇʀs ᴀғғᴇᴄᴛᴇᴅ:</b> <code>{affected_count}</code> ᴘʟᴀʏᴇʀs\n"
             f"━━━━━━━━━━━━━━━━━━━━"
         )
         await update.message.reply_text(success_msg, parse_mode='HTML')
 
     except Exception as e:
         await update.message.reply_text(f"<b>⚠️ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>", parse_mode='HTML')
+
 
 
 # --- /setded <percentage> ---
