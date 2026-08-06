@@ -97,7 +97,7 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
-application.add_handler(CommandHandler(["bal", "balance"], balance_cmd, block=False))
+application.add_handler(CommandHandler(["bal", "balance", "coins", "coin"], balance_cmd, block=False))
 application.add_handler(CommandHandler(["tokens", "tbal", "token"], tokens_cmd, block=False))
 
 LOGGER.info("✓ Balance & Tokens module loaded successfully")
