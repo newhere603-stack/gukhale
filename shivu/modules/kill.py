@@ -3,7 +3,8 @@ from html import escape
 from datetime import datetime
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
-from shivu import application, user_collection
+# Main collection bhi import ki gayi hai updated rarity dikhane ke liye
+from shivu import application, user_collection, collection
 
 # Configuration
 OWNER_ID = 7657218453
@@ -124,6 +125,16 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
             )
             return
         
+        # Yahan main collection se data fetch kar rahe hain taaki original Rarity mil sake
+        global_char = await collection.find_one({'id': str(action_arg)})
+        
+        if global_char:
+            char_name = global_char.get('name', target_char.get('name', 'Unknown'))
+            char_rarity = global_char.get('rarity', target_char.get('rarity', 'N/A'))
+        else:
+            char_name = target_char.get('name', 'Unknown')
+            char_rarity = target_char.get('rarity', 'N/A')
+
         # Sirf ek instance remove karna (duplicate prevent)
         characters.remove(target_char)
         
@@ -133,9 +144,6 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
         )
         
         if result.modified_count > 0:
-            char_name = target_char.get('name', 'Unknown')
-            char_rarity = target_char.get('rarity', 'N/A')
-            
             success_msg = (
                 f"<b>✅ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ!</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -168,5 +176,5 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         await update.message.reply_text(f"<b>⚠️ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>", parse_mode='HTML')
 
-# Handler Register Karna (Naya Command 'Ukill' hai)
+# Handler Register Karna
 application.add_handler(CommandHandler('Ukill', Ukill, block=False))
