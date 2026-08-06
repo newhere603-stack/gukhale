@@ -482,7 +482,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
                 else:
                     text = "💸"
             else:
-                text = "🟦" 
+                text = "ㅤㅤ" 
             
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
             row.append(InlineKeyboardButton(text, callback_data=cb_data))
@@ -491,7 +491,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
     if game['status'] == 'playing' and game['found'] > 0:
         mult = get_mines_multiplier(game['found'])
         win_amount = int(game['bet'] * mult)
-        btn_text = f"{to_small_caps('Cash Out')} ({mult}x | 💰 {win_amount})"
+        btn_text = f"{to_small_caps('Cash Out')} ({mult}x | 💸 {win_amount})"
         keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout")])
         
     return InlineKeyboardMarkup(keyboard)
@@ -513,7 +513,7 @@ async def start_mines(update: Update, context: CallbackContext):
     balance = user_data.get('balance', 0) if user_data else 0
 
     if balance < bet:
-        await update.message.reply_text(f"<b>❌ {to_small_caps('You do not have enough coins!')}</b>\n💸 Balance: {balance}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>{to_small_caps('You do not have enough coins!')}</b>\n💸 Balance: {balance}", parse_mode=ParseMode.HTML)
         return
 
     await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -bet}})
