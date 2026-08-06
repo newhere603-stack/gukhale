@@ -182,8 +182,8 @@ async def despawn_character(chat_id, message_id, character, context):
         caption = (
             f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
-            f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n"
-            f"<b>ʀᴀʀɪᴛʏ:</b> <b>{rarity_display}</b>\n\n"
+            f"<b>{rarity_display}</b> <b>ʀᴀʀɪᴛʏ:</b>\n"
+            f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n\n"
             f"<tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
@@ -527,7 +527,7 @@ async def main():
                 "Bot": f"<b>@{bot_info.username}</b>",
                 "Status": "<b>Online & Ready <tg-emoji emoji-id=\"6093708348413189642\">⚡️</tg-emoji></b>"
             }
-            log_msg = create_log_message("˹ Bot Restarted ˼ 🔄", data)
+            log_msg = create_log_message("˹ Bot Restarted ˼ <tg-emoji emoji-id=\"6093679829830344586\">🔝</tg-emoji>", data)
             asyncio.create_task(send_log_to_group(log_msg))
             LOGGER.info("Startup log queued successfully!")
         except Exception as e:
