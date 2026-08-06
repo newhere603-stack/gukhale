@@ -13,7 +13,7 @@ from shivu import (
     user_collection,
 )
 
-START_VIDEO = "https://graph.org/file/e668451eba24048fe880c-8cefbbe834e0f673d8.mp4"
+START_VIDEO = "https://gxtusqitetsemwjdtvvq.supabase.co/storage/v1/object/public/photos/1785999431478-sm4ln0.mp4"
 FORCE_SUB_CHAT = "anime_group_hai"
 OWNER_ID = 7657218453  # Aapki Master Owner ID
 
