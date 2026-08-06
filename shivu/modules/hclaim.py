@@ -133,7 +133,7 @@ async def swaifu(update: Update, context: CallbackContext):
         )
 
         caption = (
-            f"<b>{to_small_caps('Congratulations 🎉')}\n {safe_first_name}! {to_small_caps('You won')}🔥</b>\n"
+            f"<b>{to_small_caps('Congratulations')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji>\n {safe_first_name}! {to_small_caps('You won')}<tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>\n"
             f"<b>◈ {to_small_caps('Name')}: {char_name}</b>\n"
             f"<b>◈ {to_small_caps('Rarity')}: {rarity}</b>\n"
             f"<b>◈ {to_small_caps('Anime')}: {anime}</b>"
@@ -154,11 +154,11 @@ async def swaifu(update: Update, context: CallbackContext):
             "ᴄʜᴀʀᴀᴄᴛᴇʀ": f"<b>{character.get('name', 'Unknown')}</b>",
             "ʀᴀʀɪᴛʏ": f"<b>{character.get('rarity', 'Common')}</b>"
         }
-        await send_log(context, create_log_message("˹ sᴡᴀɪꜰᴜ ᴄʟᴀɪᴍᴇᴅ ˼ 🌸", log_data))
+        await send_log(context, create_log_message("˹ sᴡᴀɪꜰᴜ ᴄʟᴀɪᴍᴇᴅ ˼ <tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji>", log_data))
 
     except Exception as e:
         logger.error(f"Swaifu Error: {e}", exc_info=True)
-        await update.message.reply_text(f"<b>⚠️ {to_small_caps('An error occurred! Try again later.')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('An error occurred! Try again later.')}</b>", parse_mode=ParseMode.HTML)
 
 
 async def daily_claim_coins(update: Update, context: CallbackContext):
@@ -191,11 +191,11 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         )
 
         msg_text = (
-            f"<b>🎉 {to_small_caps('Daily Reward Claimed!')} 🎉</b>\n\n"
-            f"<b>✨ {to_small_caps('Your dedication pays off!')}</b>\n"
-            f"<b>💸 {to_small_caps('You just received')} {coins_won} {to_small_caps('coins!')}</b>\n\n"
-            f"<b>🏦 {to_small_caps('These have been securely added to your vault.')}</b>\n"
-            f"<b>🌟 {to_small_caps('Keep coming back daily to grow your empire!')}</b>"
+            f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {to_small_caps('Daily Reward Claimed!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
+            f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {to_small_caps('Your dedication pays off!')}</b>\n"
+            f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {to_small_caps('You just received')} {coins_won} {to_small_caps('coins!')}</b>\n\n"
+            f"<b><tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> {to_small_caps('These have been securely added to your vault.')}</b>\n"
+            f"<b><tg-emoji emoji-id=\"5438496463044752972\">⭐️</tg-emoji> {to_small_caps('Keep coming back daily to grow your empire!')}</b>"
         )
 
         await update.message.reply_text(msg_text, parse_mode=ParseMode.HTML)
@@ -203,13 +203,13 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         log_data = {
             "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
             "ɪᴅ": f"<code>{user_id}</code>",
-            "ʀᴇᴡᴀʀᴅ": f"<b>💸 {coins_won:,} ᴄᴏɪɴs</b>"
+            "ʀᴇᴡᴀʀᴅ": f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {coins_won:,} ᴄᴏɪɴs</b>"
         }
-        await send_log(context, create_log_message("˹ ᴅᴀɪʟʏ ᴄʟᴀɪᴍ sᴜᴄᴄᴇssғᴜʟ ˼ 💸", log_data))
+        await send_log(context, create_log_message("˹ ᴅᴀɪʟʏ ᴄʟᴀɪᴍ sᴜᴄᴄᴇssғᴜʟ ˼ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>", log_data))
 
     except Exception as e:
         logger.error(f"Claim Error: {e}", exc_info=True)
-        await update.message.reply_text(f"<b>⚠️ {to_small_caps('An error occurred! Try again later.')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('An error occurred! Try again later.')}</b>", parse_mode=ParseMode.HTML)
 
 
 # ==========================================
@@ -500,20 +500,20 @@ async def start_mines(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if not context.args or not context.args[0].isdigit():
-        msg = f"<b>⚠️ {to_small_caps('Usage:')} /mines [bet_amount]</b>\n<i>Example: /mines 20</i>"
+        msg = f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Usage:')} /mines [bet_amount]</b>\n<i>Example: /mines 20</i>"
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
         
     bet = int(context.args[0])
     if bet < 10:
-        await update.message.reply_text(f"<b>⚠️ {to_small_caps('Minimum bet is 10 coins!')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Minimum bet is 10 coins!')}</b>", parse_mode=ParseMode.HTML)
         return
 
     user_data = await user_collection.find_one({'id': user_id})
     balance = user_data.get('balance', 0) if user_data else 0
 
     if balance < bet:
-        await update.message.reply_text(f"<b>{to_small_caps('You do not have enough coins!')}</b>\n💸 Balance: {balance}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>{to_small_caps('You do not have enough coins!')}</b>\n<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> Balance: {balance}", parse_mode=ParseMode.HTML)
         return
 
     await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -bet}})
@@ -533,12 +533,12 @@ async def start_mines(update: Update, context: CallbackContext):
     }
 
     text = (
-        f"<b>🎮 {to_small_caps('Mines Game Active!')}</b>\n\n"
-        f"💸 <b>{to_small_caps('Bet')}:</b> {bet}\n"
-        f"💣 <b>{to_small_caps('Mines')}:</b> 5\n"
-        f"💸 <b>{to_small_caps('Found')}:</b> 0\n"
-        f"📈 <b>{to_small_caps('Multiplier')}:</b> 1.00x\n\n"
-        f"<b>{to_small_caps('Potential Winnings')}:</b> 💸 {bet}"
+        f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {to_small_caps('Mines Game Active!')}</b>\n\n"
+        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {bet}\n"
+        f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{to_small_caps('Mines')}:</b> 5\n"
+        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found')}:</b> 0\n"
+        f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> 1.00x\n\n"
+        f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bet}"
     )
 
     msg = await update.message.reply_text(text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
@@ -578,10 +578,10 @@ async def mines_callback(update: Update, context: CallbackContext):
         game['status'] = 'cashed_out'
         
         text = (
-            f"<b>💸 {to_small_caps('Cashed Out!')} 💸</b>\n\n"
-            f"💸 <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
-            f"✅ <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
-            f"🏆 <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
+            f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {to_small_caps('Cashed Out!')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n\n"
+            f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
+            f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
+            f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
             f"<b>{to_small_caps('Final Board')}:</b>"
         )
         
@@ -598,9 +598,9 @@ async def mines_callback(update: Update, context: CallbackContext):
             game['revealed'][idx] = True
             
             text = (
-                f"<b>💥 {to_small_caps('BOOM! You hit a mine!')} 💥</b>\n\n"
-                f"💸 <b>{to_small_caps('Lost Bet')}:</b> {game['bet']} coins\n"
-                f"💸 <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
+                f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {to_small_caps('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Lost Bet')}:</b> {game['bet']} coins\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
                 f"<b>{to_small_caps('Final Board')}:</b>"
             )
             await query.message.edit_text(text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
@@ -618,10 +618,10 @@ async def mines_callback(update: Update, context: CallbackContext):
                 await user_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
                 game['status'] = 'cashed_out'
                 text = (
-                    f"<b>🎉 {to_small_caps('PERFECT GAME!')} 🎉</b>\n\n"
-                    f"💸 <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
-                    f"✅ <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
-                    f"🏆 <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
+                    f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {to_small_caps('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
+                    f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
+                    f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
                     f"<b>{to_small_caps('Final Board')}:</b>"
                 )
                 await query.message.edit_text(text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
@@ -630,12 +630,12 @@ async def mines_callback(update: Update, context: CallbackContext):
                 return
 
             text = (
-                f"<b>🎮 {to_small_caps('Mines Game Active!')}</b>\n\n"
-                f"💸 <b>{to_small_caps('Bet')}:</b> {game['bet']}\n"
-                f"💣 <b>{to_small_caps('Mines')}:</b> 5\n"
-                f"💸 <b>{to_small_caps('Found')}:</b> {game['found']}\n"
-                f"📈 <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
-                f"<b>{to_small_caps('Potential Winnings')}:</b> 💸 {win_amount}"
+                f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {to_small_caps('Mines Game Active!')}</b>\n\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {game['bet']}\n"
+                f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{to_small_caps('Mines')}:</b> 5\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found')}:</b> {game['found']}\n"
+                f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
+                f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
             )
             await query.message.edit_text(text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
             await query.answer("Safe! 💸")
@@ -650,4 +650,3 @@ application.add_handler(CommandHandler("tic", start_tic))
 application.add_handler(CallbackQueryHandler(tic_callback, pattern="^tic_"))
 application.add_handler(CommandHandler("mines", start_mines))
 application.add_handler(CallbackQueryHandler(mines_callback, pattern="^mines_"))
-
