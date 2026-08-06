@@ -216,6 +216,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 # ==========================================
 
 active_tic_games = {}
+play_again_cooldowns = {} # NEW: Cooldown track karne ke liye dictionary
 
 # Custom Premium Emoji Tags
 PREMIUM_GAME = '<tg-emoji emoji-id="6311820827952162567">🎮</tg-emoji>'
@@ -300,6 +301,19 @@ async def tic_callback(update: Update, context: CallbackContext):
 
     # Handle Play Again Action (Fresh Game in New Message)
     if query.data == "tic_play_again":
+        now = datetime.now(IST)
+        
+        # NEW: Check cooldown (5 seconds limit)
+        if user_id in play_again_cooldowns:
+            time_passed = (now - play_again_cooldowns[user_id]).total_seconds()
+            if time_passed < 5:
+                remaining = int(5 - time_passed)
+                await query.answer(to_small_caps(f"Please wait {remaining} seconds before playing again!"), show_alert=True)
+                return
+        
+        # Update timestamp for user
+        play_again_cooldowns[user_id] = now
+
         safe_name = html.escape(query.from_user.first_name or "User")
 
         game = {
