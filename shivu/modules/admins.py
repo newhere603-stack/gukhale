@@ -1,7 +1,8 @@
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
-from shivu import application, user_collection, db
+# Main database 'collection' ko bhi import kiya gaya hai
+from shivu import application, user_collection, db, collection
 
 OWNER_ID = 7657218453
 SUDO_USERS = [7657218453]
@@ -160,6 +161,60 @@ async def destroy_cmd(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
 
 
+# --- /fixrarity <char_id> (DYNAMIC UPDATE) ---
+async def fixrarity_cmd(update: Update, context: CallbackContext):
+    try:
+        requester_id = update.effective_user.id
+        if not is_authorized(requester_id):
+            return 
+
+        text = update.message.text or update.message.caption
+        parts = text.split()
+        args = parts[1:]
+
+        if len(args) < 1:
+            await update.message.reply_text("<b>⚠️ ᴜsᴀɢᴇ:</b> <code>/fixrarity [ᴄʜᴀʀ_ɪᴅ]</code>", parse_mode='HTML')
+            return
+
+        char_id = str(args[0])
+
+        # 1. Main collection se LIVE data uthana
+        global_char = await collection.find_one({'id': char_id})
+        
+        if not global_char:
+            await update.message.reply_text(f"<b>❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ <code>{char_id}</code> ᴍᴀɪɴ ᴅᴀᴛᴀʙᴀsᴇ ᴍᴇ ɴᴀʜɪ ᴍɪʟᴀ!</b>", parse_mode='HTML')
+            return
+
+        # Current time pe jo data hai wahi extract hoga
+        current_rarity = global_char.get('rarity', 'Unknown')
+        current_name = global_char.get('name', 'Unknown')
+
+        # 2. Sabhi users ke database me ja kar update kar dena
+        result = await user_collection.update_many(
+            {"characters.id": char_id},
+            {"$set": {
+                "characters.$[elem].rarity": current_rarity,
+                "characters.$[elem].name": current_name
+            }},
+            array_filters=[{"elem.id": char_id}]
+        )
+
+        # 3. Success Message
+        success_msg = (
+            f"<b>✅ ᴅᴀᴛᴀʙᴀsᴇ ᴜᴘᴅᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>🆔 ᴄʜᴀʀ ɪᴅ:</b> <code>{char_id}</code>\n"
+            f"<b>📝 ᴄʜᴀʀ ɴᴀᴍᴇ:</b> <code>{current_name}</code>\n"
+            f"<b>✨ ᴄᴜʀʀᴇɴᴛ ʀᴀʀɪᴛʏ:</b> <code>{current_rarity}</code>\n"
+            f"<b>👥 ᴜsᴇʀs ᴀғғᴇᴄᴛᴇᴅ:</b> <code>{result.modified_count}</code> ᴘʟᴀʏᴇʀs\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
+        )
+        await update.message.reply_text(success_msg, parse_mode='HTML')
+
+    except Exception as e:
+        await update.message.reply_text(f"<b>⚠️ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>", parse_mode='HTML')
+
+
 # --- /setded <percentage> ---
 async def setded_cmd(update: Update, context: CallbackContext):
     try:
@@ -216,3 +271,4 @@ application.add_handler(CommandHandler(['tadd'], tadd_cmd, block=False))
 application.add_handler(CommandHandler(['cadd'], cadd_cmd, block=False))
 application.add_handler(CommandHandler(['trem'], trem_cmd, block=False))
 application.add_handler(CommandHandler(['crem'], crem_cmd, block=False))
+application.add_handler(CommandHandler(['fixrarity'], fixrarity_cmd, block=False))
