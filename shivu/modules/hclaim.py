@@ -359,7 +359,7 @@ async def tic_callback(update: Update, context: CallbackContext):
             f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
             f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
             f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
-            f"{PREMIUM_TURN} <b>{to_small_caps('Turn')}: {game['player_1_name']} ({PREMIUM_O})</b>"
+            f"{PREMIUM_TURN} <b>Turn: {game['player_1_name']} ({PREMIUM_O})</b>"
         )
         await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
         await query.answer(to_small_caps("✅ You have joined the game!"))
