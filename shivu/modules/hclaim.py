@@ -231,7 +231,7 @@ PREMIUM_CRY  = '<tg-emoji emoji-id="5922641759518593935">😭</tg-emoji>'
 def get_tic_board(game):
     if game['status'] == 'waiting':
         btn_text = to_small_caps("Join Game")
-        return InlineKeyboardMarkup([[InlineKeyboardButton(f"🎮 {btn_text}", callback_data="tic_join")]])
+        return InlineKeyboardMarkup([[InlineKeyboardButton(f"{btn_text}", callback_data="tic_join")]])
 
     board = game['board']
     keyboard = []
@@ -281,7 +281,7 @@ async def start_tic(update: Update, context: CallbackContext):
 
     text = (
         f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe Game Started!')}</b>\n\n"
-        f"{PREMIUM_USER} <b>{to_small_caps('Player 1')} ({PREMIUM_O}): {game['player_1_name']}</b>\n"
+        f"{PREMIUM_USER} <b>Player 1 ({PREMIUM_O}): {game['player_1_name']}</b>\n\n"
         f"{PREMIUM_WAIT} <i><b>{to_small_caps('Waiting for Player 2 to join...')}</b></i>"
     )
 
@@ -318,7 +318,7 @@ async def tic_callback(update: Update, context: CallbackContext):
 
         text = (
             f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe Game Started!')}</b>\n\n"
-            f"{PREMIUM_USER} <b>{to_small_caps('Player 1')} ({PREMIUM_O}): {game['player_1_name']}</b>\n"
+            f"{PREMIUM_USER} <b>Player 1 ({PREMIUM_O}): {game['player_1_name']}</b>\n\n"
             f"{PREMIUM_WAIT} <i><b>{to_small_caps('Waiting for Player 2 to join...')}</b></i>"
         )
 
