@@ -22,35 +22,42 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-
+# Dictionary updated to hold 3 values (Database Emoji, Premium Emoji, Name)
 RARITIES = {
-    "common": ("🟢", "Common"),
-    "rare": ("🟠", "Rare"),
-    "legendary": ("🟡", "Legendary"),
-    "special": ("🔵", "Medium"),
-    "celestial": ("🪽", "Celestial"),
-    "erotic": ("🥵", "Spicy"),
-    "exclusive": ("💮", "Exclusive"),
-    "premium": ("🔮", "Premium Edition"),
-    "mythic": ("💎", "Mythic"),
-    "sweet": ("🍭", "Sweet"),
-    "valentine": ("💞", "Valentine"),
-    "winter": ("❄️", "Winter"),
-    "neon": ("⚡", "Neon"),
-    "pearl": ("🐚", "Summer"),
-    "cosmic": ("🌌", "Cosmic"),
+    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"),
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
+    "legendary": ("🟡", '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji>', "Legendary"),
+    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"),
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"),
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"),
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
+    "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"),
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"),
+    "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
+    "pearl": ("🐚", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"),
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
 }
 
 
 def rarity_display(key: str) -> str:
-    emoji, name = RARITIES.get(key, RARITIES["common"])
-    return f"{emoji} {name}"
+    db_emoji, _, name = RARITIES.get(key, RARITIES["common"])
+    return f"{db_emoji} {name}"
 
+def rarity_premium_display(key: str) -> str:
+    _, prem_emoji, name = RARITIES.get(key, RARITIES["common"])
+    return f"{prem_emoji} {name}"
 
 def rarity_emoji(display: str) -> str:
     if not display:
-        return "💎"
-    return display.split(' ', 1)[0] if ' ' in display else display
+        return '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>'
+    db_emoji = display.split(' ', 1)[0] if ' ' in display else display
+    for key, (db_e, prem_e, name) in RARITIES.items():
+        if db_emoji == db_e:
+            return prem_e
+    return db_emoji
 
 
 def chunk(items: list, size: int) -> list:
@@ -91,10 +98,9 @@ class DisplayOptions:
     compact_mode: bool = False
 
 
-# YOUR ORIGINAL SYMBOLS WITH SCREENSHOT STRUCTURE
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s ʜᴀʀᴇᴍ - ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
-    'anime_header': "<b>🎞 {anime}</b> ({user_count}/{total_count})\n",
+    'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime}</b> ({user_count}/{total_count})\n",
     'separator': "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n",
     'character': "<b>➥ {id} | {rarity} | {name}{event} x{count}</b>\n",
     'footer': "\n",
@@ -244,7 +250,6 @@ class HaremHandler:
 
         characters = [c for c in (Character.from_dict(c) for c in user.get('characters', [])) if c]
         
-        # --- LIVE SYNC FIX: Fetch latest character info from global db to ensure rarities match ---
         if characters:
             unique_ids = list({c.id for c in characters})
             live_cursor = self.collection_db.find({"id": {"$in": unique_ids}})
@@ -256,7 +261,7 @@ class HaremHandler:
                     doc = live_map[c.id]
                     c.name = doc.get('name', c.name)
                     c.anime = doc.get('anime', c.anime)
-                    c.rarity = doc.get('rarity', c.rarity)  # Updates rarity dynamically from live DB
+                    c.rarity = doc.get('rarity', c.rarity) 
                     if doc.get('img_url'):
                         c.img_url = doc.get('img_url')
                     c.is_video = doc.get('is_video', c.is_video)
@@ -308,17 +313,18 @@ class HaremHandler:
 
         collection = await self.load_user_collection(user_id)
         if not collection:
-            await message.reply_text("⚠️ ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!")
+            await message.reply_text("<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!</b>", parse_mode='HTML')
             return
         if not collection.characters:
-            await message.reply_text("📭 ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.")
+            await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
             return
 
         filtered = collection.get_filtered_characters()
         if not filtered:
             await message.reply_text(
-                f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ʀᴀʀɪᴛʏ:</b> {rarity_display(collection.filter_mode)}\n"
-                f"💡<b>ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /smode</b>"
+                f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ʀᴀʀɪᴛʏ: {rarity_premium_display(collection.filter_mode)}</b>\n"
+                f"<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /smode</b>",
+                parse_mode='HTML'
             )
             return
 
@@ -392,10 +398,10 @@ class ModeHandler:
             await update.message.reply_photo(self.IMG, caption=caption, reply_markup=markup, parse_mode='HTML')
 
     async def show_rarity_menu(self, query):
-        buttons = [InlineKeyboardButton(emoji, callback_data=f"harem_mode_{key}") for key, (emoji, _) in RARITIES.items()]
+        buttons = [InlineKeyboardButton(db_emoji, callback_data=f"harem_mode_{key}") for key, (db_emoji, _, _) in RARITIES.items()]
         keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data="harem_mode_back")]]
         await query.edit_message_caption(
-            caption="🪄 <b>sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ ʏᴏᴜʀ ʜᴀʀᴇᴍ</b>",
+            caption="<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ ʏᴏᴜʀ ʜᴀʀᴇᴍ</b>",
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
         )
 
@@ -419,7 +425,7 @@ class ModeHandler:
             await query.answer()
             return await query.message.delete()
 
-        label = self.LABELS.get(action) or (RARITIES[action][1] if action in RARITIES else None)
+        label = self.LABELS.get(action) or (RARITIES[action][2] if action in RARITIES else None)
         if not label:
             return await query.answer("ɪɴᴠᴀʟɪᴅ ᴏᴘᴛɪᴏɴ", show_alert=True)
 
@@ -437,12 +443,12 @@ class UnfavHandler:
         user = await self.user_db.find_one({'id': user_id})
 
         if not user:
-            await update.message.reply_text('⚠️<b>ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ɢᴏᴛ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴇᴛ!</b>')
+            await update.message.reply_text('<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ɢᴏᴛ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴇᴛ!</b>', parse_mode='HTML')
             return
 
         fav = Character.from_dict(user.get('favorites'))
         if not fav:
-            await update.message.reply_text("💔<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!</b>")
+            await update.message.reply_text("<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!</b>", parse_mode='HTML')
             return
 
         buttons = [[
@@ -450,10 +456,10 @@ class UnfavHandler:
             InlineKeyboardButton("⤬ ɴᴏ", callback_data=f"harem_unfav_no:{user_id}")
         ]]
         caption = (
-            f"<b>💔 ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʀᴇᴍᴏᴠᴇ ᴛʜɪs ғᴀᴠᴏʀɪᴛᴇ?</b>\n\n"
-            f"✨ <b>ɴᴀᴍᴇ:</b> <code>{escape(to_small_caps(fav.name))}</code>\n"
-            f"🎞 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n"
-            f"🆔 <b>ɪᴅ:</b> <code>{fav.id}</code>"
+            f"<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʀᴇᴍᴏᴠᴇ ᴛʜɪs ғᴀᴠᴏʀɪᴛᴇ?</b>\n\n"
+            f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ɴᴀᴍᴇ:</b> <code>{escape(to_small_caps(fav.name))}</code>\n"
+            f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n"
+            f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ:</b> <code>{fav.id}</code>"
         )
         await MediaHelper.send_media_message(
             update.message, fav.img_url, caption, InlineKeyboardMarkup(buttons), fav.is_video, DEFAULT_OPTIONS
@@ -477,15 +483,15 @@ class UnfavHandler:
             await self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}})
             await query.edit_message_caption(
                 caption=(
-                    f"<b>💔 ғᴀᴠᴏʀɪᴛᴇ ʀᴇᴍᴏᴠᴇᴅ!</b>\n\n"
-                    f"✨ <b>ɴᴀᴍᴇ:</b> <code>{escape(to_small_caps(fav.name))}</code>\n"
-                    f"🎞 <b>ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n\n"
-                    f"<i>💖 ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ɴᴇᴡ ғᴀᴠᴏʀɪᴛᴇ ᴜsɪɴɢ /fav</i>"
+                    f"<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ғᴀᴠᴏʀɪᴛᴇ ʀᴇᴍᴏᴠᴇᴅ!</b>\n\n"
+                    f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ɴᴀᴍᴇ:</b> <code>{escape(to_small_caps(fav.name))}</code>\n"
+                    f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n\n"
+                    f"<b><i><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ɴᴇᴡ ғᴀᴠᴏʀɪᴛᴇ ᴜsɪɴɢ /fav</i></b>"
                 ),
                 parse_mode='HTML'
             )
         elif action == 'harem_unfav_no':
-            await query.edit_message_caption(caption="ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.", parse_mode='HTML')
+            await query.edit_message_caption(caption="<b>ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.</b>", parse_mode='HTML')
 
 
 async def verify_owner(query, user_id_str: str) -> Optional[int]:
@@ -510,7 +516,7 @@ async def harem_command(update: Update, context: CallbackContext):
         await harem_handler.show_harem(update, context)
     except TelegramError as e:
         LOGGER.error(f"Error in harem_command: {e}", exc_info=True)
-        await update.message.reply_text("⏳ ʟᴏᴀᴅɪɴɢ ʜᴀʀᴇᴍ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.")
+        await update.message.reply_text("<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ʟᴏᴀᴅɪɴɢ ʜᴀʀᴇᴍ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>", parse_mode='HTML')
 
 
 async def harem_page_callback(update: Update, context: CallbackContext):
@@ -532,7 +538,7 @@ async def smode_command(update: Update, context: CallbackContext):
         await mode_handler.show_mode_menu(update, update.effective_user.id)
     except TelegramError as e:
         LOGGER.error(f"Error in smode_command: {e}", exc_info=True)
-        await update.message.reply_text("ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴍᴏᴅᴇ ᴍᴇɴᴜ.")
+        await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴍᴏᴅᴇ ᴍᴇɴᴜ.</b>", parse_mode='HTML')
 
 
 async def mode_callback(update: Update, context: CallbackContext):
@@ -547,7 +553,7 @@ async def unfav_command(update: Update, context: CallbackContext):
         await unfav_handler.show_unfav_prompt(update)
     except TelegramError as e:
         LOGGER.error(f"Error in unfav_command: {e}", exc_info=True)
-        await update.message.reply_text("ᴇʀʀᴏʀ ᴘʀᴏᴄᴇssɪɴɢ ᴜɴғᴀᴠ ᴄᴏᴍᴍᴀɴᴅ.")
+        await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ᴘʀᴏᴄᴇssɪɴɢ ᴜɴғᴀᴠ ᴄᴏᴍᴍᴀɴᴅ.</b>", parse_mode='HTML')
 
 
 async def unfav_callback(update: Update, context: CallbackContext):
