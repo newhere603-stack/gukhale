@@ -97,7 +97,7 @@ async def set_rarity_status(key, enabled):
     )
 
 
-async def get_group_setting(chat_id, setting_name, default=True):
+async def get_group_setting(chat_id, setting_name, default=False):
     if chat_id not in group_settings_cache:
         doc = await group_settings_collection.find_one({'chat_id': chat_id})
         if doc:
@@ -162,7 +162,7 @@ async def despawn_character(chat_id, message_id, character, context):
             grabbed_spawns.discard(message_id) 
             return
 
-        should_delete = await get_group_setting(chat_id, 'grab_delete', True)
+        should_delete = await get_group_setting(chat_id, 'grab_delete', False)
         if should_delete:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -188,7 +188,7 @@ async def despawn_character(chat_id, message_id, character, context):
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
         
-        should_delete_miss = await get_group_setting(chat_id, 'miss_delete', True)
+        should_delete_miss = await get_group_setting(chat_id, 'miss_delete', False)
         if should_delete_miss:
             await asyncio.sleep(10)
             try:
@@ -331,7 +331,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
             
         first_correct_guesses[chat_id] = user_id
         
-        should_delete = await get_group_setting(chat_id, 'grab_delete', True)
+        should_delete = await get_group_setting(chat_id, 'grab_delete', False)
         if should_delete and spawn_msg_id:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=spawn_msg_id)
