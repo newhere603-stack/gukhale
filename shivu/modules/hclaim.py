@@ -543,37 +543,36 @@ async def start_mines(update: Update, context: CallbackContext):
         f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bet}"
     )
 
-    gif_url = "https://files.catbox.moe/vn5i0w.gif"
+    photo_url = "https://files.catbox.moe/ewtw4l.png"
 
-    # Download GIF bytes locally in Python to bypass Telegram-Catbox server fetch errors
+    # Download photo locally and send via reply_photo with bulletproof error handling
     try:
-        req = urllib.request.Request(gif_url, headers={'User-Agent': 'Mozilla/5.0'})
+        req = urllib.request.Request(photo_url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req) as response:
-            gif_bytes = io.BytesIO(response.read())
-            gif_bytes.name = "animation.gif"
+            photo_bytes = io.BytesIO(response.read())
+            photo_bytes.name = "image.png"
         
-        msg = await update.message.reply_animation(
-            animation=gif_bytes,
+        msg = await update.message.reply_photo(
+            photo=photo_bytes,
             caption=text,
             reply_markup=get_mines_keyboard(game),
             parse_mode=ParseMode.HTML
         )
     except Exception as e:
-        logger.error(f"Failed to download/send GIF: {e}")
-        # Fallback to sending via direct URL string if local buffer fails
+        logger.error(f"Failed to download/send Photo: {e}")
         try:
-            msg = await update.message.reply_animation(
-                animation=gif_url,
+            msg = await update.message.reply_photo(
+                photo=photo_url,
                 caption=text,
                 reply_markup=get_mines_keyboard(game),
                 parse_mode=ParseMode.HTML
             )
         except Exception as err:
-            logger.error(f"Secondary animation send failed: {err}")
+            logger.error(f"Secondary photo send failed: {err}")
             # Refund bet if completely failed
             await user_collection.update_one({'id': user_id}, {'$inc': {'balance': bet}})
             await update.message.reply_text(
-                f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Error loading GIF. Your bet has been refunded.')}</b>",
+                f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Error loading image. Your bet has been refunded.')}</b>",
                 parse_mode=ParseMode.HTML
             )
             return
