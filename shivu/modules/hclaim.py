@@ -2,8 +2,6 @@ import random
 import html
 import logging
 import math
-import urllib.request
-import io
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
@@ -545,37 +543,23 @@ async def start_mines(update: Update, context: CallbackContext):
 
     photo_url = "https://files.catbox.moe/ewtw4l.png"
 
-    # Download photo locally and send via reply_photo with bulletproof error handling
+    # Blazing fast: Passing photo URL directly to Telegram so it fetches asynchronously without blocking the bot
     try:
-        req = urllib.request.Request(photo_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
-            photo_bytes = io.BytesIO(response.read())
-            photo_bytes.name = "image.png"
-        
         msg = await update.message.reply_photo(
-            photo=photo_bytes,
+            photo=photo_url,
             caption=text,
             reply_markup=get_mines_keyboard(game),
             parse_mode=ParseMode.HTML
         )
     except Exception as e:
-        logger.error(f"Failed to download/send Photo: {e}")
-        try:
-            msg = await update.message.reply_photo(
-                photo=photo_url,
-                caption=text,
-                reply_markup=get_mines_keyboard(game),
-                parse_mode=ParseMode.HTML
-            )
-        except Exception as err:
-            logger.error(f"Secondary photo send failed: {err}")
-            # Refund bet if completely failed
-            await user_collection.update_one({'id': user_id}, {'$inc': {'balance': bet}})
-            await update.message.reply_text(
-                f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Error loading image. Your bet has been refunded.')}</b>",
-                parse_mode=ParseMode.HTML
-            )
-            return
+        logger.error(f"Failed to send photo: {e}")
+        # Refund bet if completely failed
+        await user_collection.update_one({'id': user_id}, {'$inc': {'balance': bet}})
+        await update.message.reply_text(
+            f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Error loading image. Your bet has been refunded.')}</b>",
+            parse_mode=ParseMode.HTML
+        )
+        return
 
     key = f"{update.effective_chat.id}_{msg.message_id}"
     active_mines_games[key] = game
