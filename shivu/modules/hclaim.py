@@ -2,6 +2,8 @@ import random
 import html
 import logging
 import math
+import urllib.request
+import io
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
@@ -543,25 +545,31 @@ async def start_mines(update: Update, context: CallbackContext):
 
     gif_url = "https://files.catbox.moe/vn5i0w.gif"
 
-    # Bulletproof error handling for your GIF link
+    # Download GIF bytes locally in Python to bypass Telegram-Catbox server fetch errors
     try:
+        req = urllib.request.Request(gif_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            gif_bytes = io.BytesIO(response.read())
+            gif_bytes.name = "animation.gif"
+        
         msg = await update.message.reply_animation(
-            animation=gif_url,
+            animation=gif_bytes,
             caption=text,
             reply_markup=get_mines_keyboard(game),
             parse_mode=ParseMode.HTML
         )
     except Exception as e:
-        logger.warning(f"reply_animation failed, falling back to reply_document: {e}")
+        logger.error(f"Failed to download/send GIF: {e}")
+        # Fallback to sending via direct URL string if local buffer fails
         try:
-            msg = await update.message.reply_document(
-                document=gif_url,
+            msg = await update.message.reply_animation(
+                animation=gif_url,
                 caption=text,
                 reply_markup=get_mines_keyboard(game),
                 parse_mode=ParseMode.HTML
             )
-        except Exception as doc_err:
-            logger.error(f"Both animation and document failed: {doc_err}")
+        except Exception as err:
+            logger.error(f"Secondary animation send failed: {err}")
             # Refund bet if completely failed
             await user_collection.update_one({'id': user_id}, {'$inc': {'balance': bet}})
             await update.message.reply_text(
