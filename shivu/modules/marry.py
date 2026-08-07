@@ -90,10 +90,10 @@ PROPOSE_REJECT_TEXTS = [
     "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
 ]
 
-# (UPDATED) Added medium, epic, legendary. (Top rarities like Celestial/Exclusive are NOT here)
-DICE_RARITY_PATTERN = "common|rare|medium|epic|legendary"  
-PROPOSE_RARITY_PATTERN = None  # None means ALL rarities
 cooldowns = {"dice": {}, "propose": {}}
+
+# DYNAMIC DISABLED RARITIES (Default: premium, cosmic, mythic are OFF)
+DISABLED_RARITIES = {"premium", "cosmic", "mythic"}
 
 
 # ---------------- EVENT LOOP FIX ----------------
@@ -140,8 +140,25 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
         
         match_query = {"id": {"$nin": owned}}
         
-        if rarity_pattern:
+        # Build dynamic regex for disabled rarities
+        if DISABLED_RARITIES:
+            banned_str = "|".join(re.escape(r) for r in DISABLED_RARITIES)
+            banned_condition = {"$not": {"$regex": banned_str, "$options": "i"}}
+        else:
+            banned_condition = None
+
+        if rarity_pattern and banned_condition:
+            match_query = {
+                "$and": [
+                    {"id": {"$nin": owned}},
+                    {"rarity": {"$regex": rarity_pattern, "$options": "i"}},
+                    {"rarity": banned_condition}
+                ]
+            }
+        elif rarity_pattern:
             match_query["rarity"] = {"$regex": rarity_pattern, "$options": "i"}
+        elif banned_condition:
+            match_query["rarity"] = banned_condition
             
         pipeline = [
             {"$match": match_query},
@@ -185,6 +202,59 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
         pass
 
 
+# ---------------- RARITY CONTROL COMMANDS (OWNER/SUDO ONLY) ----------------
+async def prarity_on(update: Update, context: CallbackContext):
+    if not is_authorized(update.effective_user.id):
+        return  # No reply for unauthorized users
+    
+    if not context.args:
+        return await update.message.reply_text(
+            "<b>ᴜsᴀɢᴇ: /prarity_on &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n"
+            "<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_on ᴘʀᴇᴍɪᴜᴍ</code>", 
+            parse_mode="HTML"
+        )
+    
+    rarity_name = " ".join(context.args).lower()
+    
+    if rarity_name in DISABLED_RARITIES:
+        DISABLED_RARITIES.remove(rarity_name)
+        await update.message.reply_text(
+            f"✅ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ ғᴏʀ /marry & /propose.</b>", 
+            parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(
+            f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", 
+            parse_mode="HTML"
+        )
+
+
+async def prarity_off(update: Update, context: CallbackContext):
+    if not is_authorized(update.effective_user.id):
+        return  # No reply for unauthorized users
+    
+    if not context.args:
+        return await update.message.reply_text(
+            "<b>ᴜsᴀɢᴇ: /prarity_off &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n"
+            "<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_off ᴘʀᴇᴍɪᴜᴍ</code>", 
+            parse_mode="HTML"
+        )
+    
+    rarity_name = " ".join(context.args).lower()
+    
+    if rarity_name not in DISABLED_RARITIES:
+        DISABLED_RARITIES.add(rarity_name)
+        await update.message.reply_text(
+            f"❌ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ ғᴏʀ /marry & /propose.</b>", 
+            parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(
+            f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", 
+            parse_mode="HTML"
+        )
+
+
 # ---------------- /dice, /marry ----------------
 async def dice_marry(update: Update, context: CallbackContext):
     fix_motor_loop() 
@@ -220,7 +290,9 @@ async def dice_marry(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    char = await get_unique_char(user.id, DICE_RARITY_PATTERN)
+    # Calling with None allows ALL rarities EXCEPT those in DISABLED_RARITIES
+    char = await get_unique_char(user.id, None)
+    
     if not char:
         cooldowns["dice"].pop(user.id, None) 
         return await context.bot.send_message(
@@ -335,26 +407,15 @@ async def propose(update: Update, context: CallbackContext):
         )
 
     # Phase 3: Result (Win)
+    # Allowed ALL rarities EXCEPT those in DISABLED_RARITIES
+    char = await get_unique_char(user.id, None)
     
-    # ------------------ ADDED WEIGHTED RARITY ------------------
-    # Low rarity zyada milegi, high rarity kam (50% Common, 30% Rare, 14% Medium, 5% Epic, 1% Legendary)
-    rarities = ["common", "rare", "medium", "epic", "legendary"]
-    weights = [50, 30, 14, 5, 1] 
-    chosen_rarity = random.choices(rarities, weights=weights, k=1)[0]
-    
-    char = await get_unique_char(user.id, chosen_rarity)
-    
-    # Agar chosen rarity ka character nahi bacha hai, toh hum 'None' filter laga kar koi bhi bacha hua character de denge
-    if not char:
-        char = await get_unique_char(user.id, None)
-    # -------------------------------------------------------------
-
     if not char:
         await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
         cooldowns["propose"].pop(user.id, None) 
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ. (Cooldown Reset)</b>",
+            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ. (ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ)</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
@@ -391,7 +452,7 @@ async def propose_callback(update: Update, context: CallbackContext):
         if not await is_user_joined(context, user.id):
             return await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
         
-        await query.answer("✅ Verified! You can now propose.", show_alert=False)
+        await query.answer("✅ ᴠᴇʀɪғɪᴇᴅ! ʏᴏᴜ ᴄᴀɴ ɴᴏᴡ ᴘʀᴏᴘᴏsᴇ.", show_alert=False)
         
         try:
             await query.message.delete()
@@ -414,35 +475,27 @@ async def cdm_cmd(update: Update, context: CallbackContext):
     msg_id = update.message.message_id
 
     if not is_authorized(update.effective_user.id):
-        return await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"<b>ʏᴏᴜ ᴀʀᴇ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ.</b>",
-            parse_mode="HTML",
-            reply_to_message_id=msg_id
-        )
+        return  # No reply for unauthorized users
 
     reply = update.message.reply_to_message if update.message else None
     target_id = None
     target_name = "User"
     
-    # -------- ADDED USER NAME FETCHING LOGIC --------
     if reply and reply.from_user:
         target_id = reply.from_user.id
         target_name = reply.from_user.first_name
     elif context.args and context.args[0].isdigit():
         target_id = int(context.args[0])
         try:
-            # Agar bot us user ko janta hoga (group se) to ye naam nikaal lega
             user_info = await context.bot.get_chat(target_id)
             target_name = user_info.first_name or f"User {target_id}"
         except Exception:
             target_name = f"User {target_id}"
-    # ------------------------------------------------
 
     if target_id is None:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>ᴜsᴀɢᴇ: /cdm <user_id> (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>",
+            text=f"<b>ᴜsᴀɢᴇ: /cdm &lt;ᴜsᴇʀ_ɪᴅ&gt; (ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇ ᴜsᴇʀ's ᴍᴇssᴀɢᴇ)</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
@@ -450,7 +503,6 @@ async def cdm_cmd(update: Update, context: CallbackContext):
     cooldowns["dice"].pop(target_id, None)
     cooldowns["propose"].pop(target_id, None)
     
-    # Updated text to mention the user name instead of just ID
     await context.bot.send_message(
         chat_id=chat_id,
         text=f"<b>✅ ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ <a href='tg://user?id={target_id}'>{target_name}</a>.</b>",
@@ -463,4 +515,6 @@ async def cdm_cmd(update: Update, context: CallbackContext):
 application.add_handler(CommandHandler(["dice", "marry"], dice_marry, block=False))
 application.add_handler(CommandHandler(["propose"], propose, block=False))
 application.add_handler(CommandHandler(["cdm"], cdm_cmd, block=False))
+application.add_handler(CommandHandler(["prarity_on"], prarity_on, block=False))
+application.add_handler(CommandHandler(["prarity_off"], prarity_off, block=False))
 application.add_handler(CallbackQueryHandler(propose_callback, pattern=r"^propose_checksub$", block=False))
