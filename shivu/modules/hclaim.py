@@ -543,7 +543,7 @@ async def start_mines(update: Update, context: CallbackContext):
 
     # GIF aur text ek hi message mein caption ke taur par send honge
     msg = await update.message.reply_animation(
-        animation="https://files.catbox.moe/81en6g.mp4",
+        animation="https://files.catbox.moe/vn5i0w.gif",
         caption=text,
         reply_markup=get_mines_keyboard(game),
         parse_mode=ParseMode.HTML
