@@ -225,7 +225,7 @@ async def dice_marry(update: Update, context: CallbackContext):
         cooldowns["dice"].pop(user.id, None) 
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ! (Cooldown Reset)</b>",
+            text=f"<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
