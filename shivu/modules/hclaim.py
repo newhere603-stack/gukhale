@@ -541,13 +541,10 @@ async def start_mines(update: Update, context: CallbackContext):
         f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bet}"
     )
 
-    # GIF send as reply (quoting user's command message)
-    await update.message.reply_animation(
-        animation="https://files.catbox.moe/81en6g.mp4"
-    )
-    # Text message with buttons below the GIF
-    msg = await update.message.reply_text(
-        text,
+    # GIF aur text ek hi message mein caption ke taur par send honge
+    msg = await update.message.reply_animation(
+        animation="https://files.catbox.moe/81en6g.mp4",
+        caption=text,
         reply_markup=get_mines_keyboard(game),
         parse_mode=ParseMode.HTML
     )
@@ -594,7 +591,7 @@ async def mines_callback(update: Update, context: CallbackContext):
             f"<b>{to_small_caps('Final Board')}:</b>"
         )
         
-        await query.message.edit_text(text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+        await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
         del active_mines_games[key]
         await query.answer(f"Cashed out {win_amount} coins! 💸")
         return
@@ -612,7 +609,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
                 f"<b>{to_small_caps('Final Board')}:</b>"
             )
-            await query.message.edit_text(text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+            await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
             del active_mines_games[key]
             await query.answer("BOOM! You lost the bet. 💥")
             return
@@ -633,7 +630,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
                     f"<b>{to_small_caps('Final Board')}:</b>"
                 )
-                await query.message.edit_text(text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
                 del active_mines_games[key]
                 await query.answer("Incredible! You found all the money! 💸")
                 return
@@ -646,7 +643,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
                 f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
             )
-            await query.message.edit_text(text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
+            await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
             await query.answer("Safe! 💸")
 
 # ==========================================
