@@ -34,14 +34,14 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
     if update.effective_chat.type == "private":
         await update.message.reply_text(
-            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!</b>",
+            "<b>ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴜsᴇᴅ ɪɴ ɢʀᴏᴜᴘs!</b>",
             parse_mode=ParseMode.HTML
         )
         return
 
     if update.message.reply_to_message:
         await update.message.reply_text(
-            "<b>❌ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴɴᴏᴛ ʙᴇ ᴜsᴇᴅ ᴀs ᴀ ʀᴇᴘʟʏ!</b>",
+            "<b>ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴄᴀɴɴᴏᴛ ʙᴇ ᴜsᴇᴅ ᴀs ᴀ ʀᴇᴘʟʏ!</b>",
             parse_mode=ParseMode.HTML
         )
         return
@@ -88,7 +88,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
 
         # Using correct emoji-id attribute for Telegram custom emojis
         await update.message.reply_text(
-            f"<b><tg-emoji emoji-id=\"6093547287139590167\">🍽</tg-emoji> ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {reward} ᴄᴏɪɴs!</b>\n"
+            f"<b><tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> ʏᴏᴜ {action} ᴀɴᴅ ғᴏᴜɴᴅ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {reward} ᴄᴏɪɴs!</b>\n"
             f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ᴇxᴘʟᴏʀᴀᴛɪᴏɴ ғᴇᴇ: <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {FEE} ᴄᴏɪɴs</b>",
             parse_mode=ParseMode.HTML
         )
