@@ -87,7 +87,7 @@ def build_bonus_text(user: dict, first_name: str) -> str:
     # BUG FIXED: Added 'f' before the string to make it an f-string
     return (
         f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ </b>\n\n"
-        f"<tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
+        f"<tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> <b>ᴀʟɪꜱᴀ ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
         f"<tg-emoji emoji-id=\"5255861796350224063\">❤️</tg-emoji> <b>ᴜsᴇʀ:</b> <b>{first_name}</b>\n"
         f"<tg-emoji emoji-id=\"5287606810168028257\">🗓</tg-emoji> <b>ᴅᴀᴛᴇ:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
         f"<tg-emoji emoji-id=\"6053280534220513008\">🔥</tg-emoji> <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
