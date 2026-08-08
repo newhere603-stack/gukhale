@@ -174,6 +174,7 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
         else:
             await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
 
+
 async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     min_bid = active_auc['highest_bid'] + 1000
     if proposed_bid is None or proposed_bid < min_bid:
@@ -188,7 +189,10 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
             medal = ["🥇", "🥈", "🥉"][i]
             # Normal font for user name, HTML safe
             clean_name = str(b['name']).replace('<', '&lt;').replace('>', '&gt;')
-            top_3_text += f"{medal} {clean_name}: {bold_sc(f'{b['bid']:,} 💸')}\n"
+            
+            # 🔥 BUG FIX: Variable banakar f-string mein daala taaki SyntaxError na aaye
+            bid_amount = b['bid']
+            top_3_text += f"{medal} {clean_name}: {bold_sc(f'{bid_amount:,} 💸')}\n"
     else:
         top_3_text += f"👻 {bold_sc('No bids placed yet!')}\n"
 
@@ -201,7 +205,6 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     buttons = [
         [
             InlineKeyboardButton("⋞", callback_data=f"auc_adj_{user_id}_-1000_{proposed_bid}"),
-            # 🔥 GLITCH FIXED: Removed HTML tags from this button text
             InlineKeyboardButton(f"{proposed_bid:,}", callback_data=f"auc_none_{user_id}"),
             InlineKeyboardButton("⋟", callback_data=f"auc_adj_{user_id}_1000_{proposed_bid}")
         ],
