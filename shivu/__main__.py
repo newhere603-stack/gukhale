@@ -27,7 +27,7 @@ rarity_status_collection = db['rarity_status_settings']
 group_settings_collection = db['group_settings_db']
 
 MESSAGE_FREQUENCY = 70
-DESPAWN_TIME = 180
+DESPAWN_TIME = 300  # Updated to 5 minutes (300 seconds)
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
 # [BUG FIX]: Dictionary modified to hold 3 values (Database Emoji, Premium Emoji, Name)
@@ -54,7 +54,6 @@ rarity_status_cache = {}
 group_settings_cache = {}  
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-# Fixed line below: added the 3rd {}
 first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
 currently_spawning = {}
 spawn_times = {}  
@@ -180,7 +179,7 @@ async def despawn_character(chat_id, message_id, character, context):
             rarity_display = escape(rarity_str)
 
         caption = (
-            f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
+            f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜ𝙥! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
             f"<b>{r_display_emoji} <b>ʀᴀʀɪᴛʏ: {r_name}</b>\n"
             f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n\n"
@@ -442,7 +441,7 @@ async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
 
 async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: bool) -> None:
     if not is_authorized(update.effective_user.id):
-        return  # Silent exit if not authorized
+        return  
 
     if not context.args:
         cmd = "/rarity_on" if enable else "/rarity_off"
@@ -469,7 +468,7 @@ async def rarity_off_cmd(update, context):
 
 async def name_cmd(update: Update, context: CallbackContext) -> None:
     if not is_authorized(update.effective_user.id):
-        return  # Silent exit if not authorized
+        return  
 
     chat_id = update.effective_chat.id
     if chat_id not in last_characters:
@@ -519,7 +518,6 @@ async def main():
 
         LOGGER.info("✅ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
 
-        # --- DIRECT STARTUP LOG TRIGGER ---
         try:
             from shivu.modules.chatlog import send_log_to_group, create_log_message
             bot_info = await application.bot.get_me()
@@ -532,7 +530,6 @@ async def main():
             LOGGER.info("Startup log queued successfully!")
         except Exception as e:
             LOGGER.error(f"Failed to queue startup log: {e}")
-        # -----------------------------------
 
         await asyncio.Event().wait()
 
