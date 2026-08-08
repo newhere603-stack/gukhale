@@ -9,6 +9,7 @@ from telegram.error import TelegramError
 from shivu import application, user_collection
 
 IST = pytz.timezone('Asia/Kolkata')
+BONUS_IMG_URL = "https://files.catbox.moe/ewtw4l.png"
 
 
 @dataclass(frozen=True)
@@ -84,27 +85,27 @@ class UserDB:
 
 def build_bonus_text(user: dict, first_name: str) -> str:
     return (
-        "<b>🌸 ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ 🫧</b>\n\n"
-        "🎮 <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
-        f"👤 <b>ᴜsᴇʀ:</b> <b>{first_name}</b>\n"
-        f"📅 <b>ᴅᴀᴛᴇ:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
-        f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
-        f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
+        "<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ <tg-emoji emoji-id=\"6323080917942279829\">🫧</tg-emoji></b>\n\n"
+        "<tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
+        "<tg-emoji emoji-id=\"6134157341089603984\">👤</tg-emoji> <b>ᴜsᴇʀ:</b> <b>{first_name}</b>\n"
+        "<tg-emoji emoji-id=\"5287606810168028257\">🗓</tg-emoji> <b>ᴅᴀᴛᴇ:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
+        "<tg-emoji emoji-id=\"6053280534220513008\">🔥</tg-emoji> <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
+        "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
         "<b>sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ʙᴇʟᴏᴡ:</b>"
-    )
+    ).format(first_name=first_name, now_ist=now_ist, user=user)
 
 
 def build_bonus_keyboard(user: dict, now: datetime, user_id: int) -> InlineKeyboardMarkup:
     rows = []
     
-    # Daily Button
+    # Daily Button (Cannot use Premium Emoji here as it's a Button)
     daily_label = "Daily 🎁"
     if last_d := user.get('last_daily_claim'):
         rem_d = timedelta(hours=COOLDOWNS['daily']) - (now - to_ist(last_d))
         if rem_d.total_seconds() > 0:
             daily_label = f"Daily ⏳ {format_countdown(rem_d)}"
             
-    # Weekly Button
+    # Weekly Button (Cannot use Premium Emoji here as it's a Button)
     weekly_label = "Weekly 🎁"
     if last_w := user.get('last_weekly_claim'):
         rem_w = timedelta(hours=COOLDOWNS['weekly']) - (now - to_ist(last_w))
@@ -124,8 +125,11 @@ def build_bonus_keyboard(user: dict, now: datetime, user_id: int) -> InlineKeybo
 async def bonus_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     user = await UserDB.ensure(user_id, update.effective_user.first_name, update.effective_user.username)
-    await update.message.reply_text(
-        build_bonus_text(user, update.effective_user.first_name),
+    
+    # Sent as a photo with caption
+    await update.message.reply_photo(
+        photo=BONUS_IMG_URL,
+        caption=build_bonus_text(user, update.effective_user.first_name),
         reply_markup=build_bonus_keyboard(user, now_ist(), user_id),
         parse_mode='HTML'
     )
@@ -134,8 +138,10 @@ async def bonus_command(update: Update, context: CallbackContext):
 async def refresh_menu(query, user_id: int, now: datetime):
     user = await UserDB.get(user_id)
     first_name = user.get('first_name', 'User') if user else query.from_user.first_name
-    await query.edit_message_text(
-        build_bonus_text(user or {}, first_name),
+    
+    # Updated to edit_message_caption since the message is an image
+    await query.edit_message_caption(
+        caption=build_bonus_text(user or {}, first_name),
         reply_markup=build_bonus_keyboard(user or {}, now, user_id),
         parse_mode='HTML'
     )
@@ -189,16 +195,19 @@ async def show_stats(update: Update, context: CallbackContext, owner_id: int):
     streak = user.get('bonus_streak', 0)
 
     text = (
-        "📊 <b>ʙᴏɴᴜs sᴛᴀᴛs</b>\n\n"
-        f"💸 <b>ʙᴀʟᴀɴᴄᴇ:</b> <b>{user.get('balance', 0):,} ᴄᴏɪɴs</b>\n"
-        f"🔥 <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{streak} ᴅᴀʏs</b>\n"
-        f"🏆 <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
-        f"🎁 <b>ɴᴇxᴛ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ:</b> <b>{daily_reward(streak):,} ᴄᴏɪɴs</b>\n"
-        f"🎁 <b>ɴᴇxᴛ ᴡᴇᴇᴋʟʏ ʀᴇᴡᴀʀᴅ:</b> <b>{weekly_reward(streak):,} ᴄᴏɪɴs</b>"
+        "<tg-emoji emoji-id=\"6330041629704985188\">📊</tg-emoji> <b>ʙᴏɴᴜs sᴛᴀᴛs</b>\n\n"
+        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>ʙᴀʟᴀɴᴄᴇ:</b> <b>{user.get('balance', 0):,} ᴄᴏɪɴs</b>\n"
+        f"<tg-emoji emoji-id=\"6053280534220513008\">🔥</tg-emoji> <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{streak} ᴅᴀʏs</b>\n"
+        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
+        f"<tg-emoji emoji-id=\"6093475058674576576\">🎁</tg-emoji> <b>ɴᴇxᴛ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ:</b> <b>{daily_reward(streak):,} ᴄᴏɪɴs</b>\n"
+        f"<tg-emoji emoji-id=\"6093475058674576576\">🎁</tg-emoji> <b>ɴᴇxᴛ ᴡᴇᴇᴋʟʏ ʀᴇᴡᴀʀᴅ:</b> <b>{weekly_reward(streak):,} ᴄᴏɪɴs</b>"
     )
+    
     await query.answer()
-    await query.edit_message_text(
-        text, parse_mode='HTML',
+    
+    # Updated to edit_message_caption since the message is an image
+    await query.edit_message_caption(
+        caption=text, parse_mode='HTML',
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"bonus:menu:{user_id}")]])
     )
 
