@@ -1,5 +1,6 @@
 import random
 import traceback
+import logging
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
@@ -18,34 +19,32 @@ except ImportError:
 
 OWNER_ID = 7657218453
 
+# Ab humne keys ko sirf lowercase text mein rakha hai taaki exact match ki problem na aaye
 DEFAULT_PRICES = {
-    "🟢 Common": 1000, "🟠 Rare": 3200, "🔵 Medium": 2900, 
-    "🟡 Legendary": 5000, "🪽 Celestial": 70000, "🥵 Spicy": 15000, 
-    "💮 Exclusive": 12000, "💎 Mythic": 35000, "🔮 Premium Edition": 20000, 
-    "🍭 Sweet": 52000, "💞 Valentine": 90000, "❄️ Winter": 55000, 
-    "⚡ Neon": 67000, "🐚 Summer": 60000, "🌌 Cosmic": 90000
+    "common": 1000, "rare": 3200, "medium": 2900, 
+    "legendary": 5000, "celestial": 70000, "spicy": 15000, 
+    "exclusive": 12000, "mythic": 35000, "premium edition": 20000, 
+    "sweet": 52000, "valentine": 90000, "winter": 55000, 
+    "neon": 67000, "summer": 60000, "cosmic": 90000
 }
 
 PREMIUM_RARITIES = {
-    "🟢 Common": '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji> Common',
-    "🟠 Rare": '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji> Rare',
-    "🔵 Medium": '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji> Medium',
-    "🟡 Legendary": '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji> Legendary',
-    "🪽 Celestial": '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji> Celestial',
-    "🥵 Spicy": '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji> Spicy',
-    "💮 Exclusive": '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji> Exclusive',
-    "💎 Mythic": '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji> Mythic',
-    "🔮 Premium Edition": '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji> Premium Edition',
-    "🍭 Sweet": '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji> Sweet',
-    "💞 Valentine": '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji> Valentine',
-    "❄️ Winter": '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji> Winter',
-    "⚡ Neon": '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji> Neon',
-    "🐚 Summer": '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji> Summer',
-    "🌌 Cosmic": '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji> Cosmic'
+    "common": '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>',
+    "rare": '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>',
+    "medium": '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>',
+    "legendary": '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji>',
+    "celestial": '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>',
+    "spicy": '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>',
+    "exclusive": '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>',
+    "mythic": '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>',
+    "premium edition": '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>',
+    "sweet": '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>',
+    "valentine": '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>',
+    "winter": '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>',
+    "neon": '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>',
+    "summer": '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>',
+    "cosmic": '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>'
 }
-
-def format_rarity(r: str) -> str:
-    return PREMIUM_RARITIES.get(r, r)
 
 # --- Formatting Functions ---
 def to_small_caps(text: str) -> str:
@@ -67,11 +66,34 @@ def to_small_caps(text: str) -> str:
 def bold_sc(text: str) -> str:
     return f"<b>{to_small_caps(text)}</b>"
 
+def extract_rarity_name(r_str: str) -> str:
+    """Extracts only the alphabetic name (e.g. 'Legendary') from string like '🟠 LEGENDARY'"""
+    text_part = ""
+    for i, c in enumerate(r_str):
+        if c.isalpha():
+            text_part = r_str[i:]
+            break
+    return text_part.strip() if text_part else r_str.strip()
+
+def format_rarity(r: str) -> str:
+    r_str = str(r)
+    name_part = extract_rarity_name(r_str)
+    name_part_lower = name_part.lower()
+    
+    if name_part_lower in PREMIUM_RARITIES:
+        return f"{PREMIUM_RARITIES[name_part_lower]} <b>{to_small_caps(name_part)}</b>"
+    
+    return f"<b>{to_small_caps(r_str)}</b>"
+
 def get_price(char):
     if 'mp_price' in char and char['mp_price'] is not None:
         return char['mp_price']
-    rarity = char.get('rarity', 'Unknown')
-    return DEFAULT_PRICES.get(rarity, 50000) 
+        
+    r_str = str(char.get('rarity', 'Unknown'))
+    name_part = extract_rarity_name(r_str).lower()
+    
+    return DEFAULT_PRICES.get(name_part, 50000)
+
 
 def get_current_mp_day():
     IST = timezone(timedelta(hours=5, minutes=30))
@@ -162,7 +184,7 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
 <tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(str(char.get('name', 'Unknown')).upper())}
 <tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(str(char.get('anime', 'Unknown')).upper())}
 <tg-emoji emoji-id="6332443074769196273">🆔</tg-emoji> {bold_sc('ID:')} {bold_sc(str(char.get('id', 'N/A')))}
-<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> {bold_sc('RARITY:')} {bold_sc(format_rarity(char.get('rarity', 'Unknown')))}
+<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> {bold_sc('RARITY:')} {format_rarity(char.get('rarity', 'Unknown'))}
 <tg-emoji emoji-id="5472030678633684592">💸</tg-emoji> {bold_sc('ORIGINAL:')} {bold_sc(f"{char['mp_orig']:,}")}
 <tg-emoji emoji-id="5240228673738527951">🏷</tg-emoji> {bold_sc('SALE PRICE:')} {bold_sc(f"{char['mp_sale']:,}")}
 <tg-emoji emoji-id="6093521568875420685">🛍</tg-emoji> {bold_sc('DISCOUNT:')} {bold_sc(f"{char['mp_disc']}%")}
@@ -183,12 +205,15 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
 
     if is_edit:
         try:
-            if update_obj.message.photo and img_url:
-                await update_obj.edit_message_media(media=InputMediaPhoto(media=img_url, caption=caption, parse_mode='HTML'), reply_markup=reply_markup)
+            if update_obj.message.photo:
+                if img_url:
+                    await update_obj.edit_message_media(media=InputMediaPhoto(media=img_url, caption=caption, parse_mode='HTML'), reply_markup=reply_markup)
+                else:
+                    await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
             else:
-                await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
-        except Exception:
-            pass
+                await update_obj.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+        except Exception as e:
+            logging.error(f"UI Edit Error in MP: {e}")
     else:
         if img_url:
             await update_obj.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
@@ -225,7 +250,7 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
 
 <tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(active_auc['char_name'])}
 <tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
-<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> {bold_sc('RARITY:')} {bold_sc(format_rarity(active_auc['rarity']))}{top_3_text}"""
+<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> {bold_sc('RARITY:')} {format_rarity(active_auc['rarity'])}{top_3_text}"""
 
     buttons = [
         [
@@ -244,12 +269,15 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     img_url = active_auc.get('img_url')
     
     try:
-        if query.message.photo and img_url:
-            await query.edit_message_media(media=InputMediaPhoto(media=img_url, caption=caption, parse_mode='HTML'), reply_markup=reply_markup)
+        if query.message.photo:
+            if img_url:
+                await query.edit_message_media(media=InputMediaPhoto(media=img_url, caption=caption, parse_mode='HTML'), reply_markup=reply_markup)
+            else:
+                await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         else:
-            await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
-    except Exception:
-        pass
+            await query.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+    except Exception as e:
+        logging.error(f"UI Edit Error in Auction: {e}")
 
 
 # --- Commands & Callbacks ---
@@ -294,6 +322,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 current_proposed = int(parts[4])
                 new_proposed = current_proposed + increment
                 await render_auction_ui(query, active_auc, user_id, new_proposed)
+                await query.answer()
                 return
 
             if data.startswith("auc_conf_"):
@@ -359,6 +388,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
             if data.startswith("mp_nav_"):
                 index = int(parts[3])
                 await render_mp_message(query, user, index, is_edit=True)
+                await query.answer()
 
             elif data.startswith("mp_buy_"):
                 index = int(parts[3])
@@ -388,6 +418,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await query.answer(to_small_caps("There is no active auction right now!"), show_alert=True)
                     return
                 await render_auction_ui(query, active_auc, user_id)
+                await query.answer()
 
             elif data.startswith("mp_ref_"):
                 if user.get('balance', 0) < 30000:
@@ -396,11 +427,14 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -30000}, '$set': {'mp_data.day': "FORCE_REFRESH"}})
                 new_user = await load_user_deals(user_id)
                 await render_mp_message(query, new_user, 0, is_edit=True)
+                await query.answer(to_small_caps("Deals Refreshed!"), show_alert=False)
 
             elif data.startswith("mp_back_"):
                 await render_mp_message(query, user, 0, is_edit=True)
+                await query.answer()
 
     except Exception as e:
+        logging.error(f"Error in MP Callbacks: {e}")
         await query.answer(to_small_caps("An error occurred."), show_alert=False)
 
 
@@ -420,7 +454,6 @@ async def start_auction(update: Update, context: CallbackContext):
         await update.message.reply_text(bold_sc("Starting bid must be a valid number!"), parse_mode='HTML')
         return
         
-    # Flexible query to match ID as string, integer, or raw format
     query = {'$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if char_id.isdigit() else char_id}]}
     char = await collection.find_one(query)
     
@@ -449,14 +482,14 @@ async def start_auction(update: Update, context: CallbackContext):
     await auction_collection.insert_one(auction_data)
     
     msg = (
-        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> AUCTION STARTED! <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
-        f"CHARACTER: {char.get('name')}\n"
-        f"STARTING BID: {starting_bid:,} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
+        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION STARTED!')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+        f"{bold_sc('CHARACTER:')} {bold_sc(char.get('name'))}\n"
+        f"{bold_sc('STARTING BID:')} {bold_sc(f'{starting_bid:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
     )
     if char.get('img_url'):
-        await update.message.reply_photo(photo=char.get('img_url'), caption=bold_sc(msg), parse_mode='HTML')
+        await update.message.reply_photo(photo=char.get('img_url'), caption=msg, parse_mode='HTML')
     else:
-        await update.message.reply_text(bold_sc(msg), parse_mode='HTML')
+        await update.message.reply_text(msg, parse_mode='HTML')
 
 
 async def end_auction(update: Update, context: CallbackContext):
@@ -480,7 +513,7 @@ async def end_auction(update: Update, context: CallbackContext):
     winning_bid = winner['bid']
     
     clean_winner_name = str(winner['name']).replace('<', '&lt;').replace('>', '&gt;')
-    winner_mention = f"<b><a href='tg://user?id={bidder_id}'>{clean_winner_name}</a></b>"
+    winner_mention = f"<b><a href='tg://user?id={bidder_id}'>{to_small_caps(clean_winner_name)}</a></b>"
     
     bidder = await user_collection.find_one({'id': bidder_id})
     char_query = {'$or': [{'id': active_auc['char_id']}, {'id': str(active_auc['char_id'])}, {'id': int(active_auc['char_id']) if str(active_auc['char_id']).isdigit() else active_auc['char_id']}]}
@@ -490,8 +523,8 @@ async def end_auction(update: Update, context: CallbackContext):
         clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
         await user_collection.update_one({'id': bidder_id}, {'$inc': {'balance': -winning_bid}, '$push': {'characters': clean_char}})
         
-        header = bold_sc("<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> AUCTION ENDED! <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\nWINNER: ")
-        footer = bold_sc(f"\nWINNING BID: {winning_bid:,}") + " <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
+        header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION ENDED!')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n{bold_sc('WINNER: ')}"
+        footer = f"\n{bold_sc('WINNING BID:')} {bold_sc(f'{winning_bid:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
         msg = f"{header}{winner_mention}{footer}"
         
         await update.message.reply_text(msg, parse_mode='HTML')
