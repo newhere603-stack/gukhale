@@ -92,7 +92,7 @@ def build_bonus_text(user: dict, first_name: str) -> str:
         f"<tg-emoji emoji-id=\"5287606810168028257\">🗓</tg-emoji> <b>ᴅᴀᴛᴇ:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
         f"<tg-emoji emoji-id=\"6053280534220513008\">🔥</tg-emoji> <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
-        f"<b>sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ʙᴇʟᴏᴡ:</b>"
+        f"<tg-emoji emoji-id=\"6093676372381671194\">🪩</tg-emoji> <b>sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ʙᴇʟᴏᴡ:</b>"
     )
 
 
