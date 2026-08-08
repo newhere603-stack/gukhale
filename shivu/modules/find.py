@@ -180,14 +180,12 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     if proposed_bid is None or proposed_bid < min_bid:
         proposed_bid = min_bid
 
-    # Top 3 Bids Logic
     top_bids = active_auc.get('top_bids', [])
     top_3_text = f"\n\n🏆 {bold_sc('TOP BIDDERS:')}\n\n"
     
     if top_bids:
         for i, b in enumerate(top_bids[:3]):
             medal = ["🥇", "🥈", "🥉"][i]
-            # HTML safe aur Mention format mein user name
             clean_name = str(b['name']).replace('<', '&lt;').replace('>', '&gt;')
             mention_link = f"<b><a href='tg://user?id={b['id']}'>{clean_name}</a></b>"
             
@@ -209,7 +207,6 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
             InlineKeyboardButton("⋟", callback_data=f"auc_adj_{user_id}_1000_{proposed_bid}")
         ],
         [InlineKeyboardButton(to_small_caps("Confirm Bid"), callback_data=f"auc_conf_{user_id}_{proposed_bid}")],
-        # 🔥 Changes Here: Back aur Cancel ek hi line (List) mein
         [
             InlineKeyboardButton(to_small_caps("⟲ Back"), callback_data=f"mp_back_{user_id}"),
             InlineKeyboardButton(to_small_caps("Cancel ⟳"), callback_data=f"auc_can_{user_id}")
@@ -286,11 +283,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     return
                 
                 top_bids = active_auc.get('top_bids', [])
-                
-                # Remove this user's old bid if exists
                 top_bids = [b for b in top_bids if b['id'] != clicker_id]
-                
-                # Add new bid and sort
                 top_bids.append({'id': clicker_id, 'name': query.from_user.first_name, 'bid': proposed})
                 top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
                     
@@ -314,7 +307,6 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await query.answer(to_small_caps("You haven't placed any bid yet!"), show_alert=True)
                     return
                     
-                # Remove user from top bids
                 top_bids = [b for b in top_bids if b['id'] != clicker_id]
                 top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
                 
@@ -387,29 +379,45 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
 
 # --- AUCTION OWNER COMMANDS ---
 async def start_auction(update: Update, context: CallbackContext):
-    if update.effective_user.id != OWNER_ID: return 
+    if update.effective_user.id != OWNER_ID: 
+        return 
     
     if len(context.args) < 2:
+        await update.message.reply_text(bold_sc("Usage: /startauction [char_id] [starting_bid]"), parse_mode='HTML')
         return
         
     char_id = context.args[0]
-    starting_bid = int(context.args[1])
+    try:
+        starting_bid = int(context.args[1])
+    except ValueError:
+        await update.message.reply_text(bold_sc("Starting bid must be a valid number!"), parse_mode='HTML')
+        return
         
-    query = {'$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id)}]}
+    # Flexible query to match ID as string, integer, or raw format
+    query = {'$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if char_id.isdigit() else char_id}]}
     char = await collection.find_one(query)
     
-    if not char: return
+    if not char:
+        await update.message.reply_text(bold_sc("Character ID not found in database!"), parse_mode='HTML')
+        return
         
     active_auc = await auction_collection.find_one({'status': 'active'})
-    if active_auc: return
+    if active_auc:
+        await update.message.reply_text(bold_sc("An auction is already active! End it first using /endauction."), parse_mode='HTML')
+        return
         
     await collection.update_one(query, {'$set': {'auction_exclusive': True}})
     
     auction_data = {
-        'char_id': char.get('id'), 'char_name': char.get('name', 'Unknown'),
-        'anime': char.get('anime', 'Unknown'), 'rarity': char.get('rarity', 'Unknown'),
-        'img_url': char.get('img_url'), 'starting_bid': starting_bid, 'highest_bid': starting_bid,
-        'top_bids': [], 'status': 'active'
+        'char_id': char.get('id'), 
+        'char_name': char.get('name', 'Unknown'),
+        'anime': char.get('anime', 'Unknown'), 
+        'rarity': char.get('rarity', 'Unknown'),
+        'img_url': char.get('img_url'), 
+        'starting_bid': starting_bid, 
+        'highest_bid': starting_bid,
+        'top_bids': [], 
+        'status': 'active'
     }
     await auction_collection.insert_one(auction_data)
     
@@ -421,10 +429,13 @@ async def start_auction(update: Update, context: CallbackContext):
 
 
 async def end_auction(update: Update, context: CallbackContext):
-    if update.effective_user.id != OWNER_ID: return 
+    if update.effective_user.id != OWNER_ID: 
+        return 
         
     active_auc = await auction_collection.find_one({'status': 'active'})
-    if not active_auc: return
+    if not active_auc:
+        await update.message.reply_text(bold_sc("No active auction found to end."), parse_mode='HTML')
+        return
         
     await auction_collection.update_one({'_id': active_auc['_id']}, {'$set': {'status': 'ended'}})
     
@@ -441,14 +452,13 @@ async def end_auction(update: Update, context: CallbackContext):
     winner_mention = f"<b><a href='tg://user?id={bidder_id}'>{clean_winner_name}</a></b>"
     
     bidder = await user_collection.find_one({'id': bidder_id})
-    char_query = {'$or': [{'id': active_auc['char_id']}, {'id': str(active_auc['char_id'])}, {'id': int(active_auc['char_id'])}]}
+    char_query = {'$or': [{'id': active_auc['char_id']}, {'id': str(active_auc['char_id'])}, {'id': int(active_auc['char_id']) if str(active_auc['char_id']).isdigit() else active_auc['char_id']}]}
     char = await collection.find_one(char_query)
     
     if bidder and char:
         clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
         await user_collection.update_one({'id': bidder_id}, {'$inc': {'balance': -winning_bid}, '$push': {'characters': clean_char}})
         
-        # Format explicitly to avoid bold_sc corrupting HTML links
         header = bold_sc("🎊 AUCTION ENDED! 🎊\n\nWINNER: ")
         footer = bold_sc(f"\nWINNING BID: {winning_bid:,} 💸")
         msg = f"{header}{winner_mention}{footer}"
