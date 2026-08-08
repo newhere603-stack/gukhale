@@ -26,6 +26,27 @@ DEFAULT_PRICES = {
     "⚡ Neon": 67000, "🐚 Summer": 60000, "🌌 Cosmic": 90000
 }
 
+PREMIUM_RARITIES = {
+    "🟢 Common": '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji> Common',
+    "🟠 Rare": '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji> Rare',
+    "🔵 Medium": '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji> Medium',
+    "🟡 Legendary": '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji> Legendary',
+    "🪽 Celestial": '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji> Celestial',
+    "🥵 Spicy": '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji> Spicy',
+    "💮 Exclusive": '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji> Exclusive',
+    "💎 Mythic": '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji> Mythic',
+    "🔮 Premium Edition": '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji> Premium Edition',
+    "🍭 Sweet": '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji> Sweet',
+    "💞 Valentine": '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji> Valentine',
+    "❄️ Winter": '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji> Winter',
+    "⚡ Neon": '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji> Neon',
+    "🐚 Summer": '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji> Summer',
+    "🌌 Cosmic": '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji> Cosmic'
+}
+
+def format_rarity(r: str) -> str:
+    return PREMIUM_RARITIES.get(r, r)
+
 # --- Formatting Functions ---
 def to_small_caps(text: str) -> str:
     mapping = {
@@ -134,18 +155,18 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     char = chars[index]
     user_id = user['id'] 
     
-    status_text = f"❌ {bold_sc('SOLD')}" if char.get('is_sold') else f"🛒 {bold_sc('AVAILABLE')}"
+    status_text = f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('SOLD')}" if char.get('is_sold') else f"<tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> {bold_sc('AVAILABLE')}"
 
-    caption = f"""🏪 {bold_sc(f'DAILY DEALS ({index+1}/2)')}
+    caption = f"""<tg-emoji emoji-id="5278702045883292456">🛍</tg-emoji> {bold_sc(f'DAILY DEALS ({index+1}/2)')}
 
-🌸 {bold_sc('NAME:')} {bold_sc(str(char.get('name', 'Unknown')).upper())}
-🎞️ {bold_sc('SERIES:')} {bold_sc(str(char.get('anime', 'Unknown')).upper())}
-🆔 {bold_sc('ID:')} {bold_sc(str(char.get('id', 'N/A')))}
-💫 {bold_sc('RARITY:')} {bold_sc(str(char.get('rarity', 'Unknown')))}
-💸 {bold_sc('ORIGINAL:')} {bold_sc(f"{char['mp_orig']:,}")}
-🏷️ {bold_sc('SALE PRICE:')} {bold_sc(f"{char['mp_sale']:,}")}
-📊 {bold_sc('DISCOUNT:')} {bold_sc(f"{char['mp_disc']}%")}
-📋 {bold_sc('STATUS:')} {status_text}"""
+<tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(str(char.get('name', 'Unknown')).upper())}
+<tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(str(char.get('anime', 'Unknown')).upper())}
+<tg-emoji emoji-id="6332443074769196273">🆔</tg-emoji> {bold_sc('ID:')} {bold_sc(str(char.get('id', 'N/A')))}
+<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> {bold_sc('RARITY:')} {bold_sc(format_rarity(char.get('rarity', 'Unknown')))}
+<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji> {bold_sc('ORIGINAL:')} {bold_sc(f"{char['mp_orig']:,}")}
+<tg-emoji emoji-id="5240228673738527951">🏷</tg-emoji> {bold_sc('SALE PRICE:')} {bold_sc(f"{char['mp_sale']:,}")}
+<tg-emoji emoji-id="6093521568875420685">🛍</tg-emoji> {bold_sc('DISCOUNT:')} {bold_sc(f"{char['mp_disc']}%")}
+<tg-emoji emoji-id="5197269100878907942">✍️</tg-emoji> {bold_sc('STATUS:')} {status_text}"""
 
     nav_index = 1 if index == 0 else 0
     buttons = [
@@ -181,24 +202,30 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
         proposed_bid = min_bid
 
     top_bids = active_auc.get('top_bids', [])
-    top_3_text = f"\n\n🏆 {bold_sc('TOP BIDDERS:')}\n\n"
+    top_3_text = f"\n\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('TOP BIDDERS:')}\n\n"
+    
+    medals = [
+        '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>', 
+        '<tg-emoji emoji-id="5447203607294265305">🥈</tg-emoji>', 
+        '<tg-emoji emoji-id="5453902265922376865">🥉</tg-emoji>'
+    ]
     
     if top_bids:
         for i, b in enumerate(top_bids[:3]):
-            medal = ["🥇", "🥈", "🥉"][i]
+            medal = medals[i]
             clean_name = str(b['name']).replace('<', '&lt;').replace('>', '&gt;')
             mention_link = f"<b><a href='tg://user?id={b['id']}'>{clean_name}</a></b>"
             
             bid_amount = b['bid']
-            top_3_text += f"{medal} {mention_link}: {bold_sc(f'{bid_amount:,} 💸')}\n"
+            top_3_text += f"{medal} {mention_link}: {bold_sc(f'{bid_amount:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
     else:
-        top_3_text += f"👻 {bold_sc('No bids placed yet!')}\n"
+        top_3_text += f"<tg-emoji emoji-id=\"6093837944756379538\">👻</tg-emoji> {bold_sc('No bids placed yet!')}\n"
 
-    caption = f"""🍃 {bold_sc('LIVE AUCTION')} 🍃
+    caption = f"""<tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji> {bold_sc('LIVE AUCTION')} <tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji>
 
-🌸 {bold_sc('NAME:')} {bold_sc(active_auc['char_name'])}
-🎞️ {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
-💫 {bold_sc('RARITY:')} {bold_sc(active_auc['rarity'])}{top_3_text}"""
+<tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(active_auc['char_name'])}
+<tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
+<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> {bold_sc('RARITY:')} {bold_sc(format_rarity(active_auc['rarity']))}{top_3_text}"""
 
     buttons = [
         [
@@ -421,7 +448,11 @@ async def start_auction(update: Update, context: CallbackContext):
     }
     await auction_collection.insert_one(auction_data)
     
-    msg = f"🎉 AUCTION STARTED! 🎉\n\nCHARACTER: {char.get('name')}\nSTARTING BID: {starting_bid:,} 💸"
+    msg = (
+        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> AUCTION STARTED! <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+        f"CHARACTER: {char.get('name')}\n"
+        f"STARTING BID: {starting_bid:,} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
+    )
     if char.get('img_url'):
         await update.message.reply_photo(photo=char.get('img_url'), caption=bold_sc(msg), parse_mode='HTML')
     else:
@@ -459,8 +490,8 @@ async def end_auction(update: Update, context: CallbackContext):
         clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
         await user_collection.update_one({'id': bidder_id}, {'$inc': {'balance': -winning_bid}, '$push': {'characters': clean_char}})
         
-        header = bold_sc("🎊 AUCTION ENDED! 🎊\n\nWINNER: ")
-        footer = bold_sc(f"\nWINNING BID: {winning_bid:,} 💸")
+        header = bold_sc("<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> AUCTION ENDED! <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\nWINNER: ")
+        footer = bold_sc(f"\nWINNING BID: {winning_bid:,}") + " <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
         msg = f"{header}{winner_mention}{footer}"
         
         await update.message.reply_text(msg, parse_mode='HTML')
