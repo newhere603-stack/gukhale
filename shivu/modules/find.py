@@ -175,29 +175,39 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
             await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
 
 async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
-    # Minimum valid bid is current bid + 1000
     min_bid = active_auc['highest_bid'] + 1000
     if proposed_bid is None or proposed_bid < min_bid:
         proposed_bid = min_bid
+
+    # Top 3 Bids Logic
+    top_bids = active_auc.get('top_bids', [])
+    top_3_text = f"\n\n🏆 {bold_sc('TOP BIDS:')}\n"
+    
+    if top_bids:
+        for i, b in enumerate(top_bids[:3]):
+            medal = ["🥇", "🥈", "🥉"][i]
+            # Normal font for user name, HTML safe
+            clean_name = str(b['name']).replace('<', '&lt;').replace('>', '&gt;')
+            top_3_text += f"{medal} {clean_name}: {bold_sc(f'{b['bid']:,} 💸')}\n"
+    else:
+        top_3_text += f"👻 {bold_sc('No bids placed yet!')}\n"
 
     caption = f"""🍃 {bold_sc('LIVE AUCTION')} 🍃
 
 🌸 {bold_sc('NAME:')} {bold_sc(active_auc['char_name'])}
 🎞️ {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
-💫 {bold_sc('RARITY:')} {bold_sc(active_auc['rarity'])}
-
-👑 {bold_sc('TOP BIDDER:')} {bold_sc(active_auc['highest_bidder_name'])}
-💰 {bold_sc('CURRENT BID:')} {bold_sc(f"{active_auc['highest_bid']:,} 💸")}"""
+💫 {bold_sc('RARITY:')} {bold_sc(active_auc['rarity'])}{top_3_text}"""
 
     buttons = [
         [
             InlineKeyboardButton("⋞", callback_data=f"auc_adj_{user_id}_-1000_{proposed_bid}"),
-            InlineKeyboardButton(bold_sc(f"{proposed_bid:,} 💸"), callback_data=f"auc_none_{user_id}"),
+            # 🔥 GLITCH FIXED: Removed HTML tags from this button text
+            InlineKeyboardButton(f"{proposed_bid:,}", callback_data=f"auc_none_{user_id}"),
             InlineKeyboardButton("⋟", callback_data=f"auc_adj_{user_id}_1000_{proposed_bid}")
         ],
-        [InlineKeyboardButton(to_small_caps("✅ Confirm Bid"), callback_data=f"auc_conf_{user_id}_{proposed_bid}")],
-        [InlineKeyboardButton(to_small_caps("❌ Cancel My Bid"), callback_data=f"auc_can_{user_id}")],
-        [InlineKeyboardButton(to_small_caps("🔙 Back to Deals"), callback_data=f"mp_back_{user_id}")]
+        [InlineKeyboardButton(to_small_caps("Confirm Bid"), callback_data=f"auc_conf_{user_id}_{proposed_bid}")],
+        [InlineKeyboardButton(to_small_caps("Cancel Bid"), callback_data=f"auc_can_{user_id}")],
+        [InlineKeyboardButton(to_small_caps("⟲ Back"), callback_data=f"mp_back_{user_id}")]
     ]
     
     reply_markup = InlineKeyboardMarkup(buttons)
@@ -229,7 +239,6 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
     parts = data.split("_")
     
     try:
-        # STRICT SECURITY: Only the menu owner can click any button
         if len(parts) >= 3:
             owner_id = int(parts[2])
             if clicker_id != owner_id:
@@ -260,7 +269,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
             if data.startswith("auc_conf_"):
                 proposed = int(parts[3])
                 
-                if proposed <= active_auc['highest_bid']:
+                if proposed <= active_auc['highest_bid'] and active_auc.get('top_bids'):
                     await query.answer(to_small_caps(f"Bid must be higher than {active_auc['highest_bid']:,}!"), show_alert=True)
                     await render_auction_ui(query, active_auc, user_id, active_auc['highest_bid'] + 1000)
                     return
@@ -269,35 +278,52 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 if not user_db or user_db.get('balance', 0) < proposed:
                     await query.answer(to_small_caps(f"Low balance! You need {proposed:,} 💸"), show_alert=True)
                     return
+                
+                top_bids = active_auc.get('top_bids', [])
+                
+                # Remove this user's old bid if exists
+                top_bids = [b for b in top_bids if b['id'] != clicker_id]
+                
+                # Add new bid and sort
+                top_bids.append({'id': clicker_id, 'name': query.from_user.first_name, 'bid': proposed})
+                top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
                     
                 await auction_collection.update_one(
                     {'_id': active_auc['_id']},
-                    {'$set': {'highest_bid': proposed, 'highest_bidder_id': clicker_id, 'highest_bidder_name': query.from_user.first_name}}
+                    {'$set': {'highest_bid': top_bids[0]['bid'], 'top_bids': top_bids}}
                 )
                 
                 await query.answer(to_small_caps(f"✅ Bid of {proposed:,} placed successfully!"), show_alert=True)
                 
-                active_auc['highest_bid'] = proposed
-                active_auc['highest_bidder_name'] = query.from_user.first_name
-                await render_auction_ui(query, active_auc, user_id, proposed + 1000)
+                active_auc['highest_bid'] = top_bids[0]['bid']
+                active_auc['top_bids'] = top_bids
+                await render_auction_ui(query, active_auc, user_id, top_bids[0]['bid'] + 1000)
                 return
 
             if data.startswith("auc_can_"):
-                if active_auc.get('highest_bidder_id') != clicker_id:
-                    await query.answer(to_small_caps("You are not the highest bidder, nothing to cancel!"), show_alert=True)
+                top_bids = active_auc.get('top_bids', [])
+                has_bid = any(b['id'] == clicker_id for b in top_bids)
+                
+                if not has_bid:
+                    await query.answer(to_small_caps("You haven't placed any bid yet!"), show_alert=True)
                     return
                     
-                starting_bid = active_auc.get('starting_bid', 1000)
+                # Remove user from top bids
+                top_bids = [b for b in top_bids if b['id'] != clicker_id]
+                top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
+                
+                highest_bid = top_bids[0]['bid'] if top_bids else active_auc.get('starting_bid', 1000)
+                
                 await auction_collection.update_one(
                     {'_id': active_auc['_id']},
-                    {'$set': {'highest_bid': starting_bid, 'highest_bidder_id': None, 'highest_bidder_name': 'None'}}
+                    {'$set': {'highest_bid': highest_bid, 'top_bids': top_bids}}
                 )
                 
                 await query.answer(to_small_caps("✅ Your bid has been cancelled! Coins are safe."), show_alert=True)
                 
-                active_auc['highest_bid'] = starting_bid
-                active_auc['highest_bidder_name'] = 'None'
-                await render_auction_ui(query, active_auc, user_id, starting_bid + 1000)
+                active_auc['highest_bid'] = highest_bid
+                active_auc['top_bids'] = top_bids
+                await render_auction_ui(query, active_auc, user_id, highest_bid + 1000)
                 return
 
         # ---------------- DEALS LOGIC ----------------
@@ -377,7 +403,7 @@ async def start_auction(update: Update, context: CallbackContext):
         'char_id': char.get('id'), 'char_name': char.get('name', 'Unknown'),
         'anime': char.get('anime', 'Unknown'), 'rarity': char.get('rarity', 'Unknown'),
         'img_url': char.get('img_url'), 'starting_bid': starting_bid, 'highest_bid': starting_bid,
-        'highest_bidder_id': None, 'highest_bidder_name': 'None', 'status': 'active'
+        'top_bids': [], 'status': 'active'
     }
     await auction_collection.insert_one(auction_data)
     
@@ -395,20 +421,28 @@ async def end_auction(update: Update, context: CallbackContext):
     if not active_auc: return
         
     await auction_collection.update_one({'_id': active_auc['_id']}, {'$set': {'status': 'ended'}})
-    bidder_id = active_auc.get('highest_bidder_id')
     
-    if not bidder_id:
+    top_bids = active_auc.get('top_bids', [])
+    if not top_bids:
         await update.message.reply_text(bold_sc("Auction ended! No one placed a bid."), parse_mode='HTML')
         return
         
+    winner = top_bids[0]
+    bidder_id = winner['id']
+    winning_bid = winner['bid']
+    
+    # Safe name format
+    winner_name = str(winner['name']).replace('<', '&lt;').replace('>', '&gt;')
+    
     bidder = await user_collection.find_one({'id': bidder_id})
     char_query = {'$or': [{'id': active_auc['char_id']}, {'id': str(active_auc['char_id'])}, {'id': int(active_auc['char_id'])}]}
     char = await collection.find_one(char_query)
     
     if bidder and char:
         clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
-        await user_collection.update_one({'id': bidder_id}, {'$inc': {'balance': -active_auc['highest_bid']}, '$push': {'characters': clean_char}})
-        msg = f"🎊 AUCTION ENDED! 🎊\n\nWINNER: {active_auc['highest_bidder_name']}\nWINNING BID: {active_auc['highest_bid']:,} 💸"
+        await user_collection.update_one({'id': bidder_id}, {'$inc': {'balance': -winning_bid}, '$push': {'characters': clean_char}})
+        
+        msg = f"🎊 AUCTION ENDED! 🎊\n\nWINNER: {winner_name}\nWINNING BID: {winning_bid:,} 💸"
         await update.message.reply_text(bold_sc(msg), parse_mode='HTML')
 
 # --- Handlers ---
