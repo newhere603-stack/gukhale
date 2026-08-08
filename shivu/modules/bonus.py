@@ -86,9 +86,9 @@ class UserDB:
 def build_bonus_text(user: dict, first_name: str) -> str:
     # BUG FIXED: Added 'f' before the string to make it an f-string
     return (
-        f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ <tg-emoji emoji-id=\"6323080917942279829\">🫧</tg-emoji></b>\n\n"
+        f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ </b>\n\n"
         f"<tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> <b>ʙᴏɴᴜs sʏsᴛᴇᴍ</b>\n\n"
-        f"<tg-emoji emoji-id=\"6134157341089603984\">👤</tg-emoji> <b>ᴜsᴇʀ:</b> <b>{first_name}</b>\n"
+        f"<tg-emoji emoji-id=\"5255861796350224063\">❤️</tg-emoji> <b>ᴜsᴇʀ:</b> <b>{first_name}</b>\n"
         f"<tg-emoji emoji-id=\"5287606810168028257\">🗓</tg-emoji> <b>ᴅᴀᴛᴇ:</b> <b>{now_ist().strftime('%Y-%m-%d %H:%M')}</b>\n\n"
         f"<tg-emoji emoji-id=\"6053280534220513008\">🔥</tg-emoji> <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_streak', 0)} ᴅᴀʏs</b>\n"
         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
@@ -195,7 +195,7 @@ async def show_stats(update: Update, context: CallbackContext, owner_id: int):
     streak = user.get('bonus_streak', 0)
 
     text = (
-        f"<tg-emoji emoji-id=\"6330041629704985188\">📊</tg-emoji> <b>ʙᴏɴᴜs sᴛᴀᴛs</b>\n\n"
+        f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> <b>ʙᴏɴᴜs sᴛᴀᴛs</b>\n\n"
         f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>ʙᴀʟᴀɴᴄᴇ:</b> <b>{user.get('balance', 0):,} ᴄᴏɪɴs</b>\n"
         f"<tg-emoji emoji-id=\"6053280534220513008\">🔥</tg-emoji> <b>ᴄᴜʀʀᴇɴᴛ sᴛʀᴇᴀᴋ:</b> <b>{streak} ᴅᴀʏs</b>\n"
         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>ʜɪɢʜᴇsᴛ sᴛʀᴇᴀᴋ:</b> <b>{user.get('bonus_highest_streak', 0)} ᴅᴀʏs</b>\n\n"
