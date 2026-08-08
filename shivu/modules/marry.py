@@ -138,27 +138,21 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
         user = await user_collection.find_one({"id": user_id}) or {}
         owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
         
-        match_query = {"id": {"$nin": owned}}
+        # 🔥 FIXED: Ensure user doesn't own it AND it is not auction exclusive
+        and_conditions = [
+            {"id": {"$nin": owned}},
+            {"auction_exclusive": {"$ne": True}}
+        ]
         
         # Build dynamic regex for disabled rarities
         if DISABLED_RARITIES:
             banned_str = "|".join(re.escape(r) for r in DISABLED_RARITIES)
-            banned_condition = {"$not": {"$regex": banned_str, "$options": "i"}}
-        else:
-            banned_condition = None
+            and_conditions.append({"rarity": {"$not": {"$regex": banned_str, "$options": "i"}}})
 
-        if rarity_pattern and banned_condition:
-            match_query = {
-                "$and": [
-                    {"id": {"$nin": owned}},
-                    {"rarity": {"$regex": rarity_pattern, "$options": "i"}},
-                    {"rarity": banned_condition}
-                ]
-            }
-        elif rarity_pattern:
-            match_query["rarity"] = {"$regex": rarity_pattern, "$options": "i"}
-        elif banned_condition:
-            match_query["rarity"] = banned_condition
+        if rarity_pattern:
+            and_conditions.append({"rarity": {"$regex": rarity_pattern, "$options": "i"}})
+            
+        match_query = {"$and": and_conditions}
             
         pipeline = [
             {"$match": match_query},
@@ -290,7 +284,6 @@ async def dice_marry(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    # Calling with None allows ALL rarities EXCEPT those in DISABLED_RARITIES
     char = await get_unique_char(user.id, None)
     
     if not char:
@@ -407,7 +400,6 @@ async def propose(update: Update, context: CallbackContext):
         )
 
     # Phase 3: Result (Win)
-    # Allowed ALL rarities EXCEPT those in DISABLED_RARITIES
     char = await get_unique_char(user.id, None)
     
     if not char:
