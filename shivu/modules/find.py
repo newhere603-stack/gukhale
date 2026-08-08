@@ -182,17 +182,17 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
 
     # Top 3 Bids Logic
     top_bids = active_auc.get('top_bids', [])
-    top_3_text = f"\n\n🏆 {bold_sc('TOP BIDS:')}\n"
+    top_3_text = f"\n\n🏆 {bold_sc('TOP BIDDERS:')}\n\n"
     
     if top_bids:
         for i, b in enumerate(top_bids[:3]):
             medal = ["🥇", "🥈", "🥉"][i]
-            # Normal font for user name, HTML safe
+            # HTML safe aur Mention format mein user name
             clean_name = str(b['name']).replace('<', '&lt;').replace('>', '&gt;')
+            mention_link = f"<b><a href='tg://user?id={b['id']}'>{clean_name}</a></b>"
             
-            # 🔥 BUG FIX: Variable banakar f-string mein daala taaki SyntaxError na aaye
             bid_amount = b['bid']
-            top_3_text += f"{medal} {clean_name}: {bold_sc(f'{bid_amount:,} 💸')}\n"
+            top_3_text += f"{medal} {mention_link}: {bold_sc(f'{bid_amount:,} 💸')}\n"
     else:
         top_3_text += f"👻 {bold_sc('No bids placed yet!')}\n"
 
@@ -209,8 +209,11 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
             InlineKeyboardButton("⋟", callback_data=f"auc_adj_{user_id}_1000_{proposed_bid}")
         ],
         [InlineKeyboardButton(to_small_caps("Confirm Bid"), callback_data=f"auc_conf_{user_id}_{proposed_bid}")],
-        [InlineKeyboardButton(to_small_caps("Cancel Bid"), callback_data=f"auc_can_{user_id}")],
-        [InlineKeyboardButton(to_small_caps("⟲ Back"), callback_data=f"mp_back_{user_id}")]
+        # 🔥 Changes Here: Back aur Cancel ek hi line (List) mein
+        [
+            InlineKeyboardButton(to_small_caps("Cancel ⟳"), callback_data=f"auc_can_{user_id}"),
+            InlineKeyboardButton(to_small_caps("⟲ Back"), callback_data=f"mp_back_{user_id}")
+        ]
     ]
     
     reply_markup = InlineKeyboardMarkup(buttons)
@@ -434,8 +437,8 @@ async def end_auction(update: Update, context: CallbackContext):
     bidder_id = winner['id']
     winning_bid = winner['bid']
     
-    # Safe name format
-    winner_name = str(winner['name']).replace('<', '&lt;').replace('>', '&gt;')
+    clean_winner_name = str(winner['name']).replace('<', '&lt;').replace('>', '&gt;')
+    winner_mention = f"<b><a href='tg://user?id={bidder_id}'>{clean_winner_name}</a></b>"
     
     bidder = await user_collection.find_one({'id': bidder_id})
     char_query = {'$or': [{'id': active_auc['char_id']}, {'id': str(active_auc['char_id'])}, {'id': int(active_auc['char_id'])}]}
@@ -445,8 +448,12 @@ async def end_auction(update: Update, context: CallbackContext):
         clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
         await user_collection.update_one({'id': bidder_id}, {'$inc': {'balance': -winning_bid}, '$push': {'characters': clean_char}})
         
-        msg = f"🎊 AUCTION ENDED! 🎊\n\nWINNER: {winner_name}\nWINNING BID: {winning_bid:,} 💸"
-        await update.message.reply_text(bold_sc(msg), parse_mode='HTML')
+        # Format explicitly to avoid bold_sc corrupting HTML links
+        header = bold_sc("🎊 AUCTION ENDED! 🎊\n\nWINNER: ")
+        footer = bold_sc(f"\nWINNING BID: {winning_bid:,} 💸")
+        msg = f"{header}{winner_mention}{footer}"
+        
+        await update.message.reply_text(msg, parse_mode='HTML')
 
 # --- Handlers ---
 application.add_handler(CommandHandler(["mp", "marketplace"], marketplace, block=False))
