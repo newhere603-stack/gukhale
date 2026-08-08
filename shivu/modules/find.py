@@ -154,7 +154,7 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
             InlineKeyboardButton(to_small_caps("Buy"), callback_data=f"mp_buy_{user_id}_{index}"),
             InlineKeyboardButton("⋟", callback_data=f"mp_nav_{user_id}_{nav_index}")
         ],
-        [InlineKeyboardButton(f"🍃 {to_small_caps('Auction')}", callback_data=f"mp_auc_{user_id}")],
+        [InlineKeyboardButton(f"{to_small_caps('Auction')}", callback_data=f"mp_auc_{user_id}")],
         [InlineKeyboardButton(to_small_caps("Refresh (30,000 💸)"), callback_data=f"mp_ref_{user_id}")]
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
@@ -211,8 +211,8 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
         [InlineKeyboardButton(to_small_caps("Confirm Bid"), callback_data=f"auc_conf_{user_id}_{proposed_bid}")],
         # 🔥 Changes Here: Back aur Cancel ek hi line (List) mein
         [
-            InlineKeyboardButton(to_small_caps("Cancel ⟳"), callback_data=f"auc_can_{user_id}"),
-            InlineKeyboardButton(to_small_caps("⟲ Back"), callback_data=f"mp_back_{user_id}")
+            InlineKeyboardButton(to_small_caps("⟲ Back"), callback_data=f"mp_back_{user_id}"),
+            InlineKeyboardButton(to_small_caps("Cancel ⟳"), callback_data=f"auc_can_{user_id}")
         ]
     ]
     
