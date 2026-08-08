@@ -133,15 +133,20 @@ async def is_admin(update: Update, context: CallbackContext) -> bool:
 
 
 async def is_character_allowed(character, chat_id=None):
-    if character.get('removed', False):
+    # 🔥 FIXED: Added auction_exclusive check to prevent auction characters from spawning
+    if character.get('removed', False) or character.get('auction_exclusive', False):
         return False
+        
     rarity = character.get('rarity', '🟢 Common')
     emoji = rarity.split(' ')[0] if isinstance(rarity, str) and ' ' in rarity else rarity
     key = get_rarity_key(rarity)
+    
     if key is not None and not rarity_status_cache.get(key, True):
         return False
+        
     if character.get('is_video', False) and emoji == '🎥':
         return chat_id == AMV_ALLOWED_GROUP_ID
+        
     return True
 
 
@@ -238,7 +243,8 @@ async def send_image(update: Update, context: CallbackContext) -> None:
     chat_id_str = str(chat_id)
 
     try:
-        all_characters = await collection.find({}).to_list(length=None)
+        # 🔥 FIXED: Added auction_exclusive filter directly to the database query
+        all_characters = await collection.find({'auction_exclusive': {'$ne': True}}).to_list(length=None)
         if not all_characters:
             return
 
