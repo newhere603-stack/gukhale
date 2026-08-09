@@ -210,7 +210,7 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
         tokens = extract_tokens(u)
         rows.append(f"<b>{i}. {link} - <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {tokens:,}</b>")
 
-    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗧𝗢𝗞𝗘𝗡 𝗛𝗢𝗟𝗗𝗘𝗥𝗦", rows)
+    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗧𝗢𝗞𝗘𝗡 𝗛𝗢𝗟𝗗𝗘𝗥", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
 
 
