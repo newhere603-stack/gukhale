@@ -166,7 +166,7 @@ def card_caption(char: Char, gcount: int) -> str:
         f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> {bold_sc('anime ⬡')} <b>{escape(char.anime)}</b>\n"
         f"<tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> {bold_sc('char id ⬡')} <code>{char.id}</code>\n"
         "\n"
-        f"<tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
+        f"<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
     )
 
 
@@ -177,7 +177,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     lines = [
-        f"ㅤ<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('character owners')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('character owners')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
     ]
     
     for i, o in enumerate(owners[start:end], start + 1):
@@ -190,7 +190,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
         link = f"<b><a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a></b>"
         lines.append(f"{medal} {link} - <b>x{o['count']}</b>")
         
-    lines.append(f"\n<tg-emoji emoji-id=\"5240228673738527951\">🏷</tg-emoji> {bold_sc(f'page {page+1}/{total_pages}')} • <tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> {bold_sc('total:')} <code>{gcount}x</code>")
+    lines.append(f"\n<tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> {bold_sc(f'page {page+1}/{total_pages}')} • <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> {bold_sc('total:')} <code>{gcount}x</code>")
     return "\n".join(lines)
 
 
