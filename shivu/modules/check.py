@@ -132,7 +132,8 @@ async def get_owners(cid: str) -> List[Dict]:
     ).to_list(length=None)
     owners = []
     for u in users:
-        cnt = sum(1 for c in u.get('characters', []) if c.get('id'] == cid)
+        # BUG FIXED HERE: c.get('id'] changed to c.get('id')
+        cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
         if cnt:
             owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
                             'username': u.get('username'), 'count': cnt})
@@ -154,37 +155,42 @@ def process_search(chars: List[Dict]) -> Dict:
     return {'names': names, 'data': data, 'rarities': rarities, 'unique': len(names), 'total': len(chars)}
 
 
-# --- ✨ COOL CARD INFO DESIGN (SMALL CAPS + BOLD) ---
+# --- ✨ COOL CARD INFO DESIGN (SMALL CAPS + BOLD + PREMIUM EMOJI) ---
 def card_caption(char: Char, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     return (
-        f"{bold_sc('ㅤ✨ ultimate w-h info ✨')}\n"
+        f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {to_small_caps('ultimate w-h info')} <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji></b>\n"
         "\n"
-        f"🌸 {bold_sc('name ⬡')} <b>{escape(char.name)}</b>\n"
-        f"🌟 {bold_sc('rarity ⬡')} {emoji} <b>{to_small_caps(text)}</b>\n"
-        f"🎞️ {bold_sc('anime ⬡')} <b>{escape(char.anime)}</b>\n"
-        f"🔖 {bold_sc('char id ⬡')} <code>{char.id}</code>\n"
+        f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> {bold_sc('name ⬡')} <b>{escape(char.name)}</b>\n"
+        f"<tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> {bold_sc('rarity ⬡')} {emoji} <b>{to_small_caps(text)}</b>\n"
+        f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> {bold_sc('anime ⬡')} <b>{escape(char.anime)}</b>\n"
+        f"<tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> {bold_sc('char id ⬡')} <code>{char.id}</code>\n"
         "\n"
-        f"🌍 {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
+        f"<tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
     )
 
 
-# --- 🏆 OWNERS LIST DESIGN (SMALL CAPS + BOLD) ---
+# --- 🏆 OWNERS LIST DESIGN (SMALL CAPS + BOLD + PREMIUM EMOJI) ---
 def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     start, end = page * USERS_PER_PAGE, page * USERS_PER_PAGE + USERS_PER_PAGE
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     lines = [
-        f"ㅤ🏆 {bold_sc('character owners')} 🏆\n"
+        f"ㅤ<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('character owners')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
     ]
     
     for i, o in enumerate(owners[start:end], start + 1):
-        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(i, f"<code>{i}.</code>")
+        medal = {
+            1: '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>', 
+            2: '<tg-emoji emoji-id="5447203607294265305">🥈</tg-emoji>', 
+            3: '<tg-emoji emoji-id="5453902265922376865">🥉</tg-emoji>'
+        }.get(i, f"<code>{i}.</code>")
+        
         link = f"<b><a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a></b>"
         lines.append(f"{medal} {link} - <b>x{o['count']}</b>")
         
-    lines.append(f"\n📄 {bold_sc(f'page {page+1}/{total_pages}')} • 🌍 {bold_sc('total:')} <code>{gcount}x</code>")
+    lines.append(f"\n<tg-emoji emoji-id=\"5240228673738527951\">🏷</tg-emoji> {bold_sc(f'page {page+1}/{total_pages}')} • <tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> {bold_sc('total:')} <code>{gcount}x</code>")
     return "\n".join(lines)
 
 
@@ -207,8 +213,8 @@ def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, i
     total_pages = 1 if show_all else max(1, (r['unique'] + 15 - 1) // 15)
     lines = [
         f"{bold_sc('anime search results')}",
-        f"📂 {bold_sc('query ⬡')} <i>{escape(query)}</i>",
-        f"📊 {bold_sc('total ⬡')} <code>{r['total']}</code> | {bold_sc('unique ⬡')} <code>{r['unique']}</code>",
+        f"<tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> {bold_sc('query ⬡')} <i>{escape(query)}</i>",
+        f"<tg-emoji emoji-id=\"6330041629704985188\">📊</tg-emoji> {bold_sc('total ⬡')} <code>{r['total']}</code> | {bold_sc('unique ⬡')} <code>{r['unique']}</code>",
         "\n"
     ]
     items = sorted(r['names'].items())
@@ -219,7 +225,7 @@ def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, i
         lines.append(f"<b>{i}.</b> <code>{escape(name)}</code> ⦅<code>{c.get('id','??')}</code>⦆ {emoji} <i>{to_small_caps(text)}</i>"
                       + (f" <b>(x{cnt})</b>" if cnt > 1 else ""))
     if not show_all and total_pages > 1:
-        lines.append(f"\n📄 {bold_sc(f'page {page+1}/{total_pages}')}")
+        lines.append(f"\n<tg-emoji emoji-id=\"5240228673738527951\">🏷</tg-emoji> {bold_sc(f'page {page+1}/{total_pages}')}")
     return "\n".join(lines), total_pages
 
 
@@ -231,16 +237,16 @@ async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
             kwargs['reply_markup'] = kb
         await method(video=char.img_url, **kwargs) if char.is_video else await method(photo=char.img_url, **kwargs)
     except TelegramError as e:
-        await update.message.reply_text(f"{caption}\n\n⚠️ {bold_sc('media error:')} {escape(str(e))}",
+        await update.message.reply_text(f"{caption}\n\n<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('media error:')} {escape(str(e))}",
                                          reply_markup=kb, parse_mode=ParseMode.HTML)
 
 
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text(f"✨ {bold_sc('usage:')} <code>/check &lt;ɪᴅ&gt;</code>", parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/check &lt;ɪᴅ&gt;</code>", parse_mode=ParseMode.HTML)
     char = await get_char(context.args[0])
     if not char:
-        return await update.message.reply_text(bold_sc("character not found in database!"), parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('character not found in database!')}", parse_mode=ParseMode.HTML)
     gcount = await global_count(char.id)
     owners = await get_owners(char.id)
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
@@ -249,11 +255,11 @@ async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text(f"✨ {bold_sc('usage:')} <code>/anime &lt;ɴᴀᴍᴇ&gt;</code>", parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/anime &lt;ɴᴀᴍᴇ&gt;</code>", parse_mode=ParseMode.HTML)
     name = ' '.join(context.args)
     chars = await find_by_anime(name)
     if not chars:
-        return await update.message.reply_text(f"{bold_sc('no characters found from')} <i>{escape(name)}</i>", parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('no characters found from')} <i>{escape(name)}</i>", parse_mode=ParseMode.HTML)
     r = process_search(chars)
     text, _ = find_caption(name, r, 0, True)
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
