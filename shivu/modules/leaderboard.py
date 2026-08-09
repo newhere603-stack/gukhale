@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from html import escape
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.helpers import mention_html
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 
@@ -105,12 +105,35 @@ def format_custom_header(heading: str, rows):
 
 
 async def send_or_edit(update, context, text, kb, edit):
+    photo_url = "https://files.catbox.moe/ewtw4l.png"
     if edit:
         q = update.callback_query
         await q.answer()
-        await q.message.edit_text(text, parse_mode='HTML', reply_markup=kb)
+        try:
+            await q.edit_message_media(
+                media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
+                reply_markup=kb
+            )
+        except Exception:
+            # Fallback agar message pehle normal text tha jise media mein edit nahi kiya ja sakta
+            try:
+                await q.message.delete()
+            except Exception:
+                pass
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=photo_url,
+                caption=text,
+                parse_mode='HTML',
+                reply_markup=kb
+            )
     else:
-        await update.message.reply_text(text, parse_mode='HTML', reply_markup=kb)
+        await update.message.reply_photo(
+            photo=photo_url, 
+            caption=text, 
+            parse_mode='HTML', 
+            reply_markup=kb
+        )
 
 
 def back_close_buttons(refresh_cb, extra_row=None):
