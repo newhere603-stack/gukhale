@@ -18,6 +18,36 @@ LOG_GROUP_ID = -1003893927065
 # Indian Standard Time (IST -> UTC +5:30)
 IST = timezone(timedelta(hours=5, minutes=30))
 
+# RARITIES mapping setup for custom Telegram emojis and display names
+RARITIES = {
+    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
+    "legendary": ("🟡", '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji>', "Legendary"),
+    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"), 
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"), 
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"), 
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"), 
+    "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"), 
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"), 
+    "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"), 
+    "pearl": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
+}
+
+def get_rarity_key(rarity_str):
+    if not isinstance(rarity_str, str):
+        return None
+    rarity_str = rarity_str.strip()
+    db_emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
+    name = name.strip().lower()
+    for key, (r_db_emoji, _, r_name) in RARITIES.items():
+        if rarity_str.lower() == key or db_emoji == r_db_emoji or name == r_name.lower():
+            return key
+    return None
+
 def to_small_caps(text: str) -> str:
     if not text:
         return "ᴜɴᴋɴᴏᴡɴ"
@@ -117,7 +147,16 @@ async def swaifu(update: Update, context: CallbackContext):
         
         char_name = html.escape(to_small_caps(character.get('name', 'Unknown')))
         anime = html.escape(to_small_caps(character.get('anime', 'Unknown')))
-        rarity = html.escape(to_small_caps(character.get('rarity', ' MEDIUM 🔵')))
+        
+        # 🔥 FIXED: Proper Rarity & Custom Emoji mapping matching your main file
+        rarity_str = character.get('rarity', '🟢 Common')
+        r_key = get_rarity_key(rarity_str)
+        if r_key and r_key in RARITIES:
+            _, r_display_emoji, r_name = RARITIES[r_key]
+            rarity = f"{r_display_emoji} <b>{html.escape(r_name)}</b>"
+        else:
+            rarity = html.escape(to_small_caps(rarity_str))
+
         img_url = character.get('img_url', '')
 
         await user_collection.update_one(
@@ -543,7 +582,6 @@ async def start_mines(update: Update, context: CallbackContext):
 
     photo_url = "https://files.catbox.moe/ewtw4l.png"
 
-    # Blazing fast: Passing photo URL directly to Telegram so it fetches asynchronously without blocking the bot
     try:
         msg = await update.message.reply_photo(
             photo=photo_url,
@@ -553,7 +591,6 @@ async def start_mines(update: Update, context: CallbackContext):
         )
     except Exception as e:
         logger.error(f"Failed to send photo: {e}")
-        # Refund bet if completely failed
         await user_collection.update_one({'id': user_id}, {'$inc': {'balance': bet}})
         await update.message.reply_text(
             f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Error loading image. Your bet has been refunded.')}</b>",
