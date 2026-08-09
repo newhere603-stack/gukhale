@@ -16,6 +16,36 @@ user_cache = TTLCache(maxsize=500, ttl=300)
 
 USERS_PER_PAGE = 10
 
+# --- ✨ RARITIES MAPPING FOR CUSTOM EMOJIS ---
+RARITIES = {
+    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
+    "legendary": ("🟡", '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji>', "Legendary"),
+    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"), 
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"), 
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"), 
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"), 
+    "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"), 
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"), 
+    "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"), 
+    "pearl": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
+}
+
+def get_rarity_key(rarity_str):
+    if not isinstance(rarity_str, str):
+        return None
+    rarity_str = rarity_str.strip()
+    db_emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
+    name = name.strip().lower()
+    for key, (r_db_emoji, _, r_name) in RARITIES.items():
+        if rarity_str.lower() == key or db_emoji == r_db_emoji or name == r_name.lower():
+            return key
+    return None
+
 
 # --- ✨ UNIVERSAL SMALL CAPS CONVERTER ---
 def to_small_caps(text: str) -> str:
@@ -51,6 +81,10 @@ class Char:
 
 
 def rarity_parts(rarity) -> Tuple[str, str]:
+    r_key = get_rarity_key(rarity)
+    if r_key and r_key in RARITIES:
+        _, display_emoji, name = RARITIES[r_key]
+        return display_emoji, name
     if isinstance(rarity, str):
         p = rarity.split(' ', 1)
         return (p[0], p[1] if len(p) > 1 else 'Common')
@@ -98,7 +132,7 @@ async def get_owners(cid: str) -> List[Dict]:
     ).to_list(length=None)
     owners = []
     for u in users:
-        cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
+        cnt = sum(1 for c in u.get('characters', []) if c.get('id'] == cid)
         if cnt:
             owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
                             'username': u.get('username'), 'count': cnt})
