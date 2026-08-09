@@ -227,7 +227,7 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
         proposed_bid = min_bid
 
     top_bids = active_auc.get('top_bids', [])
-    top_3_text = f"\n\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('TOP BIDDERS:')}\n\n"
+    top_3_text = f"\n\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> 𝗧𝗢𝗣 𝗕𝗜𝗗𝗗𝗘𝗥𝗦:\n\n"
     
     medals = [
         '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>', 
@@ -246,7 +246,7 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     else:
         top_3_text += f"<tg-emoji emoji-id=\"6093837944756379538\">👻</tg-emoji> {bold_sc('No bids placed yet!')}\n"
 
-    caption = f"""<tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji> {bold_sc('LIVE AUCTION')} <tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji>
+    caption = f"""<tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji> 𝗟𝗜𝗩𝗘 𝗔𝗨𝗖𝗧𝗜𝗢𝗡 <tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji>
 
 <tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(active_auc['char_name'])}
 <tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
