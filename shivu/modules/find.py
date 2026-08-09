@@ -227,7 +227,7 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
         proposed_bid = min_bid
 
     top_bids = active_auc.get('top_bids', [])
-    top_3_text = f"\n\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> 𝗧𝗢𝗣 𝗕𝗜𝗗𝗗𝗘𝗥𝗦:\n\n"
+    top_3_text = f"\n\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> 𝗧𝗢𝗣 𝗕𝗜𝗗𝗗𝗘𝗥𝗦:\n"
     
     medals = [
         '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>', 
