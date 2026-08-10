@@ -27,11 +27,9 @@ rarity_status_collection = db['rarity_status_settings']
 group_settings_collection = db['group_settings_db']
 
 MESSAGE_FREQUENCY = 70
-DESPAWN_TIME = 300  # Updated to 5 minutes (300 seconds)
+DESPAWN_TIME = 180  # 3 minutes (180 seconds)
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
-# [BUG FIX]: Dictionary modified to hold 3 values (Database Emoji, Premium Emoji, Name)
-# This fixes the Rarity Status matching issue.
 RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
     "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
@@ -59,6 +57,17 @@ currently_spawning = {}
 spawn_times = {}  
 grabbed_spawns = set()  
 
+_cached_characters = []
+_last_cache_time = 0
+
+async def get_cached_characters():
+    global _cached_characters, _last_cache_time
+    current_time = time.time()
+    if not _cached_characters or (current_time - _last_cache_time) > 300:
+        _cached_characters = await collection.find({'auction_exclusive': {'$ne': True}}).to_list(length=None)
+        _last_cache_time = current_time
+    return _cached_characters
+
 for module_name in ALL_MODULES:
     try:
         importlib.import_module("shivu.modules." + module_name)
@@ -76,6 +85,17 @@ def get_rarity_key(rarity_str):
         if rarity_str.lower() == key or db_emoji == r_db_emoji or name == r_name.lower():
             return key
     return None
+
+
+# 🔥 Time Formatter Helper Function (e.g., 65s -> 1m 5s)
+def format_time_taken(seconds):
+    if seconds < 60:
+        return f"{seconds}s"
+    mins = seconds // 60
+    secs = seconds % 60
+    if secs == 0:
+        return f"{mins}m"
+    return f"{mins}m {secs}s"
 
 
 async def load_rarity_status():
@@ -133,7 +153,6 @@ async def is_admin(update: Update, context: CallbackContext) -> bool:
 
 
 async def is_character_allowed(character, chat_id=None):
-    # 🔥 FIXED: Added auction_exclusive check to prevent auction characters from spawning
     if character.get('removed', False) or character.get('auction_exclusive', False):
         return False
         
@@ -150,13 +169,13 @@ async def is_character_allowed(character, chat_id=None):
     return True
 
 
-async def _send_media(context, chat_id, character, caption, **timeouts):
+async def _send_media(context, chat_id, character, caption):
     if character.get('is_video', False):
         return await context.bot.send_video(chat_id=chat_id, video=character.get('img_url'),
                                               caption=caption, parse_mode='HTML',
-                                              supports_streaming=True, **timeouts)
+                                              supports_streaming=True)
     return await context.bot.send_photo(chat_id=chat_id, photo=character.get('img_url'),
-                                         caption=caption, parse_mode='HTML', **timeouts)
+                                         caption=caption, parse_mode='HTML')
 
 
 async def despawn_character(chat_id, message_id, character, context):
@@ -178,15 +197,14 @@ async def despawn_character(chat_id, message_id, character, context):
         
         if r_key and r_key in RARITIES:
             _, r_display_emoji, r_name = RARITIES[r_key]
-            rarity_display = f"{r_display_emoji} {escape(r_name)}"
         else:
-            db_emoji = rarity_str.split(' ')[0] if isinstance(rarity_str, str) and ' ' in rarity_str else '🟢'
-            rarity_display = escape(rarity_str)
+            r_display_emoji = rarity_str.split(' ')[0] if isinstance(rarity_str, str) and ' ' in rarity_str else '🟢'
+            r_name = escape(rarity_str)
 
         caption = (
             f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜ𝙥! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
-            f"<b>{r_display_emoji} <b>ʀᴀʀɪᴛʏ: {r_name}</b>\n"
+            f"{r_display_emoji}<b> ʀᴀʀɪᴛʏ: {r_name}</b>\n"
             f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n\n"
             f"<tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
@@ -199,8 +217,8 @@ async def despawn_character(chat_id, message_id, character, context):
                 await context.bot.delete_message(chat_id=chat_id, message_id=missed_msg.message_id)
             except BadRequest:
                 pass
-    except Exception:
-        LOGGER.exception(f"despawn_character failed for chat={chat_id}")
+    except Exception as e:
+        LOGGER.error(f"despawn_character failed for chat={chat_id}: {e}")
     finally:
         if spawn_messages.get(chat_id) == message_id:
             last_characters.pop(chat_id, None)
@@ -225,11 +243,8 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
         
         try:
             chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
-            if chat_data and 'message_frequency' in chat_data:
-                target_frequency = chat_data['message_frequency']
-            else:
-                target_frequency = MESSAGE_FREQUENCY
-        except Exception as e:
+            target_frequency = chat_data.get('message_frequency', MESSAGE_FREQUENCY) if chat_data else MESSAGE_FREQUENCY
+        except Exception:
             target_frequency = MESSAGE_FREQUENCY
 
         if message_counts[chat_id] >= target_frequency and not currently_spawning.get(chat_id):
@@ -243,8 +258,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
     chat_id_str = str(chat_id)
 
     try:
-        # 🔥 FIXED: Added auction_exclusive filter directly to the database query
-        all_characters = await collection.find({'auction_exclusive': {'$ne': True}}).to_list(length=None)
+        all_characters = await get_cached_characters()
         if not all_characters:
             return
 
@@ -264,8 +278,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         first_correct_guesses.pop(chat_id, None)
 
         caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴘᴘᴇᴀʀᴇᴅ! <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji>\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
-        timeouts = dict(read_timeout=300, write_timeout=300, connect_timeout=60, pool_timeout=60)
-        spawn_msg = await _send_media(context, chat_id, character, caption, **timeouts)
+        spawn_msg = await _send_media(context, chat_id, character, caption)
 
         spawn_messages[chat_id] = spawn_msg.message_id
         spawn_times[chat_id] = time.time()  
@@ -326,9 +339,12 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=spawn_message_links[chat_id])]])
             return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
-        time_taken = 0
+        time_taken_seconds = 0
         if chat_id in spawn_times:
-            time_taken = round(time.time() - spawn_times[chat_id])
+            time_taken_seconds = round(time.time() - spawn_times[chat_id])
+        
+        # Format time using helper function
+        formatted_time = format_time_taken(time_taken_seconds)
             
         spawn_msg_id = spawn_messages.get(chat_id)
         if spawn_msg_id:
@@ -364,14 +380,12 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 'bot_started': False
             })
 
-        # --- CACHE CLEAR FOR INSTANT INLINE UPDATE ---
         try:
             from shivu.modules.inline import user_cache, query_cache
             user_cache.pop(f"u{user_id}", None)
             query_cache.clear()
         except Exception:
             pass
-        # ---------------------------------------------
 
         await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
         await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
@@ -395,7 +409,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> 𝗡𝗔𝗠𝗘:<b> {escape(character.get('name', 'Unknown'))}</b>\n"
             f"{r_display_emoji} 𝗥𝗔𝗥𝗜𝗧𝗬:<b> {r_name}</b>\n"
             f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> 𝗔𝗡𝗜𝗠𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
-            f"<tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {time_taken}s</code>"
+            f"<tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {formatted_time}</code>"
         )
         
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
@@ -411,11 +425,9 @@ async def guess(update: Update, context: CallbackContext) -> None:
 async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> None:
     if not await is_admin(update, context):
         return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ!</b>')
-    
     chat_id = update.effective_chat.id
     if not context.args or context.args[0].lower() not in ('on', 'off'):
         return await update.message.reply_html('<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> /grab_delete [on|off]')
-
     mode = context.args[0].lower() == 'on'
     await set_group_setting(chat_id, 'grab_delete', mode)
     state = "<b>ᴇɴᴀʙʟᴇᴅ (sᴘᴀᴡɴɪɴɢ ᴍsɢ ᴡɪʟʟ ᴅᴇʟᴇᴛᴇ ᴏɴ ɢʀᴀʙ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (sᴘᴀᴡɴɪɴɢ ᴍsɢ ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
@@ -425,11 +437,9 @@ async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> No
 async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> None:
     if not await is_admin(update, context):
         return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ!</b>')
-    
     chat_id = update.effective_chat.id
     if not context.args or context.args[0].lower() not in ('on', 'off'):
         return await update.message.reply_html('<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> /miss_delete [on|off]')
-
     mode = context.args[0].lower() == 'on'
     await set_group_setting(chat_id, 'miss_delete', mode)
     state = "<b>ᴇɴᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡɪʟʟ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
@@ -448,15 +458,12 @@ async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
 async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: bool) -> None:
     if not is_authorized(update.effective_user.id):
         return  
-
     if not context.args:
         cmd = "/rarity_on" if enable else "/rarity_off"
         return await update.message.reply_html(f'<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> {cmd} &lt;rarity_key&gt;')
-
     key = context.args[0].lower()
     if key not in RARITIES:
         return await update.message.reply_html(f'<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴜɴᴋɴᴏᴡɴ ʀᴀʀɪᴛʏ ᴋᴇʏ:</b> <code>{escape(key)}</code>')
-
     await set_rarity_status(key, enable)
     _, display_emoji, name = RARITIES[key]
     state = "ᴇɴᴀʙʟᴇᴅ ᴀɴᴅ ᴄᴀɴ sᴘᴀᴡɴ" if enable else "ᴅɪsᴀʙʟᴇᴅ ᴀɴᴅ ᴡɪʟʟ ɴᴏᴛ sᴘᴀᴡɴ"
@@ -475,22 +482,17 @@ async def rarity_off_cmd(update, context):
 async def name_cmd(update: Update, context: CallbackContext) -> None:
     if not is_authorized(update.effective_user.id):
         return  
-
     chat_id = update.effective_chat.id
     if chat_id not in last_characters:
         return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
-
     c = last_characters[chat_id]
-    
     rarity_str = c.get('rarity', '🟢 Common')
     r_key = get_rarity_key(rarity_str)
-    
     if r_key and r_key in RARITIES:
         _, r_display_emoji, r_name = RARITIES[r_key]
         display_rarity = f"{r_display_emoji} {escape(r_name)}"
     else:
         display_rarity = escape(rarity_str)
-        
     text = (
         "<b><tg-emoji emoji-id=\"5359441070201513074\">🎭</tg-emoji> ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
         f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ:</b> {escape(c.get('name', 'Unknown'))}\n"
@@ -521,7 +523,6 @@ async def main():
         await application.start()
         await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
-
         LOGGER.info("✅ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
 
         try:
@@ -533,7 +534,6 @@ async def main():
             }
             log_msg = create_log_message("˹ Bot Restarted ˼ <tg-emoji emoji-id=\"6093679829830344586\">🔝</tg-emoji>", data)
             asyncio.create_task(send_log_to_group(log_msg))
-            LOGGER.info("Startup log queued successfully!")
         except Exception as e:
             LOGGER.error(f"Failed to queue startup log: {e}")
 
