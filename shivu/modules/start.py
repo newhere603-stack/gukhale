@@ -13,8 +13,8 @@ from shivu import (
     user_collection,
 )
 
-# 🔥 0 Delay Instant Video File ID
-START_VIDEO = "BAACAgUAAxkBAAEtbOlqehsuv4rUg3HVDZCXaeXJvmsx1QACxjAAAuXJSFfUP_LEGbSJtj0E"
+# File ID ki jagah temporary direct video URL daal kar check karo
+START_VIDEO = "https://gxtusqitetsemwjdtvvq.supabase.co/storage/v1/object/public/photos/1785999431478-sm4ln0.mp4"
 
 FORCE_SUB_CHAT = "anime_group_hai"
 OWNER_ID = 7657218453  # Aapki Master Owner ID
