@@ -1,7 +1,7 @@
 import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus, ChatType, ParseMode
-from telegram.error import BadRequest, Forbidden, TelegramError
+from telegram.error import BadRequest, TelegramError
 from telegram.ext import ContextTypes, CallbackQueryHandler, CommandHandler
 from shivu import (
     BOT_USERNAME,
@@ -13,7 +13,9 @@ from shivu import (
     user_collection,
 )
 
-START_VIDEO = "https://gxtusqitetsemwjdtvvq.supabase.co/storage/v1/object/public/photos/1785999431478-sm4ln0.mp4"
+# 🔥 0 Delay Instant Video File ID
+START_VIDEO = "BAACAgUAAxkBAAEtbOlqehsuv4rUg3HVDZCXaeXJvmsx1QACxjAAAuXJSFfUP_LEGbSJtj0E"
+
 FORCE_SUB_CHAT = "anime_group_hai"
 OWNER_ID = 7657218453  # Aapki Master Owner ID
 
@@ -93,7 +95,6 @@ CATEGORIES = {
     ),
 }
 
-
 # Dynamic Caption Generator with User Mention
 def get_main_caption(user_id: int, first_name: str) -> str:
     user_mention = f'<a href="tg://user?id={user_id}">{first_name}</a>'
@@ -103,11 +104,9 @@ def get_main_caption(user_id: int, first_name: str) -> str:
         f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
     )
 
-
-# Robust Force Sub Checker (Supports Groups Bypass & API Error Handling)
+# Robust Force Sub Checker
 async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
-        # Group chats me force sub check mat karo
         if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
             return True
 
@@ -126,7 +125,7 @@ async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     except BadRequest as e:
         LOGGER.warning(f"Force-sub BadRequest for user: {e}")
-        return True  # Error hone par allow kar do
+        return True
     except Exception as e:
         LOGGER.error(f"Force-sub error: {e}")
         return True
@@ -149,7 +148,6 @@ def menu_view():
         "<b>ʜᴇʟᴘ ᴍᴇɴᴜ</b>\n\n<b>sᴇʟᴇᴄᴛ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ᴛᴏ ᴠɪᴇᴡ ᴄᴏᴍᴍᴀɴᴅs:</b>",
         InlineKeyboardMarkup(kb),
     )
-
 
 def category_view(cat_key: str, page: int = 1):
     title, commands = CATEGORIES[cat_key]
@@ -181,12 +179,11 @@ def category_view(cat_key: str, page: int = 1):
     return text, InlineKeyboardMarkup(kb)
 
 
-# Dynamic Credits View Fetching Owner & Sudo Users Directly from Database
+# Dynamic Credits View
 async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     kb = []
     added_ids = set()
 
-    # 1. First add Main Owner Always
     try:
         owner_chat = await context.bot.get_chat(OWNER_ID)
         owner_name = owner_chat.first_name or "ＩＭ 𖣘 ＵＣＨＩＨＡ"
@@ -196,7 +193,6 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     kb.append([InlineKeyboardButton(f"{owner_name}", url=f"tg://user?id={OWNER_ID}")])
     added_ids.add(OWNER_ID)
 
-    # 2. Database se baki sabhi Sudo Users fetch honge
     sudo_users = await sudo_users_collection.find().to_list(length=None)
 
     if sudo_users:
@@ -212,43 +208,37 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     return "<b>sᴜᴅᴏ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
 
 
-def _new_user_doc(user_id, first_name, username):
-    return {
-        "id": user_id,
-        "first_name": first_name,
-        "username": username,
-        "balance": 5000,
-        "bot_started": True,  # Yaha flag add kiya gaya hai
-        "characters": [],
-        "pass_data": {
-            "tier": "free",
-            "weekly_claims": 0,
-            "last_weekly_claim": None,
-            "streak_count": 0,
-            "last_streak_claim": None,
-            "tasks": {"weekly_claims": 0, "grabs": 0},
-            "mythic_unlocked": False,
-            "premium_expires": None,
-            "elite_expires": None,
-            "pending_elite_payment": None,
-        },
-    }
-
-
+# 🔥 SUPERFAST DATABASE UPSERT 
 async def _ensure_user(user_id, first_name, username):
     try:
-        user_data = await user_collection.find_one({"id": user_id})
-        if user_data:
-            # Profile pehle se hai to update set me bot_started True kar do
-            await user_collection.update_one(
-                {"id": user_id},
-                {"$set": {"first_name": first_name, "username": username, "bot_started": True}},
-            )
-            return False
-        await user_collection.insert_one(
-            _new_user_doc(user_id, first_name, username)
+        result = await user_collection.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "first_name": first_name, 
+                    "username": username, 
+                    "bot_started": True
+                },
+                "$setOnInsert": {
+                    "balance": 5000,
+                    "characters": [],
+                    "pass_data": {
+                        "tier": "free",
+                        "weekly_claims": 0,
+                        "last_weekly_claim": None,
+                        "streak_count": 0,
+                        "last_streak_claim": None,
+                        "tasks": {"weekly_claims": 0, "grabs": 0},
+                        "mythic_unlocked": False,
+                        "premium_expires": None,
+                        "elite_expires": None,
+                        "pending_elite_payment": None,
+                    }
+                }
+            },
+            upsert=True
         )
-        return True
+        return result.upserted_id is not None 
     except Exception as e:
         LOGGER.error(f"Error in _ensure_user DB query: {e}")
         return False
@@ -305,7 +295,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         caption_text = get_main_caption(user_id, first_name)
 
-        # Direct message send (Bina user message ko reply tag kiye)
         await context.bot.send_video(
             chat_id=chat_id,
             video=START_VIDEO,
