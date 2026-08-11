@@ -27,7 +27,7 @@ rarity_status_collection = db['rarity_status_settings']
 group_settings_collection = db['group_settings_db']
 
 MESSAGE_FREQUENCY = 70
-DESPAWN_TIME = 240  # (240 seconds)
+DESPAWN_TIME = 300  # (300 seconds)
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
 RARITIES = {
