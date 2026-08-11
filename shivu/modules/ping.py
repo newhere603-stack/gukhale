@@ -1,12 +1,12 @@
 import random
 import logging
-from telegram import Update
+from telegram import Update, ReactionTypeEmoji
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 from shivu import application
 
 LOGGER = logging.getLogger(__name__)
 
-# --- MASSIVE UNLIMITED WORD LISTS (EXPANDED) ---
+# --- MASSIVE UNLIMITED WORD LISTS ---
 WORDS_4 = [
     "ABLE", "ACID", "AQUA", "ATOM", "BABY", "BACK", "BAKE", "BALL", "BAND", "BANK", "BASE", "BATH", "BEAR", "BEAT",
     "BELL", "BIRD", "BITE", "BLUE", "BOAT", "BODY", "BONE", "BOOK", "BORN", "BOSS", "BOWL", "BUMP", "BURN", "BUSH", 
@@ -156,8 +156,12 @@ WORDS_6 = [
 ]
 
 ACTIVE_GAMES = {}
-# Temporary storage for points. Ise database se replace kar lijiyega.
 USER_POINTS = {}
+# Chat-wise delete toggle state (True = delete old board, False = keep old board)
+DELETE_SETTINGS = {}
+
+# 15 random exciting emojis for reactions
+REACTION_EMOJIS = ["🔥", "👍", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "🚀", "💯", "🔥", "✨", "👑", "🎯"]
 
 def get_wordle_hints(guess: str, target: str) -> str:
     length = len(target)
@@ -178,6 +182,17 @@ def get_wordle_hints(guess: str, target: str) -> str:
                 target_chars[target_chars.index(guess_chars[i])] = None
 
     return "".join(result)
+
+async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command to toggle whether old board messages should be deleted or kept."""
+    if not update.effective_chat:
+        return
+    chat_id = update.effective_chat.id
+    current_status = DELETE_SETTINGS.get(chat_id, True)
+    NEW_STATUS = not current_status
+    DELETE_SETTINGS[chat_id] = NEW_STATUS
+    status_text = "ENABLED 🗑️ (Old boards will be deleted)" if NEW_STATUS else "DISABLED 🛡️ (Old boards will be kept)"
+    await update.message.reply_text(f"<b>Auto-Delete for WordSeek board is now: {status_text}</b>", parse_mode="HTML")
 
 async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message:
@@ -252,6 +267,7 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>• /new5 → Start 5-letter game</b>\n"
         "<b>• /new6 → Start 6-letter game</b>\n\n"
         "<b>Basic Commands:</b>\n"
+        "<b>• /toggledelete - Toggle auto-delete of old boards On/Off</b>\n"
         "<b>• /end - End current game</b>\n"
         "<b>• /helpword - Show this help menu</b>"
     )
@@ -269,7 +285,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game = ACTIVE_GAMES[chat_id]
     length = game["length"]
 
-    # Agar word list ki length match nahi karti ya ajeeb characters hain to reply
     if len(text) != length or not text.isalpha():
         await update.message.reply_text(
             f"<b>{text.lower()} is not a valid {length}-letter word.</b>", 
@@ -294,10 +309,11 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lost = (attempt_num >= game["max_attempts"] and not won)
 
     old_message_id = game.get("message_id")
+    should_delete = DELETE_SETTINGS.get(chat_id, True) # Default is True (delete old board)
 
     try:
         if not won and not lost:
-            # 1. Pehle naya message send karo
+            # 1. Pehle naya board message send karo taaki speed fast lage
             msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=board_text,
@@ -305,8 +321,8 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             game["message_id"] = msg.message_id
             
-            # 2. Fir purana message delete karo (Jisse chat delete sequence sahi ho jaaye)
-            if old_message_id:
+            # 2. Agar setting ON hai tabhi purana board delete karo
+            if should_delete and old_message_id:
                 try:
                     await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
                 except Exception:
@@ -317,7 +333,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_id = update.effective_user.id
             USER_POINTS[user_id] = USER_POINTS.get(user_id, 0) + points_earned
             
-            if old_message_id:
+            if should_delete and old_message_id:
                 try:
                     await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
                 except Exception:
@@ -330,14 +346,27 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>Correct Word: {target.lower()}</b>\n"
                 f"<b>Added {points_earned} to the leaderboard.</b>"
             )
+            
+            # Quoted win message send karein
             await update.message.reply_text(
                 win_msg, 
                 parse_mode="HTML", 
                 reply_to_message_id=update.message.message_id
             )
             
+            # User ke guess message par random reaction dena (10-15 options me se)
+            try:
+                selected_emoji = random.choice(REACTION_EMOJIS)
+                await context.bot.set_message_reaction(
+                    chat_id=chat_id,
+                    message_id=update.message.message_id,
+                    reaction=[ReactionTypeEmoji(selected_emoji)]
+                )
+            except Exception as e:
+                LOGGER.error(f"Failed to set reaction: {e}")
+            
         elif lost:
-            if old_message_id:
+            if should_delete and old_message_id:
                 try:
                     await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
                 except Exception:
@@ -360,6 +389,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Registering to shivu app
 application.add_handler(CommandHandler(["new", "new4", "new5", "new6"], start_game_handler))
+application.add_handler(CommandHandler("toggledelete", toggle_delete_handler))
 application.add_handler(CommandHandler("end", end_game_handler))
 application.add_handler(CommandHandler("helpword", help_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_guess))
