@@ -157,10 +157,8 @@ WORDS_6 = [
 
 ACTIVE_GAMES = {}
 USER_POINTS = {}
-# Chat-wise delete toggle state (True = delete old board, False = keep old board)
 DELETE_SETTINGS = {}
 
-# 15 random exciting emojis for reactions
 REACTION_EMOJIS = ["🔥", "👍", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "🚀", "💯", "🔥", "✨", "👑", "🎯"]
 
 def get_wordle_hints(guess: str, target: str) -> str:
@@ -184,7 +182,6 @@ def get_wordle_hints(guess: str, target: str) -> str:
     return "".join(result)
 
 async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Command to toggle whether old board messages should be deleted or kept."""
     if not update.effective_chat:
         return
     chat_id = update.effective_chat.id
@@ -199,6 +196,16 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     chat_id = update.effective_chat.id
+
+    # Check if a game is already active in this chat
+    if chat_id in ACTIVE_GAMES:
+        await update.message.reply_text(
+            "<b>There is already a game in progress in this chat. Use /end to end the current game.</b>",
+            parse_mode="HTML",
+            reply_to_message_id=update.message.message_id
+        )
+        return
+
     command = update.message.text.split()[0].lower()
     
     length = 5
@@ -309,11 +316,10 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lost = (attempt_num >= game["max_attempts"] and not won)
 
     old_message_id = game.get("message_id")
-    should_delete = DELETE_SETTINGS.get(chat_id, True) # Default is True (delete old board)
+    should_delete = DELETE_SETTINGS.get(chat_id, True)
 
     try:
         if not won and not lost:
-            # 1. Pehle naya board message send karo taaki speed fast lage
             msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=board_text,
@@ -321,7 +327,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             game["message_id"] = msg.message_id
             
-            # 2. Agar setting ON hai tabhi purana board delete karo
             if should_delete and old_message_id:
                 try:
                     await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
@@ -347,14 +352,12 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>Added {points_earned} to the leaderboard.</b>"
             )
             
-            # Quoted win message send karein
             await update.message.reply_text(
                 win_msg, 
                 parse_mode="HTML", 
                 reply_to_message_id=update.message.message_id
             )
             
-            # User ke guess message par random reaction dena (10-15 options me se)
             try:
                 selected_emoji = random.choice(REACTION_EMOJIS)
                 await context.bot.set_message_reaction(
