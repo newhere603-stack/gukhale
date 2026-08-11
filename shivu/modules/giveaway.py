@@ -21,16 +21,37 @@ def get_user_state(chat_id):
         }
     return LEADERBOARD_STATES[chat_id]
 
-def extract_gold(user_doc):
+def extract_gold(user_doc, letter_filter="all"):
     if not user_doc or not isinstance(user_doc, dict):
         return 0
-    for key in ['gold', 'golds', 'wordseek_points', 'score', 'points']:
+    
+    # Letter-wise points extraction logic
+    key_map = {
+        "4": ['gold_4', 'points_4', 'golds_4'],
+        "5": ['gold_5', 'points_5', 'golds_5'],
+        "6": ['gold_6', 'points_6', 'golds_6'],
+        "all": ['gold', 'golds', 'wordseek_points', 'score', 'points']
+    }
+    
+    keys_to_check = key_map.get(letter_filter, key_map["all"])
+    
+    for key in keys_to_check:
         val = user_doc.get(key)
         if val is not None:
             if isinstance(val, (int, float)):
                 return int(val)
             elif isinstance(val, str) and val.isdigit():
                 return int(val)
+                
+    # Fallback to general gold if specific letter field is missing
+    if letter_filter != "all":
+        for key in ['gold', 'golds', 'wordseek_points', 'score', 'points']:
+            val = user_doc.get(key)
+            if val is not None:
+                if isinstance(val, (int, float)):
+                    return int(val)
+                elif isinstance(val, str) and val.isdigit():
+                    return int(val)
     return 0
 
 async def send_or_edit(update, context, text, kb, edit):
@@ -69,7 +90,6 @@ def get_wordseek_keyboard(state):
     time_f = state["time"]
     letter_f = state["letters"]
 
-    # Active button indicators mimicking the screenshot style
     global_btn = "« Global »" if scope == "global" else "Global"
     chat_btn = "« This chat »" if scope == "chat" else "This chat"
     
@@ -79,14 +99,14 @@ def get_wordseek_keyboard(state):
     year_btn = "« This year »" if time_f == "year" else "This year"
     all_btn = "« All time »" if time_f == "all" else "All time"
 
-    l4_btn = "« 4 letters »" if letter_f == "4" else "4 letters"
-    l5_btn = "« 5 letters »" if letter_f == "5" else "5 letters"
-    l6_btn = "« 6 letters »" if letter_f == "6" else "6 letters"
+    l4_btn = "« 4 Let »" if letter_f == "4" else "4 letters"
+    l5_btn = "« 5 Let »" if letter_f == "5" else "5 letters"
+    l6_btn = "« 6 Let »" if letter_f == "6" else "6 letters"
 
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(global_btn, callback_data="ws_scope_global"),
-            InlineKeyboardButton("🔄", callback_data="ws_refresh"),
+            InlineKeyboardButton("⟳", callback_data="ws_refresh"),
             InlineKeyboardButton(chat_btn, callback_data="ws_scope_chat")
         ],
         [
@@ -109,19 +129,19 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
     chat_id = update.effective_chat.id
     state = get_user_state(chat_id)
 
-    # Fetch data based on scope/time/letters filters
     query_filter = {}
     
-    # If specific chat scope is selected, fetch users active in that group
     if state["scope"] == "chat":
         group_users = await group_user_totals_collection.distinct("user_id", {"group_id": chat_id})
         if group_users:
             query_filter["$or"] = [{"id": {"$in": group_users}}, {"user_id": {"$in": group_users}}, {"_id": {"$in": group_users}}]
         else:
-            query_filter["id"] = {"$in": []} # empty results
+            query_filter["id"] = {"$in": []}
 
     data = await user_collection.find(query_filter).to_list(None)
-    filtered_data = [u for u in data if extract_gold(u) > 0]
+    
+    # Filter users based on letter points > 0
+    filtered_data = [u for u in data if extract_gold(u, state["letters"]) > 0]
 
     if not filtered_data:
         header_title = "Global Leaderboard" if state["scope"] == "global" else "Group Leaderboard"
@@ -132,7 +152,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
-    sorted_data = sorted(filtered_data, key=lambda x: extract_gold(x), reverse=True)[:20]
+    sorted_data = sorted(filtered_data, key=lambda x: extract_gold(x, state["letters"]), reverse=True)[:20]
 
     rows = []
     for i, u in enumerate(sorted_data, 1):
@@ -143,9 +163,8 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
             pass
         name = u.get('first_name', 'Unknown')
         link = mention_html(uid, name)
-        gold_val = extract_gold(u)
+        gold_val = extract_gold(u, state["letters"])
         
-        # Numbers 1 to 20 format with 🪙 symbol instead of pts
         rows.append(f"<b>{i}. {link} - 🪙 {gold_val:,}</b>")
 
     rows_text = "\n".join(rows)
