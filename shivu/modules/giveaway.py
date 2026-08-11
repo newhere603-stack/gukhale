@@ -25,15 +25,16 @@ def extract_gold(user_doc, letter_filter="all"):
     if not user_doc or not isinstance(user_doc, dict):
         return 0
     
-    # Letter-wise points extraction logic
-    key_map = {
-        "4": ['gold_4', 'points_4', 'golds_4'],
-        "5": ['gold_5', 'points_5', 'golds_5'],
-        "6": ['gold_6', 'points_6', 'golds_6'],
-        "all": ['gold', 'golds', 'wordseek_points', 'score', 'points']
-    }
-    
-    keys_to_check = key_map.get(letter_filter, key_map["all"])
+    # Strict letter-wise points extraction (No unwanted fallback to other letters)
+    if letter_filter == "4":
+        keys_to_check = ['gold_4', 'points_4', 'golds_4']
+    elif letter_filter == "5":
+        keys_to_check = ['gold_5', 'points_5', 'golds_5']
+    elif letter_filter == "6":
+        keys_to_check = ['gold_6', 'points_6', 'golds_6']
+    else:
+        # 'all' ke liye total ya general gold check hoga
+        keys_to_check = ['gold', 'golds', 'wordseek_points', 'score', 'points']
     
     for key in keys_to_check:
         val = user_doc.get(key)
@@ -43,15 +44,6 @@ def extract_gold(user_doc, letter_filter="all"):
             elif isinstance(val, str) and val.isdigit():
                 return int(val)
                 
-    # Fallback to general gold if specific letter field is missing
-    if letter_filter != "all":
-        for key in ['gold', 'golds', 'wordseek_points', 'score', 'points']:
-            val = user_doc.get(key)
-            if val is not None:
-                if isinstance(val, (int, float)):
-                    return int(val)
-                elif isinstance(val, str) and val.isdigit():
-                    return int(val)
     return 0
 
 async def send_or_edit(update, context, text, kb, edit):
@@ -140,7 +132,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
 
     data = await user_collection.find(query_filter).to_list(None)
     
-    # Filter users based on letter points > 0
+    # Filter users based on strict letter points > 0
     filtered_data = [u for u in data if extract_gold(u, state["letters"]) > 0]
 
     if not filtered_data:
@@ -148,7 +140,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         text = (
             f"WordSeek\nAdmin\n\n"
             f"🏆 <b>{header_title}</b> 🏆\n\n"
-            f"<i>No data found for the selected filter!</i>"
+            f"<i>No data found for this letter mode!</i>"
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
@@ -165,13 +157,13 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         link = mention_html(uid, name)
         gold_val = extract_gold(u, state["letters"])
         
-        rows.append(f"<b>{i}. {link} - 🪙 {gold_val:,}</b>")
+        rows.append(f"<b>{i}. {link} - {gold_val:,} </b>")
 
     rows_text = "\n".join(rows)
     header_title = "Global Leaderboard" if state["scope"] == "global" else "Group Leaderboard"
     
     text = (
-        "WordSeek\n"
+        "<b>WordSeek</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
         f"🏆 <b>{header_title}</b> 🏆\n\n"
         f"{rows_text}"
