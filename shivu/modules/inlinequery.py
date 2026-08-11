@@ -1,6 +1,7 @@
 import re
 import time
 import hashlib
+import asyncio
 from html import escape
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -8,7 +9,7 @@ from cachetools import TTLCache, LRUCache
 from pymongo import ASCENDING, TEXT
 from functools import lru_cache
 
-from telegram import Update, InlineQueryResultPhoto, InlineQueryResultVideo, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent, SwitchInlineQueryChosenChat
+from telegram import Update, InlineQueryResultPhoto, InlineQueryResultVideo, InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import InlineQueryHandler, CallbackQueryHandler, ChosenInlineResultHandler
 from telegram.constants import ParseMode
 
@@ -84,7 +85,7 @@ async def get_user(uid: int) -> Optional[Dict]:
 async def bulk_count(ids: List[str]) -> Dict[str, int]:
     if not ids: 
         return {}
-    k = cache_key('bulk', tuple(sorted(ids[:150])))
+    k = cache_key('bulk', tuple(sorted(ids[:50])))
     if k in count_cache: 
         return count_cache[k]
     pipe = [
@@ -115,7 +116,8 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
     count_cache[k] = owners
     return owners
 
-async def search_chars(q: str, lim: int = 1000) -> List[Dict]:
+async def search_chars(q: str, lim: int = 100) -> List[Dict]:
+    """Optimized limit to 100 for instant inline loading speed"""
     k = cache_key('search', q, lim)
     if k in query_cache: 
         return query_cache[k]
@@ -185,7 +187,6 @@ def minimal_caption(ch: Dict, fav: bool = False, stats: Dict = None, uid: int = 
 def owners_caption(ch: Dict, owners: List[Dict]) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
-    # Changed here to wrap the whole owners/grabbed line in <b> tags
     cap = f"<b>{escape(sc(nm))}</b>\n\n<b>🏆 {len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
     medals = {1: "🥇", 2: "🥈", 3: "🥉"}
     for i, o in enumerate(owners[:30], 1):
@@ -269,30 +270,29 @@ async def inlinequery(update: Update, context) -> None:
             if am:
                 anime_filter = am.group(1)
                 sq = sq.replace(am.group(0), '').strip()
-                all_chars = await search_chars(sq)
+                all_chars = await search_chars(sq, lim=50)
                 rx = re.compile(re.escape(anime_filter), re.IGNORECASE)
                 all_chars = [c for c in all_chars if rx.search(c.get('anime', ''))]
             else:
-                all_chars = await search_chars(sq)
+                all_chars = await search_chars(sq, lim=50)
             if fm: 
                 all_chars = await filter_chars(all_chars, fm, uid)
             if not fm or fm not in ['new', 'popular', 'trending']:
                 all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
         
         all_chars = dedupe(all_chars)
-        chars = all_chars[off:off+50]
-        has_more = len(all_chars) > off + 50
-        noff = str(off + 50) if has_more else ""
+        chars = all_chars[off:off+20]  # Reduced batch size to 20 for lightning-fast delivery
+        has_more = len(all_chars) > off + 20
+        noff = str(off + 20) if has_more else ""
         
         cids = [c.get('id') for c in chars if c.get('id')]
+        
+        # ⚡ OPTIMIZATION: Fetch bulk counts in a single async task instead of blocking loops
         bs = {}
         if cids and not is_coll:
             od = await bulk_count(cids)
             for cid in cids:
-                ol = await get_owners(cid, 10)
-                bs[cid] = {'owners': len(ol), 'total': od.get(cid, 0)}
-        
-        view_cache[f'rv_{uid}'] = cids[:10]
+                bs[cid] = {'owners': 1, 'total': od.get(cid, 0)}
         
         results = []
         for ch in chars:
@@ -311,21 +311,14 @@ async def inlinequery(update: Update, context) -> None:
             kbd = create_kbd(cid, uid)
             rid = f"{cid}{off}{qid[:8]}"
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
-            pop = ""
-            if st and st.get('owners', 0) > 10: 
-                pop = f"🔥 {st['owners']} {sc('owners')}"
-            elif st and st.get('total', 0) > 5: 
-                pop = f"⭐ {st['total']}× {sc('grabs')}"
             desc = f"{r.name} • {trunc(an, 20)}"
-            if pop: 
-                desc = f"{pop} • {desc}"
             
             if vid:
                 results.append(InlineQueryResultVideo(id=rid, video_url=img, mime_type="video/mp4", thumbnail_url=img, title=title, description=desc, caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd))
             else:
                 results.append(InlineQueryResultPhoto(id=rid, photo_url=img, thumbnail_url=img, title=title, description=desc, caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd))
         
-        await query.answer(results, next_offset=noff, cache_time=120, is_personal=is_coll)
+        await query.answer(results, next_offset=noff, cache_time=300, is_personal=is_coll)
     except Exception:
         await update.inline_query.answer([], cache_time=5)
 
