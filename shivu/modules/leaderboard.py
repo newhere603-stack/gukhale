@@ -200,12 +200,15 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
 # ---------- Top by Golds (Word Seek Win Points) ----------
 
 async def top_gold(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.find({}).limit(50).to_list(50)
+    data = await user_collection.find({}).to_list(None)
 
-    if not data:
+    # Sirf unhi users ko filter karo jinke paas 0 se zyada gold/points hain
+    filtered_data = [u for u in data if extract_gold(u) > 0]
+
+    if not filtered_data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", back_close_buttons("lb_gold"), edit)
 
-    sorted_data = sorted(data, key=lambda x: extract_gold(x), reverse=True)[:10]
+    sorted_data = sorted(filtered_data, key=lambda x: extract_gold(x), reverse=True)[:10]
 
     rows = []
     for i, u in enumerate(sorted_data, 1):
@@ -405,7 +408,7 @@ async def stats(update: Update, context: CallbackContext, edit=False):
         f"<b>{sc('grabbers')}</b>: <b>{collectors:,}</b>\n"
         f"<b>{sc('groups')}</b>: <b>{groups:,}</b>\n"
         f"<b>{sc('total characters')}</b>: <b>{total_chars:,}</b>\n\n"
-        f"<i><b>{datetime.now().strftime('%H:%M:%S')}</b></i>"
+        f"<i><b>{datetime.now('%H:%M:%S')}</b></i>"
     )
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("⟳", callback_data="lb_stats")],
