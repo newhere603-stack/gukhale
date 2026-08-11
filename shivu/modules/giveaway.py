@@ -1,12 +1,25 @@
 import logging
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.helpers import mention_html
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from shivu import application, user_collection
+from shivu import application, user_collection, group_user_totals_collection
 
 LOGGER = logging.getLogger(__name__)
+
+# Temporary state tracking for filters (chat_id -> state dict)
+LEADERBOARD_STATES = {}
+
+def get_user_state(chat_id):
+    if chat_id not in LEADERBOARD_STATES:
+        LEADERBOARD_STATES[chat_id] = {
+            "scope": "global",  # global / chat
+            "time": "all",      # today / week / month / year / all
+            "letters": "all"    # 4 / 5 / 6 / all
+        }
+    return LEADERBOARD_STATES[chat_id]
 
 def extract_gold(user_doc):
     if not user_doc or not isinstance(user_doc, dict):
@@ -51,42 +64,74 @@ async def send_or_edit(update, context, text, kb, edit):
     else:
         await update.message.reply_photo(photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
 
-def get_wordseek_keyboard():
+def get_wordseek_keyboard(state):
+    scope = state["scope"]
+    time_f = state["time"]
+    letter_f = state["letters"]
+
+    # Active button indicators mimicking the screenshot style
+    global_btn = "« Global »" if scope == "global" else "Global"
+    chat_btn = "« This chat »" if scope == "chat" else "This chat"
+    
+    today_btn = "« Today »" if time_f == "today" else "Today"
+    week_btn = "« This week »" if time_f == "week" else "This week"
+    month_btn = "« This month »" if time_f == "month" else "This month"
+    year_btn = "« This year »" if time_f == "year" else "This year"
+    all_btn = "« All time »" if time_f == "all" else "All time"
+
+    l4_btn = "« 4 letters »" if letter_f == "4" else "4 letters"
+    l5_btn = "« 5 letters »" if letter_f == "5" else "5 letters"
+    l6_btn = "« 6 letters »" if letter_f == "6" else "6 letters"
+
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("Global", callback_data="ws_global"),
+            InlineKeyboardButton(global_btn, callback_data="ws_scope_global"),
             InlineKeyboardButton("🔄", callback_data="ws_refresh"),
-            InlineKeyboardButton("« This chat", callback_data="ws_chat")
+            InlineKeyboardButton(chat_btn, callback_data="ws_scope_chat")
         ],
         [
-            InlineKeyboardButton("Today", callback_data="ws_today"),
-            InlineKeyboardButton("This week", callback_data="ws_week"),
-            InlineKeyboardButton("« This month", callback_data="ws_month")
+            InlineKeyboardButton(today_btn, callback_data="ws_time_today"),
+            InlineKeyboardButton(week_btn, callback_data="ws_time_week"),
+            InlineKeyboardButton(month_btn, callback_data="ws_time_month")
         ],
         [
-            InlineKeyboardButton("This year", callback_data="ws_year"),
-            InlineKeyboardButton("All time", callback_data="ws_all")
+            InlineKeyboardButton(year_btn, callback_data="ws_time_year"),
+            InlineKeyboardButton(all_btn, callback_data="ws_time_all")
         ],
         [
-            InlineKeyboardButton("4 letters", callback_data="ws_4l"),
-            InlineKeyboardButton("« 5 letters »", callback_data="ws_5l"),
-            InlineKeyboardButton("6 letters", callback_data="ws_6l")
+            InlineKeyboardButton(l4_btn, callback_data="ws_let_4"),
+            InlineKeyboardButton(l5_btn, callback_data="ws_let_5"),
+            InlineKeyboardButton(l6_btn, callback_data="ws_let_6")
         ]
     ])
 
 async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.find({}).to_list(None)
+    chat_id = update.effective_chat.id
+    state = get_user_state(chat_id)
+
+    # Fetch data based on scope/time/letters filters
+    query_filter = {}
+    
+    # If specific chat scope is selected, fetch users active in that group
+    if state["scope"] == "chat":
+        group_users = await group_user_totals_collection.distinct("user_id", {"group_id": chat_id})
+        if group_users:
+            query_filter["$or"] = [{"id": {"$in": group_users}}, {"user_id": {"$in": group_users}}, {"_id": {"$in": group_users}}]
+        else:
+            query_filter["id"] = {"$in": []} # empty results
+
+    data = await user_collection.find(query_filter).to_list(None)
     filtered_data = [u for u in data if extract_gold(u) > 0]
 
     if not filtered_data:
+        header_title = "Global Leaderboard" if state["scope"] == "global" else "Group Leaderboard"
         text = (
-            "WordSeek\nAdmin\n\n"
-            "🏆 <b>Group Leaderboard</b> 🏆\n\n"
-            "<i>No data found yet! Play WordSeek to rank up.</i>"
+            f"WordSeek\nAdmin\n\n"
+            f"🏆 <b>{header_title}</b> 🏆\n\n"
+            f"<i>No data found for the selected filter!</i>"
         )
-        return await send_or_edit(update, context, text, get_wordseek_keyboard(), edit)
+        return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
-    # Top 20 users sort karke fetch karna
     sorted_data = sorted(filtered_data, key=lambda x: extract_gold(x), reverse=True)[:20]
 
     rows = []
@@ -100,25 +145,38 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         link = mention_html(uid, name)
         gold_val = extract_gold(u)
         
-        # Har ek entry ke liye line number (1 se 20 tak) aur 🪙 symbol ka format
+        # Numbers 1 to 20 format with 🪙 symbol instead of pts
         rows.append(f"<b>{i}. {link} - 🪙 {gold_val:,}</b>")
 
     rows_text = "\n".join(rows)
+    header_title = "Global Leaderboard" if state["scope"] == "global" else "Group Leaderboard"
+    
     text = (
         "WordSeek\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
-        "🏆 <b>Group Leaderboard</b> 🏆\n\n"
+        f"🏆 <b>{header_title}</b> 🏆\n\n"
         f"{rows_text}"
     )
     
-    await send_or_edit(update, context, text, get_wordseek_keyboard(), edit)
+    await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
 async def ws_callback_router(update: Update, context: CallbackContext):
     query = update.callback_query
     data = query.data
-    if data and data.startswith("ws_"):
-        await wordseek_leaderboard(update, context, edit=True)
+    chat_id = update.effective_chat.id
+    state = get_user_state(chat_id)
+
+    if data == "ws_scope_global":
+        state["scope"] = "global"
+    elif data == "ws_scope_chat":
+        state["scope"] = "chat"
+    elif data.startswith("ws_time_"):
+        state["time"] = data.replace("ws_time_", "")
+    elif data.startswith("ws_let_"):
+        state["letters"] = data.replace("ws_let_", "")
+
+    await wordseek_leaderboard(update, context, edit=True)
 
 # Handlers registration
-application.add_handler(CommandHandler(["wordseektop", "leaderboard"], wordseek_leaderboard, block=False))
+application.add_handler(CommandHandler(["wordseektop", "wstop", "leaderboard"], wordseek_leaderboard, block=False))
 application.add_handler(CallbackQueryHandler(ws_callback_router, pattern="^ws_"))
