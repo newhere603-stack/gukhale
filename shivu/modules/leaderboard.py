@@ -4,7 +4,7 @@ from html import escape
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.helpers import mention_html
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
-from telegram.error import BadRequest  # Naya import add kiya gaya hai
+from telegram.error import BadRequest
 
 from shivu import application, OWNER_ID, user_collection, top_global_groups_collection, group_user_totals_collection
 from shivu import sudo_users as SUDO_USERS
@@ -49,7 +49,7 @@ def extract_balance(user_doc):
     if not user_doc or not isinstance(user_doc, dict):
         return 0
     
-    for key in ['balance', 'coins', 'wallet', 'money', 'gold', 'bal']:
+    for key in ['balance', 'coins', 'wallet', 'money', 'gold_bal', 'bal']:
         val = user_doc.get(key)
         if val is not None:
             if isinstance(val, (int, float)):
@@ -69,6 +69,21 @@ def extract_tokens(user_doc):
     if not user_doc or not isinstance(user_doc, dict):
         return 0
     for key in ['tokens', 'token', 'gems']:
+        val = user_doc.get(key)
+        if val is not None:
+            if isinstance(val, (int, float)):
+                return int(val)
+            elif isinstance(val, str) and val.isdigit():
+                return int(val)
+    return 0
+
+
+def extract_gold(user_doc):
+    """Safely extracts Word Seek win golds/points for leaderboard"""
+    if not user_doc or not isinstance(user_doc, dict):
+        return 0
+    # Word seek points/golds keys handle karne ke liye (USER_POINTS ya database fields)
+    for key in ['gold', 'golds', 'wordseek_points', 'score', 'points']:
         val = user_doc.get(key)
         if val is not None:
             if isinstance(val, (int, float)):
@@ -118,11 +133,7 @@ async def send_or_edit(update, context, text, kb, edit):
             )
         except BadRequest as e:
             if "not modified" in str(e).lower():
-                # Agar leaderboard mein koi naya change nahi aaya hai, 
-                # toh Telegram error dega. Hume ise silently ignore karna hai taaki flicker na ho.
                 return
-            
-            # Fallback agar edit kisi aur wajah se fail hua
             try:
                 await q.message.delete()
             except Exception:
@@ -135,7 +146,6 @@ async def send_or_edit(update, context, text, kb, edit):
                 reply_markup=kb
             )
         except Exception:
-            # Generic fallback
             try:
                 await q.message.delete()
             except Exception:
@@ -164,13 +174,13 @@ def back_close_buttons(refresh_cb, extra_row=None):
     return InlineKeyboardMarkup(rows)
 
 
-# ---------- /tops menu ----------
+# ---------- /tops menu (Updated with Golds instead of Profile) ----------
 
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>𝗦𝗘𝗟𝗘𝗖𝗧 𝗧𝗛𝗘 𝗧𝗢𝗣 𝗟𝗜𝗦𝗧</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👤 ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"),
+            InlineKeyboardButton("🪙 ɢᴏʟᴅs", callback_data="lb_gold"),
             InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
         ],
         [
@@ -182,6 +192,32 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
         ],
     ])
     await send_or_edit(update, context, text, kb, edit)
+
+
+# ---------- Top by Golds (Word Seek Win Points) ----------
+
+async def top_gold(update: Update, context: CallbackContext, edit=False):
+    data = await user_collection.find({}).limit(50).to_list(50)
+
+    if not data:
+        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
+
+    sorted_data = sorted(data, key=lambda x: extract_gold(x), reverse=True)[:10]
+
+    rows = []
+    for i, u in enumerate(sorted_data, 1):
+        uid = u.get('id') or u.get('user_id') or u.get('_id', 0)
+        try:
+            uid = int(uid)
+        except (ValueError, TypeError):
+            pass
+        name = u.get('first_name', 'Unknown')
+        link = mention_html(uid, name)
+        gold_val = extract_gold(u)
+        rows.append(f"<b>{i}. {link} - <tg-emoji emoji-id=\"5431604990924108831\">🪙</tg-emoji> {gold_val:,}</b>")
+    
+    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗢𝗟𝗗 ʜᴏʟᴅᴇʀꜱ", rows)
+    await send_or_edit(update, context, text, back_close_buttons("lb_gold"), edit)
 
 
 # ---------- Top by balance ----------
@@ -275,7 +311,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
 
 
-# ---------- My Profile (Fixed & Upgraded) ----------
+# ---------- My Profile (Accessible via Command only) ----------
 
 async def my_profile(update: Update, context: CallbackContext, edit=False):
     user_id = update.effective_user.id
@@ -288,15 +324,14 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
             f"<b><tg-emoji emoji-id=\"5210952531676504517\">❌</tg-emoji> {sc('start me first!')}</b>\n"
             f"<b><tg-emoji emoji-id=\"5449885771420934013\">🌱</tg-emoji> {sc('start guessing characters in groups to build your profile.')}</b>"
         )
-        return await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
+        return await send_or_edit(update, context, text, None, edit)
 
-    # Characters & Stats
     characters = user.get('characters', [])
     char_count = len(characters)
     balance = extract_balance(user)
     tokens = extract_tokens(user)
+    gold = extract_gold(user)
 
-    # Calculate collection progress
     total_collectors = await user_collection.count_documents({
         "characters": {"$exists": True, "$type": "array"}
     })
@@ -305,7 +340,6 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     completion_pct = round((char_count / total_available_chars) * 100, 1)
     progress_bar = generate_progress_bar(char_count, total_available_chars)
 
-    # Calculate rank
     better_than = await user_collection.count_documents({
         "characters": {"$exists": True, "$type": "array"},
         "$expr": {"$gt": [{"$size": "$characters"}, char_count]}
@@ -327,6 +361,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji>\n"
         f"└ <b>{sc('progress')} :</b> [<code>{progress_bar}</code>] <b>{completion_pct}%</b>\n\n"
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> <b>{sc('vault & wallet')}</b>\n"
+        f"├ <b>{sc('golds')} :</b> <b><tg-emoji emoji-id=\"5431604990924108831\">🪙</tg-emoji> {gold:,}</b>\n"
         f"├ <b>{sc('balance')} :</b> <b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {balance:,}</b>\n"
         f"└ <b>{sc('tokens')} :</b> <b><tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {tokens:,}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -334,17 +369,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     )
 
     profile_kb = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🧧 ᴄᴛᴏᴘ", callback_data="lb_chars"),
-            InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")
-        ],
-        [
-            InlineKeyboardButton("⟳", callback_data="lb_profile"),
-            InlineKeyboardButton("⋞", callback_data="lb_menu")
-        ],
-        [
-            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")
-        ]
+        [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")]
     ])
 
     await send_or_edit(update, context, text, profile_kb, edit)
@@ -423,7 +448,7 @@ async def export_groups(update: Update, context: CallbackContext):
 
 CALLBACKS = {
     "lb_menu": tops_menu,
-    "lb_profile": my_profile,
+    "lb_gold": top_gold,
     "lb_tokens": top_tokens,
     "lb_bal": top_balance,
     "lb_chars": top_characters,
@@ -444,6 +469,7 @@ async def cb(update: Update, context: CallbackContext):
 # ---------- Handlers ----------
 
 application.add_handler(CommandHandler(['tops', 'top'], tops_menu, block=False))
+application.add_handler(CommandHandler('goldtop', top_gold, block=False))
 application.add_handler(CommandHandler('balancetop', top_balance, block=False))
 application.add_handler(CommandHandler('chartop', top_characters, block=False))
 application.add_handler(CommandHandler(['gtop', 'topgroups'], top_groups, block=False))
