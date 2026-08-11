@@ -151,7 +151,7 @@ WORDS_6 = [
     "PRIEST", "PRINCE", "PRISON", "PROFIT", "PROMPT", "PROPER", "PROVEN", "PUBLIC", "PULLEN",
     "PUNISH", "PUPILS", "PURITY", "PURPLE", "PURSUE", "PUZZLE", "QUOTES", "RABBIT", "RACISM",
     "RADIAL", "RADIUS", "RATHER", "RATING", "READER", "REALLY", "REASON", "REBEL", "RECALL",
-    "RECENT", "RECIPE", "RECORD", "REDUCE", "REFINE", "REFORM", "REFUGE", "REFUND", "REFUSE",
+    "RECENT", "RECIPE", "RECORD", "REDUCE", "REFINE", "REFORM", "REUGE", "REFUND", "REFUSE",
     "REGARD", "REGION", "REGRET", "REJECT", "RELATE", "RELIEF", "REMAIN", "REMIND", "REMOTE",
     "REMOVE", "REPAIR", "REPEAT", "REPLAY", "REPORT", "RESCUE", "RESIGN", "RESIST", "RESULT",
     "RETAIL", "RETAIN", "RETURN", "REVEAL", "REVIEW", "REWARD", "RHYTHM", "RIBBON", "RIDING",
@@ -180,26 +180,21 @@ WORDS_6 = [
     "YELLOW"
 ]
 
-# Active games storage: chat_id -> game_state dict
 ACTIVE_GAMES = {}
-# Temporary storage for points. Ise database se replace kar lijiyega.
 USER_POINTS = {}
 
 def get_wordle_hints(guess: str, target: str) -> str:
-    """Accurate Wordle hint algorithm handling duplicate letters correctly."""
     length = len(target)
     result = ["🟥"] * length
     target_chars = list(target)
     guess_chars = list(guess)
 
-    # First pass: Check for Greens (Correct position)
     for i in range(length):
         if guess_chars[i] == target_chars[i]:
             result[i] = "🟩"
             target_chars[i] = None
             guess_chars[i] = None
 
-    # Second pass: Check for Yellows (Wrong position)
     for i in range(length):
         if guess_chars[i] is not None:
             if guess_chars[i] in target_chars:
@@ -209,14 +204,12 @@ def get_wordle_hints(guess: str, target: str) -> str:
     return "".join(result)
 
 async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles /new, /new4, /new5, /new6 and /new [length] commands."""
     if not update.effective_chat or not update.message:
         return
 
     chat_id = update.effective_chat.id
     command = update.message.text.split()[0].lower()
     
-    # Determine word length based on command or arguments
     length = 5
     if "4" in command:
         length = 4
@@ -230,7 +223,6 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except ValueError:
             pass
 
-    # Select word list
     if length == 4:
         target = random.choice(WORDS_4)
     elif length == 6:
@@ -256,7 +248,6 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         LOGGER.error(f"Error starting wordseek game: {e}")
 
 async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ends the current active game using /end."""
     if not update.effective_chat:
         return
     chat_id = update.effective_chat.id
@@ -268,7 +259,6 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("<b>ℹ️ No active WordSeek game running in this chat.</b>", parse_mode="HTML")
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Shows the complete help menu."""
     help_text = (
         "<b>▸ How to Play WordSeek</b>\n\n"
         "<b>1. Start a game using /new, /new4, /new5, or /new6</b>\n"
@@ -292,7 +282,6 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, parse_mode="HTML")
 
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processes user chat messages as guesses for the active WordSeek game."""
     if not update.message or not update.message.text or not update.effective_chat:
         return
 
@@ -304,8 +293,8 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game = ACTIVE_GAMES[chat_id]
     length = game["length"]
 
-    # Validate word length and alphabetic chars
     if len(text) != length or not text.isalpha():
+        await update.message.reply_text(f"<b>{text} is not a valid {length}-letter word.</b>", parse_mode="HTML")
         return
 
     target = game["target"]
@@ -314,7 +303,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game["guesses"].append((feedback, text))
     attempt_num = len(game["guesses"])
 
-    # Build board layout according to screenshot
     board_lines = [f"<b>{length}-letter mode · {attempt_num}/{game['max_attempts']}</b>\n"]
     for fb, guess_word in game["guesses"]:
         board_lines.append(f"{fb} <b>{guess_word}</b>")
@@ -324,15 +312,9 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     won = (text == target)
     lost = (attempt_num >= game["max_attempts"] and not won)
 
+    old_message_id = game.get("message_id")
+
     try:
-        # Puraana board message delete karke naya bhejenge to chat clear rahegi
-        if game.get("message_id"):
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=game["message_id"])
-            except Exception:
-                pass
-        
-        # Agar user jeeta nahi aur attempts bache hain to board dikhao
         if not won and not lost:
             msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -341,13 +323,22 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             game["message_id"] = msg.message_id
             
+            if old_message_id:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
+                except Exception:
+                    pass
+            
         elif won:
-            # Points calculation (e.g., 30 - 4 + 1 = 27 points)
             points_earned = game["max_attempts"] - attempt_num + 1
             user_id = update.effective_user.id
-            
-            # Simulated point update (aap isko DB me save kara sakte hain)
             USER_POINTS[user_id] = USER_POINTS.get(user_id, 0) + points_earned
+            
+            if old_message_id:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
+                except Exception:
+                    pass
             
             del ACTIVE_GAMES[chat_id]
             
@@ -356,21 +347,34 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"<b>Correct Word: {target.lower()}</b>\n"
                 f"<b>Added {points_earned} to the leaderboard.</b>"
             )
-            await update.message.reply_text(win_msg, parse_mode="HTML")
+            await update.message.reply_text(
+                win_msg, 
+                parse_mode="HTML", 
+                reply_to_message_id=update.message.message_id
+            )
             
         elif lost:
+            if old_message_id:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
+                except Exception:
+                    pass
+                    
             del ACTIVE_GAMES[chat_id]
             
             lose_msg = (
                 f"<b>Game Over! 30 words guessed incorrectly.</b>\n"
                 f"<b>Correct Word: {target.lower()}</b>"
             )
-            await update.message.reply_text(lose_msg, parse_mode="HTML")
+            await update.message.reply_text(
+                lose_msg, 
+                parse_mode="HTML", 
+                reply_to_message_id=update.message.message_id
+            )
 
     except Exception as e:
         LOGGER.error(f"Error updating wordseek game board: {e}")
 
-# Register handlers to the main shivu application
 application.add_handler(CommandHandler(["new", "new4", "new5", "new6"], start_game_handler))
 application.add_handler(CommandHandler("end", end_game_handler))
 application.add_handler(CommandHandler("helpword", help_handler))
