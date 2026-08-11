@@ -116,8 +116,8 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
     count_cache[k] = owners
     return owners
 
-async def search_chars(q: str, lim: int = 100) -> List[Dict]:
-    """Optimized limit to 100 for instant inline loading speed"""
+async def search_chars(q: str, lim: int = 500) -> List[Dict]:
+    """Increased limit back to 500 so all characters load properly while maintaining cache speed"""
     k = cache_key('search', q, lim)
     if k in query_cache: 
         return query_cache[k]
@@ -256,7 +256,7 @@ async def inlinequery(update: Update, context) -> None:
                 fid = fav.get('id') if isinstance(fav, dict) else fav
                 fc = next((c for c in all_chars if c.get('id') == fid), None)
                 if fc:
-                    all_chars = [c for c in all_chars if c.get('id') != fid]
+                    all_chars = [c for c in all_chars if c.get('id'] != fid]
                     all_chars.insert(0, fc)
             if not fm or fm not in ['new', 'popular', 'trending']:
                 all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
@@ -270,24 +270,22 @@ async def inlinequery(update: Update, context) -> None:
             if am:
                 anime_filter = am.group(1)
                 sq = sq.replace(am.group(0), '').strip()
-                all_chars = await search_chars(sq, lim=50)
+                all_chars = await search_chars(sq, lim=500)
                 rx = re.compile(re.escape(anime_filter), re.IGNORECASE)
                 all_chars = [c for c in all_chars if rx.search(c.get('anime', ''))]
             else:
-                all_chars = await search_chars(sq, lim=50)
+                all_chars = await search_chars(sq, lim=500)
             if fm: 
                 all_chars = await filter_chars(all_chars, fm, uid)
             if not fm or fm not in ['new', 'popular', 'trending']:
                 all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
         
         all_chars = dedupe(all_chars)
-        chars = all_chars[off:off+20]  # Reduced batch size to 20 for lightning-fast delivery
-        has_more = len(all_chars) > off + 20
-        noff = str(off + 20) if has_more else ""
+        chars = all_chars[off:off+25]  # Batch size 25 for smooth scrolling and complete loading
+        has_more = len(all_chars) > off + 25
+        noff = str(off + 25) if has_more else ""
         
         cids = [c.get('id') for c in chars if c.get('id')]
-        
-        # ⚡ OPTIMIZATION: Fetch bulk counts in a single async task instead of blocking loops
         bs = {}
         if cids and not is_coll:
             od = await bulk_count(cids)
