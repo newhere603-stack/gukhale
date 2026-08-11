@@ -4,6 +4,7 @@ from html import escape
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.helpers import mention_html
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
+from telegram.error import BadRequest  # Naya import add kiya gaya hai
 
 from shivu import application, OWNER_ID, user_collection, top_global_groups_collection, group_user_totals_collection
 from shivu import sudo_users as SUDO_USERS
@@ -104,6 +105,7 @@ def format_custom_header(heading: str, rows):
     return header + "\n".join(rows)
 
 
+# ---------- Updated send_or_edit function ----------
 async def send_or_edit(update, context, text, kb, edit):
     photo_url = "https://files.catbox.moe/ewtw4l.png"
     if edit:
@@ -114,8 +116,26 @@ async def send_or_edit(update, context, text, kb, edit):
                 media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
                 reply_markup=kb
             )
+        except BadRequest as e:
+            if "not modified" in str(e).lower():
+                # Agar leaderboard mein koi naya change nahi aaya hai, 
+                # toh Telegram error dega. Hume ise silently ignore karna hai taaki flicker na ho.
+                return
+            
+            # Fallback agar edit kisi aur wajah se fail hua
+            try:
+                await q.message.delete()
+            except Exception:
+                pass
+            await context.bot.send_photo(
+                chat_id=update.effective_chat.id,
+                photo=photo_url,
+                caption=text,
+                parse_mode='HTML',
+                reply_markup=kb
+            )
         except Exception:
-            # Fallback agar message pehle normal text tha jise media mein edit nahi kiya ja sakta
+            # Generic fallback
             try:
                 await q.message.delete()
             except Exception:
