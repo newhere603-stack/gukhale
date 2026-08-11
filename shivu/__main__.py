@@ -27,7 +27,7 @@ rarity_status_collection = db['rarity_status_settings']
 group_settings_collection = db['group_settings_db']
 
 MESSAGE_FREQUENCY = 70
-DESPAWN_TIME = 180  # 3 minutes (180 seconds)
+DESPAWN_TIME = 240  # (240 seconds)
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
 RARITIES = {
@@ -202,7 +202,7 @@ async def despawn_character(chat_id, message_id, character, context):
             r_name = escape(rarity_str)
 
         caption = (
-            f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜ𝙥! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
+            f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
             f"{r_display_emoji}<b> ʀᴀʀɪᴛʏ: {r_name}</b>\n"
             f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n\n"
