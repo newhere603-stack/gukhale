@@ -1,13 +1,15 @@
 #siya method v3 - Custom Symbols + Small Caps Font
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
-from telegram.error import TelegramError
+import asyncio
+import random
+import math
 from html import escape
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
-import random
-import math
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
+from telegram.error import TelegramError
 from shivu import db, application, LOGGER
 
 # --- SMALL CAPS CONVERTER HELPERS ---
@@ -244,40 +246,17 @@ class HaremHandler:
         self.user_db = db['user_collection_lmaoooo']
 
     async def load_user_collection(self, user_id: int) -> Optional[UserCollection]:
+        """Loads basic collection from user DB extremely fast."""
         user = await self.user_db.find_one({'id': user_id})
         if not user:
             return None
 
-        characters = [c for c in (Character.from_dict(c) for c in user.get('characters', [])) if c]
-        
-        if characters:
-            unique_ids = list({c.id for c in characters})
-            live_cursor = self.collection_db.find({"id": {"$in": unique_ids}})
-            live_docs = await live_cursor.to_list(length=None)
-            live_map = {str(doc.get('id')): doc for doc in live_docs}
-            
-            for c in characters:
-                if c.id in live_map:
-                    doc = live_map[c.id]
-                    c.name = doc.get('name', c.name)
-                    c.anime = doc.get('anime', c.anime)
-                    c.rarity = doc.get('rarity', c.rarity) 
-                    if doc.get('img_url'):
-                        c.img_url = doc.get('img_url')
-                    c.is_video = doc.get('is_video', c.is_video)
-
+        characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
         favorite = Character.from_dict(user.get('favorites')) if user.get('favorites') else None
-        if favorite and favorite.id in live_map:
-            doc = live_map[favorite.id]
-            favorite.name = doc.get('name', favorite.name)
-            favorite.anime = doc.get('anime', favorite.anime)
-            favorite.rarity = doc.get('rarity', favorite.rarity)
-            if doc.get('img_url'):
-                favorite.img_url = doc.get('img_url')
-            favorite.is_video = doc.get('is_video', favorite.is_video)
 
+        # Clean up fav asynchronously if no longer owned
         if favorite and not any(c.id == favorite.id for c in characters):
-            await self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}})
+            asyncio.create_task(self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}}))
             favorite = None
 
         return UserCollection(
@@ -285,8 +264,42 @@ class HaremHandler:
             filter_mode=user.get('smode', 'default')
         )
 
+    async def update_live_data(self, characters: List[Character]):
+        """Only fetch and update data for the characters currently visible on the page."""
+        if not characters:
+            return
+        unique_ids = list({c.id for c in characters})
+        live_cursor = self.collection_db.find({"id": {"$in": unique_ids}})
+        live_docs = await live_cursor.to_list(length=None)
+        live_map = {str(doc.get('id')): doc for doc in live_docs}
+        
+        for c in characters:
+            if c.id in live_map:
+                doc = live_map[c.id]
+                c.name = doc.get('name', c.name)
+                c.anime = doc.get('anime', c.anime)
+                c.rarity = doc.get('rarity', c.rarity) 
+                if doc.get('img_url'):
+                    c.img_url = doc.get('img_url')
+                c.is_video = doc.get('is_video', c.is_video)
+
     async def get_anime_counts(self, anime_list: List[str]) -> Dict[str, int]:
-        return {anime: await self.collection_db.count_documents({"anime": anime}) for anime in anime_list}
+        """Superfast single database aggregation instead of looping."""
+        if not anime_list:
+            return {}
+        
+        pipeline = [
+            {"$match": {"anime": {"$in": anime_list}}},
+            {"$group": {"_id": "$anime", "count": {"$sum": 1}}}
+        ]
+        
+        counts = {}
+        cursor = self.collection_db.aggregate(pipeline)
+        docs = await cursor.to_list(length=None)
+        
+        for doc in docs:
+            counts[doc['_id']] = doc['count']
+        return counts
 
     def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int) -> InlineKeyboardMarkup:
         keyboard = [[InlineKeyboardButton(
@@ -330,21 +343,28 @@ class HaremHandler:
 
         display_order = filtered if collection.filter_mode in ("latest",) else sorted(filtered, key=lambda c: (c.anime, c.id))
         total_pages = math.ceil(len(display_order) / self.CHARACTERS_PER_PAGE)
-        page = page if 0 <= page < total_pages else 0
+        page = max(0, min(page, total_pages - 1))
 
         start = page * self.CHARACTERS_PER_PAGE
         current = display_order[start:start + self.CHARACTERS_PER_PAGE]
 
+        # ⚡ OPTIMIZATION: Update only required characters from live database
+        chars_to_update = list(current)
+        display_char = collection.favorite if collection.favorite else (random.choice(filtered) if filtered else None)
+        if display_char:
+            chars_to_update.append(display_char)
+            
+        await self.update_live_data(chars_to_update)
+
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
 
+        # ⚡ OPTIMIZATION: Fast aggregated anime counts
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
+        
         builder = HaremMessageBuilder(collection, page, total_pages, style, options, user_name, user_id)
         text = builder.build_message(current, anime_counts)
         markup = self._build_keyboard(page, total_pages, len(display_order), user_id)
 
-        display_char = collection.favorite if collection.favorite and collection.favorite.img_url else (
-            random.choice(filtered) if filtered else None
-        )
         media_url = display_char.img_url if display_char else None
         is_video = display_char.is_video if display_char else False
 
