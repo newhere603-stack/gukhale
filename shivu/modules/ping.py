@@ -157,6 +157,7 @@ WORDS_6 = [
 
 ACTIVE_GAMES = {}
 USER_POINTS = {}
+# Default delete setting is False (old boards will NOT be deleted unless toggled on)
 DELETE_SETTINGS = {}
 
 REACTION_EMOJIS = ["🔥", "👍", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "🚀", "💯", "🔥", "✨", "👑", "🎯"]
@@ -185,7 +186,7 @@ async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if not update.effective_chat:
         return
     chat_id = update.effective_chat.id
-    current_status = DELETE_SETTINGS.get(chat_id, True)
+    current_status = DELETE_SETTINGS.get(chat_id, False) # Default is False
     NEW_STATUS = not current_status
     DELETE_SETTINGS[chat_id] = NEW_STATUS
     status_text = "ENABLED 🗑️ (Old boards will be deleted)" if NEW_STATUS else "DISABLED 🛡️ (Old boards will be kept)"
@@ -197,7 +198,6 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     chat_id = update.effective_chat.id
 
-    # Check if a game is already active in this chat
     if chat_id in ACTIVE_GAMES:
         await update.message.reply_text(
             "<b>There is already a game in progress in this chat. Use /end to end the current game.</b>",
@@ -292,7 +292,10 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game = ACTIVE_GAMES[chat_id]
     length = game["length"]
 
-    if len(text) != length or not text.isalpha():
+    # Check if the guessed word is valid length and exists in the corresponding master word list
+    valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
+    
+    if len(text) != length or not text.isalpha() or text not in valid_list:
         await update.message.reply_text(
             f"<b>{text.lower()} is not a valid {length}-letter word.</b>", 
             parse_mode="HTML",
@@ -316,7 +319,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lost = (attempt_num >= game["max_attempts"] and not won)
 
     old_message_id = game.get("message_id")
-    should_delete = DELETE_SETTINGS.get(chat_id, True)
+    should_delete = DELETE_SETTINGS.get(chat_id, False) # Default is False
 
     try:
         if not won and not lost:
@@ -390,7 +393,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         LOGGER.error(f"Error updating wordseek game board: {e}")
 
-# Registering to shivu app
+# Registering handlers
 application.add_handler(CommandHandler(["new", "new4", "new5", "new6"], start_game_handler))
 application.add_handler(CommandHandler("toggledelete", toggle_delete_handler))
 application.add_handler(CommandHandler("end", end_game_handler))
