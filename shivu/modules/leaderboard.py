@@ -82,7 +82,6 @@ def extract_gold(user_doc):
     """Safely extracts Word Seek win golds/points for leaderboard"""
     if not user_doc or not isinstance(user_doc, dict):
         return 0
-    # Word seek points/golds keys handle karne ke liye (USER_POINTS ya database fields)
     for key in ['gold', 'golds', 'wordseek_points', 'score', 'points']:
         val = user_doc.get(key)
         if val is not None:
@@ -125,7 +124,11 @@ async def send_or_edit(update, context, text, kb, edit):
     photo_url = "https://files.catbox.moe/ewtw4l.png"
     if edit:
         q = update.callback_query
-        await q.answer()
+        try:
+            await q.answer()
+        except Exception:
+            pass
+
         try:
             await q.edit_message_media(
                 media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
@@ -174,13 +177,13 @@ def back_close_buttons(refresh_cb, extra_row=None):
     return InlineKeyboardMarkup(rows)
 
 
-# ---------- /tops menu (Updated with Golds instead of Profile) ----------
+# ---------- /tops menu ----------
 
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>𝗦𝗘𝗟𝗘𝗖𝗧 𝗧𝗛𝗘 𝗧𝗢𝗣 𝗟𝗜𝗦𝗧</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("🪙 ɢᴏʟᴅs", callback_data="lb_gold"),
+            InlineKeyboardButton("🌕 ɢᴏʟᴅs", callback_data="lb_gold"),
             InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")
         ],
         [
@@ -200,7 +203,7 @@ async def top_gold(update: Update, context: CallbackContext, edit=False):
     data = await user_collection.find({}).limit(50).to_list(50)
 
     if not data:
-        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
+        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", back_close_buttons("lb_gold"), edit)
 
     sorted_data = sorted(data, key=lambda x: extract_gold(x), reverse=True)[:10]
 
@@ -214,9 +217,9 @@ async def top_gold(update: Update, context: CallbackContext, edit=False):
         name = u.get('first_name', 'Unknown')
         link = mention_html(uid, name)
         gold_val = extract_gold(u)
-        rows.append(f"<b>{i}. {link} - <tg-emoji emoji-id=\"5431604990924108831\">🪙</tg-emoji> {gold_val:,}</b>")
+        rows.append(f"<b>{i}. {link} - <tg-emoji emoji-id=\"6332287240470798249\">🪙</tg-emoji> {gold_val:,}</b>")
     
-    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗢𝗟𝗗 ʜᴏʟᴅᴇʀꜱ", rows)
+    text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗢𝗟𝗗 𝗛𝗢𝗟𝗗𝗘𝗥𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gold"), edit)
 
 
@@ -226,7 +229,7 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
     data = await user_collection.find({}).limit(50).to_list(50)
 
     if not data:
-        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
+        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", back_close_buttons("lb_bal"), edit)
 
     sorted_data = sorted(data, key=lambda x: extract_balance(x), reverse=True)[:10]
 
@@ -250,7 +253,7 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
     data = await user_collection.find({}).limit(50).to_list(50)
 
     if not data:
-        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
+        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", back_close_buttons("lb_tokens"), edit)
 
     sorted_data = sorted(data, key=lambda x: extract_tokens(x), reverse=True)[:10]
 
@@ -280,7 +283,7 @@ async def top_characters(update: Update, context: CallbackContext, edit=False):
     ]).to_list(10)
 
     if not data:
-        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
+        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", back_close_buttons("lb_chars"), edit)
 
     rows = []
     for i, u in enumerate(data, 1):
@@ -303,7 +306,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     data = await top_global_groups_collection.find({}).sort('count', -1).limit(10).to_list(10)
 
     if not data:
-        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
+        return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", back_close_buttons("lb_gtop"), edit)
 
     rows = [f"<b>{i}. {escape(g.get('group_name', 'Unknown'))} - {g.get('count', 0):,} <tg-emoji emoji-id=\"5453957997418004470\">👥</tg-emoji></b>"
             for i, g in enumerate(data, 1)]
@@ -458,9 +461,14 @@ CALLBACKS = {
 
 
 async def cb(update: Update, context: CallbackContext):
-    data = update.callback_query.data
+    query = update.callback_query
+    data = query.data
     if data == "lb_close":
-        return await update.callback_query.message.delete()
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        return
     handler = CALLBACKS.get(data)
     if handler:
         await handler(update, context, edit=True)
