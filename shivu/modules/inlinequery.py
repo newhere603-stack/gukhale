@@ -1,7 +1,7 @@
 import re
 import time
 import hashlib
-import asyncio
+import logging
 from html import escape
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -13,7 +13,9 @@ from telegram import Update, InlineQueryResultPhoto, InlineQueryResultVideo, Inl
 from telegram.ext import InlineQueryHandler, CallbackQueryHandler, ChosenInlineResultHandler
 from telegram.constants import ParseMode
 
-from shivu import application, db, LOGGER
+from shivu import application, db
+
+LOGGER = logging.getLogger(__name__)
 
 collection = db['anime_characters_lol']
 user_collection = db['user_collection_lmaoooo']
@@ -101,7 +103,6 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
         return []
 
 async def search_chars(q: str, lim: int = 200) -> List[Dict]:
-    """Lightning fast optimized regex search"""
     k = cache_key('search', q, lim)
     if k in query_cache: 
         return query_cache[k]
@@ -235,7 +236,7 @@ async def inlinequery(update: Update, context) -> None:
             fav = usr.get('favorites')
             if fav and not sq and not fm:
                 fid = fav.get('id') if isinstance(fav, dict) else fav
-                fc = next((c for c in all_chars if c.get('id'] == fid), None)
+                fc = next((c for c in all_chars if c.get('id') == fid), None)  # FIXED BRACKET TYPO HERE
                 if fc:
                     all_chars = [c for c in all_chars if c.get('id') != fid]
                     all_chars.insert(0, fc)
