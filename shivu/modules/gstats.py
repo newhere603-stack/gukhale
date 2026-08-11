@@ -32,7 +32,7 @@ def sc(text: str) -> str:
 
 # --- AUTHENTICATION HELPER ---
 def is_authorized(user_id: int) -> bool:
-    # Yaha par aapka Owner ID (7657218453) add kar diya gaya hai
+    # Yaha par aapka Owner ID (7657218453) add hai
     if user_id in [OWNER_ID, 7657218453]:
         return True
     if hasattr(sudo_users, '__contains__') and user_id in sudo_users:
@@ -49,11 +49,9 @@ async def gstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(user_id):
         return
     
-    # Send a quick processing message for instant feedback
     processing_msg = await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> {sc('fetching statistics...')}</b>", parse_mode=ParseMode.HTML)
     
     try:
-        # ⚡ OPTIMIZATION: Fetch all document counts concurrently (in parallel)
         tasks = [
             user_collection.count_documents({}),
             top_global_groups_collection.count_documents({}),
@@ -64,7 +62,6 @@ async def gstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Handle potential errors from gather safely
         total_users = results[0] if isinstance(results[0], int) else 0
         total_chats = results[1] if isinstance(results[1], int) else 0
         banned_users_count = results[2] if isinstance(results[2], int) else 0
@@ -96,7 +93,7 @@ async def check_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Check database connectivity and collections - OPTIMIZED"""
     user_id = update.effective_user.id
     
-    # Agar user owner/sudo nahi hai, toh bina kuch reply kiye return (Silent Ignore)
+    # Silent Ignore
     if not is_authorized(user_id):
         return
     
@@ -111,7 +108,6 @@ async def check_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ("PM Users", pm_users)
         ]
         
-        # ⚡ OPTIMIZATION: Check all collections concurrently
         async def fetch_col_data(name, col):
             try:
                 count = await col.count_documents({})
@@ -166,6 +162,12 @@ async def check_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def test_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Test command for everyone - Premium Style"""
+    user_id = update.effective_user.id
+    
+    # Silent Ignore
+    if not is_authorized(user_id):
+        return
+
     try:
         count = await user_collection.count_documents({})
         
@@ -189,6 +191,12 @@ async def test_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Check if bot is responsive - Premium Style"""
+    user_id = update.effective_user.id
+    
+    # Silent Ignore added for ping as well
+    if not is_authorized(user_id):
+        return
+
     start_time = time.time()
     message = await update.message.reply_text(f"<b>🏓 {sc('pong...')}</b>", parse_mode=ParseMode.HTML)
     end_time = time.time()
@@ -204,8 +212,9 @@ async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # --- HANDLERS REGISTRATION ---
-application.add_handler(CommandHandler("gstats", gstats, filters=filters.ALL))
-application.add_handler(CommandHandler("checkdb", check_db, filters=filters.ALL))
-application.add_handler(CommandHandler("testdb", test_db, filters=filters.ALL))
-application.add_handler(CommandHandler("dbinfo", check_db, filters=filters.ALL))
-application.add_handler(CommandHandler("ping", ping, filters=filters.ALL))
+# Added group=2 to handlers so they take priority if the old file still exists
+application.add_handler(CommandHandler("gstats", gstats, filters=filters.ALL), group=2)
+application.add_handler(CommandHandler("checkdb", check_db, filters=filters.ALL), group=2)
+application.add_handler(CommandHandler("testdb", test_db, filters=filters.ALL), group=2)
+application.add_handler(CommandHandler("dbinfo", check_db, filters=filters.ALL), group=2)
+application.add_handler(CommandHandler("ping", ping, filters=filters.ALL), group=2)
