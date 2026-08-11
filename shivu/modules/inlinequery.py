@@ -13,7 +13,7 @@ from telegram import Update, InlineQueryResultPhoto, InlineQueryResultVideo, Inl
 from telegram.ext import InlineQueryHandler, CallbackQueryHandler, ChosenInlineResultHandler
 from telegram.constants import ParseMode
 
-from shivu import application, db
+from shivu import application, db, LOGGER
 
 collection = db['anime_characters_lol']
 user_collection = db['user_collection_lmaoooo']
@@ -35,7 +35,6 @@ RARITY_MAP = {
 try:
     collection.create_index([('id', ASCENDING)], unique=True, background=True)
     collection.create_index([('rarity', ASCENDING), ('anime', ASCENDING)], background=True)
-    collection.create_index([('name', TEXT), ('anime', TEXT)], background=True)
     user_collection.create_index([('id', ASCENDING)], unique=True, background=True)
     user_collection.create_index([('characters.id', ASCENDING)], background=True, sparse=True)
 except Exception: 
@@ -82,54 +81,41 @@ async def get_user(uid: int) -> Optional[Dict]:
         user_cache[k] = u
     return u
 
-async def bulk_count(ids: List[str]) -> Dict[str, int]:
-    if not ids: 
-        return {}
-    k = cache_key('bulk', tuple(sorted(ids[:50])))
-    if k in count_cache: 
-        return count_cache[k]
-    pipe = [
-        {'$match': {'characters.id': {'$in': ids}}},
-        {'$project': {'characters.id': 1}},
-        {'$unwind': '$characters'},
-        {'$match': {'characters.id': {'$in': ids}}},
-        {'$group': {'_id': '$characters.id', 'count': {'$sum': 1}}}
-    ]
-    results = await user_collection.aggregate(pipe).to_list(length=None)
-    counts = {r['_id']: r['count'] for r in results}
-    count_cache[k] = counts
-    return counts
-
 async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
     k = f"o{cid}{lim}"
     if k in count_cache: 
         return count_cache[k]
-    pipe = [
-        {'$match': {'characters.id': cid}},
-        {'$project': {'id': 1, 'first_name': 1, 'username': 1, 'characters': {'$filter': {'input': '$characters', 'as': 'c', 'cond': {'$eq': ['$$c.id', cid]}}}}},
-        {'$addFields': {'count': {'$size': '$characters'}}},
-        {'$sort': {'count': -1}},
-        {'$limit': lim},
-        {'$project': {'characters': 0}}
-    ]
-    owners = await user_collection.aggregate(pipe).to_list(length=lim)
-    count_cache[k] = owners
-    return owners
+    try:
+        pipe = [
+            {'$match': {'characters.id': cid}},
+            {'$project': {'id': 1, 'first_name': 1, 'username': 1, 'characters': {'$filter': {'input': '$characters', 'as': 'c', 'cond': {'$eq': ['$$c.id', cid]}}}}},
+            {'$addFields': {'count': {'$size': '$characters'}}},
+            {'$sort': {'count': -1}},
+            {'$limit': lim},
+            {'$project': {'characters': 0}}
+        ]
+        owners = await user_collection.aggregate(pipe).to_list(length=lim)
+        count_cache[k] = owners
+        return owners
+    except Exception:
+        return []
 
-async def search_chars(q: str, lim: int = 500) -> List[Dict]:
-    """Increased limit back to 500 so all characters load properly while maintaining cache speed"""
+async def search_chars(q: str, lim: int = 200) -> List[Dict]:
+    """Lightning fast optimized regex search"""
     k = cache_key('search', q, lim)
     if k in query_cache: 
         return query_cache[k]
-    if q:
-        chars = await collection.find({'$text': {'$search': q}}, {'_id': 0, 'score': {'$meta': 'textScore'}}).sort([('score', {'$meta': 'textScore'})]).limit(lim).to_list(length=lim)
-        if not chars:
-            rx = re.compile(f'^{re.escape(q)}', re.IGNORECASE)
+    try:
+        if q:
+            rx = re.compile(re.escape(q), re.IGNORECASE)
             chars = await collection.find({'$or': [{'name': rx}, {'anime': rx}, {'id': q}]}, {'_id': 0}).limit(lim).to_list(length=lim)
-    else:
-        chars = await collection.find({}, {'_id': 0}).limit(lim).to_list(length=lim)
-    query_cache[k] = chars
-    return chars
+        else:
+            chars = await collection.find({}, {'_id': 0}).limit(lim).to_list(length=lim)
+        query_cache[k] = chars
+        return chars
+    except Exception as e:
+        LOGGER.error(f"Search error: {e}")
+        return []
 
 async def filter_chars(chars: List[Dict], mode: str, uid: int = None) -> List[Dict]:
     if mode == 'rare': 
@@ -138,11 +124,6 @@ async def filter_chars(chars: List[Dict], mode: str, uid: int = None) -> List[Di
         return [c for c in chars if c.get('is_video', False)]
     elif mode == 'new': 
         return sorted(chars, key=lambda x: str(x.get('_id', '')), reverse=True)
-    elif mode == 'popular':
-        ids = [c.get('id') for c in chars if c.get('id')]
-        if ids:
-            counts = await bulk_count(ids)
-            return sorted(chars, key=lambda x: counts.get(x.get('id'), 0), reverse=True)
     elif mode == 'trending':
         ids = [c.get('id') for c in chars if c.get('id')]
         if ids:
@@ -172,7 +153,7 @@ def dedupe(chars: List[Dict]) -> List[Dict]:
             result.append(c)
     return result
 
-def minimal_caption(ch: Dict, fav: bool = False, stats: Dict = None, uid: int = None) -> str:
+def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
     cid, nm, an = ch.get('id', '??'), ch.get('name', 'Unknown'), ch.get('anime', 'Unknown')
     r = parse_rar(ch.get('rarity', ''))
     
@@ -231,7 +212,7 @@ async def inlinequery(update: Update, context) -> None:
             parts = q.split(' ', 1)
             tid = parts[0].split('.')[1]
             sq = parts[1].strip() if len(parts) > 1 else ''
-            for m in ['rare', 'video', 'new', 'popular', 'trending', 'owned', 'notowned', 'wishlist']:
+            for m in ['rare', 'video', 'new', 'trending', 'owned', 'notowned', 'wishlist']:
                 if sq.startswith(f'-{m}'):
                     fm = m
                     sq = sq.replace(f'-{m}', '').strip()
@@ -254,14 +235,14 @@ async def inlinequery(update: Update, context) -> None:
             fav = usr.get('favorites')
             if fav and not sq and not fm:
                 fid = fav.get('id') if isinstance(fav, dict) else fav
-                fc = next((c for c in all_chars if c.get('id') == fid), None)
+                fc = next((c for c in all_chars if c.get('id'] == fid), None)
                 if fc:
-                    all_chars = [c for c in all_chars if c.get('id'] != fid]
+                    all_chars = [c for c in all_chars if c.get('id') != fid]
                     all_chars.insert(0, fc)
-            if not fm or fm not in ['new', 'popular', 'trending']:
+            if not fm or fm not in ['new', 'trending']:
                 all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
         else:
-            for m in ['rare', 'video', 'new', 'popular', 'trending', 'owned', 'notowned', 'wishlist']:
+            for m in ['rare', 'video', 'new', 'trending', 'owned', 'notowned', 'wishlist']:
                 if sq.startswith(f'-{m}'):
                     fm = m
                     sq = sq.replace(f'-{m}', '').strip()
@@ -270,27 +251,20 @@ async def inlinequery(update: Update, context) -> None:
             if am:
                 anime_filter = am.group(1)
                 sq = sq.replace(am.group(0), '').strip()
-                all_chars = await search_chars(sq, lim=500)
+                all_chars = await search_chars(sq, lim=200)
                 rx = re.compile(re.escape(anime_filter), re.IGNORECASE)
                 all_chars = [c for c in all_chars if rx.search(c.get('anime', ''))]
             else:
-                all_chars = await search_chars(sq, lim=500)
+                all_chars = await search_chars(sq, lim=200)
             if fm: 
                 all_chars = await filter_chars(all_chars, fm, uid)
-            if not fm or fm not in ['new', 'popular', 'trending']:
+            if not fm or fm not in ['new', 'trending']:
                 all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
         
         all_chars = dedupe(all_chars)
-        chars = all_chars[off:off+25]  # Batch size 25 for smooth scrolling and complete loading
+        chars = all_chars[off:off+25]
         has_more = len(all_chars) > off + 25
         noff = str(off + 25) if has_more else ""
-        
-        cids = [c.get('id') for c in chars if c.get('id')]
-        bs = {}
-        if cids and not is_coll:
-            od = await bulk_count(cids)
-            for cid in cids:
-                bs[cid] = {'owners': 1, 'total': od.get(cid, 0)}
         
         results = []
         for ch in chars:
@@ -304,8 +278,8 @@ async def inlinequery(update: Update, context) -> None:
                 fv = usr.get('favorites')
                 fid = fv.get('id') if isinstance(fv, dict) else fv
                 fav = (fid == cid)
-            st = bs.get(cid)
-            cap = minimal_caption(ch, fav, stats=st, uid=uid)
+            
+            cap = minimal_caption(ch, fav, uid=uid)
             kbd = create_kbd(cid, uid)
             rid = f"{cid}{off}{qid[:8]}"
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
@@ -317,8 +291,12 @@ async def inlinequery(update: Update, context) -> None:
                 results.append(InlineQueryResultPhoto(id=rid, photo_url=img, thumbnail_url=img, title=title, description=desc, caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd))
         
         await query.answer(results, next_offset=noff, cache_time=300, is_personal=is_coll)
-    except Exception:
-        await update.inline_query.answer([], cache_time=5)
+    except Exception as e:
+        LOGGER.error(f"Inline query error: {e}")
+        try:
+            await update.inline_query.answer([], cache_time=5)
+        except Exception:
+            pass
 
 async def chosen_inline_result(update: Update, context) -> None:
     result = update.chosen_inline_result
