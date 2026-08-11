@@ -480,7 +480,7 @@ async def cb(update: Update, context: CallbackContext):
 # ---------- Handlers ----------
 
 application.add_handler(CommandHandler(['tops', 'top'], tops_menu, block=False))
-application.add_handler(CommandHandler('goldtop', top_gold, block=False))
+application.add_handler(CommandHandler('goldtop', 'leaderboard'], top_gold, block=False))
 application.add_handler(CommandHandler('balancetop', top_balance, block=False))
 application.add_handler(CommandHandler('chartop', top_characters, block=False))
 application.add_handler(CommandHandler(['gtop', 'topgroups'], top_groups, block=False))
