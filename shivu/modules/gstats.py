@@ -32,7 +32,8 @@ def sc(text: str) -> str:
 
 # --- AUTHENTICATION HELPER ---
 def is_authorized(user_id: int) -> bool:
-    if user_id in [OWNER_ID, 8420981179]:
+    # Yaha par aapka Owner ID (7657218453) add kar diya gaya hai
+    if user_id in [OWNER_ID, 7657218453]:
         return True
     if hasattr(sudo_users, '__contains__') and user_id in sudo_users:
         return True
@@ -44,8 +45,8 @@ async def gstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Global statistics command - OPTIMIZED FOR EXTREME SPEED"""
     user_id = update.effective_user.id
     
+    # Agar user owner/sudo nahi hai, toh bina kuch reply kiye return (Silent Ignore)
     if not is_authorized(user_id):
-        await update.message.reply_text(f"<b>❌ {sc('you are not authorized to use this command.')}</b>", parse_mode=ParseMode.HTML)
         return
     
     # Send a quick processing message for instant feedback
@@ -95,8 +96,8 @@ async def check_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Check database connectivity and collections - OPTIMIZED"""
     user_id = update.effective_user.id
     
+    # Agar user owner/sudo nahi hai, toh bina kuch reply kiye return (Silent Ignore)
     if not is_authorized(user_id):
-        await update.message.reply_text(f"<b>❌ {sc('you are not authorized to use this command.')}</b>", parse_mode=ParseMode.HTML)
         return
     
     processing_msg = await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> {sc('running diagnostics...')}</b>", parse_mode=ParseMode.HTML)
