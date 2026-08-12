@@ -11,7 +11,7 @@ LOGGER = logging.getLogger(__name__)
 ACTIVE_GAMES = {}
 DELETE_SETTINGS = {}
 WORDSEEK_ENABLED = {}  # Chat-wise enable/disable tracking
-REACTION_EMOJIS = ["🔥", "👍", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "💯", "💘", "👌", "🎯"]
+REACTION_EMOJIS = ["🔥", "🍓", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️"]
 
 def to_bold_sans_serif(text: str) -> str:
     """Converts standard text to Mathematical Sans-Serif Bold font style."""
