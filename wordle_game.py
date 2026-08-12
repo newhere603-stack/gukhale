@@ -12,6 +12,20 @@ ACTIVE_GAMES = {}
 DELETE_SETTINGS = {}
 REACTION_EMOJIS = ["🔥", "👍", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "💯", "💘", "👌", "🎯"]
 
+def to_bold_sans_serif(text: str) -> str:
+    """Converts standard text to Mathematical Sans-Serif Bold font style."""
+    result = []
+    for char in text:
+        if 'A' <= char <= 'Z':
+            result.append(chr(ord(char) + 0x1D5D4 - ord('A')))
+        elif 'a' <= char <= 'z':
+            result.append(chr(ord(char) + 0x1D5EE - ord('a')))
+        elif '0' <= char <= '9':
+            result.append(chr(ord(char) + 0x1D7EC - ord('0')))
+        else:
+            result.append(char)
+    return "".join(result)
+
 def get_wordle_hints(guess: str, target: str) -> str:
     length = len(target)
     result = ["🟥"] * length
@@ -30,7 +44,8 @@ def get_wordle_hints(guess: str, target: str) -> str:
                 result[i] = "🟨"
                 target_chars[target_chars.index(guess_chars[i])] = None
 
-    return "".join(result)
+    # Emojis ke beech space ke sath join karna
+    return " ".join(result)
 
 async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat:
@@ -107,7 +122,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
     
-    # 1. Invalid word check (Indentation fixed here)
+    # 1. Invalid word check
     if text not in valid_list:
         error_msg = f"<b>{original_text.lower()} is not a valid word.</b>"
         await update.message.reply_text(
@@ -131,7 +146,8 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     board_lines = [f"<b>{length}-letter mode · {attempt_num}/{game['max_attempts']}</b>\n"]
     for fb, guess_word in game["guesses"]:
-        board_lines.append(f"{fb} <b>{guess_word}</b>")
+        styled_word = to_bold_sans_serif(guess_word)
+        board_lines.append(f"{fb} {styled_word}")
 
     board_text = "\n".join(board_lines)
     won = (text == target)
