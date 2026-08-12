@@ -4,7 +4,7 @@ from telegram import Update, ReactionTypeEmoji
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 
 from shivu import application, user_collection
-from shivu words import WORDS_4, WORDS_5, WORDS_6
+from words import WORDS_4, WORDS_5, WORDS_6
 
 LOGGER = logging.getLogger(__name__)
 
