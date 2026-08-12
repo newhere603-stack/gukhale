@@ -17,7 +17,7 @@ def get_user_state(chat_id):
         LEADERBOARD_STATES[chat_id] = {
             "scope": "global",  # global / chat
             "time": "all",      # today / week / month / year / all
-            "letters": "all"    # 4 / 5 / 6 / all
+            "letters": "5"      # default letters mode
         }
     return LEADERBOARD_STATES[chat_id]
 
@@ -29,31 +29,21 @@ def extract_gold(user_doc, letter_filter="all"):
     if letter_filter == "4":
         keys_to_check = ['gold_4', 'points_4', 'golds_4']
     elif letter_filter == "5":
-        keys_to_check = ['gold_5', 'points_5', 'golds_5']
+        # 5 letter ke liye general 'gold' aur 'gold_5' dono ko check karega taaki aapka collect kiya hua gold dikhe
+        keys_to_check = ['gold', 'golds', 'gold_5', 'points_5', 'golds_5', 'wordseek_points', 'score', 'points']
     elif letter_filter == "6":
         keys_to_check = ['gold_6', 'points_6', 'golds_6']
     else:
-        # Jab 'all' select ho tabhi general gold check hoga
         keys_to_check = ['gold', 'golds', 'wordseek_points', 'score', 'points']
     
     for key in keys_to_check:
         val = user_doc.get(key)
         if val is not None:
-            if isinstance(val, (int, float)):
+            if isinstance(val, (int, float)) and val > 0:
                 return int(val)
-            elif isinstance(val, str) and val.isdigit():
+            elif isinstance(val, str) and val.isdigit() and int(val) > 0:
                 return int(val)
                 
-    # Fallback: Agar specific letter field nahi hai (purane score ke liye), toh general gold check karein sirf 'all' mode mein
-    if letter_filter == "all":
-        for key in ['gold', 'golds', 'wordseek_points', 'score', 'points']:
-            val = user_doc.get(key)
-            if val is not None:
-                if isinstance(val, (int, float)):
-                    return int(val)
-                elif isinstance(val, str) and val.isdigit():
-                    return int(val)
-                    
     return 0
 
 async def send_or_edit(update, context, text, kb, edit):
@@ -142,7 +132,6 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
 
     data = await user_collection.find(query_filter).to_list(None)
     
-    # Filter users based on points > 0 using smart extraction
     filtered_data = [u for u in data if extract_gold(u, state["letters"]) > 0]
 
     if not filtered_data:
@@ -170,7 +159,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
     rows_text = "\n".join(rows)
     
     text = (
-        "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
+        "🏆 <b>WordSeek Leaderboard</b> 🏆\n"
         "━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"{rows_text}"
     )
