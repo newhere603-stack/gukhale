@@ -82,18 +82,18 @@ def get_wordseek_keyboard(state):
     time_f = state["time"]
     letter_f = state["letters"]
 
-    global_btn = "« ɢʟᴏʙᴀʟ »" if scope == "global" else "ɢʟᴏʙᴀʟ"
-    chat_btn = "« ᴄʜᴀᴛ »" if scope == "chat" else "ᴄʜᴀᴛ"
+    global_btn = "ɢʟᴏʙᴀʟ ⎋" if scope == "global" else "ɢʟᴏʙᴀʟ"
+    chat_btn = "ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴄʜᴀᴛ"
     
-    today_btn = "« ᴛᴏᴅᴀʏ »" if time_f == "today" else "ᴛᴏᴅᴀʏ"
-    week_btn = "« ᴡᴇᴇᴋʟʏ »" if time_f == "week" else "ᴡᴇᴇᴋʟʏ"
-    month_btn = "« ᴍᴏɴᴛʜʟʏ »" if time_f == "month" else "ᴍᴏɴᴛʜʟʏ"
-    year_btn = "« ʏᴇᴀʀʟʏ »" if time_f == "year" else "ʏᴇᴀʀʟʏ"
-    all_btn = "« ᴀʟʟ ᴛɪᴍᴇ »" if time_f == "all" else "ᴀʟʟ ᴛɪᴍᴇ"
+    today_btn = "ᴛᴏᴅᴀʏ ⎋" if time_f == "today" else "ᴛᴏᴅᴀʏ"
+    week_btn = "ᴡᴇᴇᴋ ⎋" if time_f == "week" else "ᴡᴇᴇᴋ"
+    month_btn = "ᴍᴏɴᴛʜ ⎋" if time_f == "month" else "ᴍᴏɴᴛʜ"
+    year_btn = "ʏᴇᴀʀ ⎋" if time_f == "year" else "ʏᴇᴀʀ"
+    all_btn = "ᴀʟʟ-ᴛɪᴍᴇ ⎋" if time_f == "all" else "ᴀʟʟ-ᴛɪᴍᴇ"
 
-    l4_btn = "« 4 ʟᴇᴛʀs »" if letter_f == "4" else "4 ʟᴇᴛʀs"
-    l5_btn = "« 5 ʟᴇᴛʀs »" if letter_f == "5" else "5 ʟᴇᴛʀs"
-    l6_btn = "« 6 ʟᴇᴛʀs »" if letter_f == "6" else "6 ʟᴇᴛʀs"
+    l4_btn = "4 ʟᴇᴛʀ ⎋" if letter_f == "4" else "4 ʟᴇᴛʀ"
+    l5_btn = "5 ʟᴇᴛʀ ⎋" if letter_f == "5" else "5 ʟᴇᴛʀ"
+    l6_btn = "6 ʟᴇᴛʀ ⎋" if letter_f == "6" else "6 ʟᴇᴛʀ"
 
     return InlineKeyboardMarkup([
         [
