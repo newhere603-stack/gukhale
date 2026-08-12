@@ -82,18 +82,18 @@ def get_wordseek_keyboard(state):
     time_f = state["time"]
     letter_f = state["letters"]
 
-    global_btn = "« Global »" if scope == "global" else "Global"
-    chat_btn = "« This chat »" if scope == "chat" else "This chat"
+    global_btn = "« ɢʟᴏʙᴀʟ »" if scope == "global" else "ɢʟᴏʙᴀʟ"
+    chat_btn = "« ᴛʜɪs ᴄʜᴀᴛ »" if scope == "chat" else "ᴛʜɪs ᴄʜᴀᴛ"
     
-    today_btn = "« Today »" if time_f == "today" else "Today"
-    week_btn = "« This week »" if time_f == "week" else "This week"
-    month_btn = "« This month »" if time_f == "month" else "This month"
-    year_btn = "« This year »" if time_f == "year" else "This year"
-    all_btn = "« All time »" if time_f == "all" else "All time"
+    today_btn = "« ᴛᴏᴅᴀʏ »" if time_f == "today" else "ᴛᴏᴅᴀʏ"
+    week_btn = "« ᴛʜɪs ᴡᴇᴇᴋ »" if time_f == "week" else "ᴛʜɪs ᴡᴇᴇᴋ"
+    month_btn = "« ᴛʜɪs ᴍᴏɴᴛʜ »" if time_f == "month" else "ᴛʜɪs ᴍᴏɴᴛʜ"
+    year_btn = "« ᴛʜɪs ʏᴇᴀʀ »" if time_f == "year" else "ᴛʜɪs ʏᴇᴀʀ"
+    all_btn = "« ᴀʟʟ ᴛɪᴍᴇ »" if time_f == "all" else "ᴀʟʟ ᴛɪᴍᴇ"
 
-    l4_btn = "« 4 Let »" if letter_f == "4" else "4 letters"
-    l5_btn = "« 5 Let »" if letter_f == "5" else "5 letters"
-    l6_btn = "« 6 Let »" if letter_f == "6" else "6 letters"
+    l4_btn = "« 4 ʟᴇᴛʀs »" if letter_f == "4" else "4 ʟᴇᴛʀs"
+    l5_btn = "« 5 ʟᴇᴛʀs »" if letter_f == "5" else "5 ʟᴇᴛʀs"
+    l6_btn = "« 6 ʟᴇᴛʀs »" if letter_f == "6" else "6 ʟᴇᴛʀs"
 
     return InlineKeyboardMarkup([
         [
@@ -136,7 +136,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
 
     if not filtered_data:
         text = (
-            "🏆 <b>WordSeek Leaderboard</b> 🏆\n\n"
+            "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
             "<i>No data found for this letter mode!</i>"
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
