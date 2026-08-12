@@ -25,17 +25,17 @@ def extract_gold(user_doc, letter_filter="all"):
     if not user_doc or not isinstance(user_doc, dict):
         return 0
     
-    # Letter-wise keys mapping
-    key_map = {
-        "4": ['gold_4', 'points_4', 'golds_4'],
-        "5": ['gold_5', 'points_5', 'golds_5'],
-        "6": ['gold_6', 'points_6', 'golds_6'],
-        "all": ['gold', 'golds', 'wordseek_points', 'score', 'points']
-    }
+    # Strict letter-wise keys mapping
+    if letter_filter == "4":
+        keys_to_check = ['gold_4', 'points_4', 'golds_4']
+    elif letter_filter == "5":
+        keys_to_check = ['gold_5', 'points_5', 'golds_5']
+    elif letter_filter == "6":
+        keys_to_check = ['gold_6', 'points_6', 'golds_6']
+    else:
+        # Jab 'all' select ho tabhi general gold check hoga
+        keys_to_check = ['gold', 'golds', 'wordseek_points', 'score', 'points']
     
-    keys_to_check = key_map.get(letter_filter, key_map["all"])
-    
-    # Pehle specific letter field check karein
     for key in keys_to_check:
         val = user_doc.get(key)
         if val is not None:
@@ -44,8 +44,8 @@ def extract_gold(user_doc, letter_filter="all"):
             elif isinstance(val, str) and val.isdigit():
                 return int(val)
                 
-    # Fallback: Agar specific letter field nahi hai (purane score ke liye), toh general gold check karein
-    if letter_filter != "all":
+    # Fallback: Agar specific letter field nahi hai (purane score ke liye), toh general gold check karein sirf 'all' mode mein
+    if letter_filter == "all":
         for key in ['gold', 'golds', 'wordseek_points', 'score', 'points']:
             val = user_doc.get(key)
             if val is not None:
@@ -93,13 +93,13 @@ def get_wordseek_keyboard(state):
     letter_f = state["letters"]
 
     global_btn = "« Global »" if scope == "global" else "Global"
-    chat_btn = "« T Chat »" if scope == "chat" else "This chat"
+    chat_btn = "« This chat »" if scope == "chat" else "This chat"
     
     today_btn = "« Today »" if time_f == "today" else "Today"
-    week_btn = "« T Week »" if time_f == "week" else "This week"
-    month_btn = "« T Month »" if time_f == "month" else "This month"
-    year_btn = "« T Year »" if time_f == "year" else "This year"
-    all_btn = "« All Time »" if time_f == "all" else "All time"
+    week_btn = "« This week »" if time_f == "week" else "This week"
+    month_btn = "« This month »" if time_f == "month" else "This month"
+    year_btn = "« This year »" if time_f == "year" else "This year"
+    all_btn = "« All time »" if time_f == "all" else "All time"
 
     l4_btn = "« 4 Let »" if letter_f == "4" else "4 letters"
     l5_btn = "« 5 Let »" if letter_f == "5" else "5 letters"
@@ -146,11 +146,9 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
     filtered_data = [u for u in data if extract_gold(u, state["letters"]) > 0]
 
     if not filtered_data:
-        header_title = "Global Leaderboard" if state["scope"] == "global" else "Group Leaderboard"
         text = (
-            "<b>Word Seek</b>\n\n"
-            f"🏆 <b>{header_title}</b> 🏆\n\n"
-            f"<i>No data found for this letter mode!</i>"
+            "🏆 <b>WordSeek Leaderboard</b> 🏆\n\n"
+            "<i>No data found for this letter mode!</i>"
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
@@ -170,12 +168,10 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         rows.append(f"<b>{i}. {link} - {gold_val:,} <tg-emoji emoji-id=\"6332287240470798249\">🪙</tg-emoji></b>")
 
     rows_text = "\n".join(rows)
-    header_title = "Global Leaderboard" if state["scope"] == "global" else "Group Leaderboard"
     
     text = (
-        "<b>Word Seek</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🏆 <b>{header_title}</b> 🏆\n\n"
+        "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"{rows_text}"
     )
     
