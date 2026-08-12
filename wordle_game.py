@@ -96,7 +96,8 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id not in ACTIVE_GAMES:
         return
 
-    text = update.message.text.strip().upper()
+    original_text = update.message.text.strip()
+    text = original_text.upper()
     game = ACTIVE_GAMES[chat_id]
     length = game["length"]
 
@@ -106,9 +107,10 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
     
-    # 1. Invalid word check
+    # 1. Invalid word check (Screenshot format ke hisaab se)
     if text not in valid_list:
-        await update.message.reply_text("❌ This word is not in the word list!", reply_to_message_id=update.message.message_id)
+        error_msg = f"{original_text.lower()} is not a valid {length}-letter word."
+        await update.message.reply_text(error_msg, reply_to_message_id=update.message.message_id)
         return
 
     # 2. Already guessed word check
@@ -168,9 +170,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del ACTIVE_GAMES[chat_id]
             
             win_msg = (
-                f"<b>Congrats! You guessed it correctly.</b>\n"
-                f"<b>Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>\n"
-                f"<b>Added {points_earned} to the leaderboard.</b>"
+                f"<b><blockquote>Congrats! You guessed it correctly. Correct Word: {target.lower()} Added {points_earned} to the leaderboard.</blockquote></b>"
             )
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
