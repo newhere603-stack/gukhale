@@ -157,7 +157,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         link = mention_html(uid, name)
         gold_val = extract_gold(u, state["letters"])
         
-        rows.append(f"<b>{i}. {link} - {gold_val:,} </b>")
+        rows.append(f"<b>{i}. {link} - {gold_val:,} <tg-emoji emoji-id=\"6332287240470798249\">🪙</tg-emoji></b>")
 
     rows_text = "\n".join(rows)
     header_title = "Global Leaderboard" if state["scope"] == "global" else "Group Leaderboard"
