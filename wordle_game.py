@@ -170,7 +170,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del ACTIVE_GAMES[chat_id]
             
             win_msg = (
-                f"<b><blockquote>Congrats! You guessed it correctly. Correct Word: {target.lower()} Added {points_earned} to the leaderboard.</blockquote></b>"
+                f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()} Added {points_earned} to the leaderboard.</blockquote>\nStart with /new</b>"
             )
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
