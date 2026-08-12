@@ -100,13 +100,21 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game = ACTIVE_GAMES[chat_id]
     length = game["length"]
 
-    # Strict length check: agar length match nahi karti toh chupchaap ignore kar dega
+    # Strict length check
     if len(text) != length or not text.isalpha():
         return
 
     valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
     
+    # 1. Invalid word check
     if text not in valid_list:
+        await update.message.reply_text("❌ This word is not in the word list!", reply_to_message_id=update.message.message_id)
+        return
+
+    # 2. Already guessed word check
+    guessed_words = [g[1] for g in game["guesses"]]
+    if text in guessed_words:
+        await update.message.reply_text("Someone has already guessed your word. Please try another one!", reply_to_message_id=update.message.message_id)
         return
 
     target = game["target"]
@@ -159,7 +167,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             del ACTIVE_GAMES[chat_id]
             
-            # Quoted block implementation using target/word variable
             win_msg = (
                 f"<b>Congrats! You guessed it correctly.</b>\n"
                 f"<b>Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>\n"
