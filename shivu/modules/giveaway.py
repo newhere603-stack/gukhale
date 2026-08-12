@@ -159,7 +159,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
     rows_text = "\n".join(rows)
     
     text = (
-        "🏆 <b>WordSeek Leaderboard</b> 🏆\n"
+        "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
         "━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"{rows_text}"
     )
