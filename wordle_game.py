@@ -109,9 +109,13 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 1. Invalid word check (Screenshot format ke hisaab se)
     if text not in valid_list:
-        error_msg = f"<b>{original_text.lower()} is not a valid word.</b>"
-        await update.message.reply_text(error_msg, reply_to_message_id=update.message.message_id)
-        return
+    error_msg = f"<b>{original_text.lower()} is not a valid word.</b>"
+    await update.message.reply_text(
+        error_msg,
+        reply_to_message_id=update.message.message_id,
+        parse_mode="HTML"
+    )
+    return
 
     # 2. Already guessed word check
     guessed_words = [g[1] for g in game["guesses"]]
