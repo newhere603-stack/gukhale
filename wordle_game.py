@@ -1,20 +1,39 @@
+import os
+import json
 import random
 import logging
 from telegram import Update, ReactionTypeEmoji
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 
 from shivu import application, user_collection
-from words import WORDS_4, WORDS_5, WORDS_6
 
 LOGGER = logging.getLogger(__name__)
 
 ACTIVE_GAMES = {}
 DELETE_SETTINGS = {}
-WORDSEEK_ENABLED = {}  # Chat-wise enable/disable tracking
+WORDSEEK_ENABLED = {}  
 REACTION_EMOJIS = ["🔥", "🍓", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️"]
 
+# --- FAST JSON LOADING (NO FALLBACKS) ---
+def load_words_from_json(filename):
+    try:
+        paths_to_check = [filename, os.path.join("wordseek", filename), os.path.join("shivu", filename)]
+        for path in paths_to_check:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        return set(str(w).strip().upper() for w in data)
+    except Exception as e:
+        LOGGER.error(f"Error loading {filename}: {e}")
+    return set()
+
+# Direct loading from your 3 files into memory sets for blazing-fast lookups
+WORDS_4 = load_words_from_json("all-four.json")
+WORDS_5 = load_words_from_json("all-five.json")
+WORDS_6 = load_words_from_json("all-six.json")
+
 def to_bold_sans_serif(text: str) -> str:
-    """Converts standard text to Mathematical Sans-Serif Bold font style."""
     result = []
     for char in text:
         if 'A' <= char <= 'Z':
@@ -116,7 +135,12 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except ValueError:
             pass
 
-    target = random.choice(WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5))
+    word_pool = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
+    if not word_pool:
+        await update.message.reply_text(f"<b>⚠️ Error: No words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
+        return
+
+    target = random.choice(list(word_pool))
     ACTIVE_GAMES[chat_id] = {"target": target, "length": length, "guesses": [], "max_attempts": 30, "message_id": None}
 
     try:
@@ -163,26 +187,29 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game = ACTIVE_GAMES[chat_id]
     length = game["length"]
 
-    # Strict length check
     if len(text) != length or not text.isalpha():
         return
 
     valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
     
-    # 1. Invalid word check
+    # 1. Invalid word check (Bina reply tag ke normal message bheja jayega)
     if text not in valid_list:
         error_msg = f"<b>{original_text.lower()} is not a valid word.</b>"
-        await update.message.reply_text(
-            error_msg,
-            reply_to_message_id=update.message.message_id,
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=error_msg,
             parse_mode="HTML"
         )
         return
 
-    # 2. Already guessed word check
+    # 2. Already guessed word check (Bina reply tag ke normal message)
     guessed_words = [g[1] for g in game["guesses"]]
     if text in guessed_words:
-        await update.message.reply_text("Someone has already guessed your word. Please try another one!", reply_to_message_id=update.message.message_id)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Someone has already guessed your word. Please try another one!",
+            parse_mode="HTML"
+        )
         return
 
     target = game["target"]
