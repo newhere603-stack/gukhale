@@ -10,6 +10,7 @@ LOGGER = logging.getLogger(__name__)
 
 ACTIVE_GAMES = {}
 DELETE_SETTINGS = {}
+WORDSEEK_ENABLED = {}  # Chat-wise enable/disable tracking
 REACTION_EMOJIS = ["🔥", "👍", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "💯", "💘", "👌", "🎯"]
 
 def to_bold_sans_serif(text: str) -> str:
@@ -44,13 +45,44 @@ def get_wordle_hints(guess: str, target: str) -> str:
                 result[i] = "🟨"
                 target_chars[target_chars.index(guess_chars[i])] = None
 
-    # Emojis ke beech space ke sath join karna
     return " ".join(result)
+
+async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    chat = update.effective_chat
+    user = update.effective_user
+    if not chat or not user:
+        return False
+    if chat.type == "private":
+        return True
+    try:
+        member = await context.bot.get_chat_member(chat.id, user.id)
+        return member.status in ["creator", "administrator"]
+    except Exception:
+        return False
+
+async def toggle_wordseek_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_chat:
+        return
+    
+    if not await is_admin(update, context):
+        await update.message.reply_text("<b>❌ Only group admins can enable or disable WordSeek.</b>", parse_mode="HTML")
+        return
+
+    chat_id = update.effective_chat.id
+    current_status = WORDSEEK_ENABLED.get(chat_id, True)
+    new_status = not current_status
+    WORDSEEK_ENABLED[chat_id] = new_status
+    
+    status_text = "ENABLED ✅" if new_status else "DISABLED ❌"
+    await update.message.reply_text(f"<b>WordSeek Game is now: {status_text}</b>", parse_mode="HTML")
 
 async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat:
         return
     chat_id = update.effective_chat.id
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        return
+
     current_status = DELETE_SETTINGS.get(chat_id, False)
     NEW_STATUS = not current_status
     DELETE_SETTINGS[chat_id] = NEW_STATUS
@@ -61,6 +93,10 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not update.effective_chat or not update.message:
         return
     chat_id = update.effective_chat.id
+
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        await update.message.reply_text("<b>WordSeek is currently disabled in this chat.</b>", parse_mode="HTML")
+        return
 
     if chat_id in ACTIVE_GAMES:
         await update.message.reply_text("<b>There is already a game in progress in this chat. Use /end to end it.</b>", parse_mode="HTML")
@@ -84,7 +120,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ACTIVE_GAMES[chat_id] = {"target": target, "length": length, "guesses": [], "max_attempts": 30, "message_id": None}
 
     try:
-        msg = await update.message.reply_text(f"<b>Game started! Guess the {length}-letter word!</b>", parse_mode="HTML")
+        msg = await update.message.reply_text(f"<b>Game started! Guess the word!</b>", parse_mode="HTML")
         ACTIVE_GAMES[chat_id]["message_id"] = msg.message_id
     except Exception as e:
         LOGGER.error(f"Error starting game: {e}")
@@ -93,21 +129,32 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat:
         return
     chat_id = update.effective_chat.id
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        return
+
     if chat_id in ACTIVE_GAMES:
         target = ACTIVE_GAMES[chat_id]["target"]
         del ACTIVE_GAMES[chat_id]
-        await update.message.reply_text(f"<b>🛑 Game ended. The word was:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
+        await update.message.reply_text(f"<b>🛑 Game ended.\nThe word was:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
     else:
         await update.message.reply_text("<b>ℹ️ No active game running.</b>", parse_mode="HTML")
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("<b>WordSeek Help Menu</b>\nCommands: /new, /new4, /new5, /new6, /end, /toggledelete", parse_mode="HTML")
+    if not update.effective_chat:
+        return
+    chat_id = update.effective_chat.id
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        return
+    await update.message.reply_text("<b>WordSeek Help Menu</b>\nCommands: /new, /new4, /new5, /new6, /end, /toggledelete, /togglewordseek", parse_mode="HTML")
 
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text or not update.effective_chat:
         return
 
     chat_id = update.effective_chat.id
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        return
+
     if chat_id not in ACTIVE_GAMES:
         return
 
@@ -214,6 +261,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Registering Game Handlers Only
 application.add_handler(CommandHandler(["new", "new4", "new5", "new6"], start_game_handler))
 application.add_handler(CommandHandler("toggledelete", toggle_delete_handler))
+application.add_handler(CommandHandler("togglewordseek", toggle_wordseek_handler))
 application.add_handler(CommandHandler("end", end_game_handler))
 application.add_handler(CommandHandler("helpword", help_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_guess))
