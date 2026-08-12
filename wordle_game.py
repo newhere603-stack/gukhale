@@ -196,7 +196,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
     
     if text not in valid_list:
-        error_msg = f"<b>{original_text.lower()} is not a valid word.</b>"
+        error_msg = f"{original_text.lower()} is not a valid word."
         await context.bot.send_message(
             chat_id=chat_id,
             text=error_msg,
