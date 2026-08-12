@@ -12,10 +12,12 @@ def is_authorized(user_id):
 
 bot_settings_collection = db['bot_settings']
 
-# Sahi Economy Fields
+# Economy Fields
 COIN_FIELD = 'balance'   # /bal ke liye
 TOKEN_FIELD = 'tokens'   # /tbal ke liye
-GOLD_FIELD = 'gold'      # Word seek / gold ke liye
+GOLD_4_FIELD = 'gold_4'  # 4-letter word seek gold
+GOLD_5_FIELD = 'gold'    # 5-letter word seek gold (default 'gold')
+GOLD_6_FIELD = 'gold_6'  # 6-letter word seek gold
 
 # --- Helper for adding/removing currency ---
 async def modify_currency(update: Update, context: CallbackContext, field: str, currency_name: str, is_add: bool):
@@ -24,7 +26,6 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
         if not is_authorized(requester_id):
             return  # Normal users completely ignored
             
-        # Context args ki jagah manual split use kar rahe hain taaki reply me number hamesha read ho
         text = update.message.text or update.message.caption
         if not text:
             return
@@ -42,18 +43,16 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
             target_user = update.message.reply_to_message.from_user
             target_id = target_user.id
             target_name = target_user.first_name
-            # Agar reply kiya hai, to pehla argument hi amount hoga
             if len(args) >= 1:
                 amount = args[0]
         else:
-            # Bina reply ke: Command + User ID + Amount
             if len(args) >= 2:
                 target_id = args[0]
                 amount = args[1]
                 
         if target_id is None or amount is None:
             await update.message.reply_text(
-                f"<b>ᴜsᴀɢᴇ: {command_used} ᴜsᴇʀ_ɪᴅ ᴀᴍᴏᴜɴᴛ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴜsᴇʀ ᴡɪᴛ🇭 {command_used} ᴀᴍᴏᴜɴᴛ</b>", 
+                f"<b>ᴜsᴀɢᴇ: {command_used} ᴜsᴇʀ_ɪᴅ ᴀᴍᴏᴜɴᴛ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴜsᴇʀ ᴡɪᴛʜ {command_used} ᴀᴍᴏᴜɴᴛ</b>", 
                 parse_mode='HTML'
             )
             return
@@ -100,10 +99,14 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
         
         if currency_name == 'tokens':
             c_name = "ᴛᴏᴋᴇɴs"
-        elif currency_name == 'gold':
-            c_name = "ɢᴏʟᴅ"
+        elif currency_name == 'gold_4':
+            c_name = "4-ʟᴇᴛᴛᴇʀ ɢᴏʟᴅ"
+        elif currency_name == 'gold_5':
+            c_name = "5-ʟᴇᴛᴛᴇʀ ɢᴏʟᴅ"
+        elif currency_name == 'gold_6':
+            c_name = "6-ʟᴇᴛᴛᴇʀ ɢᴏʟᴅ"
         else:
-            c_name = "ᴄᴏɪɴs"
+            c_name = "ᴄᴏɪns"
         
         await update.message.reply_text(
             f"<b>sᴜᴄᴄᴇss! {amount} {c_name} {action} {mention}.\nᴜᴘᴅᴀᴛᴇᴅ ʙᴀʟᴀɴᴄᴇ: {new_balance} {c_name}.</b>",
@@ -185,13 +188,11 @@ async def fixrarity_cmd(update: Update, context: CallbackContext):
 
         char_id_input = str(args[0])
         
-        # Sabhi possible ID formats bana rahe hain ('02', '2', 2)
         search_ids = [char_id_input]
         if char_id_input.isdigit():
-            search_ids.append(str(int(char_id_input))) # "2"
-            search_ids.append(int(char_id_input))      # 2
+            search_ids.append(str(int(char_id_input))) 
+            search_ids.append(int(char_id_input))      
 
-        # 1. Main collection se LIVE data uthana
         global_char = await collection.find_one({'id': {'$in': search_ids}})
         
         if not global_char:
@@ -201,16 +202,13 @@ async def fixrarity_cmd(update: Update, context: CallbackContext):
         current_rarity = global_char.get('rarity', 'Unknown')
         current_name = global_char.get('name', 'Unknown')
 
-        # 2. Safely users ko dhundhna jinke paas kisi bhi format me ye ID ho
         users_cursor = user_collection.find({"characters.id": {"$in": search_ids}})
         affected_count = 0
         
-        # Har affected user ke data ko manually Python me theek karke save karna
         async for user in users_cursor:
             updated_chars = []
             modified = False
             for c in user.get('characters', []):
-                # Agar ID humare format list mein milti hai toh replace karo
                 if c.get('id') in search_ids:
                     c['rarity'] = current_rarity
                     c['name'] = current_name
@@ -224,7 +222,6 @@ async def fixrarity_cmd(update: Update, context: CallbackContext):
                 )
                 affected_count += 1
 
-        # 3. Success Message
         success_msg = (
             f"<b>✅ ᴅᴀᴛᴀʙᴀsᴇ ᴜᴘᴅᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -238,7 +235,6 @@ async def fixrarity_cmd(update: Update, context: CallbackContext):
 
     except Exception as e:
         await update.message.reply_text(f"<b>⚠️ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>", parse_mode='HTML')
-
 
 
 # --- /setded <percentage> ---
@@ -283,17 +279,32 @@ async def tadd_cmd(update: Update, context: CallbackContext):
 async def cadd_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, COIN_FIELD, 'coins', True)
 
+# 4-Letter Gold Add/Rem
+async def g4add_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, GOLD_4_FIELD, 'gold_4', True)
+
+async def g4rem_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, GOLD_4_FIELD, 'gold_4', False)
+
+# 5-Letter Gold Add/Rem (Default /gadd aur /grem)
 async def gadd_cmd(update: Update, context: CallbackContext):
-    await modify_currency(update, context, GOLD_FIELD, 'gold', True)
+    await modify_currency(update, context, GOLD_5_FIELD, 'gold_5', True)
+
+async def grem_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, GOLD_5_FIELD, 'gold_5', False)
+
+# 6-Letter Gold Add/Rem
+async def g6add_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, GOLD_6_FIELD, 'gold_6', True)
+
+async def g6rem_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, GOLD_6_FIELD, 'gold_6', False)
 
 async def trem_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, TOKEN_FIELD, 'tokens', False)
 
 async def crem_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, COIN_FIELD, 'coins', False)
-
-async def grem_cmd(update: Update, context: CallbackContext):
-    await modify_currency(update, context, GOLD_FIELD, 'gold', False)
 
 
 # Handlers registration
@@ -302,7 +313,11 @@ application.add_handler(CommandHandler(['setded'], setded_cmd, block=False))
 application.add_handler(CommandHandler(['tadd'], tadd_cmd, block=False))
 application.add_handler(CommandHandler(['cadd'], cadd_cmd, block=False))
 application.add_handler(CommandHandler(['gadd'], gadd_cmd, block=False))
+application.add_handler(CommandHandler(['g4add'], g4add_cmd, block=False))
+application.add_handler(CommandHandler(['g6add'], g6add_cmd, block=False))
 application.add_handler(CommandHandler(['trem'], trem_cmd, block=False))
 application.add_handler(CommandHandler(['crem'], crem_cmd, block=False))
 application.add_handler(CommandHandler(['grem'], grem_cmd, block=False))
+application.add_handler(CommandHandler(['g4rem'], g4rem_cmd, block=False))
+application.add_handler(CommandHandler(['g6rem'], g6rem_cmd, block=False))
 application.add_handler(CommandHandler(['fixrarity'], fixrarity_cmd, block=False))
