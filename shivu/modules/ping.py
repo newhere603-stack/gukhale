@@ -158,7 +158,7 @@ WORDS_6 = [
 
 ACTIVE_GAMES = {}
 DELETE_SETTINGS = {}
-REACTION_EMOJIS = ["🔥", "👍", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "🚀", "💯", "✨", "👑", "🎯"]
+REACTION_EMOJIS = ["🔥", "👍", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "💘", "💯", "👌", "❤️‍🔥", "🎯"]
 
 # --- WORD SEEK GAME LOGIC ---
 
@@ -308,7 +308,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
             
             del ACTIVE_GAMES[chat_id]
-            win_msg = f"<b>Congrats! You guessed it correctly.</b>\n<b>Correct Word: {target.lower()}</b>\n<b>Added {points_earned} to the leaderboard.</b>"
+            win_msg = f"<blockquote>Congrats! You guessed it correctly.</b>\n<b>Correct Word: {target.lower()}</b>\n<b>Added {points_earned} to the leaderboard.</blockquote>"
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
             try:
