@@ -1,5 +1,5 @@
 import asyncio
-import shivu.wordle_game
+import wordle_game
 import shivu.modules.balance
 import shivu.modules.chatlog
 loop = asyncio.new_event_loop()
