@@ -120,7 +120,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ACTIVE_GAMES[chat_id] = {"target": target, "length": length, "guesses": [], "max_attempts": 30, "message_id": None}
 
     try:
-        msg = await update.message.reply_text(f"<b>Game started! Guess the word!</b>", parse_mode="HTML")
+        msg = await update.message.reply_text(f"<b>Game started! Guess the {length}-letter word!</b>", parse_mode="HTML")
         ACTIVE_GAMES[chat_id]["message_id"] = msg.message_id
     except Exception as e:
         LOGGER.error(f"Error starting game: {e}")
@@ -135,7 +135,7 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in ACTIVE_GAMES:
         target = ACTIVE_GAMES[chat_id]["target"]
         del ACTIVE_GAMES[chat_id]
-        await update.message.reply_text(f"<b>🛑 Game ended.\nThe word was:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
+        await update.message.reply_text(f"<b>🛑 Game ended.\nThe word was:</b><blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
     else:
         await update.message.reply_text("<b>ℹ️ No active game running.</b>", parse_mode="HTML")
 
