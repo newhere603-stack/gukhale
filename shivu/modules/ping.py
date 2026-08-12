@@ -252,7 +252,10 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
     
+    # Strict validation: Agar length match nahi karti ya word valid list mein nahi hai, toh message bhej kar alert karega
     if len(text) != length or not text.isalpha() or text not in valid_list:
+        if len(text) == length:
+            await update.message.reply_text(f"<b>{text.lower()} is not a valid {length}-letter word.</b>", parse_mode="HTML")
         return
 
     target = game["target"]
@@ -285,9 +288,16 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             points_earned = game["max_attempts"] - attempt_num + 1
             user_id = update.effective_user.id
             
+            # 5-letter ke liye points seedhe general 'gold' mein save honge, baaki ke liye unke specific fields mein
+            if length == 5:
+                update_query = {"$inc": {"gold": points_earned}}
+            else:
+                letter_field = f"gold_{length}"
+                update_query = {"$inc": {letter_field: points_earned}}
+            
             await user_collection.update_one(
                 {"$or": [{"id": user_id}, {"user_id": user_id}, {"_id": user_id}]},
-                {"$inc": {"gold": points_earned}},
+                update_query,
                 upsert=True
             )
             
