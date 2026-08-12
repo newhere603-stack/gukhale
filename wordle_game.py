@@ -28,7 +28,6 @@ def load_words_from_json(filename):
         LOGGER.error(f"Error loading {filename}: {e}")
     return set()
 
-# Direct loading from your 3 files into memory sets for blazing-fast lookups
 WORDS_4 = load_words_from_json("all-four.json")
 WORDS_5 = load_words_from_json("all-five.json")
 WORDS_6 = load_words_from_json("all-six.json")
@@ -84,7 +83,7 @@ async def toggle_wordseek_handler(update: Update, context: ContextTypes.DEFAULT_
         return
     
     if not await is_admin(update, context):
-        await update.message.reply_text("<b>❌ Only group admins can enable or disable WordSeek.</b>", parse_mode="HTML")
+        await update.message.reply_text("<b>Only group admins can enable or disable WordSeek.</b>", parse_mode="HTML")
         return
 
     chat_id = update.effective_chat.id
@@ -137,14 +136,19 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     word_pool = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
     if not word_pool:
-        await update.message.reply_text(f"<b>⚠️ Error: No words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<b>⚠️ Error: No words found for {length}-letter mode! Check your word files.</b>", parse_mode="HTML")
         return
 
     target = random.choice(list(word_pool))
     ACTIVE_GAMES[chat_id] = {"target": target, "length": length, "guesses": [], "max_attempts": 30, "message_id": None}
 
     try:
-        msg = await update.message.reply_text(f"<b>Game started! Guess the {length}-letter word!</b>", parse_mode="HTML")
+        # Bina reply tag ke normal message bheja jayega taaki user tag na ho
+        msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"<b>Game started! Guess the {length}-letter word!</b>",
+            parse_mode="HTML"
+        )
         ACTIVE_GAMES[chat_id]["message_id"] = msg.message_id
     except Exception as e:
         LOGGER.error(f"Error starting game: {e}")
@@ -159,7 +163,7 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in ACTIVE_GAMES:
         target = ACTIVE_GAMES[chat_id]["target"]
         del ACTIVE_GAMES[chat_id]
-        await update.message.reply_text(f"<b>🛑 Game ended.\nThe word was:</b><blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
+        await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was:{target.lower()}</blockquote></b>", parse_mode="HTML")
     else:
         await update.message.reply_text("<b>ℹ️ No active game running.</b>", parse_mode="HTML")
 
@@ -192,7 +196,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
     
-    # 1. Invalid word check (Bina reply tag ke normal message bheja jayega)
     if text not in valid_list:
         error_msg = f"<b>{original_text.lower()} is not a valid word.</b>"
         await context.bot.send_message(
@@ -202,7 +205,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 2. Already guessed word check (Bina reply tag ke normal message)
     guessed_words = [g[1] for g in game["guesses"]]
     if text in guessed_words:
         await context.bot.send_message(
@@ -263,10 +265,18 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             del ACTIVE_GAMES[chat_id]
             
+            # Jo length ka game jeeta hai, wahi command suggest hogi (jaise /new4, /new5, /new6)
+            suggested_cmd = f"Start with /new{length}" if length in [4, 6] else "/new"
+            
             win_msg = (
-                f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()} Added {points_earned} to the leaderboard.</blockquote>\nStart with /new</b>"
+                f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()} Added {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
             )
-            await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
+            # Bina reply tag ke normal message bheja jayega
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=win_msg,
+                parse_mode="HTML"
+            )
             
             try:
                 await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
@@ -280,7 +290,11 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
             del ACTIVE_GAMES[chat_id]
-            await update.message.reply_text(f"<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML", reply_to_message_id=update.message.message_id)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>",
+                parse_mode="HTML"
+            )
 
     except Exception as e:
         LOGGER.error(f"Error handling guess: {e}")
