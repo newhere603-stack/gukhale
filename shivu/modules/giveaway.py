@@ -83,12 +83,12 @@ def get_wordseek_keyboard(state):
     letter_f = state["letters"]
 
     global_btn = "« ɢʟᴏʙᴀʟ »" if scope == "global" else "ɢʟᴏʙᴀʟ"
-    chat_btn = "« ᴛʜɪs ᴄʜᴀᴛ »" if scope == "chat" else "ᴛʜɪs ᴄʜᴀᴛ"
+    chat_btn = "« ᴄʜᴀᴛ »" if scope == "chat" else "ᴄʜᴀᴛ"
     
     today_btn = "« ᴛᴏᴅᴀʏ »" if time_f == "today" else "ᴛᴏᴅᴀʏ"
-    week_btn = "« ᴛʜɪs ᴡᴇᴇᴋ »" if time_f == "week" else "ᴛʜɪs ᴡᴇᴇᴋ"
-    month_btn = "« ᴛʜɪs ᴍᴏɴᴛʜ »" if time_f == "month" else "ᴛʜɪs ᴍᴏɴᴛʜ"
-    year_btn = "« ᴛʜɪs ʏᴇᴀʀ »" if time_f == "year" else "ᴛʜɪs ʏᴇᴀʀ"
+    week_btn = "« ᴡᴇᴇᴋʟʏ »" if time_f == "week" else "ᴡᴇᴇᴋʟʏ"
+    month_btn = "« ᴍᴏɴᴛʜʟʏ »" if time_f == "month" else "ᴍᴏɴᴛʜʟʏ"
+    year_btn = "« ʏᴇᴀʀʟʏ »" if time_f == "year" else "ʏᴇᴀʀʟʏ"
     all_btn = "« ᴀʟʟ ᴛɪᴍᴇ »" if time_f == "all" else "ᴀʟʟ ᴛɪᴍᴇ"
 
     l4_btn = "« 4 ʟᴇᴛʀs »" if letter_f == "4" else "4 ʟᴇᴛʀs"
