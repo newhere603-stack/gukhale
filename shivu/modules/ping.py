@@ -1,5 +1,6 @@
 import random
 import logging
+import wordle_game
 from telegram import Update, ReactionTypeEmoji
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 
