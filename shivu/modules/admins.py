@@ -15,6 +15,7 @@ bot_settings_collection = db['bot_settings']
 # Sahi Economy Fields
 COIN_FIELD = 'balance'   # /bal ke liye
 TOKEN_FIELD = 'tokens'   # /tbal ke liye
+GOLD_FIELD = 'gold'      # Word seek / gold ke liye
 
 # --- Helper for adding/removing currency ---
 async def modify_currency(update: Update, context: CallbackContext, field: str, currency_name: str, is_add: bool):
@@ -52,7 +53,7 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
                 
         if target_id is None or amount is None:
             await update.message.reply_text(
-                f"<b>ᴜsᴀɢᴇ: {command_used} ᴜsᴇʀ_ɪᴅ ᴀᴍᴏᴜɴᴛ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴜsᴇʀ ᴡɪᴛʜ {command_used} ᴀᴍᴏᴜɴᴛ</b>", 
+                f"<b>ᴜsᴀɢᴇ: {command_used} ᴜsᴇʀ_ɪᴅ ᴀᴍᴏᴜɴᴛ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴜsᴇʀ ᴡɪᴛ🇭 {command_used} ᴀᴍᴏᴜɴᴛ</b>", 
                 parse_mode='HTML'
             )
             return
@@ -96,7 +97,13 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
         new_balance = user.get(field, 0)
         
         action = "ᴀᴅᴅᴇᴅ ᴛᴏ" if is_add else "ʀᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ"
-        c_name = "ᴛᴏᴋᴇɴs" if currency_name == 'tokens' else "ᴄᴏɪɴs"
+        
+        if currency_name == 'tokens':
+            c_name = "ᴛᴏᴋᴇɴs"
+        elif currency_name == 'gold':
+            c_name = "ɢᴏʟᴅ"
+        else:
+            c_name = "ᴄᴏɪɴs"
         
         await update.message.reply_text(
             f"<b>sᴜᴄᴄᴇss! {amount} {c_name} {action} {mention}.\nᴜᴘᴅᴀᴛᴇᴅ ʙᴀʟᴀɴᴄᴇ: {new_balance} {c_name}.</b>",
@@ -276,11 +283,17 @@ async def tadd_cmd(update: Update, context: CallbackContext):
 async def cadd_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, COIN_FIELD, 'coins', True)
 
+async def gadd_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, GOLD_FIELD, 'gold', True)
+
 async def trem_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, TOKEN_FIELD, 'tokens', False)
 
 async def crem_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, COIN_FIELD, 'coins', False)
+
+async def grem_cmd(update: Update, context: CallbackContext):
+    await modify_currency(update, context, GOLD_FIELD, 'gold', False)
 
 
 # Handlers registration
@@ -288,6 +301,8 @@ application.add_handler(CommandHandler(['destroy'], destroy_cmd, block=False))
 application.add_handler(CommandHandler(['setded'], setded_cmd, block=False))
 application.add_handler(CommandHandler(['tadd'], tadd_cmd, block=False))
 application.add_handler(CommandHandler(['cadd'], cadd_cmd, block=False))
+application.add_handler(CommandHandler(['gadd'], gadd_cmd, block=False))
 application.add_handler(CommandHandler(['trem'], trem_cmd, block=False))
 application.add_handler(CommandHandler(['crem'], crem_cmd, block=False))
+application.add_handler(CommandHandler(['grem'], grem_cmd, block=False))
 application.add_handler(CommandHandler(['fixrarity'], fixrarity_cmd, block=False))
