@@ -1,4 +1,4 @@
-Import asyncio
+import asyncio
 import wordle_game
 import shivu.modules.balance
 import shivu.modules.chatlog
