@@ -28,9 +28,20 @@ def load_words_from_json(filename):
         LOGGER.error(f"Error loading {filename}: {e}")
     return set()
 
-WORDS_4 = load_words_from_json("all-four.json")
-WORDS_5 = load_words_from_json("all-five.json")
-WORDS_6 = load_words_from_json("all-six.json")
+# Load ALL words (For guessing validation)
+WORDS_4_ALL = load_words_from_json("all-four.json")
+WORDS_5_ALL = load_words_from_json("all-five.json")
+WORDS_6_ALL = load_words_from_json("all-six.json")
+
+# Load COMMON words (For selecting the target word)
+WORDS_4_COMMON = load_words_from_json("common-four.json")
+WORDS_5_COMMON = load_words_from_json("common-five.json")
+WORDS_6_COMMON = load_words_from_json("common-six.json")
+
+# Valid words pool (ALL + COMMON) for checking user guesses
+VALID_WORDS_4 = WORDS_4_ALL | WORDS_4_COMMON
+VALID_WORDS_5 = WORDS_5_ALL | WORDS_5_COMMON
+VALID_WORDS_6 = WORDS_6_ALL | WORDS_6_COMMON
 
 def to_bold_sans_serif(text: str) -> str:
     result = []
@@ -134,9 +145,10 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except ValueError:
             pass
 
-    word_pool = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
+    # Select target ONLY from common words pool
+    word_pool = WORDS_4_COMMON if length == 4 else (WORDS_6_COMMON if length == 6 else WORDS_5_COMMON)
     if not word_pool:
-        await update.message.reply_text(f"<b>⚠️ Error: No words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<b>⚠️ Error: No common words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
         return
 
     target = random.choice(list(word_pool))
@@ -193,7 +205,8 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(text) != length or not text.isalpha():
         return
 
-    valid_list = WORDS_4 if length == 4 else (WORDS_6 if length == 6 else WORDS_5)
+    # Check guess against the combined (ALL + COMMON) valid list
+    valid_list = VALID_WORDS_4 if length == 4 else (VALID_WORDS_6 if length == 6 else VALID_WORDS_5)
     
     if text not in valid_list:
         error_msg = f"{original_text.lower()} is not a valid word."
@@ -264,17 +277,17 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             del ACTIVE_GAMES[chat_id]
             
-            # Jo length ka game jeeta hai, wahi command suggest hogi (jaise /new4, /new5, /new6)
             suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
             
             win_msg = (
                 f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()} Added {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
             )
-            # User ke message ko reply tag ke sath bheja jayega jaisa pehle tha
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
             try:
-                await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
+                three_reactions = random.sample(REACTION_EMOJIS, 3)
+                reaction_list = [ReactionTypeEmoji(emoji) for emoji in three_reactions]
+                await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=reaction_list)
             except Exception:
                 pass
             
