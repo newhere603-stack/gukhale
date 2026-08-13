@@ -514,28 +514,34 @@ class CharacterUploadHandler:
     @staticmethod
     async def handle_url_upload(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if len(context.args) != 4:
-            await update.message.reply_text('<b>Format: /upload URL name anime rarity</b>', parse_mode='HTML')
+            await update.message.reply_text('<b>Format: /upload URL_OR_ID name anime rarity</b>', parse_mode='HTML')
             return
 
-        media_url = context.args[0]
-        processing_msg = await update.message.reply_text('<b>⏳ Downloading from URL...</b>', parse_mode='HTML')
+        media_source = context.args[0]
+        processing_msg = await update.message.reply_text('<b>⏳ Processing input...</b>', parse_mode='HTML')
 
-        progress = ProgressTracker(processing_msg)
-        file_bytes = await FileDownloader.download_from_url(media_url, progress.update)
+        # FIX: Check karega ki link hai ya File ID
+        if media_source.startswith(('http://', 'https://')):
+            progress = ProgressTracker(processing_msg)
+            file_bytes = await FileDownloader.download_from_url(media_source, progress.update)
 
-        if not file_bytes:
-            await processing_msg.edit_text('<b>Download failed. Check URL!</b>', parse_mode='HTML')
-            return
+            if not file_bytes:
+                await processing_msg.edit_text('<b>Download failed. Check URL!</b>', parse_mode='HTML')
+                return
 
-        media_file = MediaFile(url=media_url, file_bytes=file_bytes)
-        await processing_msg.edit_text('<b>⏳ Uploading to server...</b>', parse_mode='HTML')
-        
-        file_url = await MasterUploader.upload_file(file_bytes, media_file.filename, media_file.media_type)
-        if not file_url:
-            file_url = media_url
+            media_file = MediaFile(url=media_source, file_bytes=file_bytes)
+            await processing_msg.edit_text('<b>⏳ Uploading to server...</b>', parse_mode='HTML')
+            
+            file_url = await MasterUploader.upload_file(file_bytes, media_file.filename, media_file.media_type)
+            if not file_url:
+                file_url = media_source
 
-        object.__setattr__(media_file, 'url', file_url)
-        await processing_msg.edit_text('<b>✅ Uploaded! Saving character...</b>', parse_mode='HTML')
+            object.__setattr__(media_file, 'url', file_url)
+        else:
+            # Seedha ID ko accept karega
+            media_file = MediaFile(url=media_source, media_type=MediaType.IMAGE)
+
+        await processing_msg.edit_text('<b>✅ Ready! Saving character...</b>', parse_mode='HTML')
 
         character = await CharacterFactory.create_from_args(
             context.args[1:], media_file, str(update.effective_user.id), update.effective_user.first_name
@@ -623,7 +629,7 @@ class CharacterUpdateHandler:
     async def update_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         args = context.args
         if len(args) < 2:
-            await update.message.reply_text('<b>Format: /update ID field [value]\n(For Media: Reply with "media" OR type "/update ID media URL")</b>', parse_mode='HTML')
+            await update.message.reply_text('<b>Format: /update ID field [value]\n(For Media: Reply with "media" OR type "/update ID media URL_OR_ID")</b>', parse_mode='HTML')
             return
 
         char_id = args[0]
@@ -650,37 +656,57 @@ class CharacterUpdateHandler:
                 reply_msg = update.message.reply_to_message
                 
                 if len(args) >= 3:
-                    new_url = args[2]
-                    await processing_msg.edit_text('<b>⏳ Downloading from link...</b>', parse_mode='HTML')
+                    new_media = args[2]
                     
-                    file_bytes = await FileDownloader.download_from_url(new_url)
-                    if not file_bytes:
-                        await processing_msg.edit_text('<b>Failed to download from URL. Check if it is a direct media link.</b>', parse_mode='HTML')
-                        return
-                    
-                    media_file = MediaFile(url=new_url, file_bytes=file_bytes)
-                
+                    # FIX: Link vs ID checker lagaya
+                    if new_media.startswith(('http://', 'https://')):
+                        await processing_msg.edit_text('<b>⏳ Downloading from link...</b>', parse_mode='HTML')
+                        file_bytes = await FileDownloader.download_from_url(new_media)
+                        
+                        if not file_bytes:
+                            await processing_msg.edit_text('<b>Failed to download from URL. Check if it is a direct media link.</b>', parse_mode='HTML')
+                            return
+                            
+                        media_file = MediaFile(url=new_media, file_bytes=file_bytes)
+                        await processing_msg.edit_text('<b>⏳ Uploading new media to server...</b>', parse_mode='HTML')
+                        file_url = await MasterUploader.upload_file(media_file.file_bytes, media_file.filename, media_file.media_type)
+                        
+                        if not file_url:
+                            await processing_msg.edit_text('<b>Server upload failed!</b>', parse_mode='HTML')
+                            return
+                            
+                        update_data['img_url'] = file_url
+                        update_data['is_video'] = media_file.is_video
+                        update_data['media_type'] = media_file.media_type.value
+                        update_data['file_hash'] = media_file.hash
+                        
+                    else:
+                        # Direct Telegram ID support
+                        await processing_msg.edit_text('<b>⏳ Using Telegram File ID...</b>', parse_mode='HTML')
+                        update_data['img_url'] = new_media
+
                 elif reply_msg and (reply_msg.photo or reply_msg.video or reply_msg.document or reply_msg.animation):
                     await processing_msg.edit_text('<b>⏳ Extracting new media...</b>', parse_mode='HTML')
                     media_file = await CharacterUploadHandler._extract_media_from_reply(reply_msg, update)
                     if not media_file:
                         await processing_msg.edit_text('<b>Failed to extract media!</b>', parse_mode='HTML')
                         return
+                    
+                    await processing_msg.edit_text('<b>⏳ Uploading new media to server...</b>', parse_mode='HTML')
+                    file_url = await MasterUploader.upload_file(media_file.file_bytes, media_file.filename, media_file.media_type)
+                    
+                    if not file_url:
+                        await processing_msg.edit_text('<b>Server upload failed!</b>', parse_mode='HTML')
+                        return
+                        
+                    update_data['img_url'] = file_url
+                    update_data['is_video'] = media_file.is_video
+                    update_data['media_type'] = media_file.media_type.value
+                    update_data['file_hash'] = media_file.hash
+
                 else:
-                    await processing_msg.edit_text('<b>Please either reply to a photo/video OR provide a link! (e.g., /update 01 media LINK)</b>', parse_mode='HTML')
+                    await processing_msg.edit_text('<b>Please either reply to a photo/video OR provide a link/ID! (e.g., /update 01 media LINK_OR_ID)</b>', parse_mode='HTML')
                     return
-                    
-                await processing_msg.edit_text('<b>⏳ Uploading new media to server...</b>', parse_mode='HTML')
-                file_url = await MasterUploader.upload_file(media_file.file_bytes, media_file.filename, media_file.media_type)
-                
-                if not file_url:
-                    await processing_msg.edit_text('<b>Server upload failed!</b>', parse_mode='HTML')
-                    return
-                    
-                update_data['img_url'] = file_url
-                update_data['is_video'] = media_file.is_video
-                update_data['media_type'] = media_file.media_type.value
-                update_data['file_hash'] = media_file.hash
 
             else:
                 if len(args) < 3:
