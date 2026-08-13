@@ -132,7 +132,8 @@ async def get_owners(cid: str) -> List[Dict]:
     ).to_list(length=None)
     owners = []
     for u in users:
-        cnt = sum(1 for c in u.get('characters', []) if c.get('id'] == cid)
+        # 🛠️ FIXED SYNTAX ERROR HERE: c.get('id'] changed to c.get('id')
+        cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
         if cnt:
             owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
                             'username': u.get('username'), 'count': cnt})
@@ -228,18 +229,16 @@ def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, i
     return "\n".join(lines), total_pages
 
 
-# --- ✨ FIXED SEND MEDIA (Handles Photo, Video, and Documents correctly) ---
+# --- ✨ FIXED SEND MEDIA ---
 async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
     try:
         kwargs = {'caption': caption, 'parse_mode': ParseMode.HTML}
         if kb:
             kwargs['reply_markup'] = kb
         
-        # Agar yeh video hai
         if char.is_video:
             await update.message.reply_video(video=char.img_url, **kwargs)
         else:
-            # Try sending as photo first, agar document-type file_id hai toh fallback to reply_document
             try:
                 await update.message.reply_photo(photo=char.img_url, **kwargs)
             except TelegramError:
