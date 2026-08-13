@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 ACTIVE_GAMES = {}
 DELETE_SETTINGS = {}
 WORDSEEK_ENABLED = {}  
-REACTION_EMOJIS = ["🔥", "🍓", "❤️", "🎉", "🤩", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️"]
+REACTION_EMOJIS = ["🔥", "🥳", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️"]
 
 # --- FAST JSON LOADING (NO FALLBACKS) ---
 def load_words_from_json(filename):
