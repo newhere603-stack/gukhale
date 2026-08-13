@@ -148,7 +148,6 @@ async def swaifu(update: Update, context: CallbackContext):
         char_name = html.escape(to_small_caps(character.get('name', 'Unknown')))
         anime = html.escape(to_small_caps(character.get('anime', 'Unknown')))
         
-        # 🔥 FIXED: Proper Rarity & Custom Emoji mapping matching your main file
         rarity_str = character.get('rarity', '🟢 Common')
         r_key = get_rarity_key(rarity_str)
         if r_key and r_key in RARITIES:
@@ -494,13 +493,21 @@ async def tic_callback(update: Update, context: CallbackContext):
 
 active_mines_games = {}
 
-def get_mines_multiplier(found_cash: int, mines=5, total=25) -> float:
-    """Calculate dynamic multiplier based on cash tiles found."""
+def get_mines_multiplier(found_cash: int, mines: int, total: int = 25) -> float:
+    """Calculate dynamic multiplier based on cash tiles found and total mines chosen."""
     if found_cash == 0:
         return 1.00
     
+    # Safe check in case of unexpected values
+    if found_cash > (total - mines):
+        return 1.00
+
     total_combs = math.comb(total, found_cash)
     safe_combs = math.comb(total - mines, found_cash)
+    
+    if safe_combs == 0:
+        return 1.00
+        
     odds = total_combs / safe_combs
     
     multiplier = odds * 0.95
@@ -528,7 +535,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
         keyboard.append(row)
     
     if game['status'] == 'playing' and game['found'] > 0:
-        mult = get_mines_multiplier(game['found'])
+        mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
         win_amount = int(game['bet'] * mult)
         btn_text = f"{to_small_caps('Cash Out')} ({mult}x | 💸 {win_amount})"
         keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout")])
@@ -539,14 +546,24 @@ async def start_mines(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if not context.args or not context.args[0].isdigit():
-        msg = f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Usage:')} /mines [bet_amount]</b>\n<i>Example: /mines 20</i>"
+        msg = f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Usage:')} /mines [bet] [mines(optional)]</b>\n<i>Example: /mines 20 3</i>"
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
         
     bet = int(context.args[0])
-    if bet < 10:
-        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Minimum bet is 10 coins!')}</b>", parse_mode=ParseMode.HTML)
+    
+    # Bet Limit Condition
+    if bet < 10 or bet > 20000:
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Bet amount must be between 10 and 20,000 coins!')}</b>", parse_mode=ParseMode.HTML)
         return
+
+    # Mine Count Condition (Default is 5 if not provided)
+    mines_count = 5
+    if len(context.args) > 1 and context.args[1].isdigit():
+        mines_count = int(context.args[1])
+        if mines_count < 3 or mines_count > 10:
+            await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Mines count must be between 3 and 10!')}</b>", parse_mode=ParseMode.HTML)
+            return
 
     user_data = await user_collection.find_one({'id': user_id})
     balance = user_data.get('balance', 0) if user_data else 0
@@ -557,7 +574,8 @@ async def start_mines(update: Update, context: CallbackContext):
 
     await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -bet}})
 
-    board = ['mine'] * 5 + ['safe'] * 20
+    # Fill Board According to Mines Count
+    board = ['mine'] * mines_count + ['safe'] * (25 - mines_count)
     random.shuffle(board)
 
     game = {
@@ -568,13 +586,13 @@ async def start_mines(update: Update, context: CallbackContext):
         'revealed': [False] * 25,
         'status': 'playing',
         'found': 0,
-        'mines_count': 5
+        'mines_count': mines_count
     }
 
     text = (
         f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {to_small_caps('Mines Game Active!')}</b>\n\n"
         f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {bet}\n"
-        f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{to_small_caps('Mines')}:</b> 5\n"
+        f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{to_small_caps('Mines')}:</b> {mines_count}\n"
         f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found')}:</b> 0\n"
         f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> 1.00x\n\n"
         f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bet}"
@@ -627,7 +645,7 @@ async def mines_callback(update: Update, context: CallbackContext):
         return
 
     if data == "mines_cashout":
-        mult = get_mines_multiplier(game['found'])
+        mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
         win_amount = int(game['bet'] * mult)
         
         await user_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
@@ -673,10 +691,11 @@ async def mines_callback(update: Update, context: CallbackContext):
         else:
             game['revealed'][idx] = True
             game['found'] += 1
-            mult = get_mines_multiplier(game['found'])
+            mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
             win_amount = int(game['bet'] * mult)
             
-            if game['found'] == 20:
+            # Check for perfect game (found all safe spots)
+            if game['found'] == (25 - game['mines_count']):
                 await user_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
                 game['status'] = 'cashed_out'
                 text = (
@@ -697,7 +716,7 @@ async def mines_callback(update: Update, context: CallbackContext):
             text = (
                 f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {to_small_caps('Mines Game Active!')}</b>\n\n"
                 f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {game['bet']}\n"
-                f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{to_small_caps('Mines')}:</b> 5\n"
+                f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{to_small_caps('Mines')}:</b> {game['mines_count']}\n"
                 f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found')}:</b> {game['found']}\n"
                 f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
                 f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
