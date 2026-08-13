@@ -8,7 +8,6 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
-# Dhyan rakhein ki 'shivu' module aapke project me properly set ho
 from shivu import application, collection, user_collection
 
 char_cache = TTLCache(maxsize=2000, ttl=600)
@@ -133,7 +132,7 @@ async def get_owners(cid: str) -> List[Dict]:
     ).to_list(length=None)
     owners = []
     for u in users:
-        cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
+        cnt = sum(1 for c in u.get('characters', []) if c.get('id'] == cid)
         if cnt:
             owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
                             'username': u.get('username'), 'count': cnt})
@@ -229,24 +228,32 @@ def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, i
     return "\n".join(lines), total_pages
 
 
+# --- ✨ FIXED SEND MEDIA (Handles Photo, Video, and Documents correctly) ---
 async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
     try:
-        method = update.message.reply_video if char.is_video else update.message.reply_photo
         kwargs = {'caption': caption, 'parse_mode': ParseMode.HTML}
         if kb:
             kwargs['reply_markup'] = kb
         
-        # char.img_url dono ko handle kar lega (Normal URL ho ya File ID)
-        await method(video=char.img_url, **kwargs) if char.is_video else await method(photo=char.img_url, **kwargs)
-        
+        # Agar yeh video hai
+        if char.is_video:
+            await update.message.reply_video(video=char.img_url, **kwargs)
+        else:
+            # Try sending as photo first, agar document-type file_id hai toh fallback to reply_document
+            try:
+                await update.message.reply_photo(photo=char.img_url, **kwargs)
+            except TelegramError:
+                await update.message.reply_document(document=char.img_url, **kwargs)
+                
     except TelegramError as e:
-        await update.message.reply_text(f"{caption}\n\n<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('media error:')} {escape(str(e))}",
-                                         reply_markup=kb, parse_mode=ParseMode.HTML)
+        await update.message.reply_text(
+            f"{caption}\n\n<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('media error:')} {escape(str(e))}",
+            reply_markup=kb, parse_mode=ParseMode.HTML
+        )
 
 
-# --- ✨ NEW: SECURE FILE ID EXTRACTOR ---
+# --- ✨ SECURE FILE ID EXTRACTOR ---
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # 🔒 Security Check: Sirf aapki ID kaam karegi
     if update.effective_user.id != 7657218453:
         return await update.message.reply_text("⚠️ <b>Access Denied:</b> Aapke paas yeh command use karne ki permission nahi hai.", parse_mode=ParseMode.HTML)
 
@@ -256,7 +263,6 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     reply_msg = update.message.reply_to_message
 
     if reply_msg.photo:
-        # [-1] uthata hai sabse High Quality (HD) waali image ka File ID
         file_id = reply_msg.photo[-1].file_id
         await update.message.reply_text(f"📸 <b>Photo File ID:</b>\n<code>{file_id}</code>\n\n<i>Is ID ko copy karo aur MongoDB me 'img_url' ki jagah paste kardo!</i>", parse_mode=ParseMode.HTML)
         
@@ -337,9 +343,6 @@ async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE
 # --- ✨ REGISTERING HANDLERS ---
 application.add_handler(CommandHandler("check", check_character, block=False))
 application.add_handler(CommandHandler("anime", find_anime, block=False))
-
-# Aapka naya aur secure handler register ho gaya
 application.add_handler(CommandHandler("getid", get_file_id, block=False))
-
 application.add_handler(CallbackQueryHandler(handle_owners_pagination, pattern=r"^owners_", block=False))
 application.add_handler(CallbackQueryHandler(handle_back_to_card, pattern=r"^back_", block=False))
