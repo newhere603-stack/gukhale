@@ -8,6 +8,7 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
+# Dhyan rakhein ki 'shivu' module aapke project me properly set ho
 from shivu import application, collection, user_collection
 
 char_cache = TTLCache(maxsize=2000, ttl=600)
@@ -132,7 +133,6 @@ async def get_owners(cid: str) -> List[Dict]:
     ).to_list(length=None)
     owners = []
     for u in users:
-        # BUG FIXED HERE: c.get('id'] changed to c.get('id')
         cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
         if cnt:
             owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
@@ -155,7 +155,7 @@ def process_search(chars: List[Dict]) -> Dict:
     return {'names': names, 'data': data, 'rarities': rarities, 'unique': len(names), 'total': len(chars)}
 
 
-# --- ✨ COOL CARD INFO DESIGN (SMALL CAPS + BOLD + PREMIUM EMOJI) ---
+# --- ✨ COOL CARD INFO DESIGN ---
 def card_caption(char: Char, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     return (
@@ -170,7 +170,7 @@ def card_caption(char: Char, gcount: int) -> str:
     )
 
 
-# --- 🏆 OWNERS LIST DESIGN (SMALL CAPS + BOLD + PREMIUM EMOJI) ---
+# --- 🏆 OWNERS LIST DESIGN ---
 def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     start, end = page * USERS_PER_PAGE, page * USERS_PER_PAGE + USERS_PER_PAGE
@@ -235,10 +235,41 @@ async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
         kwargs = {'caption': caption, 'parse_mode': ParseMode.HTML}
         if kb:
             kwargs['reply_markup'] = kb
+        
+        # char.img_url dono ko handle kar lega (Normal URL ho ya File ID)
         await method(video=char.img_url, **kwargs) if char.is_video else await method(photo=char.img_url, **kwargs)
+        
     except TelegramError as e:
         await update.message.reply_text(f"{caption}\n\n<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('media error:')} {escape(str(e))}",
                                          reply_markup=kb, parse_mode=ParseMode.HTML)
+
+
+# --- ✨ NEW: SECURE FILE ID EXTRACTOR ---
+async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # 🔒 Security Check: Sirf aapki ID kaam karegi
+    if update.effective_user.id != 7657218453:
+        return await update.message.reply_text("⚠️ <b>Access Denied:</b> Aapke paas yeh command use karne ki permission nahi hai.", parse_mode=ParseMode.HTML)
+
+    if not update.message.reply_to_message:
+        return await update.message.reply_text("⚠️ <b>Error:</b> Kisi High Quality photo ya video pe reply karke <code>/getid</code> likho.", parse_mode=ParseMode.HTML)
+
+    reply_msg = update.message.reply_to_message
+
+    if reply_msg.photo:
+        # [-1] uthata hai sabse High Quality (HD) waali image ka File ID
+        file_id = reply_msg.photo[-1].file_id
+        await update.message.reply_text(f"📸 <b>Photo File ID:</b>\n<code>{file_id}</code>\n\n<i>Is ID ko copy karo aur MongoDB me 'img_url' ki jagah paste kardo!</i>", parse_mode=ParseMode.HTML)
+        
+    elif reply_msg.video:
+        file_id = reply_msg.video.file_id
+        await update.message.reply_text(f"🎥 <b>Video File ID:</b>\n<code>{file_id}</code>\n\n<i>Is ID ko copy karo aur MongoDB me 'img_url' ki jagah paste kardo!</i>", parse_mode=ParseMode.HTML)
+        
+    elif reply_msg.document:
+        file_id = reply_msg.document.file_id
+        await update.message.reply_text(f"📁 <b>Document File ID:</b>\n<code>{file_id}</code>\n\n<i>Is ID ko copy karo aur MongoDB me 'img_url' ki jagah paste kardo!</i>", parse_mode=ParseMode.HTML)
+        
+    else:
+        await update.message.reply_text("⚠️ <b>Invalid Media:</b> Yeh koi proper photo ya video nahi hai.", parse_mode=ParseMode.HTML)
 
 
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -306,5 +337,9 @@ async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE
 # --- ✨ REGISTERING HANDLERS ---
 application.add_handler(CommandHandler("check", check_character, block=False))
 application.add_handler(CommandHandler("anime", find_anime, block=False))
+
+# Aapka naya aur secure handler register ho gaya
+application.add_handler(CommandHandler("getid", get_file_id, block=False))
+
 application.add_handler(CallbackQueryHandler(handle_owners_pagination, pattern=r"^owners_", block=False))
 application.add_handler(CallbackQueryHandler(handle_back_to_card, pattern=r"^back_", block=False))
