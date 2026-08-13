@@ -145,7 +145,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except ValueError:
             pass
 
-    # Select target ONLY from common words pool
+    # Select target ONLY from COMMON words pool
     word_pool = WORDS_4_COMMON if length == 4 else (WORDS_6_COMMON if length == 6 else WORDS_5_COMMON)
     if not word_pool:
         await update.message.reply_text(f"<b>⚠️ Error: No common words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
@@ -285,9 +285,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
             try:
-                three_reactions = random.sample(REACTION_EMOJIS, 3)
-                reaction_list = [ReactionTypeEmoji(emoji) for emoji in three_reactions]
-                await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=reaction_list)
+                await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
             except Exception:
                 pass
             
