@@ -1,4 +1,4 @@
-import asyncio
+Import asyncio
 import wordle_game
 import shivu.modules.balance
 import shivu.modules.chatlog
@@ -175,8 +175,7 @@ async def _send_media(context, chat_id, character, caption):
         return await context.bot.send_video(chat_id=chat_id, video=character.get('img_url'),
                                               caption=caption, parse_mode='HTML',
                                               supports_streaming=True)
-    # 🔥 YAHA PE SEND_DOCUMENT LAGAYA HAI FULL HD QUALITY KE LIYE 🔥
-    return await context.bot.send_document(chat_id=chat_id, document=character.get('img_url'),
+    return await context.bot.send_photo(chat_id=chat_id, photo=character.get('img_url'),
                                          caption=caption, parse_mode='HTML')
 
 
@@ -316,6 +315,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
         if chat_id not in last_characters:
             return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
 
+        # Agar pehle hi memory me lock ho chuka hai to turant reject kardo
         if chat_id in first_correct_guesses:
             return await update.message.reply_html(
                 '<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>'
@@ -342,6 +342,9 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=spawn_message_links[chat_id])]])
             return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
+        # -------------------------------------------------------------------------
+        # 1. INSTANT MEMORY LOCK (Dusre users ko yahi se block kar dega)
+        # -------------------------------------------------------------------------
         first_correct_guesses[chat_id] = user_id
         
         time_taken_seconds = 0
@@ -358,6 +361,9 @@ async def guess(update: Update, context: CallbackContext) -> None:
         if eu.username:
             user_fields['username'] = eu.username
 
+        # -------------------------------------------------------------------------
+        # 2. MESSAGE PREPARATION & INSTANT REPLY (No wait for Database/Delete)
+        # -------------------------------------------------------------------------
         rarity_str = character.get('rarity', '🟢 Common')
         r_key = get_rarity_key(rarity_str)
         
@@ -382,14 +388,20 @@ async def guess(update: Update, context: CallbackContext) -> None:
         
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
         
+        # User ko message INSTANTLY chala jayega (Without any DB/API lag)
         await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
 
+        # State vars clear karna (Taaki despawn/error na aaye)
         spawn_message_links.pop(chat_id, None)
         spawn_times.pop(chat_id, None)
         spawn_messages.pop(chat_id, None)
 
+        # -------------------------------------------------------------------------
+        # 3. BACKGROUND TASKS (Database updates, Message Delete)
+        # -------------------------------------------------------------------------
         async def process_background_tasks():
             try:
+                # User DB update (Character add karna)
                 user = await user_collection.find_one({'id': user_id})
                 if user:
                     changed = {k: v for k, v in user_fields.items() if user.get(k) != v}
@@ -405,6 +417,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
                         'bot_started': False
                     })
 
+                # Cache clear
                 try:
                     from shivu.modules.inline import user_cache, query_cache
                     user_cache.pop(f"u{user_id}", None)
@@ -412,6 +425,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 except Exception:
                     pass
 
+                # Spawn message delete
                 should_delete = await get_group_setting(chat_id, 'grab_delete', False)
                 if should_delete and spawn_msg_id:
                     try:
@@ -419,12 +433,14 @@ async def guess(update: Update, context: CallbackContext) -> None:
                     except BadRequest:
                         pass
 
+                # Group Stats DB update
                 await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
                 await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
 
             except Exception as e:
                 LOGGER.error(f"Error in background grab process: {e}")
 
+        # Task ko piche run hone ke liye bhej diya (Main thread free ho gayi)
         asyncio.create_task(process_background_tasks())
 
     except Exception:
@@ -566,3 +582,4 @@ if __name__ == "__main__":
         loop.run_until_complete(main())
     finally:
         loop.close()
+        
