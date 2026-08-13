@@ -4,7 +4,7 @@ from html import escape
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.helpers import mention_html
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
-from telegram.error import BadRequest  # Naya import add kiya gaya hai
+from telegram.error import BadRequest
 
 from shivu import application, OWNER_ID, user_collection, top_global_groups_collection, group_user_totals_collection
 from shivu import sudo_users as SUDO_USERS
@@ -118,11 +118,8 @@ async def send_or_edit(update, context, text, kb, edit):
             )
         except BadRequest as e:
             if "not modified" in str(e).lower():
-                # Agar leaderboard mein koi naya change nahi aaya hai, 
-                # toh Telegram error dega. Hume ise silently ignore karna hai taaki flicker na ho.
                 return
             
-            # Fallback agar edit kisi aur wajah se fail hua
             try:
                 await q.message.delete()
             except Exception:
@@ -135,7 +132,6 @@ async def send_or_edit(update, context, text, kb, edit):
                 reply_markup=kb
             )
         except Exception:
-            # Generic fallback
             try:
                 await q.message.delete()
             except Exception:
@@ -187,7 +183,8 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
 # ---------- Top by balance ----------
 
 async def top_balance(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.find({}).limit(50).to_list(50)
+    # FIXED: Fetch all users instead of just the first 50
+    data = await user_collection.find({}).to_list(length=None)
 
     if not data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
@@ -210,8 +207,11 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
     await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
 
 
+# ---------- Top by tokens ----------
+
 async def top_tokens(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.find({}).limit(50).to_list(50)
+    # FIXED: Fetch all users instead of just the first 50
+    data = await user_collection.find({}).to_list(length=None)
 
     if not data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
