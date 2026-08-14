@@ -56,7 +56,7 @@ async def update_menu(query, text, keyboard):
 # ========================
 async def pmarket_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    selling_stars = selling_states.pop(user_id, None)
+    selling_states.pop(user_id, None)
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
         [InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
@@ -125,7 +125,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         market_items = await cursor.to_list(length=10)
 
         if not market_items:
-            await query.answer("ɴᴏ ᴡᴀɪғᴜs ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ғᴏʀ sᴀʟᴇ ɪɴ ᴛʜɪs ʀᴀʀɪᴛʏ!", show_alert=True)
+            await query.answer("ɴᴏ wᴀɪғᴜs ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ғᴏʀ sᴀʟᴇ ɪɴ ᴛʜɪs ʀᴀʀɪᴛʏ!", show_alert=True)
             return
 
         keyboard = []
@@ -275,7 +275,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         )
 
 # ========================
-# DIRECT MESSAGE HANDLER FOR SELLING (Bypasses Conflict)
+# DIRECT MESSAGE HANDLER FOR SELLING
 # ========================
 async def handle_selling_messages(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
@@ -283,7 +283,7 @@ async def handle_selling_messages(update: Update, context: CallbackContext):
 
     user_id = update.effective_user.id
     if user_id not in selling_states:
-        return  # User is not trying to sell anything right now
+        return  
 
     text = update.message.text.strip()
 
@@ -333,7 +333,6 @@ async def handle_selling_messages(update: Update, context: CallbackContext):
             await update.message.reply_text("<b>❌ sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket</b>", parse_mode='HTML')
             return
 
-        # Remove character from inventory and add to market
         await user_collection.update_one(
             {'id': user_id}, 
             {'$pull': {'characters': {'id': waifu['id']}}}
@@ -346,12 +345,11 @@ async def handle_selling_messages(update: Update, context: CallbackContext):
         }
         await market_collection.insert_one(market_item)
 
-        # Clear state
         selling_states.pop(user_id, None)
         
         await update.message.reply_text(
             f"🎉 <b>{to_small_caps(waifu.get('name'))}</b> ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴘ2ᴘ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!\n\n"
-            f"<i>(ʏᴏᴜ ᴄᴀɴ ᴠɪᴇᴡ ᴏʀ ᴄᴀɴᴄᴇʟ ᴛʜɪs ʟɪsᴛɪɴɢ ɪɴ ᴛʜᴇ /pmarket -> 'Mʏ Lɪsᴛɪɴɢs' ᴍᴇɴᴜ)</i>",
+            f"<i>(ʏᴏᴜ ᴄᴀɴ ᴠɪᴇᴡ ᴏʀ ᴄᴀɴᴄᴇʟ ᴛʜɪs ʟɪsᴛɪɴɢ ɪɴ ᴛʜᴇ /pmarket -> 'ᴍʏ ʟɪsᴛɪɴɢs' ᴍᴇɴᴜ)</i>",
             parse_mode='HTML'
         )
 
@@ -360,4 +358,5 @@ async def handle_selling_messages(update: Update, context: CallbackContext):
 # ========================
 application.add_handler(CommandHandler("pmarket", pmarket_command, block=False))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_selling_messages), group=0)
+# 🔥 Yahan pattern me "pm_start_s" add kar diya hai taaki button click block na ho!
 application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_start_s):', block=False))
