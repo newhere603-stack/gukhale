@@ -13,6 +13,7 @@ ACTIVE_GAMES = {}
 DELETE_SETTINGS = {}
 WORDSEEK_ENABLED = {}  
 REACTION_EMOJIS = ["🔥", "🥳", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️"]
+LOG_GROUP_ID = -1003893927065  # Aapka log group ID
 
 # --- FAST JSON LOADING (NO FALLBACKS) ---
 def load_words_from_json(filename):
@@ -121,7 +122,18 @@ async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TY
 async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message:
         return
-    chat_id = update.effective_chat.id
+    
+    chat = update.effective_chat
+    chat_id = chat.id
+
+    # --- NEW PM RESTRICTION ADDED HERE ---
+    if chat.type == "private":
+        await update.message.reply_text(
+            "<b>⚠️ Hey there! WordSeek is a multiplayer game designed for groups. Please add me to a group chat and start the game there to play with your friends!</b>", 
+            parse_mode="HTML"
+        )
+        return
+    # -------------------------------------
 
     if not WORDSEEK_ENABLED.get(chat_id, True):
         await update.message.reply_text("<b>WordSeek is currently disabled in this chat.</b>", parse_mode="HTML")
@@ -155,12 +167,36 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ACTIVE_GAMES[chat_id] = {"target": target, "length": length, "guesses": [], "max_attempts": 30, "message_id": None}
 
     try:
+        # Game Start Message
         msg = await context.bot.send_message(
             chat_id=chat_id,
             text=f"<b>Game started! Guess the {length}-letter word!</b>",
             parse_mode="HTML"
         )
         ACTIVE_GAMES[chat_id]["message_id"] = msg.message_id
+        
+        # --- LOGGING TO ADMIN GROUP ---
+        chat_name = chat.title if chat.title else "Group"
+        # Agar group public hai toh link banega, warna ID dikhayega
+        chat_link = f"https://t.me/{chat.username}" if chat.username else f"ID: {chat.id}"
+        
+        log_text = (
+            f"🎮 <b>New WordSeek Game Started!</b>\n"
+            f"<b>Group:</b> {chat_name}\n"
+            f"<b>Link/ID:</b> {chat_link}\n"
+            f"<b>Target Word:</b> <code>{target}</code>"
+        )
+        
+        try:
+            await context.bot.send_message(
+                chat_id=LOG_GROUP_ID,
+                text=log_text,
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+        except Exception as log_e:
+            LOGGER.error(f"Could not send log to log group: {log_e}")
+            
     except Exception as e:
         LOGGER.error(f"Error starting game: {e}")
 
