@@ -315,12 +315,19 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 inc_field = "gold" if length == 5 else f"gold_{length}"
                 
-                # Updates All-time, Today, Week, and Month simultaneously
+                # FIX: Updates Global (All-time, Today, Week, Month) AND Chat-Specific points simultaneously!
                 inc_dict = {
+                    # Global Tracker
                     inc_field: points_earned,
                     f"today_{inc_field}": points_earned,
                     f"week_{inc_field}": points_earned,
-                    f"month_{inc_field}": points_earned
+                    f"month_{inc_field}": points_earned,
+                    
+                    # Chat-Specific Tracker (For Chat Leaderboard)
+                    f"{chat_id}_{inc_field}": points_earned,
+                    f"{chat_id}_today_{inc_field}": points_earned,
+                    f"{chat_id}_week_{inc_field}": points_earned,
+                    f"{chat_id}_month_{inc_field}": points_earned
                 }
                 
                 existing_user = await user_collection.find_one({
