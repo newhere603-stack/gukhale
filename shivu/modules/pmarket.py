@@ -2,9 +2,10 @@ import asyncio
 from bson import ObjectId
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
-from shivu import user_collection, application, db
+from shivu import application, db
 
-# IMPORTANT: market_collection yahan explicitly define kar raha hu db se
+# --- EXACT DATABASE COLLECTIONS FROM MAIN.PY ---
+user_collection = db['user_collection_lmaoooo']
 market_collection = db['market_collection'] 
 
 # --- SMALL CAPS CONVERTER HELPERS ---
@@ -18,33 +19,30 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-# --- NEW RARITIES DICT ---
+# --- RARITIES MATCHED WITH MAIN.PY ---
 RARITIES = {
-    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"),
-    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
+    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
     "legendary": ("🟡", '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji>', "Legendary"),
-    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"),
-    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"),
+    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"), 
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"), 
     "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
-    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"), 
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"), 
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
-    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"),
-    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"), 
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"), 
     "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
-    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
-    "pearl": ("🐚", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"),
-    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"), 
+    "pearl": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"), 
 }
 
-# Helper Function to chunk lists for perfect button alignments
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
 
-# Conversation States for Selling
 WAITING_FOR_WAIFU_ID, WAITING_FOR_PRICE = 1, 2
 
-# Helper function to prevent "edit_text" errors on photos
 async def update_menu(query, text, keyboard):
     if query.message.photo or query.message.video:
         await query.message.delete()
@@ -59,7 +57,7 @@ async def pmarket_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
-        [InlineKeyboardButton("💰 ᴍʏ ʟɪsᴛɪɴɢs & sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
+        [InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
     ])
     await update.message.reply_text(
         "<b><tg-emoji emoji-id=\"6334705977073337764\">🟡</tg-emoji> ᴘ2ᴘ ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n"
@@ -87,7 +85,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     if action == "pm_b":
         buttons = []
         for key, (db_emoji, _, name) in RARITIES.items():
-            # Apply to_small_caps directly on the rarity name here!
             buttons.append(InlineKeyboardButton(f"{db_emoji} {to_small_caps(name)}", callback_data=f"pm_r:{key}:{user_id}"))
         
         keyboard = chunk(buttons, 2)
@@ -98,7 +95,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     elif action == "pm_m":
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
-            [InlineKeyboardButton("💰 ᴍʏ ʟɪsᴛɪɴɢs & sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
+            [InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
         ])
         await update_menu(query, "<b><tg-emoji emoji-id=\"6334705977073337764\">🟡</tg-emoji> ᴘ2ᴘ ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>", keyboard)
 
@@ -203,7 +200,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             return
 
         buyer = await user_collection.find_one({'id': user_id})
-        buyer_balance = buyer.get('balance', 0)
+        buyer_balance = buyer.get('balance', 0) if buyer else 0
 
         if buyer_balance < price:
             await query.answer(f"ɪɴsᴜғғɪᴄɪᴇɴᴛ ғᴜɴᴅs! ʏᴏᴜ ɴᴇᴇᴅ 💸 {price:,} ʙᴀʟᴀɴᴄᴇ.", show_alert=True)
@@ -261,7 +258,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{m_id}:{user_id}")])
             
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
-        await update_menu(query, "<b>💸 ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
+        await update_menu(query, "<b>💰 ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
 
 
 # ========================
@@ -286,13 +283,15 @@ async def sell_start(update: Update, context: CallbackContext):
     return WAITING_FOR_WAIFU_ID
 
 async def ask_waifu_id(update: Update, context: CallbackContext):
-    # .strip() added to avoid accidental spaces from mobile keyboards
     waifu_id = update.message.text.strip()
     user_id = update.message.from_user.id
     
     user_data = await user_collection.find_one({'id': user_id})
+    if not user_data or 'characters' not in user_data:
+        await update.message.reply_text("<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
+        return WAITING_FOR_WAIFU_ID
+
     characters = user_data.get('characters', [])
-    
     waifu = next((c for c in characters if str(c.get('id')) == str(waifu_id)), None)
     
     if not waifu:
@@ -316,19 +315,17 @@ async def ask_price(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
 
     if not price_text.isdigit() or int(price_text) <= 0:
-        await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ ᴡɪᴛʜᴏᴜᴛ sᴘᴀᴄᴇs ᴏʀ ʟᴇᴛᴛᴇʀs.</b>", parse_mode='HTML')
+        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ ᴡɪᴛʜᴏᴜᴛ sᴘᴀᴄᴇs ᴏʀ ʟᴇᴛᴛᴇʀs.</b>", parse_mode='HTML')
         return WAITING_FOR_PRICE
 
     price = int(price_text)
     waifu = context.user_data.get('sell_waifu')
 
-    # Remove waifu from user's inventory
     await user_collection.update_one(
         {'id': user_id}, 
         {'$pull': {'characters': {'id': waifu['id']}}}
     )
 
-    # Add to market collection
     market_item = {
         'seller_id': user_id,
         'price': price,
@@ -360,7 +357,7 @@ sell_conv_handler = ConversationHandler(
     },
     fallbacks=[CommandHandler('cancel', cancel_sell)],
     per_message=False,
-    allow_reentry=True,  # YEH LINE ZAROORI HAI! Taki agar stuck ho, to refresh ho sake.
+    allow_reentry=True,
     block=False
 )
 
