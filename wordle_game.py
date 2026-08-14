@@ -12,7 +12,9 @@ LOGGER = logging.getLogger(__name__)
 ACTIVE_GAMES = {}
 DELETE_SETTINGS = {}
 WORDSEEK_ENABLED = {}  
-REACTION_EMOJIS = ["🔥", "🥳", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "😎", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️"]
+
+# Safe reactions list (Telegram-approved bot emojis)
+REACTION_EMOJIS = ["🔥", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️", "🤩", "🐳"]
 LOG_GROUP_ID = -1003893927065  # Aapka log group ID
 
 # --- FAST JSON LOADING (NO FALLBACKS) ---
@@ -126,14 +128,12 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     chat = update.effective_chat
     chat_id = chat.id
 
-    # --- NEW PM RESTRICTION ADDED HERE ---
     if chat.type == "private":
         await update.message.reply_text(
             "<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", 
             parse_mode="HTML"
         )
         return
-    # -------------------------------------
 
     if not WORDSEEK_ENABLED.get(chat_id, True):
         await update.message.reply_text("<b>WordSeek is currently disabled in this chat.</b>", parse_mode="HTML")
@@ -157,7 +157,6 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except ValueError:
             pass
 
-    # Select target ONLY from COMMON words pool
     word_pool = WORDS_4_COMMON if length == 4 else (WORDS_6_COMMON if length == 6 else WORDS_5_COMMON)
     if not word_pool:
         await update.message.reply_text(f"<b>⚠️ Error: No common words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
@@ -167,7 +166,6 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ACTIVE_GAMES[chat_id] = {"target": target, "length": length, "guesses": [], "max_attempts": 30, "message_id": None}
 
     try:
-        # Game Start Message
         msg = await context.bot.send_message(
             chat_id=chat_id,
             text=f"<b>Game started! Guess the {length}-letter word!</b>",
@@ -175,9 +173,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         ACTIVE_GAMES[chat_id]["message_id"] = msg.message_id
         
-        # --- LOGGING TO ADMIN GROUP ---
         chat_name = chat.title if chat.title else "Group"
-        # Agar group public hai toh link banega, warna ID dikhayega
         chat_link = f"https://t.me/{chat.username}" if chat.username else f"ID: {chat.id}"
         
         log_text = (
@@ -210,7 +206,7 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in ACTIVE_GAMES:
         target = ACTIVE_GAMES[chat_id]["target"]
         del ACTIVE_GAMES[chat_id]
-        await update.message.reply_text(f"<b>🛑 Game ended.\nThe word was:</b><blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
+        await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was:{target.lower()}</blockquote></b>", parse_mode="HTML")
     else:
         await update.message.reply_text("<b>ℹ️ No active game running.</b>", parse_mode="HTML")
 
@@ -220,7 +216,28 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if not WORDSEEK_ENABLED.get(chat_id, True):
         return
-    await update.message.reply_text("<b>WordSeek Help Menu</b>\nCommands: /new, /new4, /new5, /new6, /end, /toggledelete, /togglewordseek", parse_mode="HTML")
+        
+    help_text = (
+        "<b>▸ How to Play WordSeek</b>\n\n"
+        "1. Start a game using /new, /new4, /new5, or /new6\n"
+        "2. Guess the hidden word\n"
+        "3. Color hints:\n"
+        "   🟩 Correct letter & spot\n"
+        "   🟨 Correct letter, wrong spot\n"
+        "   🟥 Letter not in word\n"
+        "4. First to guess correctly wins!\n\n"
+        "<b>Game Modes:</b>\n"
+        "• /new or /new5 → 5-letter game\n"
+        "• /new4 → 4-letter game\n"
+        "• /new6 → 6-letter game\n\n"
+        "<b>Commands:</b>\n"
+        "• /end → End current game\n"
+        "• /toggledelete → Toggle auto-delete hints\n"
+        "• /togglewordseek → Enable/Disable bot in chat\n"
+        "• /helpword → Show this help menu"
+    )
+    
+    await update.message.reply_text(help_text, parse_mode="HTML")
 
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text or not update.effective_chat:
@@ -241,7 +258,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(text) != length or not text.isalpha():
         return
 
-    # Check guess against the combined (ALL + COMMON) valid list
     valid_list = VALID_WORDS_4 if length == 4 else (VALID_WORDS_6 if length == 6 else VALID_WORDS_5)
     
     if text not in valid_list:
@@ -291,43 +307,43 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         elif won:
             points_earned = game["max_attempts"] - attempt_num + 1
-            
-            # 1. Sabse pehle game ko list se hatao taaki error aane pe game aage na atke
             del ACTIVE_GAMES[chat_id]
             
-            # 2. Database Update Logic (New User Friendly)
             try:
                 user = update.effective_user
                 user_id = user.id
                 
-                # Check karna ki konsa field update karna hai (5-letter ke liye 'gold', baaki ke liye 'gold_X')
                 inc_field = "gold" if length == 5 else f"gold_{length}"
                 
-                # Pehle check karo ki user database me already exist karta hai ya nahi
+                # Updates All-time, Today, Week, and Month simultaneously
+                inc_dict = {
+                    inc_field: points_earned,
+                    f"today_{inc_field}": points_earned,
+                    f"week_{inc_field}": points_earned,
+                    f"month_{inc_field}": points_earned
+                }
+                
                 existing_user = await user_collection.find_one({
                     "$or": [{"id": user_id}, {"user_id": user_id}, {"_id": user_id}]
                 })
                 
                 if existing_user:
-                    # Agar old user hai, toh uski proper _id (MongoDB wali) se update kardo
                     await user_collection.update_one(
                         {"_id": existing_user["_id"]},
-                        {"$inc": {inc_field: points_earned}}
+                        {"$inc": inc_dict}
                     )
                 else:
-                    # Agar bilkul NEW user hai, toh naya document properly insert karo
                     new_user_data = {
                         "id": user_id,
                         "first_name": user.first_name,
-                        "username": user.username,
-                        inc_field: points_earned
+                        "username": user.username
                     }
+                    new_user_data.update(inc_dict)
                     await user_collection.insert_one(new_user_data)
                     
             except Exception as db_err:
                 LOGGER.error(f"Database error while updating gold: {db_err}")
             
-            # 3. Old message delete aur naya Win message send karne ka process
             if should_delete and old_message_id:
                 try:
                     await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
@@ -341,10 +357,15 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
+            # Reaction handler with safe emojis and error logger
             try:
-                await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
-            except Exception:
-                pass
+                await context.bot.set_message_reaction(
+                    chat_id=chat_id, 
+                    message_id=update.message.message_id, 
+                    reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))]
+                )
+            except Exception as reaction_error:
+                LOGGER.error(f"Reaction fail ho gaya: {reaction_error}")
             
         elif lost:
             if should_delete and old_message_id:
