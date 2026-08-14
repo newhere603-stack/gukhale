@@ -5,7 +5,7 @@ from telegram.helpers import mention_html
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from shivu import application, user_collection, group_user_totals_collection
+from shivu import application, user_collection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -16,15 +16,13 @@ def get_user_state(chat_id):
     if chat_id not in LEADERBOARD_STATES:
         LEADERBOARD_STATES[chat_id] = {
             "scope": "chat",    # Default: Chat select rahega
-            "time": "all",      # Default: All-Time rahega taaki purana score turant dikhe
+            "time": "all",      # Default: All-Time rahega
             "letters": "5"      # Default: 5 Letter rahega
         }
     return LEADERBOARD_STATES[chat_id]
 
-def extract_gold(user_doc, letter_filter="all", time_filter="all"):
-    if not user_doc or not isinstance(user_doc, dict):
-        return 0
-    
+# Yeh naya function sirf utna hi score filter karega jitna us scope mein valid hai
+def get_target_keys(letter_filter, time_filter, scope, chat_id):
     if letter_filter == "4":
         base_keys = ['gold_4', 'points_4', 'golds_4']
     elif letter_filter == "5":
@@ -34,14 +32,28 @@ def extract_gold(user_doc, letter_filter="all", time_filter="all"):
     else:
         base_keys = ['gold', 'golds', 'wordseek_points', 'score', 'points']
     
-    # Agar all time hai toh direct keys check karega
-    if time_filter == "all":
-        keys_to_check = base_keys
-    else:
-        # Today, Week, Month ke hisaab se aage prefix lagayega (eg. today_gold_5)
-        keys_to_check = [f"{time_filter}_{key}" for key in base_keys]
+    keys = []
+    for b_key in base_keys:
+        time_key = b_key
+        # Agar Today/Week/Month hai, toh time lagayega
+        if time_filter != "all":
+            time_key = f"{time_filter}_{b_key}"
+            
+        # Agar Scope CHAT hai, toh aage us chat ki ID lag jayegi (Isi chat ka score dikhega)
+        if scope == "chat":
+            final_key = f"{chat_id}_{time_key}"
+        else:
+            final_key = time_key
+            
+        keys.append(final_key)
+    return keys
+
+def extract_gold(user_doc, target_keys):
+    if not user_doc or not isinstance(user_doc, dict):
+        return 0
     
-    for key in keys_to_check:
+    # Sirf targeted keys ka hi score fetch karega
+    for key in target_keys:
         val = user_doc.get(key)
         if val is not None:
             try:
@@ -50,7 +62,6 @@ def extract_gold(user_doc, letter_filter="all", time_filter="all"):
                     return val
             except (ValueError, TypeError):
                 pass
-                
     return 0
 
 async def send_or_edit(update, context, text, kb, edit):
@@ -96,7 +107,7 @@ def get_wordseek_keyboard(state):
     week_btn = "ᴡᴇᴇᴋ ⎋" if time_f == "week" else "ᴡᴇᴇᴋ"
     month_btn = "ᴍᴏɴᴛʜ ⎋" if time_f == "month" else "ᴍᴏɴᴛʜ"
     year_btn = "ʏᴇᴀʀ ⎋" if time_f == "year" else "ʏᴇᴀʀ"
-    all_btn = "ᴀʟʟ-ᴛɪᴍᴇ ⎋" if time_f == "all" else "ᴀʟʟ-ᴛɪᴍᴇ"
+    all_btn = "ᴀʟʟ-ᴛɪᴍᴇ ⎋" if time_f == "all" else "ᴀʟʟ-ᴛɪ-ᴍᴇ"
 
     l4_btn = "4 ʟᴇᴛʀ ⎋" if letter_f == "4" else "4 ʟᴇᴛʀ"
     l5_btn = "5 ʟᴇᴛʀ ⎋" if letter_f == "5" else "5 ʟᴇᴛʀ"
@@ -128,36 +139,31 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
     chat_id = update.effective_chat.id
     state = get_user_state(chat_id)
 
-    query_filter = {}
-    
-    if state["scope"] == "chat":
-        group_users = await group_user_totals_collection.distinct("user_id", {"group_id": chat_id})
-        if group_users:
-            query_filter["$or"] = [{"id": {"$in": group_users}}, {"user_id": {"$in": group_users}}, {"_id": {"$in": group_users}}]
-        else:
-            query_filter["id"] = {"$in": []}
-
-    # Sabhi matching players ko uthayega
-    data = await user_collection.find(query_filter).to_list(None)
-    
     time_f = state["time"]
     letter_f = state["letters"]
+    scope_f = state["scope"]
+
+    # Target keys set kar lega depending on Global ya Chat hai
+    target_keys = get_target_keys(letter_f, time_f, scope_f, chat_id)
     
-    # Har ek ka current score nikalega selected filter ke hisaab se
+    # Optimised MongoDB Query: Yeh sirf unhi users ko layega jinhone points score kiye hain
+    query_filter = {"$or": [{k: {"$exists": True}} for k in target_keys]}
+    data = await user_collection.find(query_filter).to_list(None)
+    
     user_scores = []
     for u in data:
-        gold = extract_gold(u, letter_f, time_f)
+        gold = extract_gold(u, target_keys)
         if gold > 0:
             user_scores.append((u, gold))
 
     if not user_scores:
         text = (
             "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
-            "<i>No data found for this time/letter mode!</i>"
+            "<i>No data found for this mode! Play some games to rank up!</i>"
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
-    # Pehle saare players ko sort karega highest se lowest, uske baad top 20 niklega
+    # Sort karke top 20 nikalna
     sorted_data = sorted(user_scores, key=lambda x: x[1], reverse=True)[:20]
 
     rows = []
