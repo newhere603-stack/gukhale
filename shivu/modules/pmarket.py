@@ -357,7 +357,7 @@ async def cancel_sell(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 # ========================
-# HANDLERS SETUP
+# HANDLERS SETUP (GROUP 0 FIX FOR ABSOLUTE PRIORITY)
 # ========================
 sell_conv_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(sell_start, pattern='^pm_start_s:')],
@@ -371,5 +371,5 @@ sell_conv_handler = ConversationHandler(
 )
 
 application.add_handler(CommandHandler("pmarket", pmarket_command, block=False))
-application.add_handler(sell_conv_handler)
+application.add_handler(sell_conv_handler, group=0)
 application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist):', block=False))
