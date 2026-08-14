@@ -18,7 +18,7 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-# --- NEW RARITIES DICT (Cosmic moved UP, Premium Edition moved DOWN) ---
+# --- NEW RARITIES DICT ---
 RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"),
     "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
@@ -27,14 +27,14 @@ RARITIES = {
     "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"),
     "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
     "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"),
-    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"), # <-- MOVED UP
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"), 
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
     "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"),
     "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"),
     "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
     "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
     "pearl": ("🐚", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"),
-    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"), # <-- MOVED TO BOTTOM
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
 }
 
 # Helper Function to chunk lists for perfect button alignments
@@ -57,7 +57,6 @@ async def update_menu(query, text, keyboard):
 # ========================
 async def pmarket_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    # We append user_id to callbacks to ensure ONLY the author can click them
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
         [InlineKeyboardButton("💰 ᴍʏ ʟɪsᴛɪɴɢs & sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
@@ -78,7 +77,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     parts = data.split(':')
     user_id = query.from_user.id
     
-    # Check if the person clicking the button is the owner of the menu
     owner_id = int(parts[-1])
     if user_id != owner_id:
         await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ!", show_alert=True)
@@ -89,7 +87,8 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     if action == "pm_b":
         buttons = []
         for key, (db_emoji, _, name) in RARITIES.items():
-            buttons.append(InlineKeyboardButton(f"{db_emoji} {name}", callback_data=f"pm_r:{key}:{user_id}"))
+            # Apply to_small_caps directly on the rarity name here!
+            buttons.append(InlineKeyboardButton(f"{db_emoji} {to_small_caps(name)}", callback_data=f"pm_r:{key}:{user_id}"))
         
         keyboard = chunk(buttons, 2)
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
@@ -232,7 +231,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             char_name = to_small_caps(item['character'].get('name', 'Unknown'))
             price = item['price']
             market_id = str(item['_id'])
-            # Cancel Listing Button
             btn_text = f"❌ ᴄᴀɴᴄᴇʟ | {char_name} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{market_id}:{user_id}")])
             
@@ -252,7 +250,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await market_collection.delete_one({'_id': ObjectId(market_id)})
             await query.answer(f"✅ sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛᴏ ɪɴᴠᴇɴᴛᴏʀʏ!", show_alert=True)
         
-        # Refresh the listings page
         cursor = market_collection.find({'seller_id': user_id})
         listings = await cursor.to_list(length=None)
         keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴡᴀɪғᴜ", callback_data=f"pm_start_s:{user_id}")]]
@@ -264,7 +261,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{m_id}:{user_id}")])
             
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
-        await update_menu(query, "<b>💰 ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
+        await update_menu(query, "<b>💸 ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
 
 
 # ========================
@@ -289,13 +286,10 @@ async def sell_start(update: Update, context: CallbackContext):
     return WAITING_FOR_WAIFU_ID
 
 async def ask_waifu_id(update: Update, context: CallbackContext):
-    waifu_id = update.message.text
+    # .strip() added to avoid accidental spaces from mobile keyboards
+    waifu_id = update.message.text.strip()
     user_id = update.message.from_user.id
     
-    if waifu_id.lower() == '/cancel':
-        await update.message.reply_text("<b>❌ sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
-        return ConversationHandler.END
-
     user_data = await user_collection.find_one({'id': user_id})
     characters = user_data.get('characters', [])
     
@@ -318,15 +312,11 @@ async def ask_waifu_id(update: Update, context: CallbackContext):
     return WAITING_FOR_PRICE
 
 async def ask_price(update: Update, context: CallbackContext):
-    price_text = update.message.text
+    price_text = update.message.text.strip()
     user_id = update.message.from_user.id
-    
-    if price_text.lower() == '/cancel':
-        await update.message.reply_text("<b>❌ sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
-        return ConversationHandler.END
 
     if not price_text.isdigit() or int(price_text) <= 0:
-        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
+        await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ ᴡɪᴛʜᴏᴜᴛ sᴘᴀᴄᴇs ᴏʀ ʟᴇᴛᴛᴇʀs.</b>", parse_mode='HTML')
         return WAITING_FOR_PRICE
 
     price = int(price_text)
@@ -350,15 +340,14 @@ async def ask_price(update: Update, context: CallbackContext):
     
     await update.message.reply_text(
         f"🎉 <b>{to_small_caps(waifu.get('name'))}</b> ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴘ2ᴘ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!\n\n"
-        f"<i>(ʏᴏᴜ ᴄᴀɴ ᴠɪᴇᴡ ᴏʀ ᴄᴀɴᴄᴇʟ ᴛʜɪs ʟɪsᴛɪɴɢ ɪɴ ᴛʜᴇ /pmarket -> 'Mʏ Lɪsᴛɪɴɢs' Mᴇɴᴜ)</i>",
+        f"<i>(ʏᴏᴜ ᴄᴀɴ ᴠɪᴇᴡ ᴏʀ ᴄᴀɴᴄᴇʟ ᴛʜɪs ʟɪsᴛɪɴɢ ɪɴ ᴛʜᴇ /pmarket -> 'Mʏ Lɪsᴛɪɴɢs' ᴍᴇɴᴜ)</i>",
         parse_mode='HTML'
     )
     return ConversationHandler.END
 
 async def cancel_sell(update: Update, context: CallbackContext):
-    await update.message.reply_text("<b>❌ sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
+    await update.message.reply_text("<b>sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
     return ConversationHandler.END
-
 
 # ========================
 # HANDLERS SETUP
@@ -371,11 +360,10 @@ sell_conv_handler = ConversationHandler(
     },
     fallbacks=[CommandHandler('cancel', cancel_sell)],
     per_message=False,
+    allow_reentry=True,  # YEH LINE ZAROORI HAI! Taki agar stuck ho, to refresh ho sake.
     block=False
 )
 
 application.add_handler(CommandHandler("pmarket", pmarket_command, block=False))
 application.add_handler(sell_conv_handler)
-# Updated to handle all new button patterns
 application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist):', block=False))
-
