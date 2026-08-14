@@ -121,7 +121,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         market_items = await cursor.to_list(length=10)
 
         if not market_items:
-            await query.answer("ᴀʙʜɪ ᴋᴏɪ ᴡᴀɪғᴜ sᴇʟʟ ᴘᴇ ɴᴀʜɪ ʜᴀɪ ɪs ʀᴀʀɪᴛʏ ᴍᴇɪɴ!", show_alert=True)
+            await query.answer("ɴᴏ ᴡᴀɪғᴜs ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ғᴏʀ sᴀʟᴇ ɪɴ ᴛʜɪs ʀᴀʀɪᴛʏ!", show_alert=True)
             return
 
         keyboard = []
@@ -148,7 +148,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
         if not item:
-            await query.answer("ᴏᴏᴘs! ʏᴇ ᴡᴀɪғᴜ ʏᴀ ᴛᴏ ʙɪᴋ ɢᴀʏɪ ʏᴀ ʜᴀᴛᴀ ᴅɪ ɢᴀʏɪ ʜᴀɪ!", show_alert=True)
+            await query.answer("ᴏᴏᴘs! ᴛʜɪs ᴡᴀɪғᴜ ʜᴀs ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ sᴏʟᴅ ᴏʀ ʀᴇᴍᴏᴠᴇᴅ!", show_alert=True)
             return
 
         char = item['character']
@@ -166,7 +166,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                 name = r_name
                 break
 
-        # Yahan hum small caps aur premium emojis ka daba ke use kar rahe hain
         caption = (
             f"<b>{prem_emoji} {to_small_caps(char.get('name', 'Unknown'))}</b>\n\n"
             f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {to_small_caps(char.get('anime', 'Unknown'))}\n"
@@ -194,7 +193,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
         if not item:
-            await query.answer("ʙʜᴀɪ ʙᴏʜᴏᴛ ᴅᴇʀ ᴋᴀʀ ᴅɪ! ʏᴇ ᴡᴀɪғᴜ ᴛᴏ ᴋᴏɪ ᴀᴜʀ ʟᴇ ɢᴀʏᴀ.", show_alert=True)
+            await query.answer("ᴛᴏᴏ ʟᴀᴛᴇ! ᴛʜɪs ᴡᴀɪғᴜ ʜᴀs ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ ʙᴏᴜɢʜᴛ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.", show_alert=True)
             return
 
         price = item['price']
@@ -202,14 +201,14 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         char = item['character']
         
         if seller_id == user_id:
-            await query.answer("ᴀʀᴇʏ ʙʜᴀɪ! ᴀᴘɴɪ ʜɪ ᴡᴀɪғᴜ ᴋʜᴜᴅ sᴇ ᴋᴀɪsᴇ ᴋʜᴀʀɪᴅᴏɢᴇ?", show_alert=True)
+            await query.answer("ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴜʏ ʏᴏᴜʀ ᴏᴡɴ ᴡᴀɪғᴜ!", show_alert=True)
             return
 
         buyer = await user_collection.find_one({'id': user_id})
         buyer_balance = buyer.get('balance', 0)
 
         if buyer_balance < price:
-            await query.answer(f"ᴘᴀɪsᴀ ᴋᴀᴍ ʜᴀɪ ʙʜᴀɪ! ᴛᴜᴍʜᴇ 💸 {price:,} ʙᴀʟᴀɴᴄᴇ ᴄʜᴀʜɪʏᴇ.", show_alert=True)
+            await query.answer(f"ɪɴsᴜғғɪᴄɪᴇɴᴛ ғᴜɴᴅs! ʏᴏᴜ ɴᴇᴇᴅ 💸 {price:,} ʙᴀʟᴀɴᴄᴇ.", show_alert=True)
             return
 
         # Transaction Successful - Balance update
@@ -218,7 +217,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await market_collection.delete_one({'_id': ObjectId(market_id)})
 
         await query.message.edit_caption(
-            caption=f"🎉 <b>ʙᴀᴅʜᴀᴀɪ ʜᴏ!</b> ʏᴏᴜ sᴜᴄᴄᴇssғᴜʟʟʏ ʙᴏᴜɢʜᴛ <b>{to_small_caps(char.get('name'))}</b> ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}.",
+            caption=f"🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b> ʏᴏᴜ sᴜᴄᴄᴇssғᴜʟʟʏ ʙᴏᴜɢʜᴛ <b>{to_small_caps(char.get('name'))}</b> ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}.",
             parse_mode='HTML'
         )
 
@@ -243,7 +242,7 @@ async def ask_waifu_id(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     
     if waifu_id.lower() == '/cancel':
-        await update.message.reply_text("<b>❌ sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
+        await update.message.reply_text("<b>sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
         return ConversationHandler.END
 
     user_data = await user_collection.find_one({'id': user_id})
@@ -326,4 +325,3 @@ sell_conv_handler = ConversationHandler(
 application.add_handler(CommandHandler("pmarket", pmarket_command, block=False))
 application.add_handler(sell_conv_handler)
 application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^pm_', block=False))
-
