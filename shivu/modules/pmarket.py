@@ -8,6 +8,19 @@ from shivu import application, db
 user_collection = db['user_collection_lmaoooo']
 market_collection = db['market_collection'] 
 
+# --- HELPER TO GET LIVE CHARACTER FROM ANY COLLECTION ---
+async def get_live_character_doc(char_id):
+    if char_id is None:
+        return None
+    for col_name in ['anime_characters_lol', 'characters', 'collection']:
+        col = db[col_name]
+        doc = await col.find_one({
+            '$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]
+        })
+        if doc:
+            return doc
+    return None
+
 # --- CONVERSATION STATES ---
 WAITING_FOR_CHARACTER_ID, WAITING_FOR_PRICE = 1, 2
 
@@ -123,27 +136,29 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         if rarity_key == "premium":
             search_terms.extend(["Premium Edition", "Premium"])
 
-        # Fetch live character IDs from the main database matching the chosen rarity
-        matching_chars = await db.characters.find({
-            '$or': [{'rarity': {"$regex": term, "$options": "i"}} for term in search_terms]
-        }).to_list(length=None)
-        
+        # Fetch matching character IDs from all possible character collections
         char_ids = []
-        for c in matching_chars:
-            cid = c.get('id')
-            if cid is not None:
-                char_ids.append(cid)
-                if isinstance(cid, int):
-                    char_ids.append(str(cid))
-                elif isinstance(cid, str) and cid.isdigit():
-                    char_ids.append(int(cid))
+        for col_name in ['anime_characters_lol', 'characters', 'collection']:
+            col = db[col_name]
+            matching_chars = await col.find({
+                '$or': [{'rarity': {"$regex": term, "$options": "i"}} for term in search_terms]
+            }).to_list(length=None)
+            
+            for c in matching_chars:
+                cid = c.get('id')
+                if cid is not None:
+                    char_ids.append(cid)
+                    if isinstance(cid, int):
+                        char_ids.append(str(cid))
+                    elif isinstance(cid, str) and cid.isdigit():
+                        char_ids.append(int(cid))
 
         if not char_ids:
             await query.answer("ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ғᴏʀ sᴀʟᴇ ɪɴ ᴛʜɪs ʀᴀʀɪᴛʏ!", show_alert=True)
             return
 
         cursor = market_collection.find({
-            'character.id': {'$in': char_ids}
+            'character.id': {'$in': list(set(char_ids))}
         }).sort('price', sort_order).limit(10)
         
         market_items = await cursor.to_list(length=10)
@@ -157,13 +172,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             char = item['character']
             char_id = char.get('id')
             
-            # Fetch live name dynamically
-            live_char = None
-            if char_id is not None:
-                live_char = await db.characters.find_one({
-                    '$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]
-                })
-            
+            live_char = await get_live_character_doc(char_id)
             display_char = live_char if live_char else char
             char_name = display_char.get('name', 'Unknown')
             price = item['price']
@@ -189,17 +198,16 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         seller_id = item['seller_id']
         price = item['price']
         
-        # --- ABSOLUTE LIVE RARITY & DATA FETCHING FROM MAIN DATABASE ---
+        # --- ABSOLUTE LIVE RARITY & DATA FETCHING ---
         char_id = char.get('id')
         char_name = char.get('name')
         
-        live_char = None
-        if char_id is not None:
-            live_char = await db.characters.find_one({
-                '$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]
-            })
+        live_char = await get_live_character_doc(char_id)
         if not live_char and char_name:
-            live_char = await db.characters.find_one({'name': char_name})
+            for col_name in ['anime_characters_lol', 'characters', 'collection']:
+                live_char = await db[col_name].find_one({'name': char_name})
+                if live_char:
+                    break
             
         display_char = live_char if live_char else char
         char_rarity_str = str(display_char.get('rarity', '')).strip()
@@ -405,10 +413,8 @@ async def ask_price(update: Update, context: CallbackContext):
 
     char_id_val = character['id']
     
-    # Fetch latest live data from main database right when listing
-    live_char = await db.characters.find_one({
-        '$or': [{'id': char_id_val}, {'id': str(char_id_val)}, {'id': int(char_id_val) if str(char_id_val).isdigit() else None}]
-    })
+    # Fetch latest live data from correct character collection upon listing
+    live_char = await get_live_character_doc(char_id_val)
     final_character = live_char if live_char else character
 
     await user_collection.update_one(
