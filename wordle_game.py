@@ -2,6 +2,7 @@ import os
 import json
 import random
 import logging
+import asyncio
 from telegram import Update, ReactionTypeEmoji
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -315,38 +316,29 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 inc_field = "gold" if length == 5 else f"gold_{length}"
                 
-                # FIX: Updates Global (All-time, Today, Week, Month) AND Chat-Specific points simultaneously!
                 inc_dict = {
-                    # Global Tracker
                     inc_field: points_earned,
                     f"today_{inc_field}": points_earned,
                     f"week_{inc_field}": points_earned,
                     f"month_{inc_field}": points_earned,
-                    
-                    # Chat-Specific Tracker (For Chat Leaderboard)
                     f"{chat_id}_{inc_field}": points_earned,
                     f"{chat_id}_today_{inc_field}": points_earned,
                     f"{chat_id}_week_{inc_field}": points_earned,
                     f"{chat_id}_month_{inc_field}": points_earned
                 }
                 
-                existing_user = await user_collection.find_one({
-                    "$or": [{"id": user_id}, {"user_id": user_id}, {"_id": user_id}]
-                })
-                
-                if existing_user:
-                    await user_collection.update_one(
-                        {"_id": existing_user["_id"]},
-                        {"$inc": inc_dict}
-                    )
-                else:
-                    new_user_data = {
-                        "id": user_id,
-                        "first_name": user.first_name,
-                        "username": user.username
-                    }
-                    new_user_data.update(inc_dict)
-                    await user_collection.insert_one(new_user_data)
+                # OPTIMIZATION: Ultra-fast single database round-trip using upsert=True
+                await user_collection.update_one(
+                    {"id": user_id},
+                    {
+                        "$inc": inc_dict,
+                        "$setOnInsert": {
+                            "first_name": user.first_name,
+                            "username": user.username
+                        }
+                    },
+                    upsert=True
+                )
                     
             except Exception as db_err:
                 LOGGER.error(f"Database error while updating gold: {db_err}")
@@ -364,15 +356,18 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
-            # Reaction handler with safe emojis and error logger
-            try:
-                await context.bot.set_message_reaction(
-                    chat_id=chat_id, 
-                    message_id=update.message.message_id, 
-                    reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))]
-                )
-            except Exception as reaction_error:
-                LOGGER.error(f"Reaction fail ho gaya: {reaction_error}")
+            # OPTIMIZATION: Non-blocking background task for reaction so it never delays the response
+            async def set_reaction_safe():
+                try:
+                    await context.bot.set_message_reaction(
+                        chat_id=chat_id, 
+                        message_id=update.message.message_id, 
+                        reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))]
+                    )
+                except Exception as reaction_error:
+                    LOGGER.error(f"Reaction fail ho gaya: {reaction_error}")
+            
+            asyncio.create_task(set_reaction_safe())
             
         elif lost:
             if should_delete and old_message_id:
