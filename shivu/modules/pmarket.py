@@ -485,7 +485,7 @@ application.add_handler(sell_conv, group=-1)
 
 # PMARKET COMMAND
 application.add_handler(
-    CommandHandler("pmarket", pmarket_command),
+    CommandHandler(["pmarket", "shop"], pmarket_command),
     group=0
 )
 
