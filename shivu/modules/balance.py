@@ -1,20 +1,26 @@
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, ContextTypes
 from shivu import application, user_collection, LOGGER, BOT_USERNAME
 
 
 async def get_or_init_user(uid: int):
-    """User ko database se fetch karega, agar nahi mila toh default values ke sath create karke return karega."""
+    """User ko database se ek hi query mein fetch ya initialize karega (Super Fast & Atomic)."""
     try:
-        user = await user_collection.find_one({"id": uid})
-        if user is None:
-            new_user = {"id": uid, "balance": 0, "tokens": 0, "bot_started": False}
-            await user_collection.update_one(
-                {"id": uid},
-                {"$setOnInsert": new_user},
-                upsert=True
-            )
-            return new_user
+        # find_one_and_update ek hi round-trip mein document fetch ya upsert kar deta hai
+        user = await user_collection.find_one_and_update(
+            {"id": uid},
+            {
+                "$setOnInsert": {
+                    "id": uid,
+                    "balance": 0,
+                    "tokens": 0,
+                    "bot_started": False
+                }
+            },
+            upsert=True,
+            return_document=True  # Updated/Inserted document turant return karega
+        )
         return user
     except Exception as e:
         LOGGER.error(f"Error in get_or_init_user for uid {uid}: {e}")
@@ -74,7 +80,7 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("sᴛᴀʀᴛ ʙᴏᴛ", url=f"https://t.me/{BOT_USERNAME}?start=True")]
             ])
             await update.message.reply_html(
-                "<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ sᴛᴀʀᴛᴇᴅ ᴛʜᴇ ʙᴏᴛ ʏᴇᴛ!</b>\n\n"
+                "<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ sᴛᴀʀᴛᴇᴅ ᴛ🇭ᴇ ʙᴏᴛ ʏᴇᴛ!</b>\n\n"
                 "<b>ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ ɪɴ ᴅᴍ ᴛᴏ ᴠɪᴇᴡ ʏᴏᴜʀ ᴛᴏᴋᴇɴs.</b>",
                 reply_markup=kb
             )
@@ -97,7 +103,8 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+# block=False ki wajah se multiple users ek sath commands denge toh bot hang nahi hoga
 application.add_handler(CommandHandler(["bal", "balance", "coins", "coin"], balance_cmd, block=False))
 application.add_handler(CommandHandler(["tokens", "tbal", "token"], tokens_cmd, block=False))
 
-LOGGER.info("✓ Balance & Tokens module loaded successfully")
+LOGGER.info("✓ Balance & Tokens module loaded successfully (Optimized & Fast)")
