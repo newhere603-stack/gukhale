@@ -9,7 +9,7 @@ user_collection = db['user_collection_lmaoooo']
 market_collection = db['market_collection'] 
 
 # --- CONVERSATION STATES ---
-WAITING_FOR_WAIFU_ID, WAITING_FOR_PRICE = 1, 2
+WAITING_FOR_CHARACTER_ID, WAITING_FOR_PRICE = 1, 2
 
 # --- SMALL CAPS CONVERTER HELPERS ---
 SMALL_CAPS_TRANS = str.maketrans(
@@ -78,7 +78,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     
     owner_id = int(parts[-1])
     if user_id != owner_id:
-        await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ!", show_alert=True)
+        await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ ᴍᴀʀᴋᴇᴛ ᴠɪᴀ /pmarket", show_alert=True)
         return
 
     action = parts[0]
@@ -223,7 +223,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         cursor = market_collection.find({'seller_id': user_id})
         listings = await cursor.to_list(length=None)
         
-        keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ", callback_data=f"pm_sm:{user_id}")]]
+        keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ", callback_data=f"pm_start_s:{user_id}")]]
         
         for item in listings:
             char_name = to_small_caps(item['character'].get('name', 'Unknown'))
@@ -250,7 +250,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         
         cursor = market_collection.find({'seller_id': user_id})
         listings = await cursor.to_list(length=None)
-        keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ", callback_data=f"pm_sm:{user_id}")]]
+        keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ", callback_data=f"pm_start_s:{user_id}")]]
         for item in listings:
             char_name = to_small_caps(item['character'].get('name', 'Unknown'))
             price = item['price']
@@ -266,38 +266,52 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 # ========================
 async def sell_start(update: Update, context: CallbackContext):
     query = update.callback_query
+    parts = query.data.split(':')
+    owner_id = int(parts[-1])
+    
+    if query.from_user.id != owner_id:
+        await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴏᴘᴇɴ ʏᴏᴜʀ oᴡɴ ᴍᴀʀᴋᴇᴛ ᴠɪᴀ /pmarket", show_alert=True)
+        return ConversationHandler.END
+        
     await query.answer()
 
-    user_id = query.from_user.id
+    # Save owner_id in context data for strict verification in message handler
+    context.user_data['sell_owner_id'] = owner_id
 
-    await query.message.edit_text(
-        "💸 <b>Sᴇɴᴅ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ ID ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴇʟʟ:</b>",
+    await query.message.reply_text(
+        "💸 <b>Sᴇɴᴅ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ ID ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴇʟʟ:</b>\n\n(ᴛʏᴘᴇ /cancel ᴛᴏ ᴀʙᴏʀᴛ ᴛʜᴇ ᴘʀᴏᴄᴇss)",
         parse_mode="HTML"
     )
 
-    return WAITING_FOR_WAIFU_ID
+    return WAITING_FOR_CHARACTER_ID
 
-async def ask_waifu_id(update: Update, context: CallbackContext):
+async def ask_character_id(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
-        return WAITING_FOR_WAIFU_ID
+        return WAITING_FOR_CHARACTER_ID
 
-    waifu_id = update.message.text.strip()
     user_id = update.message.from_user.id
+    expected_owner = context.user_data.get('sell_owner_id')
+    
+    if expected_owner and user_id != expected_owner:
+        return WAITING_FOR_CHARACTER_ID
+
+    char_id = update.message.text.strip()
     
     user_data = await user_collection.find_one({'id': user_id})
     if not user_data or 'characters' not in user_data:
         await update.message.reply_text("<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
-        return WAITING_FOR_WAIFU_ID
+        return WAITING_FOR_CHARACTER_ID
 
+    # Flexible matching for ID (supports both string and int in database)
     characters = user_data.get('characters', [])
-    character = next((c for c in characters if str(c.get('id')) == str(waifu_id)), None)
+    character = next((c for c in characters if str(c.get('id')) == str(char_id)), None)
     
     if not character:
         await update.message.reply_text(
             "<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴡɪᴛʜ ᴛʜɪs ɪᴅ!</b> ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɪᴅ ᴏʀ /cancel.",
             parse_mode='HTML'
         )
-        return WAITING_FOR_WAIFU_ID
+        return WAITING_FOR_CHARACTER_ID
 
     context.user_data['sell_character'] = character
     
@@ -313,11 +327,16 @@ async def ask_price(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
         return WAITING_FOR_PRICE
 
-    price_text = update.message.text.strip()
     user_id = update.message.from_user.id
+    expected_owner = context.user_data.get('sell_owner_id')
+    
+    if expected_owner and user_id != expected_owner:
+        return WAITING_FOR_PRICE
+
+    price_text = update.message.text.strip()
 
     if not price_text.isdigit() or int(price_text) <= 0:
-        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ pᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
+        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
         return WAITING_FOR_PRICE
 
     price = int(price_text)
@@ -327,9 +346,11 @@ async def ask_price(update: Update, context: CallbackContext):
         await update.message.reply_text("<b>❌ sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket</b>", parse_mode='HTML')
         return ConversationHandler.END
 
+    # Correct pull query matching character ID type
+    char_id_val = character['id']
     await user_collection.update_one(
         {'id': user_id}, 
-        {'$pull': {'characters': {'id': character['id']}}}
+        {'$pull': {'characters': {'id': char_id_val}}}
     )
 
     market_item = {
@@ -340,6 +361,7 @@ async def ask_price(update: Update, context: CallbackContext):
     await market_collection.insert_one(market_item)
 
     context.user_data.pop('sell_character', None)
+    context.user_data.pop('sell_owner_id', None)
     
     await update.message.reply_text(
         f"🎉 <b>{to_small_caps(character.get('name'))}</b> ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!",
@@ -349,6 +371,7 @@ async def ask_price(update: Update, context: CallbackContext):
 
 async def cancel_sell(update: Update, context: CallbackContext):
     context.user_data.pop('sell_character', None)
+    context.user_data.pop('sell_owner_id', None)
     await update.message.reply_text("<b>❌ sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
     return ConversationHandler.END
 
@@ -359,15 +382,15 @@ sell_conv = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(
             sell_start,
-            pattern=r"^pm_sm:"
+            pattern=r"^pm_start_s:"
         )
     ],
 
     states={
-        WAITING_FOR_WAIFU_ID: [
+        WAITING_FOR_CHARACTER_ID: [
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
-                ask_waifu_id
+                ask_character_id
             )
         ],
 
