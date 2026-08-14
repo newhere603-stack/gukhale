@@ -129,7 +129,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # --- NEW PM RESTRICTION ADDED HERE ---
     if chat.type == "private":
         await update.message.reply_text(
-            "<b>⚠️ Hey there! WordSeek is a multiplayer game designed for groups. Please add me to a group chat and start the game there to play with your friends!</b>", 
+            "<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", 
             parse_mode="HTML"
         )
         return
