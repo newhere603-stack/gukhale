@@ -22,7 +22,7 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-# --- RARITIES (As requested, keeping premium untouched) ---
+# --- RARITIES (Swapped Premium and Cosmic positions) ---
 RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
     "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
@@ -91,7 +91,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         keyboard = chunk(buttons, 2)
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
         
-        await update_menu(query, "<b>🛒 ʙᴜʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ</b>\n\n<i>sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ᴠɪᴇᴡ pʀᴏᴅᴜᴄᴛs.</i>", InlineKeyboardMarkup(keyboard))
+        await update_menu(query, "<b>🛒 ʙᴜʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ</b>\n\n<i>sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ᴠɪᴇᴡ ᴘʀᴏᴅᴜᴄᴛs.</i>", InlineKeyboardMarkup(keyboard))
 
     elif action == "pm_m":
         keyboard = InlineKeyboardMarkup([
@@ -159,12 +159,13 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         seller_id = item['seller_id']
         price = item['price']
         
-        char_rarity_str = str(char.get('rarity', ''))
+        char_rarity_str = str(char.get('rarity', '')).strip()
         prem_emoji = '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>'
-        name = "Common"
+        name = char_rarity_str if char_rarity_str else "Common"
         
+        # Live matching based on database rarity string
         for k, (d_emoji, p_emoji, r_name) in RARITIES.items():
-            if r_name.lower() in char_rarity_str.lower() or k in char_rarity_str.lower() or (k == "premium" and "edition" in char_rarity_str.lower()):
+            if r_name.lower() == char_rarity_str.lower() or k.lower() == char_rarity_str.lower() or (k == "premium" and "edition" in char_rarity_str.lower()):
                 prem_emoji = p_emoji
                 name = r_name
                 break
@@ -219,7 +220,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await market_collection.delete_one({'_id': ObjectId(market_id)})
 
         await query.message.edit_caption(
-            caption=f"🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏns!</b> ʏᴏᴜ sᴜᴄᴄᴇssғᴜʟʟʏ ʙᴏᴜɢʜᴛ <b>{to_small_caps(char.get('name'))}</b> ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}.",
+            caption=f"🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b> ʏᴏᴜ sᴜᴄᴄᴇssғᴜʟʟʏ ʙᴏᴜɢʜᴛ <b>{to_small_caps(char.get('name'))}</b> ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}.",
             parse_mode='HTML'
         )
 
@@ -236,12 +237,12 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             char_name = to_small_caps(item['character'].get('name', 'Unknown'))
             price = item['price']
             market_id = str(item['_id'])
-            btn_text = f"❌ ᴄᴀɴᴄᴇʟ | {char_name} - 💸 {price:,}"
+            btn_text = f"ᴄᴀɴᴄᴇʟ | {char_name} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{market_id}:{user_id}")])
             
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
         
-        await update_menu(query, "<b>💰 ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
+        await update_menu(query, "<b>💸 ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
 
     elif action == "pm_delist":
         market_id = parts[1]
@@ -262,7 +263,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             char_name = to_small_caps(item['character'].get('name', 'Unknown'))
             price = item['price']
             m_id = str(item['_id'])
-            btn_text = f"❌ ᴄᴀɴᴄᴇʟ | {char_name} - 💸 {price:,}"
+            btn_text = f"ᴄᴀɴᴄᴇʟ | {char_name} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{m_id}:{user_id}")])
             
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
@@ -304,7 +305,7 @@ async def ask_character_id(update: Update, context: CallbackContext):
     
     user_data = await user_collection.find_one({'id': user_id})
     if not user_data or 'characters' not in user_data:
-        await update.message.reply_text("<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
+        await update.message.reply_text("<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
         return WAITING_FOR_CHARACTER_ID
 
     characters = user_data.get('characters', [])
@@ -312,7 +313,7 @@ async def ask_character_id(update: Update, context: CallbackContext):
     
     if not character:
         await update.message.reply_text(
-            "<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴡɪᴛʜ ᴛʜɪs ɪᴅ!</b> ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɪᴅ ᴏʀ /cancel.",
+            "<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴡɪᴛʜ ᴛʜɪs ɪᴅ!</b> ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɪᴅ ᴏʀ /cancel.",
             parse_mode='HTML'
         )
         return WAITING_FOR_CHARACTER_ID
@@ -340,14 +341,14 @@ async def ask_price(update: Update, context: CallbackContext):
     price_text = update.message.text.strip()
 
     if not price_text.isdigit() or int(price_text) <= 0:
-        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
+        await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
         return WAITING_FOR_PRICE
 
     price = int(price_text)
     character = context.user_data.get('sell_character')
 
     if not character:
-        await update.message.reply_text("<b>❌ sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket</b>", parse_mode='HTML')
+        await update.message.reply_text("<b>sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket</b>", parse_mode='HTML')
         return ConversationHandler.END
 
     char_id_val = character['id']
@@ -375,7 +376,7 @@ async def ask_price(update: Update, context: CallbackContext):
 async def cancel_sell(update: Update, context: CallbackContext):
     context.user_data.pop('sell_character', None)
     context.user_data.pop('sell_owner_id', None)
-    await update.message.reply_text("<b>❌ sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
+    await update.message.reply_text("<b>sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
     return ConversationHandler.END
 
 # ========================
