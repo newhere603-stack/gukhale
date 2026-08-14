@@ -255,27 +255,48 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         elif won:
             points_earned = game["max_attempts"] - attempt_num + 1
-            user_id = update.effective_user.id
             
-            if length == 5:
-                update_query = {"$inc": {"gold": points_earned}}
-            else:
-                letter_field = f"gold_{length}"
-                update_query = {"$inc": {letter_field: points_earned}}
+            # 1. Sabse pehle game ko list se hatao taaki error aane pe game aage na atke
+            del ACTIVE_GAMES[chat_id]
             
-            await user_collection.update_one(
-                {"$or": [{"id": user_id}, {"user_id": user_id}, {"_id": user_id}]},
-                update_query,
-                upsert=True
-            )
+            # 2. Database Update Logic (New User Friendly)
+            try:
+                user = update.effective_user
+                user_id = user.id
+                
+                # Check karna ki konsa field update karna hai (5-letter ke liye 'gold', baaki ke liye 'gold_X')
+                inc_field = "gold" if length == 5 else f"gold_{length}"
+                
+                # Pehle check karo ki user database me already exist karta hai ya nahi
+                existing_user = await user_collection.find_one({
+                    "$or": [{"id": user_id}, {"user_id": user_id}, {"_id": user_id}]
+                })
+                
+                if existing_user:
+                    # Agar old user hai, toh uski proper _id (MongoDB wali) se update kardo
+                    await user_collection.update_one(
+                        {"_id": existing_user["_id"]},
+                        {"$inc": {inc_field: points_earned}}
+                    )
+                else:
+                    # Agar bilkul NEW user hai, toh naya document properly insert karo
+                    new_user_data = {
+                        "id": user_id,
+                        "first_name": user.first_name,
+                        "username": user.username,
+                        inc_field: points_earned
+                    }
+                    await user_collection.insert_one(new_user_data)
+                    
+            except Exception as db_err:
+                LOGGER.error(f"Database error while updating gold: {db_err}")
             
+            # 3. Old message delete aur naya Win message send karne ka process
             if should_delete and old_message_id:
                 try:
                     await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
                 except Exception:
                     pass
-            
-            del ACTIVE_GAMES[chat_id]
             
             suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
             
