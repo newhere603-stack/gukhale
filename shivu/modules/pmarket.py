@@ -1,12 +1,15 @@
 import asyncio
 from bson import ObjectId
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
-from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
+from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, MessageHandler, filters
 from shivu import application, db
 
-# --- EXACT DATABASE COLLECTIONS FROM MAIN.PY ---
+# --- DATABASE COLLECTIONS ---
 user_collection = db['user_collection_lmaoooo']
 market_collection = db['market_collection'] 
+
+# --- IN-MEMORY STATES FOR SELLING ---
+selling_states = {}
 
 # --- SMALL CAPS CONVERTER HELPERS ---
 SMALL_CAPS_TRANS = str.maketrans(
@@ -19,7 +22,7 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-# --- RARITIES MATCHED WITH MAIN.PY ---
+# --- RARITIES ---
 RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
     "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
@@ -41,8 +44,6 @@ RARITIES = {
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
 
-WAITING_FOR_WAIFU_ID, WAITING_FOR_PRICE = 1, 2
-
 async def update_menu(query, text, keyboard):
     if query.message.photo or query.message.video:
         await query.message.delete()
@@ -55,6 +56,7 @@ async def update_menu(query, text, keyboard):
 # ========================
 async def pmarket_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
+    selling_stars = selling_states.pop(user_id, None)
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
         [InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
@@ -67,7 +69,7 @@ async def pmarket_command(update: Update, context: CallbackContext):
     )
 
 # ========================
-# BUY FLOW & CALLBACKS
+# BUY & MARKET CALLBACKS
 # ========================
 async def pmarket_callbacks(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -93,6 +95,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await update_menu(query, "<b>🛒 ʙᴜʏ ᴡᴀɪғᴜs ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ</b>\n\n<i>sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ᴠɪᴇᴡ ᴘʀᴏᴅᴜᴄᴛs.</i>", InlineKeyboardMarkup(keyboard))
 
     elif action == "pm_m":
+        selling_states.pop(user_id, None)
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
             [InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
@@ -219,6 +222,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     # SELL (MY LISTINGS) MENU
     # --------------------------
     elif action == "pm_sm":
+        selling_states.pop(user_id, None)
         cursor = market_collection.find({'seller_id': user_id})
         listings = await cursor.to_list(length=None)
         
@@ -260,19 +264,8 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
         await update_menu(query, "<b>💰 ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
 
-
-# ========================
-# NEW SELL FLOW (Conversation)
-# ========================
-async def sell_start(update: Update, context: CallbackContext):
-    query = update.callback_query
-    if query:
-        parts = query.data.split(':')
-        owner_id = int(parts[-1])
-        if query.from_user.id != owner_id:
-            await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ!", show_alert=True)
-            return ConversationHandler.END
-
+    elif action == "pm_start_s":
+        selling_states[user_id] = {"state": "WAITING_ID"}
         await query.answer()
         await query.message.edit_text(
             "<b>💸 sᴇʟʟ ʏᴏᴜʀ ᴡᴀɪғᴜ ᴏɴ ᴍᴀʀᴋᴇᴛ</b>\n\n"
@@ -280,87 +273,91 @@ async def sell_start(update: Update, context: CallbackContext):
             "(ᴛʏᴘᴇ /cancel ᴛᴏ ᴀʙᴏʀᴛ ᴛʜᴇ ᴘʀᴏᴄᴇss)",
             parse_mode='HTML'
         )
-    return WAITING_FOR_WAIFU_ID
 
-async def ask_waifu_id(update: Update, context: CallbackContext):
-    waifu_id = update.message.text.strip()
-    user_id = update.message.from_user.id
-    
-    user_data = await user_collection.find_one({'id': user_id})
-    if not user_data or 'characters' not in user_data:
-        await update.message.reply_text("<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
-        return WAITING_FOR_WAIFU_ID
+# ========================
+# DIRECT MESSAGE HANDLER FOR SELLING (Bypasses Conflict)
+# ========================
+async def handle_selling_messages(update: Update, context: CallbackContext):
+    if not update.message or not update.message.text:
+        return
 
-    characters = user_data.get('characters', [])
-    waifu = next((c for c in characters if str(c.get('id')) == str(waifu_id)), None)
-    
-    if not waifu:
+    user_id = update.effective_user.id
+    if user_id not in selling_states:
+        return  # User is not trying to sell anything right now
+
+    text = update.message.text.strip()
+
+    if text.lower() == '/cancel':
+        selling_states.pop(user_id, None)
+        await update.message.reply_text("<b>❌ sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
+        return
+
+    user_state = selling_states[user_id]
+
+    # --- STEP 1: WAITING FOR WAIFU ID ---
+    if user_state["state"] == "WAITING_ID":
+        user_data = await user_collection.find_one({'id': user_id})
+        if not user_data or 'characters' not in user_data:
+            await update.message.reply_text("<b>❌ ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
+            return
+
+        characters = user_data.get('characters', [])
+        waifu = next((c for c in characters if str(c.get('id')) == str(text)), None)
+        
+        if not waifu:
+            await update.message.reply_text(
+                "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀ ᴡᴀɪғᴜ ᴡɪᴛʜ ᴛʜɪs ɪᴅ!</b> ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɪᴅ ᴏʀ /cancel.",
+                parse_mode='HTML'
+            )
+            return
+
+        # Move to Step 2
+        selling_states[user_id] = {"state": "WAITING_PRICE", "waifu": waifu}
         await update.message.reply_text(
-            "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀ ᴡᴀɪғᴜ ᴡɪᴛʜ ᴛʜɪs ɪᴅ!</b> ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɪᴅ ᴏʀ /cancel.",
+            f"✅ ʏᴏᴜ sᴇʟᴇᴄᴛᴇᴅ <b>{to_small_caps(waifu.get('name'))}</b>.\n\n"
+            f"<i>Sᴛᴇᴘ 2: ɴᴏᴡ, ᴇɴᴛᴇʀ ᴛʜᴇ ᴘʀɪᴄᴇ (ɪɴ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>) ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴇʟʟ ɪᴛ ғᴏʀ.</i>\n\n(E.g., 5000)",
             parse_mode='HTML'
         )
-        return WAITING_FOR_WAIFU_ID
 
-    context.user_data['sell_waifu'] = waifu
-    
-    await update.message.reply_text(
-        f"✅ ʏᴏᴜ sᴇʟᴇᴄᴛᴇᴅ <b>{to_small_caps(waifu.get('name'))}</b>.\n\n"
-        f"<i>Sᴛᴇᴘ 2: ɴᴏᴡ, ᴇɴᴛᴇʀ ᴛʜᴇ ᴘʀɪᴄᴇ (ɪɴ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>) ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴇʟʟ ɪᴛ ғᴏʀ.</i>\n\n(E.g., 5000)",
-        parse_mode='HTML'
-    )
-    return WAITING_FOR_PRICE
+    # --- STEP 2: WAITING FOR PRICE ---
+    elif user_state["state"] == "WAITING_PRICE":
+        if not text.isdigit() or int(text) <= 0:
+            await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ ᴡɪᴛʜᴏᴜᴛ sᴘᴀᴄᴇs ᴏʀ ʟᴇᴛᴛᴇʀs.</b>", parse_mode='HTML')
+            return
 
-async def ask_price(update: Update, context: CallbackContext):
-    price_text = update.message.text.strip()
-    user_id = update.message.from_user.id
+        price = int(text)
+        waifu = user_state.get("waifu")
 
-    if not price_text.isdigit() or int(price_text) <= 0:
-        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ ᴡɪᴛʜᴏᴜᴛ sᴘᴀᴄᴇs ᴏʀ ʟᴇᴛᴛᴇʀs.</b>", parse_mode='HTML')
-        return WAITING_FOR_PRICE
+        if not waifu:
+            selling_states.pop(user_id, None)
+            await update.message.reply_text("<b>❌ sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket</b>", parse_mode='HTML')
+            return
 
-    price = int(price_text)
-    waifu = context.user_data.get('sell_waifu')
+        # Remove character from inventory and add to market
+        await user_collection.update_one(
+            {'id': user_id}, 
+            {'$pull': {'characters': {'id': waifu['id']}}}
+        )
 
-    await user_collection.update_one(
-        {'id': user_id}, 
-        {'$pull': {'characters': {'id': waifu['id']}}}
-    )
+        market_item = {
+            'seller_id': user_id,
+            'price': price,
+            'character': waifu
+        }
+        await market_collection.insert_one(market_item)
 
-    market_item = {
-        'seller_id': user_id,
-        'price': price,
-        'character': waifu
-    }
-    await market_collection.insert_one(market_item)
-
-    context.user_data.pop('sell_waifu', None)
-    
-    await update.message.reply_text(
-        f"🎉 <b>{to_small_caps(waifu.get('name'))}</b> ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴘ2ᴘ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!\n\n"
-        f"<i>(ʏᴏᴜ ᴄᴀɴ ᴠɪᴇᴡ ᴏʀ ᴄᴀɴᴄᴇʟ ᴛʜɪs ʟɪsᴛɪɴɢ ɪɴ ᴛʜᴇ /pmarket -> 'Mʏ Lɪsᴛɪɴɢs' ᴍᴇɴᴜ)</i>",
-        parse_mode='HTML'
-    )
-    return ConversationHandler.END
-
-async def cancel_sell(update: Update, context: CallbackContext):
-    await update.message.reply_text("<b>sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
-    return ConversationHandler.END
+        # Clear state
+        selling_states.pop(user_id, None)
+        
+        await update.message.reply_text(
+            f"🎉 <b>{to_small_caps(waifu.get('name'))}</b> ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴘ2ᴘ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!\n\n"
+            f"<i>(ʏᴏᴜ ᴄᴀɴ ᴠɪᴇᴡ ᴏʀ ᴄᴀɴᴄᴇʟ ᴛʜɪs ʟɪsᴛɪɴɢ ɪɴ ᴛʜᴇ /pmarket -> 'Mʏ Lɪsᴛɪɴɢs' ᴍᴇɴᴜ)</i>",
+            parse_mode='HTML'
+        )
 
 # ========================
 # HANDLERS SETUP
 # ========================
-sell_conv_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(sell_start, pattern='^pm_start_s:')],
-    states={
-        WAITING_FOR_WAIFU_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_waifu_id)],
-        WAITING_FOR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_price)]
-    },
-    fallbacks=[CommandHandler('cancel', cancel_sell)],
-    per_message=False,
-    allow_reentry=True,
-    block=False
-)
-
 application.add_handler(CommandHandler("pmarket", pmarket_command, block=False))
-application.add_handler(sell_conv_handler)
-application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist):', block=False))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_selling_messages), group=0)
+application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_start_s):', block=False))
