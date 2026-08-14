@@ -15,34 +15,39 @@ LEADERBOARD_STATES = {}
 def get_user_state(chat_id):
     if chat_id not in LEADERBOARD_STATES:
         LEADERBOARD_STATES[chat_id] = {
-            "scope": "global",  # global / chat
-            "time": "all",      # today / week / month / year / all
-            "letters": "5"      # default letters mode
+            "scope": "chat",    # Default: chat
+            "time": "month",    # Default: month
+            "letters": "5"      # Default: 5 letters
         }
     return LEADERBOARD_STATES[chat_id]
 
-def extract_gold(user_doc, letter_filter="all"):
+def extract_gold(user_doc, letter_filter="all", time_filter="all"):
     if not user_doc or not isinstance(user_doc, dict):
         return 0
     
-    # Strict letter-wise keys mapping
     if letter_filter == "4":
-        keys_to_check = ['gold_4', 'points_4', 'golds_4']
+        base_keys = ['gold_4', 'points_4', 'golds_4']
     elif letter_filter == "5":
-        # 5 letter ke liye general 'gold' aur 'gold_5' dono ko check karega taaki aapka collect kiya hua gold dikhe
-        keys_to_check = ['gold', 'golds', 'gold_5', 'points_5', 'golds_5', 'wordseek_points', 'score', 'points']
+        base_keys = ['gold', 'golds', 'gold_5', 'points_5', 'golds_5', 'wordseek_points', 'score', 'points']
     elif letter_filter == "6":
-        keys_to_check = ['gold_6', 'points_6', 'golds_6']
+        base_keys = ['gold_6', 'points_6', 'golds_6']
     else:
-        keys_to_check = ['gold', 'golds', 'wordseek_points', 'score', 'points']
+        base_keys = ['gold', 'golds', 'wordseek_points', 'score', 'points']
+    
+    if time_filter == "all":
+        keys_to_check = base_keys
+    else:
+        keys_to_check = [f"{time_filter}_{key}" for key in base_keys]
     
     for key in keys_to_check:
         val = user_doc.get(key)
         if val is not None:
-            if isinstance(val, (int, float)) and val > 0:
-                return int(val)
-            elif isinstance(val, str) and val.isdigit() and int(val) > 0:
-                return int(val)
+            try:
+                val = int(val)
+                if val > 0:
+                    return val
+            except (ValueError, TypeError):
+                pass
                 
     return 0
 
@@ -130,21 +135,31 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         else:
             query_filter["id"] = {"$in": []}
 
+    # Fetching all matching players
     data = await user_collection.find(query_filter).to_list(None)
     
-    filtered_data = [u for u in data if extract_gold(u, state["letters"]) > 0]
+    time_f = state["time"]
+    letter_f = state["letters"]
+    
+    # Extracting current scores for everyone in real-time
+    user_scores = []
+    for u in data:
+        gold = extract_gold(u, letter_f, time_f)
+        if gold > 0:
+            user_scores.append((u, gold))
 
-    if not filtered_data:
+    if not user_scores:
         text = (
             "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
-            "<i>No data found for this letter mode!</i>"
+            "<i>No data found for this time/letter mode!</i>"
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
-    sorted_data = sorted(filtered_data, key=lambda x: extract_gold(x, state["letters"]), reverse=True)[:20]
+    # Completely sorting all players highest to lowest, and ONLY then picking the top 20
+    sorted_data = sorted(user_scores, key=lambda x: x[1], reverse=True)[:20]
 
     rows = []
-    for i, u in enumerate(sorted_data, 1):
+    for i, (u, gold_val) in enumerate(sorted_data, 1):
         uid = u.get('id') or u.get('user_id') or u.get('_id', 0)
         try:
             uid = int(uid)
@@ -152,7 +167,6 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
             pass
         name = u.get('first_name', 'Unknown')
         link = mention_html(uid, name)
-        gold_val = extract_gold(u, state["letters"])
         
         rows.append(f"<b>{i}. {link} - {gold_val:,} <tg-emoji emoji-id=\"6332287240470798249\">🪙</tg-emoji></b>")
 
@@ -180,6 +194,8 @@ async def ws_callback_router(update: Update, context: CallbackContext):
         state["time"] = data.replace("ws_time_", "")
     elif data.startswith("ws_let_"):
         state["letters"] = data.replace("ws_let_", "")
+    elif data == "ws_refresh":
+        pass 
 
     await wordseek_leaderboard(update, context, edit=True)
 
