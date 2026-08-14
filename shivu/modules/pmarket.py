@@ -111,7 +111,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
             [InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
         ])
-        await update_menu(query, "<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> ᴘ2ᴘ ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>", keyboard)
+        await update_menu(query, "<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>", keyboard)
 
     elif action == "pm_r":
         rarity_key = parts[1]
