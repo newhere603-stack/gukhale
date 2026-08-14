@@ -29,7 +29,7 @@ class Rarity:
 RARITY_MAP = {
     "mythic": ("💎", 1), "cosmic": ("🌌", 2), "celestial": ("🪽", 3),
     "exclusive": ("💮", 4), "legendary": ("🟡", 5), "premium": ("🔮", 6),
-    "neon": ("⚡", 7), "pearl": ("🐚", 8), "sweet": ("🍭", 9),
+    "neon": ("⚡", 7), "summer": ("🏝️", 8), "sweet": ("🍭", 9),
     "special": ("🔵", 10), "valentine": ("💞", 11), "winter": ("❄️", 12),
     "erotic": ("🥵", 13), "rare": ("🟠", 14), "common": ("🟢", 15)
 }
@@ -109,7 +109,7 @@ async def search_chars(q: str, lim: int = 200) -> List[Dict]:
     try:
         if q:
             rx = re.compile(re.escape(q), re.IGNORECASE)
-            chars = await collection.find({'$or': [{'name': rx}, {'anime': rx}, {'id': q}]}, {'_id': 0}).limit(lim).to_list(length=lim)
+            chars = await collection.find({'$or': [{'name': rx}, {'anime': rx}, {'id': q}, {'rarity': rx}]}, {'_id': 0}).limit(lim).to_list(length=lim)
         else:
             chars = await collection.find({}, {'_id': 0}).limit(lim).to_list(length=lim)
         query_cache[k] = chars
@@ -230,13 +230,13 @@ async def inlinequery(update: Update, context) -> None:
             all_chars = list(cd.values())
             if sq:
                 rx = re.compile(re.escape(sq), re.IGNORECASE)
-                all_chars = [c for c in all_chars if rx.search(c.get('name', '')) or rx.search(c.get('anime', '')) or rx.search(c.get('id', ''))]
+                all_chars = [c for c in all_chars if rx.search(c.get('name', '')) or rx.search(c.get('anime', '')) or str(c.get('id', '')) == sq or rx.search(c.get('rarity', ''))]
             if fm: 
                 all_chars = await filter_chars(all_chars, fm, tuid)
             fav = usr.get('favorites')
             if fav and not sq and not fm:
                 fid = fav.get('id') if isinstance(fav, dict) else fav
-                fc = next((c for c in all_chars if c.get('id') == fid), None)  # FIXED BRACKET TYPO HERE
+                fc = next((c for c in all_chars if c.get('id') == fid), None)  
                 if fc:
                     all_chars = [c for c in all_chars if c.get('id') != fid]
                     all_chars.insert(0, fc)
