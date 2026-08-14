@@ -1,206 +1,492 @@
-import logging
-from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-from telegram.helpers import mention_html
-from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
-from telegram.error import BadRequest
+import asyncio
+from bson import ObjectId
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
+from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, ConversationHandler, MessageHandler, filters
+from shivu import application, db
 
-from shivu import application, user_collection, group_user_totals_collection
+# --- DATABASE COLLECTIONS ---
+user_collection = db['user_collection_lmaoooo']
+market_collection = db['market_collection'] 
 
-LOGGER = logging.getLogger(__name__)
+# --- HELPER TO GET LIVE CHARACTER FROM ANY COLLECTION ---
+async def get_live_character_doc(char_id):
+    if char_id is None:
+        return None
+    for col_name in ['anime_characters_lol', 'characters', 'collection']:
+        col = db[col_name]
+        doc = await col.find_one({
+            '$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]
+        })
+        if doc:
+            return doc
+    return None
 
-# Temporary state tracking for filters (chat_id -> state dict)
-LEADERBOARD_STATES = {}
+# --- CONVERSATION STATES ---
+WAITING_FOR_CHARACTER_ID, WAITING_FOR_PRICE = 1, 2
 
-def get_user_state(chat_id):
-    if chat_id not in LEADERBOARD_STATES:
-        LEADERBOARD_STATES[chat_id] = {
-            "scope": "chat",    # Default: Chat select rahega
-            "time": "all",      # Default: All-Time rahega taaki purana score turant dikhe
-            "letters": "5"      # Default: 5 Letter rahega
-        }
-    return LEADERBOARD_STATES[chat_id]
+# --- SMALL CAPS CONVERTER HELPERS ---
+SMALL_CAPS_TRANS = str.maketrans(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
+)
 
-def extract_gold(user_doc, letter_filter="all", time_filter="all"):
-    if not user_doc or not isinstance(user_doc, dict):
-        return 0
-    
-    if letter_filter == "4":
-        base_keys = ['gold_4', 'points_4', 'golds_4']
-    elif letter_filter == "5":
-        base_keys = ['gold', 'golds', 'gold_5', 'points_5', 'golds_5', 'wordseek_points', 'score', 'points']
-    elif letter_filter == "6":
-        base_keys = ['gold_6', 'points_6', 'golds_6']
+def to_small_caps(text: str) -> str:
+    if not text:
+        return ""
+    return str(text).translate(SMALL_CAPS_TRANS)
+
+# --- RARITIES (Cosmic & Premium Edition swapped) ---
+RARITIES = {
+    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
+    "legendary": ("🟡", '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji>', "Legendary"),
+    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"), 
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"), 
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"), 
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"), 
+    "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"), 
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"), 
+    "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"), 
+    "pearl": ("🐚", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"), 
+}
+
+def chunk(items: list, size: int) -> list:
+    return [items[i:i + size] for i in range(0, len(items), size)]
+
+async def update_menu(query, text, keyboard):
+    if query.message.photo or query.message.video:
+        await query.message.delete()
+        await query.message.reply_html(text, reply_markup=keyboard)
     else:
-        base_keys = ['gold', 'golds', 'wordseek_points', 'score', 'points']
-    
-    # Agar all time hai toh direct keys check karega
-    if time_filter == "all":
-        keys_to_check = base_keys
-    else:
-        # Today, Week, Month ke hisaab se aage prefix lagayega (eg. today_gold_5)
-        keys_to_check = [f"{time_filter}_{key}" for key in base_keys]
-    
-    for key in keys_to_check:
-        val = user_doc.get(key)
-        if val is not None:
-            try:
-                val = int(val)
-                if val > 0:
-                    return val
-            except (ValueError, TypeError):
-                pass
-                
-    return 0
+        await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
 
-async def send_or_edit(update, context, text, kb, edit):
-    photo_url = "https://files.catbox.moe/ewtw4l.png"
-    if edit:
-        q = update.callback_query
-        try:
-            await q.answer()
-        except Exception:
-            pass
-
-        try:
-            await q.edit_message_media(
-                media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
-                reply_markup=kb
-            )
-        except BadRequest as e:
-            if "not modified" in str(e).lower():
-                return
-            try:
-                await q.message.delete()
-            except Exception:
-                pass
-            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
-        except Exception:
-            try:
-                await q.message.delete()
-            except Exception:
-                pass
-            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
-    else:
-        await update.message.reply_photo(photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
-
-def get_wordseek_keyboard(state):
-    scope = state["scope"]
-    time_f = state["time"]
-    letter_f = state["letters"]
-
-    global_btn = "ɢʟᴏʙᴀʟ ⎋" if scope == "global" else "ɢʟᴏʙᴀʟ"
-    chat_btn = "ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴄʜᴀᴛ"
-    
-    today_btn = "ᴛᴏᴅᴀʏ ⎋" if time_f == "today" else "ᴛᴏᴅᴀʏ"
-    week_btn = "ᴡᴇᴇᴋ ⎋" if time_f == "week" else "ᴡᴇᴇᴋ"
-    month_btn = "ᴍᴏɴᴛʜ ⎋" if time_f == "month" else "ᴍᴏɴᴛʜ"
-    year_btn = "ʏᴇᴀʀ ⎋" if time_f == "year" else "ʏᴇᴀʀ"
-    all_btn = "ᴀʟʟ-ᴛɪᴍᴇ ⎋" if time_f == "all" else "ᴀʟʟ-ᴛɪᴍᴇ"
-
-    l4_btn = "4 ʟᴇᴛʀ ⎋" if letter_f == "4" else "4 ʟᴇᴛʀ"
-    l5_btn = "5 ʟᴇᴛʀ ⎋" if letter_f == "5" else "5 ʟᴇᴛʀ"
-    l6_btn = "6 ʟᴇᴛʀ ⎋" if letter_f == "6" else "6 ʟᴇᴛʀ"
-
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(global_btn, callback_data="ws_scope_global"),
-            InlineKeyboardButton("⟳", callback_data="ws_refresh"),
-            InlineKeyboardButton(chat_btn, callback_data="ws_scope_chat")
-        ],
-        [
-            InlineKeyboardButton(today_btn, callback_data="ws_time_today"),
-            InlineKeyboardButton(week_btn, callback_data="ws_time_week"),
-            InlineKeyboardButton(month_btn, callback_data="ws_time_month")
-        ],
-        [
-            InlineKeyboardButton(year_btn, callback_data="ws_time_year"),
-            InlineKeyboardButton(all_btn, callback_data="ws_time_all")
-        ],
-        [
-            InlineKeyboardButton(l4_btn, callback_data="ws_let_4"),
-            InlineKeyboardButton(l5_btn, callback_data="ws_let_5"),
-            InlineKeyboardButton(l6_btn, callback_data="ws_let_6")
-        ]
+# ========================
+# MAIN COMMAND
+# ========================
+async def pmarket_command(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
+        [InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
     ])
-
-async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=False):
-    chat_id = update.effective_chat.id
-    state = get_user_state(chat_id)
-
-    query_filter = {}
-    
-    if state["scope"] == "chat":
-        group_users = await group_user_totals_collection.distinct("user_id", {"group_id": chat_id})
-        if group_users:
-            query_filter["$or"] = [{"id": {"$in": group_users}}, {"user_id": {"$in": group_users}}, {"_id": {"$in": group_users}}]
-        else:
-            query_filter["id"] = {"$in": []}
-
-    # Sabhi matching players ko uthayega
-    data = await user_collection.find(query_filter).to_list(None)
-    
-    time_f = state["time"]
-    letter_f = state["letters"]
-    
-    # Har ek ka current score nikalega selected filter ke hisaab se
-    user_scores = []
-    for u in data:
-        gold = extract_gold(u, letter_f, time_f)
-        if gold > 0:
-            user_scores.append((u, gold))
-
-    if not user_scores:
-        text = (
-            "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
-            "<i>No data found for this time/letter mode!</i>"
-        )
-        return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
-
-    # Pehle saare players ko sort karega highest se lowest, uske baad top 20 niklega
-    sorted_data = sorted(user_scores, key=lambda x: x[1], reverse=True)[:20]
-
-    rows = []
-    for i, (u, gold_val) in enumerate(sorted_data, 1):
-        uid = u.get('id') or u.get('user_id') or u.get('_id', 0)
-        try:
-            uid = int(uid)
-        except (ValueError, TypeError):
-            pass
-        name = u.get('first_name', 'Unknown')
-        link = mention_html(uid, name)
-        
-        rows.append(f"<b>{i}. {link} - {gold_val:,} <tg-emoji emoji-id=\"6332287240470798249\">🪙</tg-emoji></b>")
-
-    rows_text = "\n".join(rows)
-    
-    text = (
-        "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"{rows_text}"
+    await update.message.reply_text(
+        "<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n"
+        "<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>",
+        reply_markup=keyboard,
+        parse_mode='HTML'
     )
-    
-    await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
-async def ws_callback_router(update: Update, context: CallbackContext):
+# ========================
+# BUY & MARKET CALLBACKS
+# ========================
+async def pmarket_callbacks(update: Update, context: CallbackContext):
     query = update.callback_query
     data = query.data
-    chat_id = update.effective_chat.id
-    state = get_user_state(chat_id)
+    parts = data.split(':')
+    user_id = query.from_user.id
+    
+    owner_id = int(parts[-1])
+    if user_id != owner_id:
+        await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ ᴍᴀʀᴋᴇᴛ ᴠɪᴀ /pmarket", show_alert=True)
+        return
 
-    if data == "ws_scope_global":
-        state["scope"] = "global"
-    elif data == "ws_scope_chat":
-        state["scope"] = "chat"
-    elif data.startswith("ws_time_"):
-        state["time"] = data.replace("ws_time_", "")
-    elif data.startswith("ws_let_"):
-        state["letters"] = data.replace("ws_let_", "")
-    elif data == "ws_refresh":
-        pass 
+    action = parts[0]
 
-    await wordseek_leaderboard(update, context, edit=True)
+    if action == "pm_b":
+        buttons = []
+        for key, (db_emoji, _, name) in RARITIES.items():
+            buttons.append(InlineKeyboardButton(f"{db_emoji} {to_small_caps(name)}", callback_data=f"pm_r:{key}:{user_id}"))
+        
+        keyboard = chunk(buttons, 2)
+        keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
+        
+        await update_menu(query, "<b><tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> ʙᴜʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ</b>\n\n<i>sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ᴠɪᴇᴡ ᴘʀᴏᴅᴜᴄᴛs.</i>", InlineKeyboardMarkup(keyboard))
 
-# Handlers registration
-application.add_handler(CommandHandler(["wordseektop", "wstop", "leaderboard"], wordseek_leaderboard, block=False))
-application.add_handler(CallbackQueryHandler(ws_callback_router, pattern="^ws_"))
+    elif action == "pm_m":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}")],
+            [InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")]
+        ])
+        await update_menu(query, "<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> ᴘ2ᴘ ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>", keyboard)
+
+    elif action == "pm_r":
+        rarity_key = parts[1]
+        db_emoji, prem_emoji, name = RARITIES.get(rarity_key, RARITIES["common"])
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("ᴘʀɪᴄᴇ ʟᴏᴡ ᴛᴏ ʜɪɢʜ", callback_data=f"pm_s:{rarity_key}:asc:{user_id}")],
+            [InlineKeyboardButton("ᴘʀɪᴄᴇ ʜɪɢʜ ᴛᴏ ʟᴏᴡ", callback_data=f"pm_s:{rarity_key}:desc:{user_id}")],
+            [InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_b:{user_id}")]
+        ])
+        
+        await update_menu(query, f"<b>{prem_emoji} {to_small_caps(name)} ᴄʜᴀʀᴀᴄᴛᴇʀs</b>\n\n<i>ʜᴏᴡ ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴏʀᴛ ᴛʜᴇᴍ?</i>", keyboard)
+
+    elif action == "pm_s":
+        rarity_key = parts[1]
+        order = parts[2]
+        sort_order = 1 if order == "asc" else -1
+        
+        db_emoji, prem_emoji, name = RARITIES.get(rarity_key, RARITIES["common"])
+        
+        search_terms = [name, rarity_key]
+        if rarity_key == "premium":
+            search_terms.extend(["Premium Edition", "Premium"])
+
+        # Fetch matching character IDs from all possible character collections
+        char_ids = []
+        for col_name in ['anime_characters_lol', 'characters', 'collection']:
+            col = db[col_name]
+            matching_chars = await col.find({
+                '$or': [{'rarity': {"$regex": term, "$options": "i"}} for term in search_terms]
+            }).to_list(length=None)
+            
+            for c in matching_chars:
+                cid = c.get('id')
+                if cid is not None:
+                    char_ids.append(cid)
+                    if isinstance(cid, int):
+                        char_ids.append(str(cid))
+                    elif isinstance(cid, str) and cid.isdigit():
+                        char_ids.append(int(cid))
+
+        if not char_ids:
+            await query.answer("ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ғᴏʀ sᴀʟᴇ ɪɴ ᴛʜɪs ʀᴀʀɪᴛʏ!", show_alert=True)
+            return
+
+        cursor = market_collection.find({
+            'character.id': {'$in': list(set(char_ids))}
+        }).sort('price', sort_order).limit(10)
+        
+        market_items = await cursor.to_list(length=10)
+
+        if not market_items:
+            await query.answer("ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ғᴏʀ sᴀʟᴇ ɪɴ ᴛʜɪs ʀᴀʀɪᴛʏ!", show_alert=True)
+            return
+
+        keyboard = []
+        for item in market_items:
+            char = item['character']
+            char_id = char.get('id')
+            
+            live_char = await get_live_character_doc(char_id)
+            display_char = live_char if live_char else char
+            char_name = display_char.get('name', 'Unknown')
+            price = item['price']
+            market_id = str(item['_id'])
+            
+            btn_text = f"{db_emoji} {to_small_caps(char_name)} - 💸 {price:,}"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_v:{market_id}:{user_id}")])
+        
+        sort_text = "ʟᴏᴡ ᴛᴏ ʜɪɢʜ" if order == "asc" else "ʜɪɢʜ ᴛᴏ ʟᴏᴡ"
+        keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_r:{rarity_key}:{user_id}")])
+
+        await update_menu(query, f"<b>{prem_emoji} ᴄʜᴀʀᴀᴄᴛᴇʀs ғᴏʀ sᴀʟᴇ</b>\n\n<i>sᴏʀᴛᴇᴅ ʙʏ ᴘʀɪᴄᴇ ({sort_text})</i>", InlineKeyboardMarkup(keyboard))
+
+    elif action == "pm_v":
+        market_id = parts[1]
+        item = await market_collection.find_one({'_id': ObjectId(market_id)})
+        
+        if not item:
+            await query.answer("ᴏᴏᴘs! ᴛʜɪs ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ sᴏʟᴅ ᴏʀ ʀᴇᴍᴏᴠᴇᴅ!", show_alert=True)
+            return
+
+        char = item['character']
+        seller_id = item['seller_id']
+        price = item['price']
+        
+        # --- ABSOLUTE LIVE RARITY & DATA FETCHING ---
+        char_id = char.get('id')
+        char_name = char.get('name')
+        
+        live_char = await get_live_character_doc(char_id)
+        if not live_char and char_name:
+            for col_name in ['anime_characters_lol', 'characters', 'collection']:
+                live_char = await db[col_name].find_one({'name': char_name})
+                if live_char:
+                    break
+            
+        display_char = live_char if live_char else char
+        char_rarity_str = str(display_char.get('rarity', '')).strip()
+
+        prem_emoji = '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>'
+        name = char_rarity_str if char_rarity_str else "Common"
+        
+        matched = False
+        for k, (d_emoji, p_emoji, r_name) in RARITIES.items():
+            if r_name.lower() == char_rarity_str.lower() or k.lower() == char_rarity_str.lower() or (k == "premium" and "edition" in char_rarity_str.lower()):
+                prem_emoji = p_emoji
+                name = r_name
+                matched = True
+                break
+                
+        if not matched:
+            for k, (d_emoji, p_emoji, r_name) in RARITIES.items():
+                if r_name.lower() in char_rarity_str.lower() or k.lower() in char_rarity_str.lower():
+                    prem_emoji = p_emoji
+                    name = r_name
+                    break
+
+        caption = (
+            f"<b>{prem_emoji} {to_small_caps(display_char.get('name', 'Unknown'))}</b>\n\n"
+            f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {to_small_caps(display_char.get('anime', 'Unknown'))}\n"
+            f"<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> ʀᴀʀɪᴛʏ:</b> {prem_emoji} {to_small_caps(name)}\n"
+            f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ᴘʀɪᴄᴇ:</b> <code>{price:,}</code>\n"
+            f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> sᴇʟʟᴇʀ:</b> <code>{seller_id}</code>"
+        )
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛒 ʙᴜʏ ɴᴏᴡ", callback_data=f"pm_buy:{market_id}:{user_id}")],
+            [InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_b:{user_id}")]
+        ])
+
+        await query.message.delete()
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=display_char.get('img_url'), 
+            caption=caption,
+            reply_markup=keyboard,
+            parse_mode='HTML'
+        )
+
+    elif action == "pm_buy":
+        market_id = parts[1]
+        item = await market_collection.find_one({'_id': ObjectId(market_id)})
+        
+        if not item:
+            await query.answer("ᴛᴏᴏ ʟᴀᴛᴇ! ᴛʜɪs ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ ʙᴏᴜɢʜᴛ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.", show_alert=True)
+            return
+
+        price = item['price']
+        seller_id = item['seller_id']
+        char = item['character']
+        
+        if seller_id == user_id:
+            await query.answer("ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴜʏ ʏᴏᴜʀ ᴏᴡɴ ᴄʜᴀʀᴀᴄᴛᴇʀ!", show_alert=True)
+            return
+
+        buyer = await user_collection.find_one({'id': user_id})
+        buyer_balance = buyer.get('balance', 0) if buyer else 0
+
+        if buyer_balance < price:
+            await query.answer(f"ɪɴsᴜғғɪᴄɪᴇɴᴛ ғᴜɴᴅs! ʏᴏᴜ ɴᴇᴇᴅ 💸 {price:,} ʙᴀʟᴀɴᴄᴇ.", show_alert=True)
+            return
+
+        await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -price}, '$push': {'characters': char}})
+        await user_collection.update_one({'id': seller_id}, {'$inc': {'balance': price}})
+        await market_collection.delete_one({'_id': ObjectId(market_id)})
+
+        await query.message.edit_caption(
+            caption=f"🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b> ʏᴏᴜ sᴜᴄᴄᴇssғᴜʟʟʏ ʙᴏᴜɢʜᴛ <b>{to_small_caps(char.get('name'))}</b> ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}.",
+            parse_mode='HTML'
+        )
+
+    # --------------------------
+    # SELL (MY LISTINGS) MENU
+    # --------------------------
+    elif action == "pm_sm":
+        cursor = market_collection.find({'seller_id': user_id})
+        listings = await cursor.to_list(length=None)
+        
+        keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ", callback_data=f"pm_start_s:{user_id}")]]
+        
+        for item in listings:
+            char_name = to_small_caps(item['character'].get('name', 'Unknown'))
+            price = item['price']
+            market_id = str(item['_id'])
+            btn_text = f"ᴄᴀɴᴄᴇʟ | {char_name} - 💸 {price:,}"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{market_id}:{user_id}")])
+            
+        keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
+        
+        await update_menu(query, "<b>💸 ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
+
+    elif action == "pm_delist":
+        market_id = parts[1]
+        item = await market_collection.find_one({'_id': ObjectId(market_id)})
+        
+        if not item:
+            await query.answer("⚠️ ᴛʜɪs ɪᴛᴇᴍ ɪs ɴᴏ ʟᴏɴɢᴇʀ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ.", show_alert=True)
+        else:
+            char = item['character']
+            await user_collection.update_one({'id': user_id}, {'$push': {'characters': char}})
+            await market_collection.delete_one({'_id': ObjectId(market_id)})
+            await query.answer(f"✅ sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛᴏ ɪɴᴠᴇɴᴛᴏʀʏ!", show_alert=True)
+        
+        cursor = market_collection.find({'seller_id': user_id})
+        listings = await cursor.to_list(length=None)
+        keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ", callback_data=f"pm_start_s:{user_id}")]]
+        for item in listings:
+            char_name = to_small_caps(item['character'].get('name', 'Unknown'))
+            price = item['price']
+            m_id = str(item['_id'])
+            btn_text = f"ᴄᴀɴᴄᴇʟ | {char_name} - 💸 {price:,}"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{m_id}:{user_id}")])
+            
+        keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")])
+        await update_menu(query, "<b>ʏᴏᴜʀ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs</b>\n\n<i>ᴍᴀɴᴀɢᴇ ʏᴏᴜʀ ᴄᴜʀʀᴇɴᴛ ʟɪsᴛɪɴɢs ᴏʀ ᴀᴅᴅ ᴀ ɴᴇᴡ ᴏɴᴇ.</i>", InlineKeyboardMarkup(keyboard))
+
+# ========================
+# CONVERSATION HANDLER FOR SELLING
+# ========================
+async def sell_start(update: Update, context: CallbackContext):
+    query = update.callback_query
+    parts = query.data.split(':')
+    owner_id = int(parts[-1])
+    
+    if query.from_user.id != owner_id:
+        await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ! ᴘʟᴇᴀsᴇ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ ᴍᴀʀᴋᴇᴛ ᴠɪᴀ /pmarket", show_alert=True)
+        return ConversationHandler.END
+        
+    await query.answer()
+    context.user_data['sell_owner_id'] = owner_id
+
+    await query.message.reply_text(
+        "💸 <b>Sᴇɴᴅ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ ID ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴇʟʟ:</b>\n\n(ᴛʏᴘᴇ /cancel ᴛᴏ ᴀʙᴏʀᴛ ᴛʜᴇ ᴘʀᴏᴄᴇss)",
+        parse_mode="HTML"
+    )
+
+    return WAITING_FOR_CHARACTER_ID
+
+async def ask_character_id(update: Update, context: CallbackContext):
+    if not update.message or not update.message.text:
+        return WAITING_FOR_CHARACTER_ID
+
+    user_id = update.message.from_user.id
+    expected_owner = context.user_data.get('sell_owner_id')
+    
+    if expected_owner and user_id != expected_owner:
+        return WAITING_FOR_CHARACTER_ID
+
+    char_id = update.message.text.strip()
+    
+    user_data = await user_collection.find_one({'id': user_id})
+    if not user_data or 'characters' not in user_data:
+        await update.message.reply_text("<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
+        return WAITING_FOR_CHARACTER_ID
+
+    characters = user_data.get('characters', [])
+    character = next((c for c in characters if str(c.get('id')) == str(char_id)), None)
+    
+    if not character:
+        await update.message.reply_text(
+            "<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴡɪᴛʜ ᴛʜɪs ɪᴅ!</b> ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɪᴅ ᴏʀ /cancel.",
+            parse_mode='HTML'
+        )
+        return WAITING_FOR_CHARACTER_ID
+
+    context.user_data['sell_character'] = character
+    
+    await update.message.reply_text(
+        f"✅ <b>Character found! Now send price</b>\n\n"
+        f"Selected: <b>{to_small_caps(character.get('name'))}</b>\n"
+        f"<i>Enter the price (in <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>) you want to sell it for.</i>",
+        parse_mode='HTML'
+    )
+    return WAITING_FOR_PRICE
+
+async def ask_price(update: Update, context: CallbackContext):
+    if not update.message or not update.message.text:
+        return WAITING_FOR_PRICE
+
+    user_id = update.message.from_user.id
+    expected_owner = context.user_data.get('sell_owner_id')
+    
+    if expected_owner and user_id != expected_owner:
+        return WAITING_FOR_PRICE
+
+    price_text = update.message.text.strip()
+
+    if not price_text.isdigit() or int(price_text) <= 0:
+        await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
+        return WAITING_FOR_PRICE
+
+    price = int(price_text)
+    character = context.user_data.get('sell_character')
+
+    if not character:
+        await update.message.reply_text("<b>sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ. ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket</b>", parse_mode='HTML')
+        return ConversationHandler.END
+
+    char_id_val = character['id']
+    
+    # Fetch latest live data from correct character collection upon listing
+    live_char = await get_live_character_doc(char_id_val)
+    final_character = live_char if live_char else character
+
+    await user_collection.update_one(
+        {'id': user_id}, 
+        {'$pull': {'characters': {'id': char_id_val}}}
+    )
+
+    market_item = {
+        'seller_id': user_id,
+        'price': price,
+        'character': final_character
+    }
+    await market_collection.insert_one(market_item)
+
+    context.user_data.pop('sell_character', None)
+    context.user_data.pop('sell_owner_id', None)
+    
+    await update.message.reply_text(
+        f"🎉 <b>{to_small_caps(final_character.get('name'))}</b> ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!",
+        parse_mode='HTML'
+    )
+    return ConversationHandler.END
+
+async def cancel_sell(update: Update, context: CallbackContext):
+    context.user_data.pop('sell_character', None)
+    context.user_data.pop('sell_owner_id', None)
+    await update.message.reply_text("<b>sᴇʟʟ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
+    return ConversationHandler.END
+
+# ========================
+# HANDLERS SETUP
+# ========================
+sell_conv = ConversationHandler(
+    entry_points=[
+        CallbackQueryHandler(
+            sell_start,
+            pattern=r"^pm_start_s:"
+        )
+    ],
+
+    states={
+        WAITING_FOR_CHARACTER_ID: [
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                ask_character_id
+            )
+        ],
+
+        WAITING_FOR_PRICE: [
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                ask_price
+            )
+        ],
+    },
+
+    fallbacks=[
+        CommandHandler("cancel", cancel_sell)
+    ],
+
+    allow_reentry=True,
+    per_user=True,
+    per_chat=True,
+)
+
+# SELL CONVERSATION — MUST BE BEFORE OTHER MESSAGE HANDLERS
+application.add_handler(sell_conv, group=-1)
+
+# PMARKET COMMAND
+application.add_handler(
+    CommandHandler(["pmarket", "shop"], pmarket_command),
+    group=0
+)
+
+application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist):'), group=0)
