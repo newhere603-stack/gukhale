@@ -15,9 +15,9 @@ LEADERBOARD_STATES = {}
 def get_user_state(chat_id):
     if chat_id not in LEADERBOARD_STATES:
         LEADERBOARD_STATES[chat_id] = {
-            "scope": "chat",    # Default: chat
-            "time": "month",    # Default: month
-            "letters": "5"      # Default: 5 letters
+            "scope": "chat",    # Default: Chat select rahega
+            "time": "all",      # Default: All-Time rahega taaki purana score turant dikhe
+            "letters": "5"      # Default: 5 Letter rahega
         }
     return LEADERBOARD_STATES[chat_id]
 
@@ -34,9 +34,11 @@ def extract_gold(user_doc, letter_filter="all", time_filter="all"):
     else:
         base_keys = ['gold', 'golds', 'wordseek_points', 'score', 'points']
     
+    # Agar all time hai toh direct keys check karega
     if time_filter == "all":
         keys_to_check = base_keys
     else:
+        # Today, Week, Month ke hisaab se aage prefix lagayega (eg. today_gold_5)
         keys_to_check = [f"{time_filter}_{key}" for key in base_keys]
     
     for key in keys_to_check:
@@ -135,13 +137,13 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         else:
             query_filter["id"] = {"$in": []}
 
-    # Fetching all matching players
+    # Sabhi matching players ko uthayega
     data = await user_collection.find(query_filter).to_list(None)
     
     time_f = state["time"]
     letter_f = state["letters"]
     
-    # Extracting current scores for everyone in real-time
+    # Har ek ka current score nikalega selected filter ke hisaab se
     user_scores = []
     for u in data:
         gold = extract_gold(u, letter_f, time_f)
@@ -155,7 +157,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
 
-    # Completely sorting all players highest to lowest, and ONLY then picking the top 20
+    # Pehle saare players ko sort karega highest se lowest, uske baad top 20 niklega
     sorted_data = sorted(user_scores, key=lambda x: x[1], reverse=True)[:20]
 
     rows = []
