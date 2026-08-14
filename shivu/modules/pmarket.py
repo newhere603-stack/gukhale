@@ -123,8 +123,27 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         if rarity_key == "premium":
             search_terms.extend(["Premium Edition", "Premium"])
 
+        # Fetch live character IDs from the main database matching the chosen rarity
+        matching_chars = await db.characters.find({
+            '$or': [{'rarity': {"$regex": term, "$options": "i"}} for term in search_terms]
+        }).to_list(length=None)
+        
+        char_ids = []
+        for c in matching_chars:
+            cid = c.get('id')
+            if cid is not None:
+                char_ids.append(cid)
+                if isinstance(cid, int):
+                    char_ids.append(str(cid))
+                elif isinstance(cid, str) and cid.isdigit():
+                    char_ids.append(int(cid))
+
+        if not char_ids:
+            await query.answer("ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ғᴏʀ sᴀʟᴇ ɪɴ ᴛʜɪs ʀᴀʀɪᴛʏ!", show_alert=True)
+            return
+
         cursor = market_collection.find({
-            '$or': [{'character.rarity': {"$regex": term, "$options": "i"}} for term in search_terms]
+            'character.id': {'$in': char_ids}
         }).sort('price', sort_order).limit(10)
         
         market_items = await cursor.to_list(length=10)
@@ -135,7 +154,18 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
         keyboard = []
         for item in market_items:
-            char_name = item['character'].get('name', 'Unknown')
+            char = item['character']
+            char_id = char.get('id')
+            
+            # Fetch live name dynamically
+            live_char = None
+            if char_id is not None:
+                live_char = await db.characters.find_one({
+                    '$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]
+                })
+            
+            display_char = live_char if live_char else char
+            char_name = display_char.get('name', 'Unknown')
             price = item['price']
             market_id = str(item['_id'])
             
@@ -145,7 +175,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         sort_text = "ʟᴏᴡ ᴛᴏ ʜɪɢʜ" if order == "asc" else "ʜɪɢʜ ᴛᴏ ʟᴏᴡ"
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_r:{rarity_key}:{user_id}")])
 
-        await update_menu(query, f"<b>{prem_emoji} ᴄʜᴀʀᴀᴄᴛᴇʀs ғอร sᴀʟᴇ</b>\n\n<i>sᴏʀᴛᴇᴅ ʙʏ ᴘʀɪᴄᴇ ({sort_text})</i>", InlineKeyboardMarkup(keyboard))
+        await update_menu(query, f"<b>{prem_emoji} ᴄʜᴀʀᴀᴄᴛᴇʀs ғᴏʀ sᴀʟᴇ</b>\n\n<i>sᴏʀᴛᴇᴅ ʙʏ ᴘʀɪᴄᴇ ({sort_text})</i>", InlineKeyboardMarkup(keyboard))
 
     elif action == "pm_v":
         market_id = parts[1]
@@ -159,26 +189,24 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         seller_id = item['seller_id']
         price = item['price']
         
-        # --- ABSOLUTE LIVE RARITY FETCHING FROM MAIN DATABASE ---
-        char_rarity_str = ""
+        # --- ABSOLUTE LIVE RARITY & DATA FETCHING FROM MAIN DATABASE ---
         char_id = char.get('id')
         char_name = char.get('name')
         
         live_char = None
         if char_id is not None:
-            live_char = await db.characters.find_one({'id': char_id}) or await db.characters.find_one({'id': str(char_id)}) or await db.characters.find_one({'id': int(char_id) if str(char_id).isdigit() else None})
+            live_char = await db.characters.find_one({
+                '$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]
+            })
         if not live_char and char_name:
             live_char = await db.characters.find_one({'name': char_name})
             
-        if live_char and live_char.get('rarity'):
-            char_rarity_str = str(live_char.get('rarity')).strip()
-        else:
-            char_rarity_str = str(char.get('rarity', '')).strip()
+        display_char = live_char if live_char else char
+        char_rarity_str = str(display_char.get('rarity', '')).strip()
 
         prem_emoji = '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>'
         name = char_rarity_str if char_rarity_str else "Common"
         
-        # Exact match first, then fallback to inclusion
         matched = False
         for k, (d_emoji, p_emoji, r_name) in RARITIES.items():
             if r_name.lower() == char_rarity_str.lower() or k.lower() == char_rarity_str.lower() or (k == "premium" and "edition" in char_rarity_str.lower()):
@@ -195,8 +223,8 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                     break
 
         caption = (
-            f"<b>{prem_emoji} {to_small_caps(char.get('name', 'Unknown'))}</b>\n\n"
-            f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {to_small_caps(char.get('anime', 'Unknown'))}\n"
+            f"<b>{prem_emoji} {to_small_caps(display_char.get('name', 'Unknown'))}</b>\n\n"
+            f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {to_small_caps(display_char.get('anime', 'Unknown'))}\n"
             f"<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> ʀᴀʀɪᴛʏ:</b> {prem_emoji} {to_small_caps(name)}\n"
             f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ᴘʀɪᴄᴇ:</b> <code>{price:,}</code>\n"
             f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> sᴇʟʟᴇʀ:</b> <code>{seller_id}</code>"
@@ -210,7 +238,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await query.message.delete()
         await context.bot.send_photo(
             chat_id=query.message.chat_id,
-            photo=char.get('img_url'), 
+            photo=display_char.get('img_url'), 
             caption=caption,
             reply_markup=keyboard,
             parse_mode='HTML'
@@ -278,7 +306,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             char = item['character']
             await user_collection.update_one({'id': user_id}, {'$push': {'characters': char}})
             await market_collection.delete_one({'_id': ObjectId(market_id)})
-            await query.answer(f"✅ sᴜᴄᴄᴇssғᴜʟʟʏ rᴇᴍᴏᴠᴇᴅ ᴀɴᴅ rᴇᴛᴜʀɴᴇᴅ ᴛᴏ ɪɴᴠᴇɴᴛᴏʀʏ!", show_alert=True)
+            await query.answer(f"✅ sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛᴏ ɪɴᴠᴇɴᴛᴏʀʏ!", show_alert=True)
         
         cursor = market_collection.find({'seller_id': user_id})
         listings = await cursor.to_list(length=None)
@@ -376,6 +404,13 @@ async def ask_price(update: Update, context: CallbackContext):
         return ConversationHandler.END
 
     char_id_val = character['id']
+    
+    # Fetch latest live data from main database right when listing
+    live_char = await db.characters.find_one({
+        '$or': [{'id': char_id_val}, {'id': str(char_id_val)}, {'id': int(char_id_val) if str(char_id_val).isdigit() else None}]
+    })
+    final_character = live_char if live_char else character
+
     await user_collection.update_one(
         {'id': user_id}, 
         {'$pull': {'characters': {'id': char_id_val}}}
@@ -384,7 +419,7 @@ async def ask_price(update: Update, context: CallbackContext):
     market_item = {
         'seller_id': user_id,
         'price': price,
-        'character': character
+        'character': final_character
     }
     await market_collection.insert_one(market_item)
 
@@ -392,7 +427,7 @@ async def ask_price(update: Update, context: CallbackContext):
     context.user_data.pop('sell_owner_id', None)
     
     await update.message.reply_text(
-        f"🎉 <b>{to_small_caps(character.get('name'))}</b> ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!",
+        f"🎉 <b>{to_small_caps(final_character.get('name'))}</b> ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!",
         parse_mode='HTML'
     )
     return ConversationHandler.END
