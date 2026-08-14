@@ -360,7 +360,28 @@ class TelegramUploader:
             fp.name = character.media_file.filename
             message = await TelegramUploader._send_media_bytes(fp, character.media_file.media_type, caption, context)
         else:
-            message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
+            # ✅ YAHAN PE SMART FIX LAGA HAI - AB YE KHUD DETECT KAREGA
+            try:
+                message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
+            except TelegramError as e:
+                error_msg = str(e).lower()
+                
+                if "video as photo" in error_msg:
+                    character.media_file.media_type = MediaType.VIDEO
+                    caption = character.get_caption(is_update) # Caption change hoke '🎥 Video' aayega
+                    message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
+                    
+                elif "photo as video" in error_msg:
+                    character.media_file.media_type = MediaType.IMAGE
+                    caption = character.get_caption(is_update)
+                    message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
+                    
+                elif "animation" in error_msg:
+                    character.media_file.media_type = MediaType.ANIMATION
+                    caption = character.get_caption(is_update)
+                    message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
+                else:
+                    raise e
 
         character.message_id = message.message_id
         if message.video:
@@ -520,7 +541,6 @@ class CharacterUploadHandler:
         media_source = context.args[0]
         processing_msg = await update.message.reply_text('<b>⏳ Processing input...</b>', parse_mode='HTML')
 
-        # FIX: Check karega ki link hai ya File ID
         if media_source.startswith(('http://', 'https://')):
             progress = ProgressTracker(processing_msg)
             file_bytes = await FileDownloader.download_from_url(media_source, progress.update)
@@ -538,7 +558,6 @@ class CharacterUploadHandler:
 
             object.__setattr__(media_file, 'url', file_url)
         else:
-            # Seedha ID ko accept karega
             media_file = MediaFile(url=media_source, media_type=MediaType.IMAGE)
 
         await processing_msg.edit_text('<b>✅ Ready! Saving character...</b>', parse_mode='HTML')
@@ -658,7 +677,6 @@ class CharacterUpdateHandler:
                 if len(args) >= 3:
                     new_media = args[2]
                     
-                    # FIX: Link vs ID checker lagaya
                     if new_media.startswith(('http://', 'https://')):
                         await processing_msg.edit_text('<b>⏳ Downloading from link...</b>', parse_mode='HTML')
                         file_bytes = await FileDownloader.download_from_url(new_media)
@@ -681,7 +699,6 @@ class CharacterUpdateHandler:
                         update_data['file_hash'] = media_file.hash
                         
                     else:
-                        # Direct Telegram ID support
                         await processing_msg.edit_text('<b>⏳ Using Telegram File ID...</b>', parse_mode='HTML')
                         update_data['img_url'] = new_media
 
@@ -740,7 +757,7 @@ class CharacterUpdateHandler:
             await processing_msg.edit_text(f'<b>Update failed: {str(e)}</b>', parse_mode='HTML')
 
 
-# Decorator for Sudo Users (Delete & Update ke liye)
+# Decorator for Sudo Users
 def require_sudo(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -752,7 +769,7 @@ def require_sudo(func):
     return wrapper
 
 
-# Decorator for Uploaders OR Sudo Users (Sirf Upload ke liye)
+# Decorator for Uploaders OR Sudo Users
 def require_uploader_or_sudo(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
