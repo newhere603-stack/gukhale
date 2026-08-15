@@ -352,7 +352,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
             
             win_msg = (
-                f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()} Added {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
+                f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()}\nAdded {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
             )
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
