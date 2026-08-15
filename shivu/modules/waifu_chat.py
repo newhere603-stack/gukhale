@@ -14,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 # 1. OPENROUTER API SETUP
 # ==========================================
 API_KEY = "Sk-or-v1-e99181b2748d135be852c7573ca3c32330b0991042dec21b727d6a37337e7fdd"
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
+API_URL = "https://openrouter.ai/api/v1/chat/completions" # OpenRouter API endpoint
 
 WAIFU_CHAT_ENABLED = {}
 
@@ -100,7 +100,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 4. MAIN CHAT HANDLER (OpenRouter + Requests)
+# 4. MAIN CHAT HANDLER (OpenRouter Integration)
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -129,16 +129,15 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         pass
 
     try:
-        # Fetch history from MongoDB
         doc = await chat_history_collection.find_one({"chat_id": chat_id})
         messages = doc.get("history", []) if doc else []
         messages.append({"role": "user", "content": text})
 
-        # Prepare payload and headers matching the OpenRouter specifications
         headers = {
             "Authorization": f"Bearer {API_KEY}",
-            "HTTP-Referer": "https://t.me/AlisaWaifusBot",
-            "X-OpenRouter-Title": "Alisa Waifu Bot",
+            "HTTP-Referer": "https://t.me/AlisaWaifusBot",  # Optional attribution
+            "X-OpenRouter-Title": "Alisa Waifu Bot",         # Optional attribution
+            "Content-Type": "application/json"
         }
         
         payload = {
@@ -146,7 +145,6 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "messages": [{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages[-10:]
         }
 
-        # Run requests.post asynchronously
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
             None, 
@@ -157,14 +155,12 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             res_data = response.json()
             reply = res_data['choices'][0]['message']['content'].strip()
             
-            # Parse emotion tags
             match = re.search(r'\[([A-Z]+)\]', reply)
             clean_reply = re.sub(r'\[[A-Z]+\]', '', reply).strip()
             
             if clean_reply:
                 await update.message.reply_text(clean_reply)
             
-            # Update history
             messages.append({"role": "assistant", "content": reply})
             asyncio.create_task(
                 chat_history_collection.update_one(
@@ -172,7 +168,6 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 )
             )
 
-            # Send sticker/animation
             if match and match.group(1) in EMOTION_MEDIA and EMOTION_MEDIA[match.group(1)]:
                 await asyncio.sleep(0.5)
                 sticker_to_send = random.choice(EMOTION_MEDIA[match.group(1)])
