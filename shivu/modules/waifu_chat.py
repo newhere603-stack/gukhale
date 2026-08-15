@@ -19,7 +19,7 @@ GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMI
 WAIFU_CHAT_ENABLED = {}
 
 # ==========================================
-# 2. ALISA PERSONALITY (Short & Natural Replies)
+# 2. ALISA PERSONALITY
 # ==========================================
 WAIFU_SYSTEM_PROMPT = """
 Tumhara naam Alisa hai, kabhi kabhi AlisaJi bhi.
@@ -137,7 +137,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 6. GEMINI API REQUEST (Strict Max Tokens for Short Replies)
+# 6. GEMINI API REQUEST
 # ==========================================
 async def ask_gemini(contents):
     if not GEMINI_API_KEY:
@@ -150,7 +150,7 @@ async def ask_gemini(contents):
     payload = {
         "system_instruction": {"parts": [{"text": WAIFU_SYSTEM_PROMPT}]},
         "contents": contents,
-        "generationConfig": {"temperature": 0.8, "maxOutputTokens": 60}  # Reduced tokens for short messages
+        "generationConfig": {"temperature": 0.8, "maxOutputTokens": 60}
     }
     loop = asyncio.get_running_loop()
 
@@ -195,16 +195,20 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not WAIFU_CHAT_ENABLED.get(chat_id, True):
         return
 
+    is_media = False
     if update.message.text:
         text = update.message.text.strip()
     elif update.message.sticker:
         text = "*(User sent a sticker)*"
+        is_media = True
     elif update.message.animation:
         text = "*(User sent a GIF)*"
+        is_media = True
     else:
         return
 
-    if chat.type in ["group", "supergroup"]:
+    # Group logic: Agar text hai toh check karo, agar sticker/GIF hai toh seedha reply karo
+    if chat.type in ["group", "supergroup"] and not is_media:
         is_reply = False
         if update.message.reply_to_message and update.message.reply_to_message.from_user:
             is_reply = update.message.reply_to_message.from_user.id == context.bot.id
@@ -239,14 +243,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         reply, error = await ask_gemini(messages)
 
         if not reply:
-            error_messages = {
-                "NO_API_KEY": "❌ API key set nahi hai.",
-                401: "❌ API key invalid hai.",
-                429: "🥺 Rate limit. Thodi der baad try karo.",
-                404: "❌ Model available nahi hai.",
-                "CONNECTION_ERROR": "❌ Connection error."
-            }
-            await update.message.reply_text(error_messages.get(error, f"B-Baka! Busy hu... 🥺"))
+            await update.message.reply_text("B-Baka! Busy hu... 🥺")
             return
 
         match = re.search(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", reply, re.IGNORECASE)
