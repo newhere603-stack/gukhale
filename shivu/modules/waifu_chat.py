@@ -134,7 +134,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 6. GEMINI API REQUEST (Using X-goog-api-key Header)
+# 6. GEMINI API REQUEST
 # ==========================================
 async def ask_gemini(contents):
     if not GEMINI_API_KEY:
@@ -238,7 +238,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 404: "❌ Model available nahi hai.",
                 "CONNECTION_ERROR": "❌ Server se connection nahi ho paya."
             }
-            await update.message.reply_text(error_messages.get(error, "B-Baka! AI server busy hai... 🥺"))
+            await update.message.reply_text(error_messages.get(error, f"B-Baka! AI server busy hai... 🥺 (Code: {error})"))
             return
 
         match = re.search(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", reply, re.IGNORECASE)
