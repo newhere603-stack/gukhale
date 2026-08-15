@@ -18,7 +18,6 @@ GEMINI_API_KEYS = [
 ]
 GEMINI_MODEL = "gemini-flash-latest"
 
-# Tumhari ElevenLabs API Key aur Voice ID (Rachel default voice)
 ELEVENLABS_API_KEY = "Sk_02920bcb875ba0d4b696fc20d1766c1c6779b11b5f93e734"
 ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM" 
 
@@ -202,13 +201,12 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         bot_username = context.bot.username.lower() if context.bot.username else ""
         is_mentioned = bool(bot_username and text and f"@{bot_username}" in text.lower())
         contains_name = bool(text and re.search(r"\balisa\b", text, re.IGNORECASE))
-        if not (is_reply || is_mentioned || contains_name): return
+        if not (is_reply or is_mentioned or contains_name): return
         if is_mentioned and bot_username and text:
             text = re.sub(rf"@{re.escape(context.bot.username)}", "", text, flags=re.IGNORECASE).strip()
         if not text: text = "Haan bolo?"
 
     try:
-        # Voice generation takes a bit longer, so show recording/uploading voice action
         action = "record_audio" if not is_media else "typing"
         await context.bot.send_chat_action(chat_id=chat_id, action=action)
     except Exception: pass
@@ -248,21 +246,17 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         sanitized_history.append({"role": "model", "parts": [{"text": raw_reply}]})
         await chat_history_collection.update_one(history_key, {"$set": {"history": sanitized_history[-10:]}}, upsert=True)
 
-        # MUTUALLY EXCLUSIVE RULE:
         if is_media:
-            # Sticker/GIF -> Bot sends ONLY sticker
             if emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
                 sticker_id = random.choice(EMOTION_MEDIA[emotion])
                 await update.message.reply_sticker(sticker=sticker_id)
         else:
-            # Text -> Bot converts text to ElevenLabs Voice Note and sends audio!
             audio_bytes = await text_to_speech_elevenlabs(clean_reply)
             if audio_bytes:
                 audio_file = io.BytesIO(audio_bytes)
                 audio_file.name = "alisa_voice.mp3"
                 await update.message.reply_voice(voice=audio_file, caption=clean_reply)
             else:
-                # Fallback to text if ElevenLabs fails
                 await update.message.reply_text(clean_reply)
 
     except Exception as e:
