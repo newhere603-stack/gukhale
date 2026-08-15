@@ -19,3 +19,4 @@ pytz
 yt-dlp
 tenacity>=8.2.0
 numpy>=1.24.0
+openai
