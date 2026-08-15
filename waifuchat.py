@@ -107,7 +107,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"Waifu ChatBot is now: {status_text}")
 
 # ==========================================
-# 4. MAIN CHAT HANDLER (Sticker/GIF Only Replies)
+# 4. MAIN CHAT HANDLER (Strict Reply-Only Filter)
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
@@ -117,29 +117,23 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if not WAIFU_CHAT_ENABLED.get(chat_id, True): return
 
-    is_media = False
+    # STEN / STRICT CONDITION CHECK:
+    # In groups/supergroups, bot will ONLY respond if the message is an explicit direct reply to the bot's message.
+    if chat.type in ["group", "supergroup"]:
+        is_reply_to_bot = False
+        if update.message.reply_to_message and update.message.reply_to_message.from_user:
+            is_reply_to_bot = update.message.reply_to_message.from_user.id == context.bot.id
+        
+        # If it's not a direct reply to the bot, completely ignore it.
+        if not is_reply_to_bot:
+            return
+
+    # Extract text content if available
+    text = "Sticker"
     if update.message.text:
         text = update.message.text.strip()
-    elif update.message.sticker:
-        text = "Sticker"
-        is_media = True
     elif update.message.animation:
         text = "GIF"
-        is_media = True
-    else:
-        return
-
-    if chat.type in ["group", "supergroup"] and not is_media:
-        is_reply = False
-        if update.message.reply_to_message and update.message.reply_to_message.from_user:
-            is_reply = update.message.reply_to_message.from_user.id == context.bot.id
-        bot_username = context.bot.username.lower() if context.bot.username else ""
-        is_mentioned = bool(bot_username and text and f"@{bot_username}" in text.lower())
-        contains_name = bool(text and re.search(r"\balisa\b", text, re.IGNORECASE))
-        if not (is_reply or is_mentioned or contains_name): return
-        if is_mentioned and bot_username and text:
-            text = re.sub(rf"@{re.escape(context.bot.username)}", "", text, flags=re.IGNORECASE).strip()
-        if not text: text = "Haan bolo?"
 
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
@@ -149,7 +143,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         _, emotion = generate_unlimited_response(text)
 
-        # Send ONLY sticker/media response, no text replies
+        # Send ONLY sticker/media response as a reply, with no text output
         if emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
             sticker_id = random.choice(EMOTION_MEDIA[emotion])
             await update.message.reply_sticker(sticker=sticker_id)
