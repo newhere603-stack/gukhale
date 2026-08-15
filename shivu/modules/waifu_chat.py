@@ -2,63 +2,45 @@ import logging
 import asyncio
 import re
 import random
-import os
 import requests
-
 from telegram import Update
-from telegram.ext import (
-    MessageHandler,
-    CommandHandler,
-    filters,
-    ContextTypes,
-)
-
+from telegram.ext import MessageHandler, CommandHandler, filters, ContextTypes
 from shivu import application, user_collection
-
 
 LOGGER = logging.getLogger(__name__)
 
-
 # ==========================================
-# 1. OPENROUTER API SETUP
+# 1. GOOGLE GEMINI API SETUP
 # ==========================================
-
-API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
-
-# Current free OpenRouter model
-MODEL = "google/gemma-4-31b-it:free"
+GEMINI_API_KEY = "Sk-or-v1-e99181b2748d135be852c7573ca3c32330b0991042dec21b727d6a37337e7fdd"
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 WAIFU_CHAT_ENABLED = {}
 
-
 # ==========================================
-# 2. SYSTEM PROMPT
+# 2. ALISA PERSONALITY
 # ==========================================
-
 WAIFU_SYSTEM_PROMPT = """
-Tumhara naam Alisa hai.
-
-Tum ek anime waifu ho jo Alisa Kujou (Roshidere)
-aur Hinata Hyuga (Naruto) ka mix hai.
-
-Personality:
-- Bahar se thoda attitude / tsundere.
+Tumhara naam Alisa hai, kabhi kabhi AlisaJi bhi.
+Tum ek anime waifu ho jo Alisa Kujou (Roshidere) aur Hinata Hyuga (Naruto) ki personality ka mix hai.
+PERSONALITY:
+- Bahar se thodi tsundere aur attitude wali.
 - Andar se sweet, caring aur friendly.
 - User se natural tarike se baat karo.
-- Har reply robotic nahi hona chahiye.
-- Kabhi kabhi cute reactions use karo.
+- Robotic AI jaise replies mat do.
+- Kabhi cute reactions use karo.
+- Situation ke according teasing, caring ya funny reply do.
+- User ko unnecessarily lecture mat do.
 - User jis language mein baat kare, usi language mein reply karo.
-- Hindi/Hinglish user ho to Hinglish mein reply karo.
-- English user ho to English mein reply karo.
-- User ke message ka direct answer do.
-- Bahut lamba reply mat do jab tak user detail na maange.
+- Hindi/Hinglish mein baat ho to Hinglish mein reply karo.
+- English mein baat ho to English mein reply karo.
+- Reply normally short aur natural rakho.
+- Zarurat ho tabhi long answer do.
 
-Important:
-Reply ke END mein exactly ek emotion tag zaroor lagao.
-
-Allowed tags:
+IMPORTANT:
+Har reply ke END mein exactly ONE emotion tag lagana hai.
+Allowed emotion tags ONLY:
 [HAPPY]
 [SAD]
 [ANGRY]
@@ -66,27 +48,23 @@ Allowed tags:
 [LAUGH]
 [FLIRT]
 
-Example:
+Examples:
 Tum kitne cute ho yaar! [BLUSH]
-
-Another example:
-Hahaha tumse ye expect nahi kiya tha 😂 [LAUGH]
+Hahaha tum bhi na 😂 [LAUGH]
+Achhaaa, mujhe ignore kar rahe ho? 😤 [ANGRY]
+Aww, kya hua? Main hoon na 🥺 [SAD]
+Reply mein emotion tag hamesha last mein hona chahiye.
 """
 
-
 # ==========================================
-# 3. CHAT HISTORY COLLECTION
+# 3. DATABASE
 # ==========================================
-
 chat_history_collection = user_collection.database["waifu_chat_history"]
 
-
 # ==========================================
-# 4. STICKER / GIF DICTIONARY
+# 4. STICKER / EMOTION MEDIA
 # ==========================================
-
 EMOTION_MEDIA = {
-
     "HAPPY": [
         "CAACAgUAAxkBAAFR3fNqgBF4PRADJszY3nNrQQoR2sD6qwACAiEAAhwwsVdASn_j-vrqtz0E",
         "CAACAgUAAxkBAAFR3e9qgBFSjkEp_DqBKKAeRJ66piFGjwACmw8AAkn9QFVLHCg1uJAT_j0E",
@@ -102,553 +80,191 @@ EMOTION_MEDIA = {
         "CAACAgUAAxkBAAFR3g9qgBIS1T1g9d85idyUs90T2hpI1QACxR8AAqUxGVVwUaNkqQ-9mz0E",
         "CAACAgUAAxkBAAFR3hFqgBIZl8O67TSiCQe4OIJz3t3keAACERoAAr1QeVbFlbbjEywZKj0E",
         "CAACAgUAAxkBAAFR3hVqgBIvSkd0Pe5dpd_SacVvAZMjOwACmRgAAo0RgVa6xF1Ctm59gT0E",
-        "CAACAgUAAxkBAAFR3hlqgBI8mSvH9K4eOU4Qj7y-pEQRigACyhgAAmO6EFUgbWsg-1F2Tj0E",
+        "CAACAgUAAxkBAAFR3hlqgBI8mSvH9K4eOU4Qj7y-pEQRigACyhgAAmO6EFUgbWsg-1F2Tj0E"
     ],
-
     "SAD": [
         "CAACAgUAAxkBAAFR3hNqgBIn4b9iZNiFHx4cB10tqRI7NgACOxcAAjV2qFThhaZ9Pm0Myj0E",
         "CAACAgUAAxkBAAFR3iFqgBNuVf4c8hAUW8kKeVXTcGHqAwAC9xsAAvn1SFXgplE-lZdNcj0E",
-        "CAACAgUAAxkBAAFR3i1qgBPayyTEc6cFhtqc94SVMMbx1AACiCcAAsyO2VTWyfLCKjr7nD0E",
+        "CAACAgUAAxkBAAFR3i1qgBPayyTEc6cFhtqc94SVMMbx1AACiCcAAsyO2VTWyfLCKjr7nD0E"
     ],
-
     "ANGRY": [
         "CAACAgUAAxkBAAFR3iVqgBO3JC6-oOEUWVM-AmMfloIIjgACAhoAAjqT2VXEvUSG1hjGHj0E",
-        "CAACAgUAAxkBAAFR3i9qgBPsx-5fBwufuVgBUlDK_ec4QAACtRAAArI-QFazW1M8z7SWSj0E",
+        "CAACAgUAAxkBAAFR3i9qgBPsx-5fBwufuVgBUlDK_ec4QAACtRAAArI-QFazW1M8z7SWSj0E"
     ],
-
     "BLUSH": [
         "CAACAgUAAxkBAAFR3jRqgBQf6SJcoFrMUtEB9OM5HCaUpAACoRYAAuqt0VRbqNEszdX3Ej0E",
-        "CAACAgUAAxkBAAFR3jZqgBQ007MeN_OWyzW13Mn9rOtKwgACNxgAAisSSVXDmdjUzngLRT0E",
+        "CAACAgUAAxkBAAFR3jZqgBQ007MeN_OWyzW13Mn9rOtKwgACNxgAAisSSVXDmdjUzngLRT0E"
     ],
-
     "FLIRT": [
-        "CAACAgUAAxkBAAFR3hdqgBI2k4bZE6tzwY7zVfiF-tw6fwACXhYAAqgp6FZJs89vgZurvj0E",
+        "CAACAgUAAxkBAAFR3hdqgBI2k4bZE6tzwY7zVfiF-tw6fwACXhYAAqgp6FZJs89vgZurvj0E"
     ],
-
     "LAUGH": [
-        "CAACAgUAAxkBAAFR3jtqgBSSa_HpuYq-P7Aiys7efYCmowACIhUAAg10eFcdJmcN6Z9L_z0E",
-    ],
+        "CAACAgUAAxkBAAFR3jtqgBSSa_HpuYq-P7Aiys7efYCmowACIhUAAg10eFcdJmcN6Z9L_z0E"
+    ]
 }
 
-
 # ==========================================
-# 5. ADMIN CHECK
+# 5. ADMIN CHECK & TOGGLE
 # ==========================================
-
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-
     chat = update.effective_chat
     user = update.effective_user
-
     if not chat or not user:
         return False
-
-    # Private chat
     if chat.type == "private":
         return True
-
     try:
-        member = await context.bot.get_chat_member(
-            chat.id,
-            user.id
-        )
-
+        member = await context.bot.get_chat_member(chat.id, user.id)
         return member.status in ["creator", "administrator"]
-
     except Exception as e:
         LOGGER.error(f"Admin check error: {e}")
         return False
 
-
-# ==========================================
-# 6. TOGGLE CHAT
-# ==========================================
-
-async def toggle_waifu_chat_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
+async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message:
         return
-
     if not await is_admin(update, context):
-
-        await update.message.reply_text(
-            "<b>❌ Only group admins can enable or disable the Waifu ChatBot.</b>",
-            parse_mode="HTML"
-        )
-
+        await update.message.reply_text("<b>❌ Only group admins can enable or disable the Waifu ChatBot.</b>", parse_mode="HTML")
         return
-
     chat_id = update.effective_chat.id
-
-    current_status = WAIFU_CHAT_ENABLED.get(
-        chat_id,
-        True
-    )
-
+    current_status = WAIFU_CHAT_ENABLED.get(chat_id, True)
     new_status = not current_status
-
     WAIFU_CHAT_ENABLED[chat_id] = new_status
-
-    status_text = (
-        "ENABLED ✅"
-        if new_status
-        else "DISABLED ❌"
-    )
-
-    await update.message.reply_text(
-        f"<b>Waifu ChatBot is now: {status_text}</b>",
-        parse_mode="HTML"
-    )
-
+    status_text = "ENABLED ✅" if new_status else "DISABLED ❌"
+    await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 7. OPENROUTER REQUEST
+# 6. GEMINI API REQUEST
 # ==========================================
+async def ask_gemini(contents):
+    if not GEMINI_API_KEY:
+        return None, "NO_API_KEY"
 
-async def get_ai_reply(messages):
-
-    if not API_KEY:
-        LOGGER.error(
-            "OPENROUTER_API_KEY is missing."
-        )
-        return None, "API_KEY_MISSING"
-
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://t.me/AlisaWaifusBot",
-        "X-Title": "Alisa Waifu Bot",
-    }
-
+    headers = {"Content-Type": "application/json"}
     payload = {
-        "model": MODEL,
-        "messages": messages,
-        "temperature": 0.9,
-        "max_tokens": 300,
+        "system_instruction": {"parts": [{"text": WAIFU_SYSTEM_PROMPT}]},
+        "contents": contents,
+        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 300}
     }
-
+    request_url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
     loop = asyncio.get_running_loop()
 
-    def make_request():
-
+    def send_request():
         try:
-
-            return requests.post(
-                API_URL,
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-
+            return requests.post(request_url, headers=headers, json=payload, timeout=30)
         except Exception as e:
-
-            LOGGER.error(
-                f"Request exception: {e}"
-            )
-
+            LOGGER.error(f"Gemini connection error: {e}")
             return None
 
-    response = await loop.run_in_executor(
-        None,
-        make_request
-    )
-
+    response = await loop.run_in_executor(None, send_request)
     if response is None:
-        return None, "REQUEST_ERROR"
-
-    LOGGER.info(
-        f"OpenRouter status: {response.status_code}"
-    )
+        return None, "CONNECTION_ERROR"
 
     if response.status_code != 200:
-
-        LOGGER.error(
-            f"OpenRouter Error "
-            f"{response.status_code}: "
-            f"{response.text}"
-        )
-
+        LOGGER.error(f"Gemini API Error {response.status_code}: {response.text}")
         return None, response.status_code
 
     try:
-
         data = response.json()
-
-    except Exception as e:
-
-        LOGGER.error(
-            f"Invalid JSON response: {e}"
-        )
-
-        return None, "INVALID_JSON"
-
-    try:
-
-        reply = (
-            data["choices"][0]
-            ["message"]["content"]
-            .strip()
-        )
-
+        reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
         return reply, None
-
     except Exception as e:
-
-        LOGGER.error(
-            f"Invalid OpenRouter response: "
-            f"{data}"
-        )
-
+        LOGGER.error(f"Gemini parsing error: {e}")
         return None, "INVALID_RESPONSE"
 
-
 # ==========================================
-# 8. MAIN CHAT HANDLER
+# 7. MAIN CHAT HANDLER
 # ==========================================
-
-async def waifu_chat_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    if not update.message:
-        return
-
-    if not update.message.text:
+async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
         return
 
     chat = update.effective_chat
     user = update.effective_user
-
     if not chat or not user:
         return
 
     chat_id = chat.id
     user_id = user.id
 
-    # --------------------------------------
-    # Check group toggle
-    # --------------------------------------
-
-    if not WAIFU_CHAT_ENABLED.get(
-        chat_id,
-        True
-    ):
+    if not WAIFU_CHAT_ENABLED.get(chat_id, True):
         return
 
     text = update.message.text.strip()
-
     if not text:
         return
 
-    # --------------------------------------
-    # Group trigger
-    # --------------------------------------
-
     if chat.type in ["group", "supergroup"]:
-
         is_reply = False
+        if update.message.reply_to_message and update.message.reply_to_message.from_user:
+            is_reply = update.message.reply_to_message.from_user.id == context.bot.id
 
-        if update.message.reply_to_message:
+        bot_username = context.bot.username.lower() if context.bot.username else ""
+        is_mentioned = bool(bot_username and f"@{bot_username}" in text.lower())
+        contains_name = bool(re.search(r"\balisa\b", text, re.IGNORECASE))
 
-            replied_user = (
-                update.message.reply_to_message.from_user
-            )
-
-            if replied_user:
-                is_reply = (
-                    replied_user.id
-                    == context.bot.id
-                )
-
-        bot_username = (
-            context.bot.username.lower()
-            if context.bot.username
-            else ""
-        )
-
-        is_mentioned = False
-
-        if bot_username:
-
-            is_mentioned = (
-                f"@{bot_username}"
-                in text.lower()
-            )
-
-        contains_name = bool(
-            re.search(
-                r"\balisa\b",
-                text,
-                re.IGNORECASE
-            )
-        )
-
-        if not (
-            is_reply
-            or is_mentioned
-            or contains_name
-        ):
+        if not (is_reply or is_mentioned or contains_name):
             return
 
-        # Remove mention
         if is_mentioned and bot_username:
-
-            text = re.sub(
-                rf"@{re.escape(context.bot.username)}",
-                "",
-                text,
-                flags=re.IGNORECASE
-            ).strip()
+            text = re.sub(rf"@{re.escape(context.bot.username)}", "", text, flags=re.IGNORECASE).strip()
 
         if not text:
             text = "Haan? Mujhe bulaya? 👀"
 
-    # --------------------------------------
-    # Typing action
-    # --------------------------------------
-
     try:
-
-        await context.bot.send_chat_action(
-            chat_id=chat_id,
-            action="typing"
-        )
-
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
     except Exception:
         pass
 
-    # --------------------------------------
-    # Database history
-    # --------------------------------------
-
-    history_id = {
-        "chat_id": chat_id,
-        "user_id": user_id
-    }
-
     try:
+        history_key = {"chat_id": chat_id, "user_id": user_id}
+        doc = await chat_history_collection.find_one(history_key)
+        messages = doc.get("history", []) if doc else []
+        
+        messages = [msg for msg in messages if isinstance(msg, dict) and msg.get("role") and msg.get("parts")]
+        messages.append({"role": "user", "parts": [{"text": text}]})
+        messages = messages[-10:]
 
-        doc = await chat_history_collection.find_one(
-            history_id
-        )
-
-        messages = (
-            doc.get("history", [])
-            if doc
-            else []
-        )
-
-        # Keep only valid messages
-        messages = [
-            msg for msg in messages
-            if (
-                isinstance(msg, dict)
-                and msg.get("role")
-                and msg.get("content")
-            )
-        ]
-
-        messages.append({
-            "role": "user",
-            "content": text
-        })
-
-        # ----------------------------------
-        # Prepare AI messages
-        # ----------------------------------
-
-        ai_messages = [
-            {
-                "role": "system",
-                "content": WAIFU_SYSTEM_PROMPT
-            }
-        ] + messages[-10:]
-
-        # ----------------------------------
-        # AI request
-        # ----------------------------------
-
-        reply, error = await get_ai_reply(
-            ai_messages
-        )
-
-        # ----------------------------------
-        # Error handling
-        # ----------------------------------
+        reply, error = await ask_gemini(messages)
 
         if not reply:
-
-            if error == "API_KEY_MISSING":
-
-                error_text = (
-                    "❌ OpenRouter API key missing hai."
-                )
-
-            elif error == 401:
-
-                error_text = (
-                    "❌ OpenRouter API key invalid "
-                    "ya revoked hai."
-                )
-
-            elif error == 402:
-
-                error_text = (
-                    "❌ OpenRouter credits/payment "
-                    "problem hai."
-                )
-
-            elif error == 429:
-
-                error_text = (
-                    "🥺 AI server ki rate limit "
-                    "hit ho gayi. Thodi der baad try karo."
-                )
-
-            elif error == 404:
-
-                error_text = (
-                    "❌ AI model available nahi hai."
-                )
-
-            elif error == "REQUEST_ERROR":
-
-                error_text = (
-                    "❌ AI server se connection nahi ho paya."
-                )
-
-            else:
-
-                error_text = (
-                    "B-Baka! AI server busy hai... 🥺"
-                )
-
-            await update.message.reply_text(
-                error_text
-            )
-
+            error_messages = {
+                "NO_API_KEY": "❌ API key set nahi hai.",
+                401: "❌ API key invalid hai.",
+                429: "🥺 Rate limit hit ho gayi. Thodi der baad try karo.",
+                404: "❌ Model available nahi hai.",
+                "CONNECTION_ERROR": "❌ Server se connection nahi ho paya."
+            }
+            await update.message.reply_text(error_messages.get(error, "B-Baka! AI server busy hai... 🥺"))
             return
 
-        # ----------------------------------
-        # Emotion detection
-        # ----------------------------------
-
-        match = re.search(
-            r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]",
-            reply,
-            re.IGNORECASE
-        )
-
-        if match:
-
-            emotion = match.group(1).upper()
-
-        else:
-
-            emotion = None
-
-        # Remove emotion tag
-        clean_reply = re.sub(
-            r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]",
-            "",
-            reply,
-            flags=re.IGNORECASE
-        ).strip()
-
-        # ----------------------------------
-        # Send AI reply
-        # ----------------------------------
+        match = re.search(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", reply, re.IGNORECASE)
+        emotion = match.group(1).upper() if match else None
+        clean_reply = re.sub(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", "", reply, flags=re.IGNORECASE).strip()
 
         if clean_reply:
+            await update.message.reply_text(clean_reply)
 
-            await update.message.reply_text(
-                clean_reply
-            )
+        messages.append({"role": "model", "parts": [{"text": reply}]})
+        await chat_history_collection.update_one(history_key, {"$set": {"history": messages[-10:]}}, upsert=True)
 
-        # ----------------------------------
-        # Save conversation
-        # ----------------------------------
-
-        messages.append({
-            "role": "assistant",
-            "content": reply
-        })
-
-        await chat_history_collection.update_one(
-            history_id,
-            {
-                "$set": {
-                    "history": messages[-10:]
-                }
-            },
-            upsert=True
-        )
-
-        # ----------------------------------
-        # Send emotion sticker
-        # ----------------------------------
-
-        if (
-            emotion
-            and emotion in EMOTION_MEDIA
-            and EMOTION_MEDIA[emotion]
-        ):
-
+        if emotion and emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
             await asyncio.sleep(0.5)
-
-            sticker_id = random.choice(
-                EMOTION_MEDIA[emotion]
-            )
-
             try:
-
-                await update.message.reply_sticker(
-                    sticker=sticker_id
-                )
-
+                await update.message.reply_sticker(sticker=random.choice(EMOTION_MEDIA[emotion]))
             except Exception as e:
-
-                LOGGER.error(
-                    f"Sticker send error: {e}"
-                )
+                LOGGER.error(f"Sticker error: {e}")
 
     except Exception as e:
-
-        LOGGER.exception(
-            f"Waifu Chat Error: {e}"
-        )
-
+        LOGGER.exception(f"Waifu Chat Error: {e}")
         try:
-
-            await update.message.reply_text(
-                "B-Baka! M-Mujhe error aa gaya... 🥺"
-            )
-
+            await update.message.reply_text("B-Baka! M-Mujhe error aa gaya... 🥺")
         except Exception:
             pass
 
-
 # ==========================================
-# 9. REGISTER HANDLERS
+# 8. REGISTER HANDLERS
 # ==========================================
-
-application.add_handler(
-    CommandHandler(
-        "togglechat",
-        toggle_waifu_chat_handler,
-        block=False
-    )
-)
-
-application.add_handler(
-    MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        waifu_chat_handler,
-        block=False
-    ),
-    group=1
-)
+application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
