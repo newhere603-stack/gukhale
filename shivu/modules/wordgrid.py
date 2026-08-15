@@ -4,7 +4,26 @@ import io
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-from shivu import pbot  # Shivu's PTB Application instance
+import shivu
+
+# Dynamically find the telegram application instance from shivu package
+pbot = None
+for attr_name in dir(shivu):
+    attr = getattr(shivu, attr_name)
+    if hasattr(attr, "add_handler"):  # Jo bhi object handlers add kar sakta hai, wahi hamara app hai
+        pbot = attr
+        break
+
+if not pbot:
+    for name in ["application", "app", "bot", "pbot"]:
+        if hasattr(shivu, name):
+            obj = getattr(shivu, name)
+            if hasattr(obj, "add_handler"):
+                pbot = obj
+                break
+
+if not pbot:
+    raise ImportError("Could not find a valid Telegram Application instance in shivu package!")
 
 # Game State Storage
 active_games = {}
@@ -226,7 +245,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("No active WordGrid game to stop.")
 
-# --- REGISTER HANDLERS WITH PTB APPLICATION ---
+# --- REGISTER HANDLERS ---
 pbot.add_handler(CommandHandler(["play", "new", "wordgrid"], start_game))
 pbot.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
 pbot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses))
