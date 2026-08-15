@@ -2,31 +2,49 @@ import logging
 import asyncio
 import re
 import random
-import requests
 from telegram import Update
 from telegram.ext import MessageHandler, CommandHandler, filters, ContextTypes
 from shivu import application, user_collection
 
 LOGGER = logging.getLogger(__name__)
 
-# ==========================================
-# 1. FREE HUGGINFACE API SETUP (Zero API Key Needed)
-# ==========================================
-# Using a fast, free public model endpoint from Hugging Face
-API_URL = "https://api-inference.huggingface.co/models/google/gemma-2-2b-it"
 WAIFU_CHAT_ENABLED = {}
 
-WAIFU_SYSTEM_PROMPT = """
-Tumhara naam Alisa hai. Tum ek anime waifu ho. 
-Bahar se thodi tsundere aur attitude wali, andar se sweet aur caring ho.
-User ke message ka ekdam natural, chota aur alag reply do (max 1-2 sentences).
-Reply ke ant mein ek emotion tag zaroor lagana: [HAPPY], [SAD], [ANGRY], [BLUSH], [LAUGH], ya [FLIRT].
-"""
+# ==========================================
+# UNLIMITED DYNAMIC SENTENCE BUILDER (Zero API Needed)
+# ==========================================
+TSUNDERE_PREFIXES = [
+    "Hmph!", "B-Baka,", "Arey suno,", "Pagal ho kya?", 
+    "Achaaa,", "Waise,", "Oye aalu,", "Itne sawal kyu puchte ho,"
+]
 
-chat_history_collection = user_collection.database["waifu_chat_history"]
+CORE_RESPONSES = [
+    "mujhe ye sab mat batao", "tumse zyada vella koi nahi hai", 
+    "apne nakhre apne paas rakho", "dimag mat khao mera", 
+    "soch rahi hu tumhe ignore kar du", "thoda sudhar jao",
+    "yeh koi poochne wali baat hai kya", "mujhe kyu pareshan kar rahe ho"
+]
+
+CARING_TWISTS = [
+    "par suno, apna dhyan rakhna", "waise ho toh tum acche", 
+    "chalo maaf kiya tumhe", "khana khaya ya nahi?", 
+    "mazak kar rahi thi waise", "aur batao kya chal raha hai"
+]
+
+EMOTIONS = ["HAPPY", "SAD", "ANGRY", "BLUSH", "LAUGH", "FLIRT"]
+
+def generate_unlimited_response(text):
+    prefix = random.choice(TSUNDERE_PREFIXES)
+    core = random.choice(CORE_RESPONSES)
+    twist = random.choice(CARING_TWISTS)
+    emotion = random.choice(EMOTIONS)
+    
+    # Mix to create unique response every single time
+    reply = f"{prefix} {core}, par {twist}"
+    return reply, emotion
 
 # ==========================================
-# 2. STICKER / EMOTION MEDIA
+# STICKER MEDIA POOL
 # ==========================================
 EMOTION_MEDIA = {
     "HAPPY": [
@@ -90,43 +108,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"Waifu ChatBot is now: {status_text}")
 
 # ==========================================
-# 4. FREE HUGGINGFACE API REQUEST
-# ==========================================
-async def ask_huggingface(prompt_text):
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "inputs": f"{WAIFU_SYSTEM_PROMPT}\nUser: {prompt_text}\nAlisa:",
-        "parameters": {"max_new_tokens": 60, "temperature": 0.8, "return_full_text": False}
-    }
-    
-    loop = asyncio.get_running_loop()
-    def send_request():
-        try:
-            res = requests.post(API_URL, headers=headers, json=payload, timeout=20)
-            return res
-        except Exception as e:
-            LOGGER.error(f"HF connection error: {e}")
-            return None
-
-    response = await loop.run_in_executor(None, send_request)
-    if response is None or response.status_code != 200:
-        return "Arey yaar, thoda network issue ho gaya! [SAD]"
-    
-    try:
-        data = response.json()
-        if isinstance(data, list) and len(data) > 0:
-            reply = data[0].get("generated_text", "").strip()
-        elif isinstance(data, dict):
-            reply = data.get("generated_text", "").strip()
-        else:
-            reply = "Hmph! Kuch samajh nahi aaya. [ANGRY]"
-        return reply if reply else "Bolo na aalu! [HAPPY]"
-    except Exception as e:
-        LOGGER.error(f"HF parsing error: {e}")
-        return "A-Aalu! Dimag ghum gaya mera... [SAD]"
-
-# ==========================================
-# 5. MAIN CHAT HANDLER
+# 4. MAIN CHAT HANDLER (Mutually Exclusive Text OR Sticker)
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
@@ -140,10 +122,10 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.message.text:
         text = update.message.text.strip()
     elif update.message.sticker:
-        text = "User sent a sticker"
+        text = "Sticker"
         is_media = True
     elif update.message.animation:
-        text = "User sent a GIF"
+        text = "GIF"
         is_media = True
     else:
         return
@@ -162,32 +144,29 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        await asyncio.sleep(0.4)
     except Exception: pass
 
     try:
-        raw_reply = await ask_huggingface(text)
+        reply_text, emotion = generate_unlimited_response(text)
 
-        match = re.search(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", raw_reply, re.IGNORECASE)
-        emotion = match.group(1).upper() if match else "HAPPY"
-        clean_reply = re.sub(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", "", raw_reply, flags=re.IGNORECASE).strip()
-        
-        if not clean_reply:
-            clean_reply = "Acha ji? [HAPPY]"
+        # MUTUALLY EXCLUSIVE RULE: 
+        # 60% chance ONLY TEXT, 40% chance ONLY STICKER (No both together!)
+        send_sticker_only = random.random() < 0.40
 
-        await update.message.reply_text(clean_reply)
-
-        if emotion and emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
-            await asyncio.sleep(0.5)
-            try:
-                await update.message.reply_sticker(sticker=random.choice(EMOTION_MEDIA[emotion]))
-            except Exception as e:
-                LOGGER.error(f"Sticker error: {e}")
+        if send_sticker_only and emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
+            # Send ONLY sticker, no text
+            sticker_id = random.choice(EMOTION_MEDIA[emotion])
+            await update.message.reply_sticker(sticker=sticker_id)
+        else:
+            # Send ONLY text, no sticker
+            await update.message.reply_text(reply_text)
 
     except Exception as e:
         LOGGER.exception(f"Waifu Chat Error: {e}")
 
 # ==========================================
-# 6. REGISTER HANDLERS
+# 5. REGISTER HANDLERS
 # ==========================================
 application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
 application.add_handler(MessageHandler((filters.TEXT | filters.Sticker.ALL | filters.ANIMATION) & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
