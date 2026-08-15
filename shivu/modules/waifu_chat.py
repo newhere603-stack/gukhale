@@ -231,9 +231,9 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             pass
 
 # ==========================================
-# 6. HANDLERS REGISTRATION
+# 6. HANDLERS REGISTRATION (With Custom Group to prevent blocking)
 # ==========================================
 application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
 
-LOGGER.info("✓ Waifu Chat Module Loaded Successfully (Bulletproof)")
+LOGGER.info("✓ Waifu Chat Module Loaded with Group-1 Priority")
