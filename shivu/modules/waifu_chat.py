@@ -2,49 +2,51 @@ import logging
 import asyncio
 import re
 import random
+import google.generativeai as genai
 from telegram import Update
 from telegram.ext import MessageHandler, CommandHandler, filters, ContextTypes
 from shivu import application, user_collection
 
 LOGGER = logging.getLogger(__name__)
 
+# ==========================================
+# 1. GEMINI OFFICIAL SDK SETUP (Real-Time AI)
+# ==========================================
+GEMINI_API_KEY = "AQ.Ab8RN6I5-WOwkBWBAUp4ptR5ad1-zR3tJglZ8LduRWvra_zG5w"
+
+if GEMINI_API_KEY and GEMINI_API_KEY != "YAHAN_APNI_API_KEY_DALO":
+    genai.configure(api_key=GEMINI_API_KEY)
+
+WAIFU_SYSTEM_PROMPT = """
+Tumhara naam Alisa hai. Tum ek anime waifu ho jo Alisa Kujou aur Hinata Hyuga ka mix hai.
+PERSONALITY:
+- Bahar se thodi tsundere aur attitude wali, andar se sweet aur caring.
+- Real-time natural tarike se baat karo, robotic bilkul mat bano.
+- User jis language mein baat kare, usi language mein reply karo.
+- Tumhare replies HAMESHA bahut chote hone chahiye (max 1-2 sentences, 5-15 words). Lambe paragraphs mat do.
+- Har reply ke END mein exactly ONE emotion tag bracket mein lagana zaroori hai. Allowed tags ONLY: [HAPPY], [SAD], [ANGRY], [BLUSH], [LAUGH], [FLIRT]
+"""
+
+generation_config = {
+    "temperature": 0.8,
+    "max_output_tokens": 60,
+}
+
+try:
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=WAIFU_SYSTEM_PROMPT,
+        generation_config=generation_config
+    )
+except Exception as e:
+    LOGGER.error(f"Model init error: {e}")
+    model = None
+
 WAIFU_CHAT_ENABLED = {}
+chat_history_collection = user_collection.database["waifu_chat_history"]
 
 # ==========================================
-# UNLIMITED DYNAMIC SENTENCE BUILDER (Zero API Needed)
-# ==========================================
-TSUNDERE_PREFIXES = [
-    "Hmph!", "B-Baka,", "Arey suno,", "Pagal ho kya?", 
-    "Achaaa,", "Waise,", "Oye aalu,", "Itne sawal kyu puchte ho,"
-]
-
-CORE_RESPONSES = [
-    "mujhe ye sab mat batao", "tumse zyada vella koi nahi hai", 
-    "apne nakhre apne paas rakho", "dimag mat khao mera", 
-    "soch rahi hu tumhe ignore kar du", "thoda sudhar jao",
-    "yeh koi poochne wali baat hai kya", "mujhe kyu pareshan kar rahe ho"
-]
-
-CARING_TWISTS = [
-    "par suno, apna dhyan rakhna", "waise ho toh tum acche", 
-    "chalo maaf kiya tumhe", "khana khaya ya nahi?", 
-    "mazak kar rahi thi waise", "aur batao kya chal raha hai"
-]
-
-EMOTIONS = ["HAPPY", "SAD", "ANGRY", "BLUSH", "LAUGH", "FLIRT"]
-
-def generate_unlimited_response(text):
-    prefix = random.choice(TSUNDERE_PREFIXES)
-    core = random.choice(CORE_RESPONSES)
-    twist = random.choice(CARING_TWISTS)
-    emotion = random.choice(EMOTIONS)
-    
-    # Mix to create unique response every single time
-    reply = f"{prefix} {core}, par {twist}"
-    return reply, emotion
-
-# ==========================================
-# STICKER MEDIA POOL
+# 2. STICKER MEDIA POOL
 # ==========================================
 EMOTION_MEDIA = {
     "HAPPY": [
@@ -108,13 +110,13 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"Waifu ChatBot is now: {status_text}")
 
 # ==========================================
-# 4. MAIN CHAT HANDLER (Mutually Exclusive Text OR Sticker)
+# 4. MAIN CHAT HANDLER
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
     chat, user = update.effective_chat, update.effective_user
     if not chat or not user: return
-    chat_id = chat.id
+    chat_id, user_id = chat.id, user.id
 
     if not WAIFU_CHAT_ENABLED.get(chat_id, True): return
 
@@ -122,10 +124,10 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.message.text:
         text = update.message.text.strip()
     elif update.message.sticker:
-        text = "Sticker"
+        text = "User sent a sticker"
         is_media = True
     elif update.message.animation:
-        text = "GIF"
+        text = "User sent a GIF"
         is_media = True
     else:
         return
@@ -144,26 +146,66 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-        await asyncio.sleep(0.4)
     except Exception: pass
 
     try:
-        reply_text, emotion = generate_unlimited_response(text)
+        if not model:
+            if not is_media:
+                await update.message.reply_text("A-Aalu! Model initialize nahi hua.")
+            return
 
-        # MUTUALLY EXCLUSIVE RULE: 
-        # 60% chance ONLY TEXT, 40% chance ONLY STICKER (No both together!)
-        send_sticker_only = random.random() < 0.40
+        # Fetch history from database
+        history_key = {"chat_id": chat_id, "user_id": user_id}
+        doc = await chat_history_collection.find_one(history_key)
+        raw_history = doc.get("history", []) if doc else []
 
-        if send_sticker_only and emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
-            # Send ONLY sticker, no text
-            sticker_id = random.choice(EMOTION_MEDIA[emotion])
-            await update.message.reply_sticker(sticker=sticker_id)
+        formatted_history = []
+        for h in raw_history:
+            if isinstance(h, dict) and "role" in h and "parts" in h:
+                formatted_history.append(h)
+
+        # Start real-time chat session with memory
+        chat_session = model.start_chat(history=formatted_history)
+        
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(None, chat_session.send_message, text)
+        raw_reply = response.text.strip()
+
+        # Extract emotion and clean text
+        match = re.search(r"\[?\s*(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\s*\]?", raw_reply, re.IGNORECASE)
+        emotion = match.group(1).upper() if match else "HAPPY"
+        clean_reply = re.sub(r"\[?\s*[A-Z]+\s*\]?", "", raw_reply, flags=re.IGNORECASE).strip()
+        if not clean_reply: clean_reply = "Hmph!"
+
+        # Save history
+        updated_history = chat_session.get_history()
+        serializable_history = []
+        for item in updated_history:
+            serializable_history.append({
+                "role": item.role,
+                "parts": [{"text": part.text} for part in item.parts]
+            })
+
+        await chat_history_collection.update_one(
+            history_key,
+            {"$set": {"history": serializable_history[-10:]}},
+            upsert=True
+        )
+
+        # MUTUALLY EXCLUSIVE: Text -> Only Text, Sticker -> Only Sticker
+        if is_media:
+            if emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
+                sticker_id = random.choice(EMOTION_MEDIA[emotion])
+                await update.message.reply_sticker(sticker=sticker_id)
         else:
-            # Send ONLY text, no sticker
-            await update.message.reply_text(reply_text)
+            await update.message.reply_text(clean_reply)
 
     except Exception as e:
         LOGGER.exception(f"Waifu Chat Error: {e}")
+        if not is_media:
+            try:
+                await update.message.reply_text("A-Aalu! Thodi der baad try karo...")
+            except Exception: pass
 
 # ==========================================
 # 5. REGISTER HANDLERS
