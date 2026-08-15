@@ -1,16 +1,17 @@
 import random
 import string
 import io
+import inspect
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 import shivu
 
-# Dynamically find the telegram application instance from shivu package
+# Safely find the running Telegram Application instance (ignoring classes)
 pbot = None
 for attr_name in dir(shivu):
     attr = getattr(shivu, attr_name)
-    if hasattr(attr, "add_handler"):  # Jo bhi object handlers add kar sakta hai, wahi hamara app hai
+    if not inspect.isclass(attr) and hasattr(attr, "add_handler"):
         pbot = attr
         break
 
@@ -18,7 +19,7 @@ if not pbot:
     for name in ["application", "app", "bot", "pbot"]:
         if hasattr(shivu, name):
             obj = getattr(shivu, name)
-            if hasattr(obj, "add_handler"):
+            if not inspect.isclass(obj) and hasattr(obj, "add_handler"):
                 pbot = obj
                 break
 
