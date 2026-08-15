@@ -12,9 +12,8 @@ LOGGER = logging.getLogger(__name__)
 # ==========================================
 # 1. OPENROUTER API SETUP
 # ==========================================
-# Tumhari nayi API key (sk- lowercase kar diya hai for 100% compatibility)
 OPENROUTER_API_KEY = "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"
-MODEL = "google/gemini-1.5-flash"
+MODEL = "meta-llama/llama-3.1-8b-instruct:free"
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 WAIFU_CHAT_ENABLED = {}
 
@@ -198,13 +197,12 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         doc = await chat_history_collection.find_one(history_key)
         raw_messages = doc.get("history", []) if doc else []
         
-        # SMART CONVERTER: Converts old Gemini history formats to OpenRouter compatible format
         valid_msgs = []
         for m in raw_messages:
             if not isinstance(m, dict): continue
             
             role = m.get("role")
-            if role == "model": role = "assistant" # Gemini "model" -> OpenRouter "assistant"
+            if role == "model": role = "assistant"
             
             content = ""
             if "content" in m and isinstance(m["content"], str):
@@ -217,7 +215,6 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 
         valid_msgs.append({"role": "user", "content": text})
         
-        # Sanitize to strictly alternate User <-> Assistant
         sanitized_history = []
         for msg in valid_msgs:
             if not sanitized_history and msg["role"] == "assistant":
@@ -235,11 +232,10 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         if not reply:
             if error and "429" in str(error):
-                return # Ignore silently on rate limit spam
+                return
             await update.message.reply_text(f"A-Aalu! Error aaya: {error}")
             return
 
-        # Flexible Emotion Extractor
         match = re.search(r"\[?\s*(?:russian\s+)?(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\s*\]?", reply, re.IGNORECASE)
         emotion = match.group(1).upper() if match else None
         clean_reply = re.sub(r"\[?\s*(?:russian\s+)?[A-Z]+\s*\]?", "", reply, flags=re.IGNORECASE).strip()
