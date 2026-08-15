@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 # ==========================================
 # 1. API KEY SETUP
 # ==========================================
-GEMINI_API_KEY = "AQ.Ab8RN6Ime4vM1dj_j6eSnlW02qsAeu..." # Apni API Key yahan daal dein
+GEMINI_API_KEY = "AQ.Ab8RN6Ime4vM1dj_j6eSnlW02qsAeu..." # Apni asli poori API Key yahan daal dein
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Chat status tracking (Chat-wise ON/OFF)
@@ -30,7 +30,7 @@ RULE 1 (LANGUAGE): User jis bhasha (language) mein baat kare, tumhe EXACTLY usi 
 - Agar wo English bole, toh pure English mein reply karo.
 - Agar wo Hinglish (Hindi-English mix) bole, toh Hinglish mein reply karo.
 
-RULE 2 (EMOTION TAG): Apni feelings express karne ke liye, apne message ke ekdum aakhri mein ek EMOTION TAG zaroor lagana.
+RULE 3 (EMOTION TAG): Apni feelings express karne ke liye, apne message ke ekdum aakhri mein ek EMOTION TAG zaroor lagana.
 Tags sirf ye ho sakte hain: [HAPPY], [SAD], [ANGRY], [BLUSH], [LAUGH], [FLIRT]
 Example: "Tum kitne cute ho yaar! [BLUSH]"
 """
@@ -40,7 +40,6 @@ model = genai.GenerativeModel(
     system_instruction=WAIFU_PROMPT
 )
 
-# Safe database collection reference (shivu ke user_collection se linked)
 chat_history_collection = user_collection.database['waifu_chat_history']
 
 # ==========================================
@@ -143,7 +142,7 @@ async def get_and_update_history(chat_id: int, user_text: str, ai_reply: str = N
 
 
 # ==========================================
-# 5. MAIN CHAT HANDLER (WITH DEBUG LOGS)
+# 5. MAIN CHAT HANDLER (FIXED GEMINI CALL)
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -153,34 +152,21 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = update.message.text
     chat_type = update.effective_chat.type
 
-    print(f"DEBUG: Message received -> '{text}' in chat type: {chat_type} (ID: {chat_id})")
-
-    # Agar chat mein bot disabled hai toh ignore karega
     if not WAIFU_CHAT_ENABLED.get(chat_id, True):
-        print("DEBUG: ChatBot is disabled in this chat.")
         return
 
-    # GROUP CHAT LOGIC:
     if chat_type in ["group", "supergroup"]:
         is_reply_to_bot = bool(update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id)
-        
-        # Safely check username
         bot_uname = context.bot.username.lower() if context.bot.username else ""
         is_mentioned = bool(bot_uname and f"@{bot_uname}" in text.lower())
-        
-        # Name check (case-insensitive, e.g., "alisa", "AlisaJi")
         contains_name = bool(re.search(r'\balisa\b', text, re.IGNORECASE))
         
-        print(f"DEBUG Checks -> Reply: {is_reply_to_bot}, Mentioned: {is_mentioned}, Contains Name: {contains_name}")
-
-        # Agar na reply kiya, na tag kiya, aur na hi message mein "alisa" likha hai, toh bot chup rahegi
         if not (is_reply_to_bot or is_mentioned or contains_name):
             return
             
         if is_mentioned and bot_uname:
             text = text.replace(f"@{context.bot.username}", "").strip()
     
-    # Action show karo
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action='typing')
     except Exception:
@@ -190,10 +176,9 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         history = await get_and_update_history(chat_id, text, ai_reply=None)
         chat_session = model.start_chat(history=history)
         
-        # Gemini API call
-        response = await chat_session.send_message_async(text)
+        # FIXED: Using asyncio.to_thread for synchronous Gemini chat send_message call
+        response = await asyncio.to_thread(chat_session.send_message, text)
         raw_reply = response.text.strip()
-        print(f"DEBUG: AI Generated Reply -> {raw_reply}")
 
         emotion_tag = None
         clean_reply = raw_reply
@@ -226,14 +211,14 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         LOGGER.error(f"Waifu Chat Critical Error: {e}")
         print(f"CRITICAL ERROR in Waifu Chat: {e}")
         try:
-            await update.message.reply_text("B-Baka! M-Mujhe abhi baat nahi karni... (Network issue 🥺)")
+            await update.message.reply_text(f"B-Baka! M-Mujhe error aa gaya... 🥺\n`{e}`", parse_mode="MARKDOWN")
         except Exception:
             pass
 
 # ==========================================
-# 6. HANDLERS REGISTRATION (With Custom Group to prevent blocking)
+# 6. HANDLERS REGISTRATION
 # ==========================================
 application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
 
-LOGGER.info("✓ Waifu Chat Module Loaded with Group-1 Priority")
+LOGGER.info("✓ Waifu Chat Module Loaded Successfully (Thread-Safe Gemini)")
