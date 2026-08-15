@@ -2,25 +2,22 @@ import logging
 import asyncio
 import re
 import random
-from openai import AsyncOpenAI
+import requests
+import json
 from telegram import Update
 from telegram.ext import MessageHandler, CommandHandler, filters, ContextTypes
-from shivu import application, user_collection, BOT_USERNAME
+from shivu import application, user_collection
 
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
 # 1. OPENROUTER API SETUP
 # ==========================================
-OPENROUTER_API_KEY = "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"
-client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=OPENROUTER_API_KEY)
+API_KEY = "Sk-or-v1-e99181b2748d135be852c7573ca3c32330b0991042dec21b727d6a37337e7fdd"
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Chat status tracking (Chat-wise ON/OFF)
 WAIFU_CHAT_ENABLED = {}
 
-# ==========================================
-# 2. PROMPT & MODEL SETUP
-# ==========================================
 WAIFU_SYSTEM_PROMPT = """
 Tumhara naam 'Alisa' (ya AlisaJi) hai. Tum ek anime waifu ho jo Alisa Kujou (Roshidere) aur Hinata Hyuga (Naruto) ka mix hai. 
 Tum bahar se thoda attitude dikhati ho (tsundere), lekin andar se sweet aur caring ho. 
@@ -29,13 +26,10 @@ Message ke aakhri mein emotion tag zaroor lagana: [HAPPY], [SAD], [ANGRY], [BLUS
 Example: "Tum kitne cute ho yaar! [BLUSH]"
 """
 
-# OpenRouter ka fast aur best model
-MODEL_NAME = "google/gemini-flash-1.5" 
-
 chat_history_collection = user_collection.database['waifu_chat_history']
 
 # ==========================================
-# 3. STICKER & GIF DICTIONARY
+# 2. STICKER & GIF DICTIONARY
 # ==========================================
 EMOTION_MEDIA = {
     "HAPPY": [
@@ -77,7 +71,7 @@ EMOTION_MEDIA = {
 }
 
 # ==========================================
-# 4. ADMIN & TOGGLE HANDLERS
+# 3. ADMIN & TOGGLE HANDLERS
 # ==========================================
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     chat = update.effective_chat
@@ -106,7 +100,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 5. MAIN CHAT HANDLER (OpenRouter Integration)
+# 4. MAIN CHAT HANDLER (OpenRouter + Requests)
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -135,52 +129,70 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         pass
 
     try:
-        # History fetch from MongoDB
+        # Fetch history from MongoDB
         doc = await chat_history_collection.find_one({"chat_id": chat_id})
         messages = doc.get("history", []) if doc else []
         messages.append({"role": "user", "content": text})
 
-        # OpenRouter Request
-        response = await client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages[-10:]
-        )
+        # Prepare payload and headers matching the OpenRouter specifications
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "HTTP-Referer": "https://t.me/AlisaWaifusBot",
+            "X-OpenRouter-Title": "Alisa Waifu Bot",
+        }
         
-        reply = response.choices[0].message.content.strip()
-        
-        # Parse emotion tags
-        match = re.search(r'\[([A-Z]+)\]', reply)
-        clean_reply = re.sub(r'\[[A-Z]+\]', '', reply).strip()
-        
-        if clean_reply:
-            await update.message.reply_text(clean_reply)
-        
-        # Update History
-        messages.append({"role": "assistant", "content": reply})
-        asyncio.create_task(
-            chat_history_collection.update_one(
-                {"chat_id": chat_id}, {"$set": {"history": messages[-10:]}}, upsert=True
-            )
+        payload = {
+            "model": "google/gemini-flash-1.5",
+            "messages": [{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages[-10:]
+        }
+
+        # Run requests.post asynchronously
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None, 
+            lambda: requests.post(API_URL, headers=headers, data=json.dumps(payload))
         )
 
-        # Send sticker/animation if tag matches
-        if match and match.group(1) in EMOTION_MEDIA and EMOTION_MEDIA[match.group(1)]:
-            await asyncio.sleep(0.5)
-            sticker_to_send = random.choice(EMOTION_MEDIA[match.group(1)])
-            try:
-                await update.message.reply_sticker(sticker_to_send)
-            except Exception:
+        if response.status_code == 200:
+            res_data = response.json()
+            reply = res_data['choices'][0]['message']['content'].strip()
+            
+            # Parse emotion tags
+            match = re.search(r'\[([A-Z]+)\]', reply)
+            clean_reply = re.sub(r'\[[A-Z]+\]', '', reply).strip()
+            
+            if clean_reply:
+                await update.message.reply_text(clean_reply)
+            
+            # Update history
+            messages.append({"role": "assistant", "content": reply})
+            asyncio.create_task(
+                chat_history_collection.update_one(
+                    {"chat_id": chat_id}, {"$set": {"history": messages[-10:]}}, upsert=True
+                )
+            )
+
+            # Send sticker/animation
+            if match and match.group(1) in EMOTION_MEDIA and EMOTION_MEDIA[match.group(1)]:
+                await asyncio.sleep(0.5)
+                sticker_to_send = random.choice(EMOTION_MEDIA[match.group(1)])
                 try:
-                    await update.message.reply_animation(sticker_to_send)
-                except Exception as e:
-                    LOGGER.error(f"Media error: {e}")
+                    await update.message.reply_sticker(sticker_to_send)
+                except Exception:
+                    try:
+                        await update.message.reply_animation(sticker_to_send)
+                    except Exception as e:
+                        LOGGER.error(f"Media error: {e}")
+        else:
+            LOGGER.error(f"OpenRouter API Error: {response.status_code} - {response.text}")
+            await update.message.reply_text("B-Baka! AI server busy hai... 🥺")
 
     except Exception as e:
-        LOGGER.error(f"OpenRouter Error: {e}")
+        LOGGER.error(f"Waifu Error: {e}")
         await update.message.reply_text("B-Baka! M-Mujhe error aa gaya... 🥺")
 
 # ==========================================
-# 6. HANDLERS REGISTRATION
+# 5. HANDLERS REGISTRATION
 # ==========================================
 application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
