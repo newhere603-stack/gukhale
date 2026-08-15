@@ -40,8 +40,8 @@ Examples:
 Haaan thik hu main! [HAPPY]
 Tumse matlab? [ANGRY]
 Aww, cute ho yaar [BLUSH]
-Hahaha chup karo 😂 [LAUGH]
-Main hoon na 🥺 [SAD]
+Hahaha chup karo [LAUGH]
+Main hoon na [SAD]
 """
 
 chat_history_collection = user_collection.database["waifu_chat_history"]
@@ -115,16 +115,20 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
 # ==========================================
 async def ask_gemini(contents):
     if not GEMINI_API_KEY: return None, "NO_API_KEY"
-    headers = {"Content-Type": "application/json", "X-goog-api-key": GEMINI_API_KEY}
+    headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY
+    }
     payload = {
         "system_instruction": {"parts": [{"text": WAIFU_SYSTEM_PROMPT}]},
         "contents": contents,
         "generationConfig": {"temperature": 0.8, "maxOutputTokens": 60}
     }
+    request_url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
     loop = asyncio.get_running_loop()
     def send_request():
         try:
-            return requests.post(GEMINI_API_URL, headers=headers, json=payload, timeout=30)
+            return requests.post(request_url, headers=headers, json=payload, timeout=30)
         except Exception as e:
             LOGGER.error(f"Gemini connection error: {e}")
             return None
@@ -176,7 +180,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if not (is_reply or is_mentioned or contains_name): return
         if is_mentioned and bot_username and text:
             text = re.sub(rf"@{re.escape(context.bot.username)}", "", text, flags=re.IGNORECASE).strip()
-        if not text: text = "Haan? 👀"
+        if not text: text = "Haan?"
 
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
@@ -192,13 +196,13 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         reply, error = await ask_gemini(messages)
         if not reply:
-            await update.message.reply_text("A-Aalu! Busy hu... 🥔")
+            await update.message.reply_text("A-Aalu! Busy hu...")
             return
 
         match = re.search(r"\[?\s*(?:russian\s+)?(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\s*\]?", reply, re.IGNORECASE)
         emotion = match.group(1).upper() if match else None
         clean_reply = re.sub(r"\[?\s*(?:russian\s+)?[A-Z]+\s*\]?", "", reply, flags=re.IGNORECASE).strip()
-        if not clean_reply: clean_reply = "Hmph! 😤"
+        if not clean_reply: clean_reply = "Hmph!"
 
         await update.message.reply_text(clean_reply)
 
@@ -214,7 +218,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     except Exception as e:
         LOGGER.exception(f"Waifu Chat Error: {e}")
-        try: await update.message.reply_text("A-Aalu! Error aa gaya... 🥔")
+        try: await update.message.reply_text("A-Aalu! Error aa gaya...")
         except Exception: pass
 
 # ==========================================
