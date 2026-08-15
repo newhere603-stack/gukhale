@@ -19,7 +19,7 @@ GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMI
 WAIFU_CHAT_ENABLED = {}
 
 # ==========================================
-# 2. ALISA PERSONALITY
+# 2. ALISA PERSONALITY (Short & Natural Replies)
 # ==========================================
 WAIFU_SYSTEM_PROMPT = """
 Tumhara naam Alisa hai, kabhi kabhi AlisaJi bhi.
@@ -35,8 +35,10 @@ PERSONALITY:
 - User jis language mein baat kare, usi language mein reply karo.
 - Hindi/Hinglish mein baat ho to Hinglish mein reply karo.
 - English mein baat ho to English mein reply karo.
-- Reply normally short aur natural rakho.
-- Zarurat ho tabhi long answer do.
+
+STRICT RULE (SHORT REPLIES):
+- Tumhare replies HAMESHA bahut chote hone chahiye (max 1 se 2 sentences, 5-15 words).
+- Kabhi bhi lambe paragraphs ya explanation mat do. Ekdum crisp aur fast chat style rakho.
 
 IMPORTANT:
 Har reply ke END mein exactly ONE emotion tag lagana hai.
@@ -49,10 +51,11 @@ Allowed emotion tags ONLY:
 [FLIRT]
 
 Examples:
-Tum kitne cute ho yaar! [BLUSH]
-Hahaha tum bhi na 😂 [LAUGH]
-Achhaaa, mujhe ignore kar rahe ho? 😤 [ANGRY]
-Aww, kya hua? Main hoon na 🥺 [SAD]
+Haaan thik hu main! [HAPPY]
+Tumse matlab? [ANGRY]
+Aww, cute ho yaar [BLUSH]
+Hahaha chup karo 😂 [LAUGH]
+Main hoon na 🥺 [SAD]
 Reply mein emotion tag hamesha last mein hona chahiye.
 """
 
@@ -134,7 +137,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 6. GEMINI API REQUEST
+# 6. GEMINI API REQUEST (Strict Max Tokens for Short Replies)
 # ==========================================
 async def ask_gemini(contents):
     if not GEMINI_API_KEY:
@@ -147,7 +150,7 @@ async def ask_gemini(contents):
     payload = {
         "system_instruction": {"parts": [{"text": WAIFU_SYSTEM_PROMPT}]},
         "contents": contents,
-        "generationConfig": {"temperature": 0.9, "maxOutputTokens": 300}
+        "generationConfig": {"temperature": 0.8, "maxOutputTokens": 60}  # Reduced tokens for short messages
     }
     loop = asyncio.get_running_loop()
 
@@ -178,7 +181,7 @@ async def ask_gemini(contents):
 # 7. MAIN CHAT HANDLER
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text:
+    if not update.message:
         return
 
     chat = update.effective_chat
@@ -192,8 +195,13 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not WAIFU_CHAT_ENABLED.get(chat_id, True):
         return
 
-    text = update.message.text.strip()
-    if not text:
+    if update.message.text:
+        text = update.message.text.strip()
+    elif update.message.sticker:
+        text = "*(User sent a sticker)*"
+    elif update.message.animation:
+        text = "*(User sent a GIF)*"
+    else:
         return
 
     if chat.type in ["group", "supergroup"]:
@@ -202,17 +210,17 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             is_reply = update.message.reply_to_message.from_user.id == context.bot.id
 
         bot_username = context.bot.username.lower() if context.bot.username else ""
-        is_mentioned = bool(bot_username and f"@{bot_username}" in text.lower())
-        contains_name = bool(re.search(r"\balisa\b", text, re.IGNORECASE))
+        is_mentioned = bool(bot_username and text and f"@{bot_username}" in text.lower())
+        contains_name = bool(text and re.search(r"\balisa\b", text, re.IGNORECASE))
 
         if not (is_reply or is_mentioned or contains_name):
             return
 
-        if is_mentioned and bot_username:
+        if is_mentioned and bot_username and text:
             text = re.sub(rf"@{re.escape(context.bot.username)}", "", text, flags=re.IGNORECASE).strip()
 
         if not text:
-            text = "Haan? Mujhe bulaya? 👀"
+            text = "Haan? 👀"
 
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
@@ -234,11 +242,11 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             error_messages = {
                 "NO_API_KEY": "❌ API key set nahi hai.",
                 401: "❌ API key invalid hai.",
-                429: "🥺 Rate limit hit ho gayi. Thodi der baad try karo.",
+                429: "🥺 Rate limit. Thodi der baad try karo.",
                 404: "❌ Model available nahi hai.",
-                "CONNECTION_ERROR": "❌ Server se connection nahi ho paya."
+                "CONNECTION_ERROR": "❌ Connection error."
             }
-            await update.message.reply_text(error_messages.get(error, f"B-Baka! AI server busy hai... 🥺 (Code: {error})"))
+            await update.message.reply_text(error_messages.get(error, f"B-Baka! Busy hu... 🥺"))
             return
 
         match = re.search(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", reply, re.IGNORECASE)
@@ -261,7 +269,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception as e:
         LOGGER.exception(f"Waifu Chat Error: {e}")
         try:
-            await update.message.reply_text("B-Baka! M-Mujhe error aa gaya... 🥺")
+            await update.message.reply_text("B-Baka! Error aa gaya... 🥺")
         except Exception:
             pass
 
@@ -269,4 +277,4 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # 8. REGISTER HANDLERS
 # ==========================================
 application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
+application.add_handler(MessageHandler((filters.TEXT | filters.Sticker.ALL | filters.ANIMATION) & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
