@@ -103,18 +103,18 @@ async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
 async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message: return
     if not await is_admin(update, context):
-        await update.message.reply_text("<b>❌ Only group admins can enable or disable the Waifu ChatBot.</b>", parse_mode="HTML")
+        await update.message.reply_text("Only group admins can enable or disable the Waifu ChatBot.")
         return
     chat_id = update.effective_chat.id
     WAIFU_CHAT_ENABLED[chat_id] = not WAIFU_CHAT_ENABLED.get(chat_id, True)
-    status_text = "ENABLED ✅" if WAIFU_CHAT_ENABLED[chat_id] else "DISABLED ❌"
-    await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
+    status_text = "ENABLED" if WAIFU_CHAT_ENABLED[chat_id] else "DISABLED"
+    await update.message.reply_text(f"Waifu ChatBot is now: {status_text}")
 
 # ==========================================
 # 5. GEMINI API REQUEST
 # ==========================================
 async def ask_gemini(contents):
-    if not GEMINI_API_KEY: return None, "NO_API_KEY"
+    if not GEMINI_API_KEY: return None, "API Key missing hai."
     headers = {
         "Content-Type": "application/json",
         "X-goog-api-key": GEMINI_API_KEY
@@ -128,16 +128,17 @@ async def ask_gemini(contents):
     loop = asyncio.get_running_loop()
     def send_request():
         try:
-            return requests.post(request_url, headers=headers, json=payload, timeout=30)
+            return requests.post(request_url, headers=headers, json=payload, timeout=20)
         except Exception as e:
             LOGGER.error(f"Gemini connection error: {e}")
             return None
 
     response = await loop.run_in_executor(None, send_request)
-    if response is None: return None, "CONNECTION_ERROR"
+    if response is None: return None, "Connection error. Timeout ho gaya."
+    
     if response.status_code != 200:
         LOGGER.error(f"Gemini API Error {response.status_code}: {response.text}")
-        return None, response.status_code
+        return None, f"Code {response.status_code}: {response.text[:100]}"
 
     try:
         data = response.json()
@@ -145,7 +146,7 @@ async def ask_gemini(contents):
         return reply, None
     except Exception as e:
         LOGGER.error(f"Gemini parsing error: {e}")
-        return None, "INVALID_RESPONSE"
+        return None, "Invalid response from API."
 
 # ==========================================
 # 6. MAIN CHAT HANDLER
@@ -162,10 +163,10 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.message.text:
         text = update.message.text.strip()
     elif update.message.sticker:
-        text = "*(User sent a sticker)*"
+        text = "[User ne ek sticker bheja hai]"
         is_media = True
     elif update.message.animation:
-        text = "*(User sent a GIF)*"
+        text = "[User ne ek GIF bheja hai]"
         is_media = True
     else:
         return
@@ -180,7 +181,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if not (is_reply or is_mentioned or contains_name): return
         if is_mentioned and bot_username and text:
             text = re.sub(rf"@{re.escape(context.bot.username)}", "", text, flags=re.IGNORECASE).strip()
-        if not text: text = "Haan?"
+        if not text: text = "Haan bolo?"
 
     try:
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
@@ -189,14 +190,28 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         history_key = {"chat_id": chat_id, "user_id": user_id}
         doc = await chat_history_collection.find_one(history_key)
-        messages = doc.get("history", []) if doc else []
-        messages = [msg for msg in messages if isinstance(msg, dict) and msg.get("role") and msg.get("parts")]
-        messages.append({"role": "user", "parts": [{"text": text}]})
-        messages = messages[-10:]
+        raw_messages = doc.get("history", []) if doc else []
+        
+        # Sanitize history to prevent 400 Bad Request
+        valid_msgs = [m for m in raw_messages if isinstance(m, dict) and m.get("role") and m.get("parts")]
+        valid_msgs.append({"role": "user", "parts": [{"text": text}]})
+        
+        sanitized_history = []
+        for msg in valid_msgs:
+            if not sanitized_history and msg["role"] == "model":
+                continue
+            if sanitized_history and sanitized_history[-1]["role"] == msg["role"]:
+                continue
+            sanitized_history.append(msg)
+            
+        if sanitized_history and sanitized_history[-1]["role"] != "user":
+            sanitized_history.append({"role": "user", "parts": [{"text": text}]})
 
-        reply, error = await ask_gemini(messages)
+        messages_to_send = sanitized_history[-10:]
+
+        reply, error = await ask_gemini(messages_to_send)
         if not reply:
-            await update.message.reply_text("A-Aalu! Busy hu...")
+            await update.message.reply_text(f"A-Aalu! Error aaya: {error}")
             return
 
         match = re.search(r"\[?\s*(?:russian\s+)?(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\s*\]?", reply, re.IGNORECASE)
@@ -206,8 +221,8 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         await update.message.reply_text(clean_reply)
 
-        messages.append({"role": "model", "parts": [{"text": reply}]})
-        await chat_history_collection.update_one(history_key, {"$set": {"history": messages[-10:]}}, upsert=True)
+        sanitized_history.append({"role": "model", "parts": [{"text": reply}]})
+        await chat_history_collection.update_one(history_key, {"$set": {"history": sanitized_history[-10:]}}, upsert=True)
 
         if emotion and emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
             await asyncio.sleep(0.5)
@@ -218,7 +233,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     except Exception as e:
         LOGGER.exception(f"Waifu Chat Error: {e}")
-        try: await update.message.reply_text("A-Aalu! Error aa gaya...")
+        try: await update.message.reply_text(f"A-Aalu! Internal Exception: {str(e)[:100]}")
         except Exception: pass
 
 # ==========================================
