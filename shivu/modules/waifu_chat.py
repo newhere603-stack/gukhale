@@ -11,10 +11,10 @@ from shivu import application, user_collection
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. OPENROUTER API SETUP
+# 1. OPENROUTER API SETUP (Fixed lowercase 'sk-')
 # ==========================================
-API_KEY = "Sk-or-v1-e99181b2748d135be852c7573ca3c32330b0991042dec21b727d6a37337e7fdd"
-API_URL = "https://openrouter.ai/api/v1/chat/completions" # OpenRouter API endpoint
+API_KEY = "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"
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 WAIFU_CHAT_ENABLED = {}
 
@@ -100,7 +100,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 4. MAIN CHAT HANDLER (OpenRouter Integration)
+# 4. MAIN CHAT HANDLER (OpenRouter + Requests)
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -133,10 +133,11 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         messages = doc.get("history", []) if doc else []
         messages.append({"role": "user", "content": text})
 
+        # Explicitly structured headers matching OpenRouter implementation docs
         headers = {
             "Authorization": f"Bearer {API_KEY}",
-            "HTTP-Referer": "https://t.me/AlisaWaifusBot",  # Optional attribution
-            "X-OpenRouter-Title": "Alisa Waifu Bot",         # Optional attribution
+            "HTTP-Referer": "https://t.me/AlisaWaifusBot",
+            "X-OpenRouter-Title": "Alisa Waifu Bot",
             "Content-Type": "application/json"
         }
         
@@ -180,11 +181,11 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         LOGGER.error(f"Media error: {e}")
         else:
             LOGGER.error(f"OpenRouter API Error: {response.status_code} - {response.text}")
-            await update.message.reply_text("B-Baka! AI server busy hai... 🥺")
+            await update.message.reply_text(f"❌ OpenRouter Error ({response.status_code}):\n{response.text[:300]}")
 
     except Exception as e:
         LOGGER.error(f"Waifu Error: {e}")
-        await update.message.reply_text("B-Baka! M-Mujhe error aa gaya... 🥺")
+        await update.message.reply_text(f"❌ Critical Error: {str(e)[:200]}")
 
 # ==========================================
 # 5. HANDLERS REGISTRATION
