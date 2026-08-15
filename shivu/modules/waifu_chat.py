@@ -4,7 +4,7 @@ import re
 import random
 import google.generativeai as genai
 from telegram import Update
-from telegram.ext import MessageHandler, filters, ContextTypes
+from telegram.ext import MessageHandler, CommandHandler, filters, ContextTypes
 from shivu import application, db, BOT_USERNAME
 
 LOGGER = logging.getLogger(__name__)
@@ -12,8 +12,11 @@ LOGGER = logging.getLogger(__name__)
 # ==========================================
 # 1. API KEY SETUP
 # ==========================================
-GEMINI_API_KEY = "AQ.Ab8RN6Ime4vM1dj_j6eSnlW02qsAeu..." # Yahan apni API Key daal dena
+GEMINI_API_KEY = "AQ.Ab8RN6Ime4vM1dj_j6eSnlW02qsAeu..." # Apni API Key yahan daal dein
 genai.configure(api_key=GEMINI_API_KEY)
+
+# Chat status tracking (Chat-wise ON/OFF)
+WAIFU_CHAT_ENABLED = {}
 
 # ==========================================
 # 2. ADVANCED WAIFU PROMPT (Multilingual + Emotions)
@@ -40,7 +43,7 @@ model = genai.GenerativeModel(
 chat_history_collection = db['waifu_chat_history']
 
 # ==========================================
-# 3. STICKER & GIF DICTIONARY (Loaded with User IDs)
+# 3. STICKER & GIF DICTIONARY
 # ==========================================
 EMOTION_MEDIA = {
     "HAPPY": [
@@ -81,6 +84,39 @@ EMOTION_MEDIA = {
     ]
 }
 
+# ==========================================
+# 4. ADMIN CHECK & TOGGLE HANDLER
+# ==========================================
+async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    chat = update.effective_chat
+    user = update.effective_user
+    if not chat or not user:
+        return False
+    if chat.type == "private":
+        return True
+    try:
+        member = await context.bot.get_chat_member(chat.id, user.id)
+        return member.status in ["creator", "administrator"]
+    except Exception:
+        return False
+
+async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_chat:
+        return
+    
+    if not await is_admin(update, context):
+        await update.message.reply_text("<b>❌ Only group admins can enable or disable the Waifu ChatBot.</b>", parse_mode="HTML")
+        return
+
+    chat_id = update.effective_chat.id
+    current_status = WAIFU_CHAT_ENABLED.get(chat_id, True)
+    new_status = not current_status
+    WAIFU_CHAT_ENABLED[chat_id] = new_status
+    
+    status_text = "ENABLED ✅" if new_status else "DISABLED ❌"
+    await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
+
+
 async def get_and_update_history(chat_id: int, user_text: str, ai_reply: str = None):
     doc = await chat_history_collection.find_one({"chat_id": chat_id})
     history = doc.get("history", []) if doc else []
@@ -89,7 +125,6 @@ async def get_and_update_history(chat_id: int, user_text: str, ai_reply: str = N
         history.append({"role": "user", "parts": [user_text]})
         history.append({"role": "model", "parts": [ai_reply]})
     
-    # Keeping only the last 20 parts (10 interactions) to keep response fast
     if len(history) > 20:
         history = history[-20:]
 
@@ -103,10 +138,16 @@ async def get_and_update_history(chat_id: int, user_text: str, ai_reply: str = N
 
 
 # ==========================================
-# 4. MAIN CHAT HANDLER
+# 5. MAIN CHAT HANDLER
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
+        return
+
+    chat_id = update.effective_chat.id
+    
+    # Agar chat mein bot disabled hai toh ignore karega
+    if not WAIFU_CHAT_ENABLED.get(chat_id, True):
         return
 
     chat_type = update.effective_chat.type
@@ -117,8 +158,6 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if chat_type in ["group", "supergroup"]:
         is_reply_to_bot = bool(message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id)
         is_mentioned = bool(context.bot.username and f"@{context.bot.username.lower()}" in text.lower())
-        
-        # Agar kisi ne message me "alisa" likha hai, toh bot reply karegi
         contains_name = "alisa" in text.lower()
         
         if not (is_reply_to_bot or is_mentioned or contains_name):
@@ -126,10 +165,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
         if is_mentioned:
             text = text.replace(f"@{context.bot.username}", "").strip()
-
-    chat_id = update.effective_chat.id
     
-    # Randomly 'typing' ya 'choose_sticker' action dikhayegi
     action = random.choice(['typing', 'choose_sticker'])
     await context.bot.send_chat_action(chat_id=chat_id, action=action)
 
@@ -139,49 +175,41 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         response = await chat_session.send_message_async(text)
         raw_reply = response.text.strip()
 
-        # ==========================================
-        # 5. EMOTION TAG PARSING & MEDIA SENDER
-        # ==========================================
         emotion_tag = None
         clean_reply = raw_reply
         sticker_to_send = None
 
-        # Dhoondho ki AI ne koi [TAG] bheja hai kya
         match = re.search(r'\[([A-Z]+)\]', raw_reply)
         if match:
             emotion_tag = match.group(1)
-            # Text se [TAG] ko hide (remove) kar do
             clean_reply = raw_reply.replace(f"[{emotion_tag}]", "").strip()
             
-            # Us emotion ka koi random sticker utha lo
             if emotion_tag in EMOTION_MEDIA and EMOTION_MEDIA[emotion_tag]:
                 sticker_to_send = random.choice(EMOTION_MEDIA[emotion_tag])
 
-        # Database me save karo (without tags)
         await get_and_update_history(chat_id, text, ai_reply=clean_reply)
 
-        # Pehle Text bhej do
         if clean_reply:
             await message.reply_text(clean_reply)
             
-        # Phir Sticker ya GIF bhej do (Agar mila hai toh)
         if sticker_to_send:
-            # Ek chota sa delay taaki real lage ki waifu dhundh rahi hai
             await asyncio.sleep(0.5)
-            
             try:
-                # Bot pehle isko STICKER samajh kar bhejne ki koshish karega
                 await message.reply_sticker(sticker_to_send)
             except Exception:
                 try:
-                    # Agar error aaye (mtlb animation/GIF hui toh) GIF ki tarah bhej dega
                     await message.reply_animation(sticker_to_send)
                 except Exception as e:
-                    LOGGER.error(f"Media bhejne mein error (Invalid ID): {e}")
+                    LOGGER.error(f"Media bhejne mein error: {e}")
 
     except Exception as e:
         LOGGER.error(f"Waifu Chat Error: {e}")
-        await message.reply_text("B-Baka! M-Mujhe abhi baat nahi karni... (Network issue 🥺)")
+        await message.reply_text("M-Mujhe abhi baat nahi karni... Network issue 🥺")
 
-
+# ==========================================
+# 6. HANDLERS REGISTRATION
+# ==========================================
+application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False))
+
+LOGGER.info("✓ Waifu Chat Module Loaded with Admin Toggle Support")
