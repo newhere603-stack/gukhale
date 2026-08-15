@@ -1,9 +1,9 @@
 import asyncio
-import waifu_chat
 import wordle_game
 import shivu.modules.pmarket
 import shivu.modules.balance
 import shivu.modules.chatlog
+import shivu.modules.waifu_chat
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
