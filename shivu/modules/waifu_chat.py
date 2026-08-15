@@ -10,11 +10,12 @@ from shivu import application, user_collection
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. GOOGLE GEMINI API SETUP
+# 1. OPENROUTER API SETUP
 # ==========================================
-GEMINI_API_KEY = "AQ.Ab8RN6I5-WOwkBWBAUp4ptR5ad1-zR3tJglZ8LduRWvra_zG5w"
-GEMINI_MODEL = "gemini-flash-latest"
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+# Tumhari nayi API key (sk- lowercase kar diya hai for 100% compatibility)
+OPENROUTER_API_KEY = "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"
+MODEL = "google/gemini-1.5-flash"
+API_URL = "https://openrouter.ai/api/v1/chat/completions"
 WAIFU_CHAT_ENABLED = {}
 
 # ==========================================
@@ -111,41 +112,46 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"Waifu ChatBot is now: {status_text}")
 
 # ==========================================
-# 5. GEMINI API REQUEST
+# 5. OPENROUTER API REQUEST
 # ==========================================
-async def ask_gemini(contents):
-    if not GEMINI_API_KEY: return None, "API Key missing hai."
+async def ask_openrouter(messages):
+    if not OPENROUTER_API_KEY: return None, "API Key missing hai."
+    
     headers = {
-        "Content-Type": "application/json",
-        "X-goog-api-key": GEMINI_API_KEY
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "HTTP-Referer": "https://t.me/AlisaWaifusBot",
+        "X-OpenRouter-Title": "Alisa Waifu Bot",
+        "Content-Type": "application/json"
     }
+    
     payload = {
-        "system_instruction": {"parts": [{"text": WAIFU_SYSTEM_PROMPT}]},
-        "contents": contents,
-        "generationConfig": {"temperature": 0.8, "maxOutputTokens": 60}
+        "model": MODEL,
+        "messages": [{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages,
+        "temperature": 0.8,
+        "max_tokens": 60
     }
-    request_url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
+    
     loop = asyncio.get_running_loop()
     def send_request():
         try:
-            return requests.post(request_url, headers=headers, json=payload, timeout=20)
+            return requests.post(API_URL, headers=headers, json=payload, timeout=20)
         except Exception as e:
-            LOGGER.error(f"Gemini connection error: {e}")
+            LOGGER.error(f"OpenRouter connection error: {e}")
             return None
 
     response = await loop.run_in_executor(None, send_request)
     if response is None: return None, "Connection error. Timeout ho gaya."
     
     if response.status_code != 200:
-        LOGGER.error(f"Gemini API Error {response.status_code}: {response.text}")
+        LOGGER.error(f"OpenRouter API Error {response.status_code}: {response.text}")
         return None, f"Code {response.status_code}: {response.text[:100]}"
 
     try:
         data = response.json()
-        reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        reply = data["choices"][0]["message"]["content"].strip()
         return reply, None
     except Exception as e:
-        LOGGER.error(f"Gemini parsing error: {e}")
+        LOGGER.error(f"OpenRouter parsing error: {e}")
         return None, "Invalid response from API."
 
 # ==========================================
@@ -192,28 +198,48 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         doc = await chat_history_collection.find_one(history_key)
         raw_messages = doc.get("history", []) if doc else []
         
-        # Sanitize history to prevent 400 Bad Request
-        valid_msgs = [m for m in raw_messages if isinstance(m, dict) and m.get("role") and m.get("parts")]
-        valid_msgs.append({"role": "user", "parts": [{"text": text}]})
+        # SMART CONVERTER: Converts old Gemini history formats to OpenRouter compatible format
+        valid_msgs = []
+        for m in raw_messages:
+            if not isinstance(m, dict): continue
+            
+            role = m.get("role")
+            if role == "model": role = "assistant" # Gemini "model" -> OpenRouter "assistant"
+            
+            content = ""
+            if "content" in m and isinstance(m["content"], str):
+                content = m["content"]
+            elif "parts" in m and isinstance(m["parts"], list) and len(m["parts"]) > 0:
+                content = m["parts"][0].get("text", "")
+                
+            if role and content:
+                valid_msgs.append({"role": role, "content": content})
+                
+        valid_msgs.append({"role": "user", "content": text})
         
+        # Sanitize to strictly alternate User <-> Assistant
         sanitized_history = []
         for msg in valid_msgs:
-            if not sanitized_history and msg["role"] == "model":
+            if not sanitized_history and msg["role"] == "assistant":
                 continue
             if sanitized_history and sanitized_history[-1]["role"] == msg["role"]:
                 continue
             sanitized_history.append(msg)
             
         if sanitized_history and sanitized_history[-1]["role"] != "user":
-            sanitized_history.append({"role": "user", "parts": [{"text": text}]})
+            sanitized_history.append({"role": "user", "content": text})
 
         messages_to_send = sanitized_history[-10:]
 
-        reply, error = await ask_gemini(messages_to_send)
+        reply, error = await ask_openrouter(messages_to_send)
+        
         if not reply:
+            if error and "429" in str(error):
+                return # Ignore silently on rate limit spam
             await update.message.reply_text(f"A-Aalu! Error aaya: {error}")
             return
 
+        # Flexible Emotion Extractor
         match = re.search(r"\[?\s*(?:russian\s+)?(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\s*\]?", reply, re.IGNORECASE)
         emotion = match.group(1).upper() if match else None
         clean_reply = re.sub(r"\[?\s*(?:russian\s+)?[A-Z]+\s*\]?", "", reply, flags=re.IGNORECASE).strip()
@@ -221,7 +247,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         await update.message.reply_text(clean_reply)
 
-        sanitized_history.append({"role": "model", "parts": [{"text": reply}]})
+        sanitized_history.append({"role": "assistant", "content": reply})
         await chat_history_collection.update_one(history_key, {"$set": {"history": sanitized_history[-10:]}}, upsert=True)
 
         if emotion and emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
