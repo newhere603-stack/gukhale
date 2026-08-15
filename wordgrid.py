@@ -2,28 +2,20 @@ import random
 import string
 import io
 from PIL import Image, ImageDraw, ImageFont
-from pyrogram import Client, filters
+from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
-# ==========================================
-# 🧠 GAME STATE & LARGE WORD DICTIONARY
-# ==========================================
+# Game State
 active_games = {}
 user_stats = {} 
 
-# Badi word list taaki game me bahut saare words available rahein
 WORD_LIST = [
     "MET", "FUR", "TIDE", "ODDS", "FEVER", "TRADE", "INCHES", "AFFECT", 
     "STATING", "JOY", "USED", "EARN", "LENS", "LADDER", "SILENCE", "AGE",
     "FIRE", "WATER", "MAGIC", "POWER", "BLADE", "SHADOW", "NINJA", "STORM",
-    "LIGHT", "HEART", "DREAM", "BRAVE", "CHAMP", "QUEST", "BLOOD", "TITAN",
-    "PLANT", "EARTH", "SPACE", "GHOST", "SOUND", "MUSIC", "ROBOT", "SUPER",
-    "SPEED", "ROYAL", "ROUND", "WORLD", "HOUSE", "PLASTIC", "ENERGY", "FORCE"
+    "LIGHT", "HEART", "DREAM", "BRAVE", "CHAMP", "QUEST", "BLOOD", "TITAN"
 ]
 
-# ==========================================
-# ⚙️ CORE GAME ENGINE (Grid & Placements)
-# ==========================================
 def generate_game_grid(size=8, num_words=8):
     grid = [['' for _ in range(size)] for _ in range(size)]
     chosen_words = random.sample(WORD_LIST, min(num_words, len(WORD_LIST)))
@@ -76,7 +68,6 @@ def create_grid_image(grid, placed_words, found_words):
     except IOError:
         font = ImageFont.load_default()
 
-    # Draw Grid and Letters
     for r in range(size):
         for c in range(size):
             x0, y0 = c * cell_size, r * cell_size
@@ -85,14 +76,9 @@ def create_grid_image(grid, placed_words, found_words):
             letter = grid[r][c]
             draw.text((x0 + 17, y0 + 10), letter, fill="white", font=font)
 
-    # Draw Colored Capsule Lines over Found Words (jaise screenshot me hai)
     colors = [
-        (255, 85, 85, 120),   # Red
-        (85, 255, 85, 120),   # Green
-        (85, 85, 255, 120),   # Blue
-        (255, 255, 85, 120),  # Yellow
-        (255, 170, 85, 120),  # Orange
-        (255, 85, 255, 120)   # Purple
+        (255, 85, 85, 120), (85, 255, 85, 120), (85, 85, 255, 120), 
+        (255, 255, 85, 120), (255, 170, 85, 120), (255, 85, 255, 120)
     ]
     color_idx = 0
     
@@ -114,137 +100,110 @@ def create_grid_image(grid, placed_words, found_words):
     return bio
 
 # ==========================================
-# 🎮 TELEGRAM HANDLERS
+# 🔌 SETUP FUNCTION FOR EXISTING BOT
 # ==========================================
+def setup_wordgrid(app):
+    
+    @app.on_message(filters.command(["play", "new", "wordgrid"]) & filters.group)
+    async def start_game(client, message):
+        chat_id = message.chat.id
+        if chat_id in active_games:
+            await message.reply_text("⚠️ A WordGrid game is already running in this group!")
+            return
 
-@Client.on_message(filters.command(["playgrid", "new_grid", "wordgrid"]) & filters.group)
-async def start_game(client, message):
-    chat_id = message.chat.id
-    if chat_id in active_games:
-        await message.reply_text("⚠️ A WordGrid game is already running in this group!")
-        return
+        grid, placed_words = generate_game_grid()
+        active_games[chat_id] = {
+            "grid": grid, "words": placed_words, "found": [], "msg_id": None, "round_scores": {}
+        }
 
-    grid, placed_words = generate_game_grid()
-    active_games[chat_id] = {
-        "grid": grid,
-        "words": placed_words,
-        "found": [],
-        "msg_id": None,
-        "round_scores": {}
-    }
+        img_bio = create_grid_image(grid, placed_words, [])
+        img_bio.seek(0)
 
-    img_bio = create_grid_image(grid, placed_words, [])
-    img_bio.seek(0)
+        caption = "🌐 **WORD GRID CHALLENGE** 🌐\n\nFind these words:\n"
+        for w in placed_words.keys():
+            caption += f"{w[0]}{'-' * (len(w)-1)} ({len(w)})\n"
+        caption += "\nTap 🔄 Refresh Grid to mark!"
 
-    caption = "🌐 **WORD GRID CHALLENGE** 🌐\n\nFind these words:\n"
-    for w in placed_words.keys():
-        caption += f"{w[0]}{'-' * (len(w)-1)} ({len(w)})\n"
-    caption += "\nTap 🔄 Refresh Grid to mark!"
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
+        msg = await message.reply_photo(photo=img_bio, caption=caption, reply_markup=btn)
+        active_games[chat_id]["msg_id"] = msg.id
 
-    btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
-    msg = await message.reply_photo(photo=img_bio, caption=caption, reply_markup=btn)
-    active_games[chat_id]["msg_id"] = msg.id
+    @app.on_message(filters.text & filters.group, group=10)
+    async def handle_guesses(client, message):
+        chat_id = message.chat.id
+        if chat_id not in active_games:
+            return
 
-@Client.on_message(filters.text & filters.group, group=10)
-async def handle_guesses(client, message):
-    chat_id = message.chat.id
-    if chat_id not in active_games:
-        return
+        game = active_games[chat_id]
+        guess = message.text.upper().strip()
 
-    game = active_games[chat_id]
-    guess = message.text.upper().strip()
+        if guess in game["words"] and guess not in game["found"]:
+            is_first = len(game["found"]) == 0
+            is_last = len(game["found"]) == len(game["words"]) - 1
+            
+            points = 3 if is_first else (5 if is_last else 2)
+            game["found"].append(guess)
+            
+            user_name = message.from_user.first_name or "Player"
+            game["round_scores"][user_name] = game["round_scores"].get(user_name, 0) + points
+            
+            img_bio = create_grid_image(game["grid"], game["words"], game["found"])
+            img_bio.seek(0)
+            
+            caption = "🌐 **WORD GRID CHALLENGE** 🌐\n\nFind these words:\n"
+            for w in game["words"].keys():
+                caption += f"✅ {w}\n" if w in game["found"] else f"{w[0]}{'-' * (len(w)-1)} ({len(w)})\n"
+            caption += "\nTap 🔄 Refresh Grid to mark!"
+            
+            btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
+            
+            try:
+                await client.edit_message_media(
+                    chat_id=chat_id, message_id=game["msg_id"],
+                    media=InputMediaPhoto(img_bio, caption=caption), reply_markup=btn
+                )
+            except Exception as e:
+                print(f"Image update error: {e}")
 
-    if guess in game["words"] and guess not in game["found"]:
-        is_first = len(game["found"]) == 0
-        is_last = len(game["found"]) == len(game["words"]) - 1
-        
-        points = 2 
-        if is_first: points = 3
-        elif is_last: points = 5
-        
-        game["found"].append(guess)
-        
-        user_name = message.from_user.first_name or "Player"
-        user_id = message.from_user.id
-        game["round_scores"][user_name] = game["round_scores"].get(user_name, 0) + points
-        
-        # 1. Regenerate image with the new line drawn for this word
+            await message.reply_text(f"✅ **+{points} points** for {message.from_user.mention}! You found **{guess}**.")
+            
+            if is_last:
+                sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
+                summary = "👾 **GAME OVER** 👾\n\n--- Round Summary ---\n\n"
+                medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
+                for idx, (name, score) in enumerate(sorted_scores):
+                    summary += f"{medals[idx] if idx < len(medals) else '🏅'} {name}: {score} points\n"
+                
+                summary += "\nThanks for playing! Start another game by /new."
+                end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("SUPPORT GROUP", url="https://t.me/LeafVillage")]])
+                await message.reply_text(summary, reply_markup=end_btn)
+                del active_games[chat_id]
+
+    @app.on_callback_query(filters.regex("refresh_grid"))
+    async def refresh_grid_callback(client, callback_query):
+        chat_id = callback_query.message.chat.id
+        if chat_id not in active_games:
+            await callback_query.answer("No active game found!", show_alert=True)
+            return
+
+        game = active_games[chat_id]
         img_bio = create_grid_image(game["grid"], game["words"], game["found"])
         img_bio.seek(0)
         
-        # 2. Update caption with tick marks (✅) for found words
         caption = "🌐 **WORD GRID CHALLENGE** 🌐\n\nFind these words:\n"
         for w in game["words"].keys():
-            if w in game["found"]:
-                caption += f"✅ {w}\n"
-            else:
-                caption += f"{w[0]}{'-' * (len(w)-1)} ({len(w)})\n"
+            caption += f"✅ {w}\n" if w in game["found"] else f"{w[0]}{'-' * (len(w)-1)} ({len(w)})\n"
         caption += "\nTap 🔄 Refresh Grid to mark!"
         
         btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
-        
-        # 3. REAL-TIME EDIT: Edit the original photo message so lines appear instantly!
-        try:
-            await client.edit_message_media(
-                chat_id=chat_id,
-                message_id=game["msg_id"],
-                media=InputMediaPhoto(img_bio, caption=caption),
-                reply_markup=btn
-            )
-        except Exception as e:
-            print(f"Image update error: {e}")
+        await callback_query.edit_message_media(media=InputMediaPhoto(img_bio, caption=caption), reply_markup=btn)
+        await callback_query.answer("Grid Refreshed!", show_alert=False)
 
-        # 4. Send success point confirmation message
-        reply_text = f"✅ **+{points} points** for {message.from_user.mention}! You found **{guess}**."
-        await message.reply_text(reply_text)
-        
-        # GAME OVER LOGIC (Jab saare words mil jayein)
-        if is_last:
-            sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
-            summary = "👾 **GAME OVER** 👾\n\n--- Round Summary ---\n\n"
-            medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
-            
-            for idx, (name, score) in enumerate(sorted_scores):
-                medal = medals[idx] if idx < len(medals) else "🏅"
-                summary += f"{medal} {name}: {score} points\n"
-            
-            summary += "\nThanks for playing! Start another game by /new."
-            
-            end_btn = InlineKeyboardMarkup([[
-                InlineKeyboardButton("SUPPORT GROUP", url="https://t.me/LeafVillage") # Apna group link yahan daal lena
-            ]])
-            
-            await message.reply_text(summary, reply_markup=end_btn)
+    @app.on_message(filters.command(["stopgame", "endgrid"]) & filters.group)
+    async def stop_game(client, message):
+        chat_id = message.chat.id
+        if chat_id in active_games:
             del active_games[chat_id]
-
-@Client.on_callback_query(filters.regex("refresh_grid"))
-async def refresh_grid_callback(client, callback_query):
-    chat_id = callback_query.message.chat.id
-    if chat_id not in active_games:
-        await callback_query.answer("No active game found!", show_alert=True)
-        return
-
-    game = active_games[chat_id]
-    img_bio = create_grid_image(game["grid"], game["words"], game["found"])
-    img_bio.seek(0)
-    
-    caption = "🌐 **WORD GRID CHALLENGE** 🌐\n\nFind these words:\n"
-    for w in game["words"].keys():
-        if w in game["found"]:
-            caption += f"✅ {w}\n"
+            await message.reply_text("⏹ WordGrid game stopped by admin.")
         else:
-            caption += f"{w[0]}{'-' * (len(w)-1)} ({len(w)})\n"
-    caption += "\nTap 🔄 Refresh Grid to mark!"
-    
-    btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
-    await callback_query.edit_message_media(media=InputMediaPhoto(img_bio, caption=caption), reply_markup=btn)
-    await callback_query.answer("Grid Refreshed!", show_alert=False)
-
-@Client.on_message(filters.command(["stopgame", "endgrid"]) & filters.group)
-async def stop_game(client, message):
-    chat_id = message.chat.id
-    if chat_id in active_games:
-        del active_games[chat_id]
-        await message.reply_text("⏹ WordGrid game stopped by admin.")
-    else:
-        await message.reply_text("No active WordGrid game to stop.")
+            await message.reply_text("No active WordGrid game to stop.")
