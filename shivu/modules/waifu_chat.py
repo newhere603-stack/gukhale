@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 # ==========================================
 # 1. OPENROUTER OFFICIAL SDK SETUP
 # ==========================================
-API_KEY = "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"
+API_KEY = "Sk-or-v1-e99181b2748d135be852c7573ca3c32330b0991042dec21b727d6a37337e7fdd"
 WAIFU_CHAT_ENABLED = {}
 
 WAIFU_SYSTEM_PROMPT = """
@@ -130,9 +130,13 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         messages = doc.get("history", []) if doc else []
         messages.append({"role": "user", "content": text})
 
-        # Using official OpenRouter Python SDK client inside a thread
+        # Official OpenRouter SDK call wrapped safely for async
         def call_openrouter():
-            with OpenRouter(api_key=API_KEY) as client:
+            with OpenRouter(
+                api_key=API_KEY,
+                http_referer="https://t.me/AlisaWaifusBot",
+                appTitle="Alisa Waifu Bot"
+            ) as client:
                 return client.chat.send(
                     model="google/gemini-flash-1.5",
                     messages=[{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages[-10:]
