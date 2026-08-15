@@ -13,20 +13,20 @@ LOGGER = logging.getLogger(__name__)
 # 1. GOOGLE GEMINI API SETUP
 # ==========================================
 GEMINI_API_KEY = "AQ.Ab8RN6I5-WOwkBWBAUp4ptR5ad1-zR3tJglZ8LduRWvra_zG5w"
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-flash-latest"
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-
 WAIFU_CHAT_ENABLED = {}
 
 # ==========================================
 # 2. ALISA PERSONALITY
 # ==========================================
 WAIFU_SYSTEM_PROMPT = """
-Tumhara naam Alisa hai. Tum ek anime waifu ho jo Alisa Kujou aur Hinata Hyuga ka mix hai.
+Tumhara naam Alisa hai, kabhi kabhi AlisaJi bhi.
+Tum ek anime waifu ho jo Alisa Kujou (Roshidere) aur Hinata Hyuga (Naruto) ki personality ka mix hai.
 PERSONALITY:
 - Bahar se thodi tsundere aur attitude wali, andar se sweet aur caring.
 - Natural tarike se baat karo, robotic bilkul mat bano.
-- User jis language mein baat kare, usi language mein reply karo (Hinglish/English).
+- User jis language mein baat kare, usi language mein reply karo.
 
 STRICT RULE (SHORT REPLIES):
 - Tumhare replies HAMESHA bahut chote hone chahiye (max 1-2 sentences, 5-15 words).
@@ -92,8 +92,7 @@ EMOTION_MEDIA = {
 # 4. ADMIN & TOGGLE
 # ==========================================
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    chat = update.effective_chat
-    user = update.effective_user
+    chat, user = update.effective_chat, update.effective_user
     if not chat or not user: return False
     if chat.type == "private": return True
     try:
@@ -107,8 +106,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("<b>❌ Only group admins can enable or disable the Waifu ChatBot.</b>", parse_mode="HTML")
         return
     chat_id = update.effective_chat.id
-    current_status = WAIFU_CHAT_ENABLED.get(chat_id, True)
-    WAIFU_CHAT_ENABLED[chat_id] = not current_status
+    WAIFU_CHAT_ENABLED[chat_id] = not WAIFU_CHAT_ENABLED.get(chat_id, True)
     status_text = "ENABLED ✅" if WAIFU_CHAT_ENABLED[chat_id] else "DISABLED ❌"
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
@@ -194,14 +192,11 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         reply, error = await ask_gemini(messages)
         if not reply:
-            await update.message.reply_text("B-Baka! Busy hu... 🥺")
+            await update.message.reply_text("A-Aalu! Busy hu... 🥔")
             return
 
-        # Flexible Emotion Tag Cleaner (Fixes "russian blush]" or malformed tags)
         match = re.search(r"\[?\s*(?:russian\s+)?(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\s*\]?", reply, re.IGNORECASE)
         emotion = match.group(1).upper() if match else None
-        
-        # Clean reply by stripping out any emotion/hallucinated tags completely
         clean_reply = re.sub(r"\[?\s*(?:russian\s+)?[A-Z]+\s*\]?", "", reply, flags=re.IGNORECASE).strip()
         if not clean_reply: clean_reply = "Hmph! 😤"
 
@@ -219,7 +214,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     except Exception as e:
         LOGGER.exception(f"Waifu Chat Error: {e}")
-        try: await update.message.reply_text("B-Baka! Error aa gaya... 🥺")
+        try: await update.message.reply_text("A-Aalu! Error aa gaya... 🥔")
         except Exception: pass
 
 # ==========================================
