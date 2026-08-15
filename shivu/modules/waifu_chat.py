@@ -2,8 +2,7 @@ import logging
 import asyncio
 import re
 import random
-import requests
-import json
+from openrouter import OpenRouter
 from telegram import Update
 from telegram.ext import MessageHandler, CommandHandler, filters, ContextTypes
 from shivu import application, user_collection
@@ -11,11 +10,9 @@ from shivu import application, user_collection
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. OPENROUTER API SETUP
+# 1. OPENROUTER OFFICIAL SDK SETUP
 # ==========================================
-API_KEY = "Sk-or-v1-e99181b2748d135be852c7573ca3c32330b0991042dec21b727d6a37337e7fdd"
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
-
+API_KEY = "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"
 WAIFU_CHAT_ENABLED = {}
 
 WAIFU_SYSTEM_PROMPT = """
@@ -100,7 +97,7 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 4. MAIN CHAT HANDLER (OpenRouter + Requests)
+# 4. MAIN CHAT HANDLER (OpenRouter Official SDK)
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -133,59 +130,44 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         messages = doc.get("history", []) if doc else []
         messages.append({"role": "user", "content": text})
 
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "HTTP-Referer": "https://t.me/AlisaWaifusBot",
-            "X-OpenRouter-Title": "Alisa Waifu Bot",
-            "Content-Type": "application/json"
-        }
-        
-        # Correct OpenRouter model slug for Gemini 1.5 Flash
-        payload = {
-            "model": "google/gemini-1.5-flash",
-            "messages": [{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages[-10:]
-        }
+        # Using official OpenRouter Python SDK client inside a thread
+        def call_openrouter():
+            with OpenRouter(api_key=API_KEY) as client:
+                return client.chat.send(
+                    model="google/gemini-flash-1.5",
+                    messages=[{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages[-10:]
+                )
 
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None, 
-            lambda: requests.post(API_URL, headers=headers, data=json.dumps(payload))
+        response = await asyncio.to_thread(call_openrouter)
+        reply = response.choices[0].message.content.strip()
+        
+        match = re.search(r'\[([A-Z]+)\]', reply)
+        clean_reply = re.sub(r'\[[A-Z]+\]', '', reply).strip()
+        
+        if clean_reply:
+            await update.message.reply_text(clean_reply)
+        
+        messages.append({"role": "assistant", "content": reply})
+        asyncio.create_task(
+            chat_history_collection.update_one(
+                {"chat_id": chat_id}, {"$set": {"history": messages[-10:]}}, upsert=True
+            )
         )
 
-        if response.status_code == 200:
-            res_data = response.json()
-            reply = res_data['choices'][0]['message']['content'].strip()
-            
-            match = re.search(r'\[([A-Z]+)\]', reply)
-            clean_reply = re.sub(r'\[[A-Z]+\]', '', reply).strip()
-            
-            if clean_reply:
-                await update.message.reply_text(clean_reply)
-            
-            messages.append({"role": "assistant", "content": reply})
-            asyncio.create_task(
-                chat_history_collection.update_one(
-                    {"chat_id": chat_id}, {"$set": {"history": messages[-10:]}}, upsert=True
-                )
-            )
-
-            if match and match.group(1) in EMOTION_MEDIA and EMOTION_MEDIA[match.group(1)]:
-                await asyncio.sleep(0.5)
-                sticker_to_send = random.choice(EMOTION_MEDIA[match.group(1)])
+        if match and match.group(1) in EMOTION_MEDIA and EMOTION_MEDIA[match.group(1)]:
+            await asyncio.sleep(0.5)
+            sticker_to_send = random.choice(EMOTION_MEDIA[match.group(1)])
+            try:
+                await update.message.reply_sticker(sticker_to_send)
+            except Exception:
                 try:
-                    await update.message.reply_sticker(sticker_to_send)
-                except Exception:
-                    try:
-                        await update.message.reply_animation(sticker_to_send)
-                    except Exception as e:
-                        LOGGER.error(f"Media error: {e}")
-        else:
-            LOGGER.error(f"OpenRouter API Error: {response.status_code} - {response.text}")
-            await update.message.reply_text(f"❌ OpenRouter Error ({response.status_code}):\n{response.text[:300]}")
+                    await update.message.reply_animation(sticker_to_send)
+                except Exception as e:
+                    LOGGER.error(f"Media error: {e}")
 
     except Exception as e:
         LOGGER.error(f"Waifu Error: {e}")
-        await update.message.reply_text(f"❌ Critical Error: {str(e)[:200]}")
+        await update.message.reply_text(f"❌ OpenRouter SDK Error:\n{str(e)[:300]}")
 
 # ==========================================
 # 5. HANDLERS REGISTRATION
