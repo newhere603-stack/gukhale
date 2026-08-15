@@ -4,6 +4,7 @@ import re
 import random
 import io
 import requests
+from openai import OpenAI
 from telegram import Update
 from telegram.ext import MessageHandler, CommandHandler, filters, ContextTypes
 from shivu import application, user_collection
@@ -11,12 +12,10 @@ from shivu import application, user_collection
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. API CONFIGURATIONS
+# 1. API CONFIGURATIONS (OpenAI & ElevenLabs)
 # ==========================================
-GEMINI_API_KEYS = [
-    "AQ.Ab8RN6I5-WOwkBWBAUp4ptR5ad1-zR3tJglZ8LduRWvra_zG5w"
-]
-GEMINI_MODEL = "gemini-flash-latest"
+OPENAI_API_KEY = "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"
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 ELEVENLABS_API_KEY = "Sk_02920bcb875ba0d4b696fc20d1766c1c6779b11b5f93e734"
 ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM" 
@@ -100,42 +99,24 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"Waifu ChatBot is now: {status_text}")
 
 # ==========================================
-# 4. GEMINI API REQUEST
+# 4. OPENAI API REQUEST
 # ==========================================
-async def ask_gemini_rotational(contents):
-    keys = list(GEMINI_API_KEYS)
-    random.shuffle(keys)
-    
-    for key in keys:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={key}"
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "system_instruction": {"parts": [{"text": WAIFU_SYSTEM_PROMPT}]},
-            "contents": contents,
-            "generationConfig": {"temperature": 0.8, "maxOutputTokens": 60}
-        }
-        
-        loop = asyncio.get_running_loop()
-        def send():
-            try:
-                return requests.post(url, headers=headers, json=payload, timeout=20)
-            except Exception:
-                return None
-                
-        res = await loop.run_in_executor(None, send)
-        if res and res.status_code == 200:
-            try:
-                data = res.json()
-                reply = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                return reply, None
-            except Exception:
-                continue
-        elif res and res.status_code == 429:
-            continue
-        elif res:
-            return None, f"Code {res.status_code}"
-            
-    return None, "Quota limit exceeded (429)"
+async def ask_openai(messages):
+    loop = asyncio.get_running_loop()
+    def call_openai():
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages,
+                temperature=0.8,
+                max_tokens=60
+            )
+            return response.choices[0].message.content.strip(), None
+        except Exception as e:
+            LOGGER.error(f"OpenAI API Error: {e}")
+            return None, str(e)
+
+    return await loop.run_in_executor(None, call_openai)
 
 # ==========================================
 # 5. ELEVENLABS TTS API REQUEST
@@ -216,24 +197,31 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         doc = await chat_history_collection.find_one(history_key)
         raw_messages = doc.get("history", []) if doc else []
         
-        valid_msgs = [m for m in raw_messages if isinstance(m, dict) and m.get("role") and m.get("parts")]
-        valid_msgs.append({"role": "user", "parts": [{"text": text}]})
+        valid_msgs = []
+        for m in raw_messages:
+            if not isinstance(m, dict): continue
+            role = m.get("role")
+            if role == "model": role = "assistant"
+            content = m.get("content") or (m.get("parts", [{}])[0].get("text", "") if "parts" in m else "")
+            if role and content:
+                valid_msgs.append({"role": role, "content": content})
+                
+        valid_msgs.append({"role": "user", "content": text})
         
         sanitized_history = []
         for msg in valid_msgs:
-            if not sanitized_history and msg["role"] == "model": continue
+            if not sanitized_history and msg["role"] == "assistant": continue
             if sanitized_history and sanitized_history[-1]["role"] == msg["role"]: continue
             sanitized_history.append(msg)
             
         if sanitized_history and sanitized_history[-1]["role"] != "user":
-            sanitized_history.append({"role": "user", "parts": [{"text": text}]})
+            sanitized_history.append({"role": "user", "content": text})
 
         messages_to_send = sanitized_history[-10:]
 
-        raw_reply, error = await ask_gemini_rotational(messages_to_send)
+        raw_reply, error = await ask_openai(messages_to_send)
         
         if not raw_reply:
-            if error and "429" in str(error): return
             if not is_media:
                 await update.message.reply_text(f"A-Aalu! Error: {error}")
             return
@@ -243,7 +231,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         clean_reply = re.sub(r"\[?\s*[A-Z]+\s*\]?", "", raw_reply, flags=re.IGNORECASE).strip()
         if not clean_reply: clean_reply = "Hmph!"
 
-        sanitized_history.append({"role": "model", "parts": [{"text": raw_reply}]})
+        sanitized_history.append({"role": "assistant", "content": raw_reply})
         await chat_history_collection.update_one(history_key, {"$set": {"history": sanitized_history[-10:]}}, upsert=True)
 
         if is_media:
