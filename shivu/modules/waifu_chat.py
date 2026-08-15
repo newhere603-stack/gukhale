@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 # 1. OPENROUTER API SETUP
 # ==========================================
 OPENROUTER_API_KEY = "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"
-MODEL = "meta-llama/llama-3.1-8b-instruct:free"
+MODEL = "google/gemini-2.0-flash-lite-preview-02-05:free"
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 WAIFU_CHAT_ENABLED = {}
 
