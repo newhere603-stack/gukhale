@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 # ==========================================
 # 1. API KEY SETUP
 # ==========================================
-GEMINI_API_KEY = "AQ.Ab8RN6I1Rs5Oubc5Eit76SfMLEex4nJUnV_jhk7iYA9_lDtiyQ"
+GEMINI_API_KEY = "AQ.Ab8RN6JmE0m56tqc1Lj1VBS6AlROhoVcWKUmE0vvkZl4EbSMPA"
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Chat status tracking (Chat-wise ON/OFF)
