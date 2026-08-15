@@ -11,9 +11,9 @@ from shivu import application, user_collection
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. OPENROUTER API SETUP (Fixed lowercase 'sk-')
+# 1. OPENROUTER API SETUP
 # ==========================================
-API_KEY = "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"
+API_KEY = "Sk-or-v1-e99181b2748d135be852c7573ca3c32330b0991042dec21b727d6a37337e7fdd"
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 WAIFU_CHAT_ENABLED = {}
@@ -133,7 +133,6 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         messages = doc.get("history", []) if doc else []
         messages.append({"role": "user", "content": text})
 
-        # Explicitly structured headers matching OpenRouter implementation docs
         headers = {
             "Authorization": f"Bearer {API_KEY}",
             "HTTP-Referer": "https://t.me/AlisaWaifusBot",
@@ -141,8 +140,9 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "Content-Type": "application/json"
         }
         
+        # Correct OpenRouter model slug for Gemini 1.5 Flash
         payload = {
-            "model": "google/gemini-flash-1.5",
+            "model": "google/gemini-1.5-flash",
             "messages": [{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages[-10:]
         }
 
