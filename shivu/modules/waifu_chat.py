@@ -154,16 +154,19 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = update.message
     text = message.text
 
-    # GROUP CHAT LOGIC: Name mention par ya tag hone par reply karegi
+    # GROUP CHAT LOGIC:
     if chat_type in ["group", "supergroup"]:
         is_reply_to_bot = bool(message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id)
         is_mentioned = bool(context.bot.username and f"@{context.bot.username.lower()}" in text.lower())
-        contains_name = "alisa" in text.lower()
         
+        # Name check (case-insensitive, e.g., "alisa", "AlisaJi")
+        contains_name = bool(re.search(r'\balisa\b', text, re.IGNORECASE))
+        
+        # Agar na reply kiya, na tag kiya, aur na hi message mein "alisa" likha hai, toh bot chup rahegi
         if not (is_reply_to_bot or is_mentioned or contains_name):
             return
             
-        if is_mentioned:
+        if is_mentioned and context.bot.username:
             text = text.replace(f"@{context.bot.username}", "").strip()
     
     action = random.choice(['typing', 'choose_sticker'])
@@ -204,7 +207,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     except Exception as e:
         LOGGER.error(f"Waifu Chat Error: {e}")
-        await message.reply_text("M-Mujhe abhi baat nahi karni... Network issue 🥺")
+        await message.reply_text("B-Baka! M-Mujhe abhi baat nahi karni... (Network issue 🥺)")
 
 # ==========================================
 # 6. HANDLERS REGISTRATION
