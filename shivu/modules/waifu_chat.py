@@ -12,8 +12,8 @@ LOGGER = logging.getLogger(__name__)
 # ==========================================
 # 1. GOOGLE GEMINI API SETUP
 # ==========================================
-GEMINI_API_KEY = "Sk-or-v1-e99181b2748d135be852c7573ca3c32330b0991042dec21b727d6a37337e7fdd"
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_KEY = "AQ.Ab8RN6I5-WOwkBWBAUp4ptR5ad1-zR3tJglZ8LduRWvra_zG5w"
+GEMINI_MODEL = "gemini-flash-latest"
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 WAIFU_CHAT_ENABLED = {}
@@ -134,24 +134,26 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
 
 # ==========================================
-# 6. GEMINI API REQUEST
+# 6. GEMINI API REQUEST (Using X-goog-api-key Header)
 # ==========================================
 async def ask_gemini(contents):
     if not GEMINI_API_KEY:
         return None, "NO_API_KEY"
 
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY
+    }
     payload = {
         "system_instruction": {"parts": [{"text": WAIFU_SYSTEM_PROMPT}]},
         "contents": contents,
         "generationConfig": {"temperature": 0.9, "maxOutputTokens": 300}
     }
-    request_url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
     loop = asyncio.get_running_loop()
 
     def send_request():
         try:
-            return requests.post(request_url, headers=headers, json=payload, timeout=30)
+            return requests.post(GEMINI_API_URL, headers=headers, json=payload, timeout=30)
         except Exception as e:
             LOGGER.error(f"Gemini connection error: {e}")
             return None
