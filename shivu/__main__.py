@@ -1,5 +1,5 @@
 import asyncio
-import modules.wordgrid
+import shivu.modules.wordgrid
 import wordle_game
 import shivu.modules.pmarket
 import shivu.modules.balance
