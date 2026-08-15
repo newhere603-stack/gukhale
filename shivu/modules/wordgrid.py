@@ -4,7 +4,17 @@ import io
 from PIL import Image, ImageDraw, ImageFont
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
-from shivu import pbot  # Shivu repo ka official client variable
+import shivu
+
+# Dynamically find the client variable from shivu package (handles app, bot, application, pbot, etc.)
+pbot = None
+for attr in ["app", "bot", "application", "pbot", "client"]:
+    if hasattr(shivu, attr):
+        pbot = getattr(shivu, attr)
+        break
+
+if not pbot:
+    raise ImportError("Could not find a valid client instance in shivu package!")
 
 # Game State Storage
 active_games = {}
@@ -98,8 +108,6 @@ def create_grid_image(grid, placed_words, found_words):
     img.save(bio, format='PNG')
     bio.name = 'grid.png'
     return bio
-
-# --- HANDLERS USING PBOT ---
 
 @pbot.on_message(filters.command(["play", "new", "wordgrid"]) & filters.group)
 async def start_game(client, message):
