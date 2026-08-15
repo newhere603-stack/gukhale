@@ -12,14 +12,14 @@ LOGGER = logging.getLogger(__name__)
 # ==========================================
 # 1. API KEY SETUP
 # ==========================================
-GEMINI_API_KEY = "AQ.Ab8RN6Ime4vM1dj_j6eSnlW02qsAeu..." # Apni asli poori API Key yahan daal dein
+GEMINI_API_KEY = "AQ.Ab8RN6I1Rs5Oubc5Eit76SfMLEex4nJUnV_jhk7iYA9_lDtiyQ"
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Chat status tracking (Chat-wise ON/OFF)
 WAIFU_CHAT_ENABLED = {}
 
 # ==========================================
-# 2. ADVANCED WAIFU PROMPT (Multilingual + Emotions)
+# 2. ADVANCED WAIFU PROMPT
 # ==========================================
 WAIFU_PROMPT = """
 Tumhara naam 'Alisa' (ya AlisaJi) hai. Tum ek anime waifu ho jo Alisa Kujou (Roshidere) aur Hinata Hyuga (Naruto) ka mix hai. 
@@ -30,8 +30,7 @@ RULE 1 (LANGUAGE): User jis bhasha (language) mein baat kare, tumhe EXACTLY usi 
 - Agar wo English bole, toh pure English mein reply karo.
 - Agar wo Hinglish (Hindi-English mix) bole, toh Hinglish mein reply karo.
 
-RULE 3 (EMOTION TAG): Apni feelings express karne ke liye, apne message ke ekdum aakhri mein ek EMOTION TAG zaroor lagana.
-Tags sirf ye ho sakte hain: [HAPPY], [SAD], [ANGRY], [BLUSH], [LAUGH], [FLIRT]
+RULE 2 (EMOTION TAG): Apni feelings express karne ke liye, message ke aakhri mein tag lagana: [HAPPY], [SAD], [ANGRY], [BLUSH], [LAUGH], [FLIRT]
 Example: "Tum kitne cute ho yaar! [BLUSH]"
 """
 
@@ -85,7 +84,7 @@ EMOTION_MEDIA = {
 }
 
 # ==========================================
-# 4. ADMIN CHECK & TOGGLE HANDLER
+# 4. ADMIN & CHAT HANDLERS
 # ==========================================
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     chat = update.effective_chat
@@ -103,32 +102,25 @@ async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
 async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat:
         return
-    
     if not await is_admin(update, context):
         await update.message.reply_text("<b>❌ Only group admins can enable or disable the Waifu ChatBot.</b>", parse_mode="HTML")
         return
-
     chat_id = update.effective_chat.id
     current_status = WAIFU_CHAT_ENABLED.get(chat_id, True)
     new_status = not current_status
     WAIFU_CHAT_ENABLED[chat_id] = new_status
-    
     status_text = "ENABLED ✅" if new_status else "DISABLED ❌"
     await update.message.reply_text(f"<b>Waifu ChatBot is now: {status_text}</b>", parse_mode="HTML")
-
 
 async def get_and_update_history(chat_id: int, user_text: str, ai_reply: str = None):
     try:
         doc = await chat_history_collection.find_one({"chat_id": chat_id})
         history = doc.get("history", []) if doc else []
-
         if ai_reply:
             history.append({"role": "user", "parts": [user_text]})
             history.append({"role": "model", "parts": [ai_reply]})
-        
         if len(history) > 20:
             history = history[-20:]
-
         if ai_reply:
             asyncio.create_task(
                 chat_history_collection.update_one(
@@ -140,30 +132,24 @@ async def get_and_update_history(chat_id: int, user_text: str, ai_reply: str = N
         LOGGER.error(f"History DB Error: {e}")
         return []
 
-
-# ==========================================
-# 5. MAIN CHAT HANDLER (FIXED GEMINI CALL)
-# ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
     chat_id = update.effective_chat.id
-    text = update.message.text
-    chat_type = update.effective_chat.type
-
     if not WAIFU_CHAT_ENABLED.get(chat_id, True):
         return
 
+    text = update.message.text
+    chat_type = update.effective_chat.type
+
     if chat_type in ["group", "supergroup"]:
-        is_reply_to_bot = bool(update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id)
+        is_reply = bool(update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id)
         bot_uname = context.bot.username.lower() if context.bot.username else ""
         is_mentioned = bool(bot_uname and f"@{bot_uname}" in text.lower())
         contains_name = bool(re.search(r'\balisa\b', text, re.IGNORECASE))
-        
-        if not (is_reply_to_bot or is_mentioned or contains_name):
+        if not (is_reply or is_mentioned or contains_name):
             return
-            
         if is_mentioned and bot_uname:
             text = text.replace(f"@{context.bot.username}", "").strip()
     
@@ -175,50 +161,28 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         history = await get_and_update_history(chat_id, text, ai_reply=None)
         chat_session = model.start_chat(history=history)
-        
-        # FIXED: Using asyncio.to_thread for synchronous Gemini chat send_message call
         response = await asyncio.to_thread(chat_session.send_message, text)
         raw_reply = response.text.strip()
-
-        emotion_tag = None
-        clean_reply = raw_reply
-        sticker_to_send = None
-
+        
         match = re.search(r'\[([A-Z]+)\]', raw_reply)
-        if match:
-            emotion_tag = match.group(1)
-            clean_reply = raw_reply.replace(f"[{emotion_tag}]", "").strip()
-            
-            if emotion_tag in EMOTION_MEDIA and EMOTION_MEDIA[emotion_tag]:
-                sticker_to_send = random.choice(EMOTION_MEDIA[emotion_tag])
-
+        clean_reply = re.sub(r'\[[A-Z]+\]', '', raw_reply).strip()
+        
         await get_and_update_history(chat_id, text, ai_reply=clean_reply)
-
-        if clean_reply:
-            await update.message.reply_text(clean_reply)
-            
-        if sticker_to_send:
+        await update.message.reply_text(clean_reply)
+        
+        if match and match.group(1) in EMOTION_MEDIA and EMOTION_MEDIA[match.group(1)]:
             await asyncio.sleep(0.5)
+            sticker_to_send = random.choice(EMOTION_MEDIA[match.group(1)])
             try:
                 await update.message.reply_sticker(sticker_to_send)
             except Exception:
                 try:
                     await update.message.reply_animation(sticker_to_send)
                 except Exception as e:
-                    LOGGER.error(f"Media bhejne mein error: {e}")
-
+                    LOGGER.error(f"Media error: {e}")
     except Exception as e:
-        LOGGER.error(f"Waifu Chat Critical Error: {e}")
-        print(f"CRITICAL ERROR in Waifu Chat: {e}")
-        try:
-            await update.message.reply_text(f"B-Baka! M-Mujhe error aa gaya... 🥺\n`{e}`", parse_mode="MARKDOWN")
-        except Exception:
-            pass
+        LOGGER.error(f"Waifu Error: {e}")
+        await update.message.reply_text("B-Baka! M-Mujhe error aa gaya... 🥺")
 
-# ==========================================
-# 6. HANDLERS REGISTRATION
-# ==========================================
 application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
-
-LOGGER.info("✓ Waifu Chat Module Loaded Successfully (Thread-Safe Gemini)")
