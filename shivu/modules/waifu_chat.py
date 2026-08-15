@@ -10,10 +10,10 @@ from shivu import application, user_collection
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. OPENROUTER API SETUP
+# 1. OPENROUTER API SETUP (Using Auto-Free Router)
 # ==========================================
 OPENROUTER_API_KEY = "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"
-MODEL = "mistralai/mistral-7b-instruct:free"
+MODEL = "openrouter/free"  # Yeh automatically active free model utha lega
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 WAIFU_CHAT_ENABLED = {}
 
