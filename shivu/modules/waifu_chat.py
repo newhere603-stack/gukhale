@@ -12,10 +12,14 @@ from shivu import application, user_collection
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. API CONFIGURATIONS (OpenAI & ElevenLabs)
+# 1. GROQ & ELEVENLABS API CONFIGURATIONS
 # ==========================================
-OPENAI_API_KEY = "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"
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Groq API is 100% Free! Get key from console.groq.com
+GROQ_API_KEY = "YAHAN_APNI_GROQ_API_KEY_DALO"
+client = OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=GROQ_API_KEY
+)
 
 ELEVENLABS_API_KEY = "Sk_02920bcb875ba0d4b696fc20d1766c1c6779b11b5f93e734"
 ELEVENLABS_VOICE_ID = "21m00Tcm4TlvDq8ikWAM" 
@@ -99,24 +103,24 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"Waifu ChatBot is now: {status_text}")
 
 # ==========================================
-# 4. OPENAI API REQUEST
+# 4. GROQ API REQUEST
 # ==========================================
-async def ask_openai(messages):
+async def ask_groq(messages):
     loop = asyncio.get_running_loop()
-    def call_openai():
+    def call_groq():
         try:
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="llama-3.1-8b-instant",
                 messages=[{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages,
                 temperature=0.8,
                 max_tokens=60
             )
             return response.choices[0].message.content.strip(), None
         except Exception as e:
-            LOGGER.error(f"OpenAI API Error: {e}")
+            LOGGER.error(f"Groq API Error: {e}")
             return None, str(e)
 
-    return await loop.run_in_executor(None, call_openai)
+    return await loop.run_in_executor(None, call_groq)
 
 # ==========================================
 # 5. ELEVENLABS TTS API REQUEST
@@ -219,7 +223,7 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         messages_to_send = sanitized_history[-10:]
 
-        raw_reply, error = await ask_openai(messages_to_send)
+        raw_reply, error = await ask_groq(messages_to_send)
         
         if not raw_reply:
             if not is_media:
