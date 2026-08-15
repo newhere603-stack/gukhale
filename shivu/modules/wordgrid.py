@@ -2,19 +2,9 @@ import random
 import string
 import io
 from PIL import Image, ImageDraw, ImageFont
-from pyrogram import filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
-import shivu
-
-# Dynamically find the client variable from shivu package (handles app, bot, application, pbot, etc.)
-pbot = None
-for attr in ["app", "bot", "application", "pbot", "client"]:
-    if hasattr(shivu, attr):
-        pbot = getattr(shivu, attr)
-        break
-
-if not pbot:
-    raise ImportError("Could not find a valid client instance in shivu package!")
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from shivu import pbot  # Shivu's PTB Application instance
 
 # Game State Storage
 active_games = {}
@@ -109,11 +99,17 @@ def create_grid_image(grid, placed_words, found_words):
     bio.name = 'grid.png'
     return bio
 
-@pbot.on_message(filters.command(["play", "new", "wordgrid"]) & filters.group)
-async def start_game(client, message):
-    chat_id = message.chat.id
+# --- HANDLERS ---
+
+async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat.type not in ["group", "supergroup"]:
+        await update.message.reply_text("This game can only be played in groups!")
+        return
+
+    chat_id = chat.id
     if chat_id in active_games:
-        await message.reply_text("⚠️ A WordGrid game is already running in this group!")
+        await update.message.reply_text("⚠️ A WordGrid game is already running in this group!")
         return
 
     grid, placed_words = generate_game_grid()
@@ -130,13 +126,20 @@ async def start_game(client, message):
     caption += "\nTap 🔄 Refresh Grid to mark!"
 
     btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
-    msg = await message.reply_photo(photo=img_bio, caption=caption, reply_markup=btn)
-    active_games[chat_id]["msg_id"] = msg.id
+    msg = await context.bot.send_photo(chat_id=chat_id, photo=img_bio, caption=caption, parse_mode="Markdown", reply_markup=btn)
+    active_games[chat_id]["msg_id"] = msg.message_id
 
-@pbot.on_message(filters.text & filters.group, group=10)
-async def handle_guesses(client, message):
-    chat_id = message.chat.id
+async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if not chat or chat.type not in ["group", "supergroup"]:
+        return
+    
+    chat_id = chat.id
     if chat_id not in active_games:
+        return
+
+    message = update.effective_message
+    if not message or not message.text:
         return
 
     game = active_games[chat_id]
@@ -149,7 +152,8 @@ async def handle_guesses(client, message):
         points = 3 if is_first else (5 if is_last else 2)
         game["found"].append(guess)
         
-        user_name = message.from_user.first_name or "Player"
+        user = update.effective_user
+        user_name = user.first_name or "Player"
         game["round_scores"][user_name] = game["round_scores"].get(user_name, 0) + points
         
         img_bio = create_grid_image(game["grid"], game["words"], game["found"])
@@ -163,14 +167,15 @@ async def handle_guesses(client, message):
         btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
         
         try:
-            await client.edit_message_media(
+            await context.bot.edit_message_media(
                 chat_id=chat_id, message_id=game["msg_id"],
-                media=InputMediaPhoto(img_bio, caption=caption), reply_markup=btn
+                media=InputMediaPhoto(img_bio, caption=caption, parse_mode="Markdown"), reply_markup=btn
             )
         except Exception as e:
             print(f"Image update error: {e}")
 
-        await message.reply_text(f"✅ **+{points} points** for {message.from_user.mention}! You found **{guess}**.")
+        mention = user.mention_html() if hasattr(user, "mention_html") else user_name
+        await message.reply_text(f"✅ **+{points} points** for {mention}! You found **{guess}**.", parse_mode="Markdown")
         
         if is_last:
             sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
@@ -181,14 +186,16 @@ async def handle_guesses(client, message):
             
             summary += "\nThanks for playing! Start another game by /new."
             end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("SUPPORT GROUP", url="https://t.me/LeafVillage")]])
-            await message.reply_text(summary, reply_markup=end_btn)
+            await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown", reply_markup=end_btn)
             del active_games[chat_id]
 
-@pbot.on_callback_query(filters.regex("refresh_grid"))
-async def refresh_grid_callback(client, callback_query):
-    chat_id = callback_query.message.chat.id
+async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    chat_id = query.message.chat_id
+    
     if chat_id not in active_games:
-        await callback_query.answer("No active game found!", show_alert=True)
+        await query.answer("No active game found!", show_alert=True)
         return
 
     game = active_games[chat_id]
@@ -201,21 +208,33 @@ async def refresh_grid_callback(client, callback_query):
     caption += "\nTap 🔄 Refresh Grid to mark!"
     
     btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
-    await callback_query.edit_message_media(media=InputMediaPhoto(img_bio, caption=caption), reply_markup=btn)
-    await callback_query.answer("Grid Refreshed!", show_alert=False)
+    try:
+        await query.edit_message_media(
+            media=InputMediaPhoto(img_bio, caption=caption, parse_mode="Markdown"), reply_markup=btn
+        )
+    except Exception:
+        pass
 
-@pbot.on_message(filters.command(["stopgame", "endgrid"]) & filters.group)
-async def stop_game(client, message):
-    chat_id = message.chat.id
+async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat.type not in ["group", "supergroup"]:
+        return
+    chat_id = chat.id
     if chat_id in active_games:
         del active_games[chat_id]
-        await message.reply_text("⏹ WordGrid game stopped by admin.")
+        await update.message.reply_text("⏹ WordGrid game stopped.")
     else:
-        await message.reply_text("No active WordGrid game to stop.")
+        await update.message.reply_text("No active WordGrid game to stop.")
+
+# --- REGISTER HANDLERS WITH PTB APPLICATION ---
+pbot.add_handler(CommandHandler(["play", "new", "wordgrid"], start_game))
+pbot.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
+pbot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses))
+pbot.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
 
 __mod_name__ = "WordGrid"
 __help__ = """
 🎮 **WordGrid Game Commands:**
 - /play or /new: Start a new word search grid game in the group.
-- /stopgame: Stop the active game (Admin only).
+- /stopgame: Stop the active game.
 """
