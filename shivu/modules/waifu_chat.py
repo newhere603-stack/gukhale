@@ -5,7 +5,7 @@ import random
 import google.generativeai as genai
 from telegram import Update
 from telegram.ext import MessageHandler, CommandHandler, filters, ContextTypes
-from shivu import application, db, BOT_USERNAME
+from shivu import application, user_collection, BOT_USERNAME
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +40,8 @@ model = genai.GenerativeModel(
     system_instruction=WAIFU_PROMPT
 )
 
-chat_history_collection = db['waifu_chat_history']
+# Safe database collection reference (shivu ke user_collection se linked)
+chat_history_collection = user_collection.database['waifu_chat_history']
 
 # ==========================================
 # 3. STICKER & GIF DICTIONARY
@@ -118,65 +119,81 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
 
 
 async def get_and_update_history(chat_id: int, user_text: str, ai_reply: str = None):
-    doc = await chat_history_collection.find_one({"chat_id": chat_id})
-    history = doc.get("history", []) if doc else []
+    try:
+        doc = await chat_history_collection.find_one({"chat_id": chat_id})
+        history = doc.get("history", []) if doc else []
 
-    if ai_reply:
-        history.append({"role": "user", "parts": [user_text]})
-        history.append({"role": "model", "parts": [ai_reply]})
-    
-    if len(history) > 20:
-        history = history[-20:]
+        if ai_reply:
+            history.append({"role": "user", "parts": [user_text]})
+            history.append({"role": "model", "parts": [ai_reply]})
+        
+        if len(history) > 20:
+            history = history[-20:]
 
-    if ai_reply:
-        asyncio.create_task(
-            chat_history_collection.update_one(
-                {"chat_id": chat_id}, {"$set": {"history": history}}, upsert=True
+        if ai_reply:
+            asyncio.create_task(
+                chat_history_collection.update_one(
+                    {"chat_id": chat_id}, {"$set": {"history": history}}, upsert=True
+                )
             )
-        )
-    return history
+        return history
+    except Exception as e:
+        LOGGER.error(f"History DB Error: {e}")
+        return []
 
 
 # ==========================================
-# 5. MAIN CHAT HANDLER
+# 5. MAIN CHAT HANDLER (WITH DEBUG LOGS)
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
 
     chat_id = update.effective_chat.id
-    
+    text = update.message.text
+    chat_type = update.effective_chat.type
+
+    print(f"DEBUG: Message received -> '{text}' in chat type: {chat_type} (ID: {chat_id})")
+
     # Agar chat mein bot disabled hai toh ignore karega
     if not WAIFU_CHAT_ENABLED.get(chat_id, True):
+        print("DEBUG: ChatBot is disabled in this chat.")
         return
-
-    chat_type = update.effective_chat.type
-    message = update.message
-    text = message.text
 
     # GROUP CHAT LOGIC:
     if chat_type in ["group", "supergroup"]:
-        is_reply_to_bot = bool(message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id)
-        is_mentioned = bool(context.bot.username and f"@{context.bot.username.lower()}" in text.lower())
+        is_reply_to_bot = bool(update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id)
+        
+        # Safely check username
+        bot_uname = context.bot.username.lower() if context.bot.username else ""
+        is_mentioned = bool(bot_uname and f"@{bot_uname}" in text.lower())
         
         # Name check (case-insensitive, e.g., "alisa", "AlisaJi")
         contains_name = bool(re.search(r'\balisa\b', text, re.IGNORECASE))
         
+        print(f"DEBUG Checks -> Reply: {is_reply_to_bot}, Mentioned: {is_mentioned}, Contains Name: {contains_name}")
+
         # Agar na reply kiya, na tag kiya, aur na hi message mein "alisa" likha hai, toh bot chup rahegi
         if not (is_reply_to_bot or is_mentioned or contains_name):
             return
             
-        if is_mentioned and context.bot.username:
+        if is_mentioned and bot_uname:
             text = text.replace(f"@{context.bot.username}", "").strip()
     
-    action = random.choice(['typing', 'choose_sticker'])
-    await context.bot.send_chat_action(chat_id=chat_id, action=action)
+    # Action show karo
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action='typing')
+    except Exception:
+        pass
 
     try:
         history = await get_and_update_history(chat_id, text, ai_reply=None)
         chat_session = model.start_chat(history=history)
+        
+        # Gemini API call
         response = await chat_session.send_message_async(text)
         raw_reply = response.text.strip()
+        print(f"DEBUG: AI Generated Reply -> {raw_reply}")
 
         emotion_tag = None
         clean_reply = raw_reply
@@ -193,21 +210,25 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await get_and_update_history(chat_id, text, ai_reply=clean_reply)
 
         if clean_reply:
-            await message.reply_text(clean_reply)
+            await update.message.reply_text(clean_reply)
             
         if sticker_to_send:
             await asyncio.sleep(0.5)
             try:
-                await message.reply_sticker(sticker_to_send)
+                await update.message.reply_sticker(sticker_to_send)
             except Exception:
                 try:
-                    await message.reply_animation(sticker_to_send)
+                    await update.message.reply_animation(sticker_to_send)
                 except Exception as e:
                     LOGGER.error(f"Media bhejne mein error: {e}")
 
     except Exception as e:
-        LOGGER.error(f"Waifu Chat Error: {e}")
-        await message.reply_text("B-Baka! M-Mujhe abhi baat nahi karni... (Network issue 🥺)")
+        LOGGER.error(f"Waifu Chat Critical Error: {e}")
+        print(f"CRITICAL ERROR in Waifu Chat: {e}")
+        try:
+            await update.message.reply_text("B-Baka! M-Mujhe abhi baat nahi karni... (Network issue 🥺)")
+        except Exception:
+            pass
 
 # ==========================================
 # 6. HANDLERS REGISTRATION
@@ -215,4 +236,4 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, waifu_chat_handler, block=False))
 
-LOGGER.info("✓ Waifu Chat Module Loaded with Admin Toggle Support")
+LOGGER.info("✓ Waifu Chat Module Loaded Successfully (Bulletproof)")
