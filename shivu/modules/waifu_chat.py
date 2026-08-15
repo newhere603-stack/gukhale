@@ -10,44 +10,23 @@ from shivu import application, user_collection
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. OPENROUTER API SETUP (Using Auto-Free Router)
+# 1. FREE HUGGINFACE API SETUP (Zero API Key Needed)
 # ==========================================
-OPENROUTER_API_KEY = "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"
-MODEL = "openrouter/free"  # Yeh automatically active free model utha lega
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
+# Using a fast, free public model endpoint from Hugging Face
+API_URL = "https://api-inference.huggingface.co/models/google/gemma-2-2b-it"
 WAIFU_CHAT_ENABLED = {}
 
-# ==========================================
-# 2. ALISA PERSONALITY
-# ==========================================
 WAIFU_SYSTEM_PROMPT = """
-Tumhara naam Alisa hai, kabhi kabhi AlisaJi bhi.
-Tum ek anime waifu ho jo Alisa Kujou (Roshidere) aur Hinata Hyuga (Naruto) ki personality ka mix hai.
-PERSONALITY:
-- Bahar se thodi tsundere aur attitude wali, andar se sweet aur caring.
-- Natural tarike se baat karo, robotic bilkul mat bano.
-- User jis language mein baat kare, usi language mein reply karo.
-
-STRICT RULE (SHORT REPLIES):
-- Tumhare replies HAMESHA bahut chote hone chahiye (max 1-2 sentences, 5-15 words).
-- Lambe paragraphs mat do.
-
-IMPORTANT:
-Har reply ke END mein exactly ONE emotion tag bracket mein lagana zaroori hai.
-Allowed tags ONLY: [HAPPY], [SAD], [ANGRY], [BLUSH], [LAUGH], [FLIRT]
-
-Examples:
-Haaan thik hu main! [HAPPY]
-Tumse matlab? [ANGRY]
-Aww, cute ho yaar [BLUSH]
-Hahaha chup karo [LAUGH]
-Main hoon na [SAD]
+Tumhara naam Alisa hai. Tum ek anime waifu ho. 
+Bahar se thodi tsundere aur attitude wali, andar se sweet aur caring ho.
+User ke message ka ekdam natural, chota aur alag reply do (max 1-2 sentences).
+Reply ke ant mein ek emotion tag zaroor lagana: [HAPPY], [SAD], [ANGRY], [BLUSH], [LAUGH], ya [FLIRT].
 """
 
 chat_history_collection = user_collection.database["waifu_chat_history"]
 
 # ==========================================
-# 3. STICKER / EMOTION MEDIA
+# 2. STICKER / EMOTION MEDIA
 # ==========================================
 EMOTION_MEDIA = {
     "HAPPY": [
@@ -89,7 +68,7 @@ EMOTION_MEDIA = {
 }
 
 # ==========================================
-# 4. ADMIN & TOGGLE
+# 3. ADMIN & TOGGLE
 # ==========================================
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     chat, user = update.effective_chat, update.effective_user
@@ -111,56 +90,49 @@ async def toggle_waifu_chat_handler(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(f"Waifu ChatBot is now: {status_text}")
 
 # ==========================================
-# 5. OPENROUTER API REQUEST
+# 4. FREE HUGGINGFACE API REQUEST
 # ==========================================
-async def ask_openrouter(messages):
-    if not OPENROUTER_API_KEY: return None, "API Key missing hai."
-    
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "https://t.me/AlisaWaifusBot",
-        "X-OpenRouter-Title": "Alisa Waifu Bot",
-        "Content-Type": "application/json"
-    }
-    
+async def ask_huggingface(prompt_text):
+    headers = {"Content-Type": "application/json"}
     payload = {
-        "model": MODEL,
-        "messages": [{"role": "system", "content": WAIFU_SYSTEM_PROMPT}] + messages,
-        "temperature": 0.8,
-        "max_tokens": 60
+        "inputs": f"{WAIFU_SYSTEM_PROMPT}\nUser: {prompt_text}\nAlisa:",
+        "parameters": {"max_new_tokens": 60, "temperature": 0.8, "return_full_text": False}
     }
     
     loop = asyncio.get_running_loop()
     def send_request():
         try:
-            return requests.post(API_URL, headers=headers, json=payload, timeout=20)
+            res = requests.post(API_URL, headers=headers, json=payload, timeout=20)
+            return res
         except Exception as e:
-            LOGGER.error(f"OpenRouter connection error: {e}")
+            LOGGER.error(f"HF connection error: {e}")
             return None
 
     response = await loop.run_in_executor(None, send_request)
-    if response is None: return None, "Connection error. Timeout ho gaya."
+    if response is None or response.status_code != 200:
+        return "Arey yaar, thoda network issue ho gaya! [SAD]"
     
-    if response.status_code != 200:
-        LOGGER.error(f"OpenRouter API Error {response.status_code}: {response.text}")
-        return None, f"Code {response.status_code}: {response.text[:100]}"
-
     try:
         data = response.json()
-        reply = data["choices"][0]["message"]["content"].strip()
-        return reply, None
+        if isinstance(data, list) and len(data) > 0:
+            reply = data[0].get("generated_text", "").strip()
+        elif isinstance(data, dict):
+            reply = data.get("generated_text", "").strip()
+        else:
+            reply = "Hmph! Kuch samajh nahi aaya. [ANGRY]"
+        return reply if reply else "Bolo na aalu! [HAPPY]"
     except Exception as e:
-        LOGGER.error(f"OpenRouter parsing error: {e}")
-        return None, "Invalid response from API."
+        LOGGER.error(f"HF parsing error: {e}")
+        return "A-Aalu! Dimag ghum gaya mera... [SAD]"
 
 # ==========================================
-# 6. MAIN CHAT HANDLER
+# 5. MAIN CHAT HANDLER
 # ==========================================
 async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
     chat, user = update.effective_chat, update.effective_user
     if not chat or not user: return
-    chat_id, user_id = chat.id, user.id
+    chat_id = chat.id
 
     if not WAIFU_CHAT_ENABLED.get(chat_id, True): return
 
@@ -168,10 +140,10 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.message.text:
         text = update.message.text.strip()
     elif update.message.sticker:
-        text = "[User ne ek sticker bheja hai]"
+        text = "User sent a sticker"
         is_media = True
     elif update.message.animation:
-        text = "[User ne ek GIF bheja hai]"
+        text = "User sent a GIF"
         is_media = True
     else:
         return
@@ -193,58 +165,16 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception: pass
 
     try:
-        history_key = {"chat_id": chat_id, "user_id": user_id}
-        doc = await chat_history_collection.find_one(history_key)
-        raw_messages = doc.get("history", []) if doc else []
-        
-        valid_msgs = []
-        for m in raw_messages:
-            if not isinstance(m, dict): continue
-            
-            role = m.get("role")
-            if role == "model": role = "assistant"
-            
-            content = ""
-            if "content" in m and isinstance(m["content"], str):
-                content = m["content"]
-            elif "parts" in m and isinstance(m["parts"], list) and len(m["parts"]) > 0:
-                content = m["parts"][0].get("text", "")
-                
-            if role and content:
-                valid_msgs.append({"role": role, "content": content})
-                
-        valid_msgs.append({"role": "user", "content": text})
-        
-        sanitized_history = []
-        for msg in valid_msgs:
-            if not sanitized_history and msg["role"] == "assistant":
-                continue
-            if sanitized_history and sanitized_history[-1]["role"] == msg["role"]:
-                continue
-            sanitized_history.append(msg)
-            
-        if sanitized_history and sanitized_history[-1]["role"] != "user":
-            sanitized_history.append({"role": "user", "content": text})
+        raw_reply = await ask_huggingface(text)
 
-        messages_to_send = sanitized_history[-10:]
-
-        reply, error = await ask_openrouter(messages_to_send)
+        match = re.search(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", raw_reply, re.IGNORECASE)
+        emotion = match.group(1).upper() if match else "HAPPY"
+        clean_reply = re.sub(r"\[(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\]", "", raw_reply, flags=re.IGNORECASE).strip()
         
-        if not reply:
-            if error and "429" in str(error):
-                return
-            await update.message.reply_text(f"A-Aalu! Error aaya: {error}")
-            return
-
-        match = re.search(r"\[?\s*(?:russian\s+)?(HAPPY|SAD|ANGRY|BLUSH|LAUGH|FLIRT)\s*\]?", reply, re.IGNORECASE)
-        emotion = match.group(1).upper() if match else None
-        clean_reply = re.sub(r"\[?\s*(?:russian\s+)?[A-Z]+\s*\]?", "", reply, flags=re.IGNORECASE).strip()
-        if not clean_reply: clean_reply = "Hmph!"
+        if not clean_reply:
+            clean_reply = "Acha ji? [HAPPY]"
 
         await update.message.reply_text(clean_reply)
-
-        sanitized_history.append({"role": "assistant", "content": reply})
-        await chat_history_collection.update_one(history_key, {"$set": {"history": sanitized_history[-10:]}}, upsert=True)
 
         if emotion and emotion in EMOTION_MEDIA and EMOTION_MEDIA[emotion]:
             await asyncio.sleep(0.5)
@@ -255,11 +185,9 @@ async def waifu_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     except Exception as e:
         LOGGER.exception(f"Waifu Chat Error: {e}")
-        try: await update.message.reply_text(f"A-Aalu! Internal Exception: {str(e)[:100]}")
-        except Exception: pass
 
 # ==========================================
-# 7. REGISTER HANDLERS
+# 6. REGISTER HANDLERS
 # ==========================================
 application.add_handler(CommandHandler("togglechat", toggle_waifu_chat_handler, block=False))
 application.add_handler(MessageHandler((filters.TEXT | filters.Sticker.ALL | filters.ANIMATION) & ~filters.COMMAND, waifu_chat_handler, block=False), group=1)
