@@ -1,4 +1,3 @@
-import os
 import random
 import string
 import io
@@ -7,24 +6,18 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 
 # ==========================================
-# ⚙️ HEROKU BOT CONFIGURATION
+# 🧠 IN-MEMORY DATABASE (Game State)
 # ==========================================
-# Heroku ke settings (Config Vars) se values lega
-API_ID = int(os.environ.get("API_ID", "1234567")) 
-API_HASH = os.environ.get("API_HASH", "YOUR_API_HASH")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN")
-
-app = Client("wordgrid_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-# In-memory storage active games ke liye
+# Ye active games aur scores track karega jab tak bot chal raha hai
 active_games = {}
 user_stats = {} 
 
+# Dictionary of words (Aap isme aur words add kar sakte ho)
 WORD_LIST = ["MET", "FUR", "TIDE", "ODDS", "FEVER", "TRADE", "INCHES", "AFFECT", "STATING", "JOY", "USED", "EARN", "LENS", "LADDER", "SILENCE", "AGE"]
 
-# (generate_game_grid aur create_grid_image function bilkul pehle jaise rahenge, 
-# main seedha main logic update kar raha hoon)
-
+# ==========================================
+# ⚙️ CORE GAME LOGIC
+# ==========================================
 def generate_game_grid(size=8, num_words=8):
     grid = [['' for _ in range(size)] for _ in range(size)]
     chosen_words = random.sample(WORD_LIST, min(num_words, len(WORD_LIST)))
@@ -73,6 +66,7 @@ def create_grid_image(grid, placed_words, found_words):
     draw = ImageDraw.Draw(img, 'RGBA')
 
     try:
+        # Font file tumhare bot ki root directory me honi chahiye
         font = ImageFont.truetype("arial.ttf", 26) 
     except IOError:
         font = ImageFont.load_default()
@@ -105,11 +99,15 @@ def create_grid_image(grid, placed_words, found_words):
     bio.name = 'grid.png'
     return bio
 
-@app.on_message(filters.command(["play", "new"]) & filters.group)
+# ==========================================
+# 🎮 TELEGRAM HANDLERS (PLUG-AND-PLAY)
+# ==========================================
+
+@Client.on_message(filters.command(["play", "new", "wordgrid"]) & filters.group)
 async def start_game(client, message):
     chat_id = message.chat.id
     if chat_id in active_games:
-        await message.reply_text("⚠️ A game is already running! Use /stopgame to end it first.")
+        await message.reply_text("⚠️ A WordGrid game is already running! Find the words or ask admin to /stopgame.")
         return
 
     grid, placed_words = generate_game_grid()
@@ -118,7 +116,7 @@ async def start_game(client, message):
         "words": placed_words,
         "found": [],
         "msg_id": None,
-        "round_scores": {} # NAYA: Is round ke current scores track karne ke liye
+        "round_scores": {}
     }
 
     img_bio = create_grid_image(grid, placed_words, [])
@@ -133,7 +131,7 @@ async def start_game(client, message):
     msg = await message.reply_photo(photo=img_bio, caption=caption, reply_markup=btn)
     active_games[chat_id]["msg_id"] = msg.id
 
-@app.on_message(filters.text & filters.group, group=1)
+@Client.on_message(filters.text & filters.group, group=10) # group=10 diya taaki tumhare dusre text handlers se clash na ho
 async def handle_guesses(client, message):
     chat_id = message.chat.id
     if chat_id not in active_games:
@@ -152,12 +150,10 @@ async def handle_guesses(client, message):
         
         game["found"].append(guess)
         
-        # Name aur points save karna
         user_name = message.from_user.first_name or "Player"
         user_id = message.from_user.id
         
         game["round_scores"][user_name] = game["round_scores"].get(user_name, 0) + points
-        user_stats[user_id] = user_stats.get(user_id, 0) + points
         
         reply_text = f"✅ **+{points} points** for {message.from_user.mention}! You found **{guess}**."
         
@@ -167,29 +163,26 @@ async def handle_guesses(client, message):
         
         await message.reply_text(reply_text, reply_markup=btn)
         
-        # NAYA: GAME OVER LOGIC (Screenshot jaisa)
+        # GAME OVER LOGIC
         if is_last:
-            # Score ko sort karna (Highest se lowest)
             sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
-            
             summary = "👾 **GAME OVER** 👾\n\n--- Round Summary ---\n\n"
-            medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] # Top 3 ko badhiya medal, baaki sab ko normal
+            medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
             
             for idx, (name, score) in enumerate(sorted_scores):
                 medal = medals[idx] if idx < len(medals) else "🏅"
                 summary += f"{medal} {name}: {score} points\n"
             
-            summary += "\nThanks for playing start another game by /new_hard or /new."
+            summary += "\nThanks for playing! Start another game by /new_hard or /new."
             
-            # Support group ka button 
             end_btn = InlineKeyboardMarkup([[
-                InlineKeyboardButton("SUPPORT GROUP", url="https://t.me/YourSupportGroupLink")
+                InlineKeyboardButton("SUPPORT GROUP", url="https://t.me/YourSupportGroup") # Apna group link yahan update kar lena
             ]])
             
             await message.reply_text(summary, reply_markup=end_btn)
             del active_games[chat_id]
 
-@app.on_callback_query(filters.regex("refresh_grid"))
+@Client.on_callback_query(filters.regex("refresh_grid"))
 async def refresh_grid_callback(client, callback_query):
     chat_id = callback_query.message.chat.id
     if chat_id not in active_games:
@@ -212,6 +205,11 @@ async def refresh_grid_callback(client, callback_query):
     await callback_query.edit_message_media(media=InputMediaPhoto(img_bio, caption=caption), reply_markup=btn)
     await callback_query.answer("Grid Updated!", show_alert=False)
 
-if __name__ == "__main__":
-    print("Bot is starting...")
-    app.run()
+@Client.on_message(filters.command(["stopgame", "endgrid"]) & filters.group)
+async def stop_game(client, message):
+    chat_id = message.chat.id
+    if chat_id in active_games:
+        del active_games[chat_id]
+        await message.reply_text("⏹ WordGrid game stopped.")
+    else:
+        await message.reply_text("No active WordGrid game to stop.")
