@@ -1,4 +1,5 @@
 import asyncio
+import waifu_chat
 import wordle_game
 import shivu.modules.pmarket
 import shivu.modules.balance
