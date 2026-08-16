@@ -1,9 +1,8 @@
 import random
 import string
 import io
-import os
-import urllib.request
 import logging
+import requests
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
@@ -11,24 +10,34 @@ from shivu import application, user_collection
 
 LOGGER = logging.getLogger(__name__)
 
-# ==========================================
-# 🛠 AUTO-FONT DOWNLOADER (Ye problem fix karega!)
-# ==========================================
-FONT_PATH = "WordGrid_Bold.ttf"
-if not os.path.exists(FONT_PATH):
-    try:
-        LOGGER.info("Downloading Bold Font for WordGrid...")
-        # Google Fonts se direct Roboto-Bold download karega
-        font_url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
-        urllib.request.urlretrieve(font_url, FONT_PATH)
-        LOGGER.info("Font downloaded successfully!")
-    except Exception as e:
-        LOGGER.error(f"Font download error: {e}")
-
 # Game State Storage
 active_games = {}
 
-# Massive Word Pool (600+ words: 3 to 8 letters)
+# ==========================================
+# 🛠 100% FOOLPROOF FONT LOADER (Direct to RAM)
+# ==========================================
+GLOBAL_FONT_BYTES = None
+
+def get_bold_font(size):
+    global GLOBAL_FONT_BYTES
+    try:
+        # Pheli baar RAM mein download karega, uske baad fast load hoga
+        if GLOBAL_FONT_BYTES is None:
+            url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
+            response = requests.get(url, timeout=10)
+            GLOBAL_FONT_BYTES = response.content
+        
+        # Memory se direct load karega (No path issues on Heroku)
+        return ImageFont.truetype(io.BytesIO(GLOBAL_FONT_BYTES), size)
+    except Exception as e:
+        LOGGER.error(f"RAM Font load failed: {e}")
+        try:
+            # Fallback to common Linux/Heroku Bold font
+            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
+        except:
+            return ImageFont.load_default()
+
+# Massive Word Pool (600+ words: 3 to 8 letters) to prevent boredom
 WORD_LIST = [
     "ACT", "AGE", "AIR", "ALL", "ANT", "ANY", "ARM", "ART", "ASK", "BAD", "BAG", "BAT", "BEE", "BIG", "BOX", "BOY", 
     "BUG", "BUS", "BUT", "BUY", "CAN", "CAR", "CAT", "COW", "CRY", "CUP", "CUT", "DAY", "DOG", "DRY", "EAR", "EAT", 
@@ -167,22 +176,22 @@ def generate_game_grid(size=8, num_words=9):
     return grid, placed_words
 
 def create_grid_image(grid, placed_words, found_words):
-    cell_size = 80  # Full/Bada box size
+    # ==========================================
+    # 🔴 MASSIVE SIZING SETUP 🔴
+    # ==========================================
+    cell_size = 100  # Box ka size ab 100x100 pixels ka hoga (Huge)
     size = len(grid)
     img_size = cell_size * size
     
     img = Image.new('RGBA', (img_size, img_size), color='#0a0a0a') 
     draw = ImageDraw.Draw(img)
 
-    try:
-        # Ab ye downloaded font load karega 52 size me jo box bhar dega!
-        font = ImageFont.truetype(FONT_PATH, 52) 
-    except IOError:
-        font = ImageFont.load_default()
+    # Calling the foolproof RAM font loader with size 65
+    font = get_bold_font(65)
 
     for r in range(size + 1):
-        draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill="#222222", width=2)
-        draw.line([(r*cell_size, 0), (r*cell_size, img_size)], fill="#222222", width=2)
+        draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill="#222222", width=3)
+        draw.line([(r*cell_size, 0), (r*cell_size, img_size)], fill="#222222", width=3)
 
     colors = [
         (60, 150, 120, 180), (180, 70, 70, 180), (60, 150, 60, 180), 
@@ -199,7 +208,7 @@ def create_grid_image(grid, placed_words, found_words):
             c2, r2 = coords[-1][1] * cell_size + cell_size // 2, coords[-1][0] * cell_size + cell_size // 2
             
             color = colors[i % len(colors)]
-            line_width = 56
+            line_width = 70  # Capsule ab aur moti hogi
             radius = line_width // 2
             
             overlay_draw.line([(c1, r1), (c2, r2)], fill=color, width=line_width)
@@ -209,12 +218,12 @@ def create_grid_image(grid, placed_words, found_words):
     img = Image.alpha_composite(img, overlay)
     draw = ImageDraw.Draw(img)
 
+    # EXACT BOX CENTERING
     for r in range(size):
         for c in range(size):
             x0, y0 = c * cell_size, r * cell_size
             letter = grid[r][c]
             
-            # Exact Math logic for true bounding-box centering inside the 80x80 box
             bbox = font.getbbox(letter)
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
@@ -231,7 +240,6 @@ def create_grid_image(grid, placed_words, found_words):
 
 def get_sorted_caption(placed_words, found_words):
     caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\nFind these words:\n"
-    
     sorted_words = sorted(placed_words.keys(), key=len)
     
     for w in sorted_words:
@@ -399,7 +407,7 @@ application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="ref
 __mod_name__ = "WordGrid"
 __help__ = """
 🎮 <b>WordGrid Game Commands:</b>
-- /playgrid or /new: Start a new word search game.
-- /stopgame or /end: Stop the active game.
+- /playgrid : Start a new word search game.
+- /stopgame : Stop the active game.
 - /gridtop: View the WordGrid Leaderboard.
 """
