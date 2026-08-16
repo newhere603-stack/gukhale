@@ -1,6 +1,8 @@
 import random
 import string
 import io
+import os
+import urllib.request
 import logging
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
@@ -9,10 +11,24 @@ from shivu import application, user_collection
 
 LOGGER = logging.getLogger(__name__)
 
+# ==========================================
+# 🛠 AUTO-FONT DOWNLOADER (Ye problem fix karega!)
+# ==========================================
+FONT_PATH = "WordGrid_Bold.ttf"
+if not os.path.exists(FONT_PATH):
+    try:
+        LOGGER.info("Downloading Bold Font for WordGrid...")
+        # Google Fonts se direct Roboto-Bold download karega
+        font_url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
+        urllib.request.urlretrieve(font_url, FONT_PATH)
+        LOGGER.info("Font downloaded successfully!")
+    except Exception as e:
+        LOGGER.error(f"Font download error: {e}")
+
 # Game State Storage
 active_games = {}
 
-# Massive Word Pool (600+ words: 3 to 8 letters) to prevent boredom
+# Massive Word Pool (600+ words: 3 to 8 letters)
 WORD_LIST = [
     "ACT", "AGE", "AIR", "ALL", "ANT", "ANY", "ARM", "ART", "ASK", "BAD", "BAG", "BAT", "BEE", "BIG", "BOX", "BOY", 
     "BUG", "BUS", "BUT", "BUY", "CAN", "CAR", "CAT", "COW", "CRY", "CUP", "CUT", "DAY", "DOG", "DRY", "EAR", "EAT", 
@@ -121,12 +137,10 @@ WORD_LIST = [
 
 def generate_game_grid(size=8, num_words=9):
     grid = [['' for _ in range(size)] for _ in range(size)]
-    # Filter valid lengths for 8x8 (3 to 8 max)
     valid_words = [w for w in WORD_LIST if 3 <= len(w) <= size]
     chosen_words = random.sample(valid_words, min(num_words, len(valid_words)))
     placed_words = {}
     
-    # 8-Way directions for finding words
     directions = [(0, 1), (1, 0), (1, 1), (-1, 1), (-1, -1), (0, -1), (-1, 0), (1, -1)] 
     
     for word in chosen_words:
@@ -135,7 +149,6 @@ def generate_game_grid(size=8, num_words=9):
             d_r, d_c = random.choice(directions)
             r, c = random.randint(0, size - 1), random.randint(0, size - 1)
             
-            # Bound checking
             if 0 <= r + d_r * (len(word)-1) < size and 0 <= c + d_c * (len(word)-1) < size:
                 if all(grid[r + d_r * i][c + d_c * i] in ['', word[i]] for i in range(len(word))):
                     for i in range(len(word)): 
@@ -146,7 +159,6 @@ def generate_game_grid(size=8, num_words=9):
         if not placed:
             continue
 
-    # Fill empty blocks with random alphabet
     for r in range(size):
         for c in range(size):
             if grid[r][c] == '':
@@ -159,39 +171,30 @@ def create_grid_image(grid, placed_words, found_words):
     size = len(grid)
     img_size = cell_size * size
     
-    # Base background (Dark theme)
     img = Image.new('RGBA', (img_size, img_size), color='#0a0a0a') 
     draw = ImageDraw.Draw(img)
 
     try:
-        font = ImageFont.truetype("arialbd.ttf", 46) # Bada & bold font size
+        # Ab ye downloaded font load karega 52 size me jo box bhar dega!
+        font = ImageFont.truetype(FONT_PATH, 52) 
     except IOError:
         font = ImageFont.load_default()
 
-    # Draw Grid Lines under the capsules
     for r in range(size + 1):
         draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill="#222222", width=2)
         draw.line([(r*cell_size, 0), (r*cell_size, img_size)], fill="#222222", width=2)
 
-    # Capsule colors with transparency (RGBA overlay)
     colors = [
-        (60, 150, 120, 180),  # Cyan-Green
-        (180, 70, 70, 180),   # Red
-        (60, 150, 60, 180),   # Green
-        (130, 90, 180, 180),  # Purple
-        (180, 140, 50, 180),  # Orange/Gold
-        (60, 100, 200, 180)   # Blue
+        (60, 150, 120, 180), (180, 70, 70, 180), (60, 150, 60, 180), 
+        (130, 90, 180, 180), (180, 140, 50, 180), (60, 100, 200, 180)
     ]
     
-    # Create overlay for capsules to get correct blending
     overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
 
-    # Draw Found Words (Premium Translucent Capsules)
     for i, word in enumerate(found_words):
         if word in placed_words:
             coords = placed_words[word]
-            # Coordinates for center of start & end cells
             c1, r1 = coords[0][1] * cell_size + cell_size // 2, coords[0][0] * cell_size + cell_size // 2
             c2, r2 = coords[-1][1] * cell_size + cell_size // 2, coords[-1][0] * cell_size + cell_size // 2
             
@@ -203,11 +206,9 @@ def create_grid_image(grid, placed_words, found_words):
             overlay_draw.ellipse([c1 - radius, r1 - radius, c1 + radius, r1 + radius], fill=color)
             overlay_draw.ellipse([c2 - radius, r2 - radius, c2 + radius, r2 + radius], fill=color)
 
-    # Blend capsules with background
     img = Image.alpha_composite(img, overlay)
     draw = ImageDraw.Draw(img)
 
-    # Draw Full Box Centered Letters OVER the capsules
     for r in range(size):
         for c in range(size):
             x0, y0 = c * cell_size, r * cell_size
@@ -222,7 +223,6 @@ def create_grid_image(grid, placed_words, found_words):
             
             draw.text((text_x, text_y), letter, fill="#ffffff", font=font)
 
-    # Convert to pure RGB to save as PNG properly for Telegram
     img = img.convert("RGB")
     bio = io.BytesIO()
     img.save(bio, format='PNG')
@@ -230,17 +230,14 @@ def create_grid_image(grid, placed_words, found_words):
     return bio
 
 def get_sorted_caption(placed_words, found_words):
-    # Untouched Premium Emojis
     caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\nFind these words:\n"
     
-    # Sort from Shortest to Longest Lengths
     sorted_words = sorted(placed_words.keys(), key=len)
     
     for w in sorted_words:
         if w in found_words:
             caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> {w}\n"
         else:
-            # Format Exactly like: V-- (3) without any extra code block tag.
             masked = w[0] + "-" * (len(w) - 1)
             caption += f"{masked} ({len(w)})\n"
             
@@ -312,7 +309,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mention = user.mention_html()
         game["round_scores"][user.first_name] = game["round_scores"].get(user.first_name, 0) + points
         
-        # Save points to database (grid_points)
         try:
             await user_collection.update_one(
                 {"id": user.id},
@@ -394,8 +390,8 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>", parse_mode="HTML")
 
 # --- REGISTER HANDLERS ---
-application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid"], start_game))
-application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
+application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "new"], start_game))
+application.add_handler(CommandHandler(["stopgame", "end", "endgrid"], stop_game))
 application.add_handler(CommandHandler("gridtop", leaderboard_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
@@ -403,7 +399,7 @@ application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="ref
 __mod_name__ = "WordGrid"
 __help__ = """
 🎮 <b>WordGrid Game Commands:</b>
-- /playgrid : Start a new word search game.
-- /stopgame : Stop the active game.
+- /playgrid or /new: Start a new word search game.
+- /stopgame or /end: Stop the active game.
 - /gridtop: View the WordGrid Leaderboard.
 """
