@@ -377,7 +377,7 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
         else:
-            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+            medals = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
             for i, user in enumerate(top_users):
                 medal = medals[i] if i < len(medals) else "🏅"
                 uid = user.get('id')
@@ -386,7 +386,7 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
                 points = user.get('grid_points', 0)
                 msg += f"{medal} <b>{user_mention}</b> — <b><code>{points} pts</code></b>\n"
         
-        btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Leaderboard", callback_data="refresh_leaderboard")]])
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh", callback_data="refresh_leaderboard")]])
         await update.message.reply_text(msg, parse_mode="HTML", reply_markup=btn)
     except Exception as e:
         LOGGER.error(f"Leaderboard error: {e}")
@@ -403,7 +403,7 @@ async def refresh_leaderboard_callback(update: Update, context: ContextTypes.DEF
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
         else:
-            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+            medals = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
             for i, user in enumerate(top_users):
                 medal = medals[i] if i < len(medals) else "🏅"
                 uid = user.get('id')
