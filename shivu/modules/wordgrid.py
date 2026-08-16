@@ -6,31 +6,28 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMe
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from shivu import application
 
-# Game State Storage
 active_games = {}
 
-# Badi aur diverse word list (3, 4, 5, 6, 7 letters mixed)
+# Unlimited feel dene ke liye bada pool
 WORD_LIST = [
-    "JOY", "AGE", "MET", "FUR", "TIDE", "ODDS", "FEVER", "TRADE", "INCHES", "AFFECT", 
-    "STATING", "USED", "EARN", "LENS", "LADDER", "SILENCE", "FIRE", "WATER", "MAGIC", 
-    "POWER", "BLADE", "SHADOW", "NINJA", "STORM", "LIGHT", "HEART", "DREAM", "BRAVE", 
-    "CHAMP", "QUEST", "BLOOD", "TITAN", "PLANT", "EARTH", "SPACE", "GHOST", "SOUND", 
-    "MUSIC", "ROBOT", "SUPER", "SPEED", "ROYAL", "ROUND", "WORLD", "HOUSE", "ENERGY"
+    "PROFIT", "RESERVE", "READY", "PRODUCE", "MARRY", "REACH", "JOY", "AGE", "MET", 
+    "FUR", "TIDE", "ODDS", "FEVER", "TRADE", "INCHES", "AFFECT", "STATING", 
+    "FIRE", "WATER", "MAGIC", "POWER", "BLADE", "SHADOW", "NINJA", "STORM", 
+    "LIGHT", "HEART", "DREAM", "BRAVE", "QUEST", "TITAN", "GHOST", "SOUND", 
+    "ROBOT", "SUPER", "SPEED", "ROYAL", "WORLD", "HOUSE", "ENERGY", "FORCE",
+    "TABLE", "CHAIR", "APPLE", "GRAPE", "LEMON", "PIZZA", "BURGER", "SNACK"
 ]
 
-def generate_game_grid(size=8, num_words=9):
+def generate_game_grid(size=8, num_words=8):
     grid = [['' for _ in range(size)] for _ in range(size)]
-    # Words ko length ke hisaab se sort karke select karna taaki balance rahe
-    sorted_pool = sorted(WORD_LIST, key=len)
-    chosen_words = random.sample(sorted_pool, min(num_words, len(sorted_pool)))
-    
+    chosen_words = random.sample(WORD_LIST, min(num_words, len(WORD_LIST)))
     placed_words = {}
     directions = [(0, 1), (1, 0), (1, 1), (-1, 1)] 
     
     for word in chosen_words:
         placed = False
         attempts = 0
-        while not placed and attempts < 100:
+        while not placed and attempts < 200:
             d_r, d_c = random.choice(directions)
             r = random.randint(0, size - 1)
             c = random.randint(0, size - 1)
@@ -57,194 +54,80 @@ def generate_game_grid(size=8, num_words=9):
         for c in range(size):
             if grid[r][c] == '':
                 grid[r][c] = random.choice(string.ascii_uppercase)
-                
     return grid, placed_words
 
 def create_grid_image(grid, placed_words, found_words):
-    cell_size = 55  # Thoda bada cell size taaki letters saaf aur bade dikhein
+    cell_size = 60
     size = len(grid)
     img_size = cell_size * size
-    
-    img = Image.new('RGB', (img_size, img_size), color='#121212') 
+    img = Image.new('RGB', (img_size, img_size), color='#0a0a0a') 
     draw = ImageDraw.Draw(img, 'RGBA')
 
     try:
-        font = ImageFont.truetype("arial.ttf", 28) 
-    except IOError:
+        font = ImageFont.truetype("arialbd.ttf", 32) # Bold font
+    except:
         font = ImageFont.load_default()
 
-    for r in range(size):
-        for c in range(size):
-            x0, y0 = c * cell_size, r * cell_size
-            x1, y1 = x0 + cell_size, y0 + cell_size
-            draw.rectangle([x0, y0, x1, y1], outline="#333333", width=1)
-            letter = grid[r][c]
-            draw.text((x0 + 18, y0 + 11), letter, fill="white", font=font)
-
-    colors = [
-        (255, 85, 85, 120), (85, 255, 85, 120), (85, 85, 255, 120), 
-        (255, 255, 85, 120), (255, 170, 85, 120), (255, 85, 255, 120)
-    ]
-    color_idx = 0
+    # Capsule colors
+    colors = [(60, 120, 120, 180), (150, 60, 60, 180), (60, 150, 60, 180), (100, 80, 150, 180), (150, 120, 50, 180)]
     
-    for word in found_words:
+    # Draw Found Words (Capsules)
+    for i, word in enumerate(found_words):
         if word in placed_words:
             coords = placed_words[word]
-            start_x = coords[0][1] * cell_size + cell_size // 2
-            start_y = coords[0][0] * cell_size + cell_size // 2
-            end_x = coords[-1][1] * cell_size + cell_size // 2
-            end_y = coords[-1][0] * cell_size + cell_size // 2
+            c1, r1 = coords[0][1] * cell_size + 30, coords[0][0] * cell_size + 30
+            c2, r2 = coords[-1][1] * cell_size + 30, coords[-1][0] * cell_size + 30
             
-            color = colors[color_idx % len(colors)]
-            draw.line([(start_x, start_y), (end_x, end_y)], fill=color, width=32, joint="curve")
-            color_idx += 1
+            # Draw Capsule
+            draw.line([(c1, r1), (c2, r2)], fill=colors[i % len(colors)], width=45)
+            # Rounded ends for capsule
+            draw.ellipse([c1-22, r1-22, c1+22, r1+22], fill=colors[i % len(colors)])
+            draw.ellipse([c2-22, r2-22, c2+22, r2+22], fill=colors[i % len(colors)])
+
+    # Draw Grid Lines & Letters
+    for r in range(size):
+        for c in range(size):
+            x, y = c * cell_size, r * cell_size
+            draw.rectangle([x, y, x+cell_size, y+cell_size], outline="#222222", width=1)
+            draw.text((x + 20, y + 15), grid[r][c], fill="#dddddd", font=font)
 
     bio = io.BytesIO()
     img.save(bio, format='PNG')
-    bio.name = 'grid.png'
     return bio
 
-# --- CAPTION BUILDER (Sorted by Length: Smallest to Longest) ---
 def get_sorted_caption(placed_words, found_words):
-    caption = "🌐 **WORD GRID CHALLENGE** 🌐\n\nFind these words:\n"
-    # Words ko length ke hisaab se sort karna (chote pehle, bade baad mein)
-    sorted_words = sorted(placed_words.keys(), key=len)
-    
-    for w in sorted_words:
-        if w in found_words:
-            caption += f"✅ {w}\n"
-        else:
-            masked = w[0] + "-" * (len(w) - 1)
-            caption += f"{masked} ({len(w)})\n"
-    caption += "\nTap 🔄 Refresh Grid to mark!"
-    return caption
+    caption = "🌐 <b>WORD GRID CHALLENGE</b> 🌐\n\nFind these words:\n"
+    for w in sorted(placed_words.keys(), key=len):
+        caption += f"✅ {w}\n" if w in found_words else f"<code>{w[0] + '-'*(len(w)-1)}</code> ({len(w)})\n"
+    return caption + "\nTap 🔄 Refresh Grid to mark!"
 
 # --- HANDLERS ---
-
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    if chat.type not in ["group", "supergroup"]:
-        await update.message.reply_text("This game can only be played in groups!")
-        return
-
-    chat_id = chat.id
+    chat_id = update.effective_chat.id
     if chat_id in active_games:
-        await update.message.reply_text("⚠️ A WordGrid game is already running in this group!")
+        await update.message.reply_text("⚠️ Game already running!")
         return
-
     grid, placed_words = generate_game_grid()
-    active_games[chat_id] = {
-        "grid": grid, "words": placed_words, "found": [], "msg_id": None, "round_scores": {}
-    }
-
-    img_bio = create_grid_image(grid, placed_words, [])
-    img_bio.seek(0)
-
-    caption = get_sorted_caption(placed_words, [])
-    btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
-    
-    msg = await context.bot.send_photo(chat_id=chat_id, photo=img_bio, caption=caption, parse_mode="Markdown", reply_markup=btn)
+    active_games[chat_id] = {"grid": grid, "words": placed_words, "found": [], "msg_id": None, "scores": {}}
+    img = create_grid_image(grid, placed_words, [])
+    msg = await context.bot.send_photo(chat_id, img, caption=get_sorted_caption(placed_words, []), parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="refresh_grid")]]))
     active_games[chat_id]["msg_id"] = msg.message_id
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    if not chat or chat.type not in ["group", "supergroup"]:
-        return
-    
-    chat_id = chat.id
-    if chat_id not in active_games:
-        return
-
-    message = update.effective_message
-    if not message or not message.text:
-        return
-
+    chat_id = update.effective_chat.id
+    if chat_id not in active_games: return
     game = active_games[chat_id]
-    guess = message.text.upper().strip()
-
+    guess = update.message.text.upper().strip()
+    
     if guess in game["words"] and guess not in game["found"]:
-        is_first = len(game["found"]) == 0
-        is_last = len(game["found"]) == len(game["words"]) - 1
-        
-        points = 3 if is_first else (5 if is_last else 2)
         game["found"].append(guess)
-        
-        user = update.effective_user
-        user_name = user.first_name or "Player"
-        game["round_scores"][user_name] = game["round_scores"].get(user_name, 0) + points
-        
-        img_bio = create_grid_image(game["grid"], game["words"], game["found"])
-        img_bio.seek(0)
-        
-        caption = get_sorted_caption(game["words"], game["found"])
-        btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
-        
-        try:
-            await context.bot.edit_message_media(
-                chat_id=chat_id, message_id=game["msg_id"],
-                media=InputMediaPhoto(img_bio, caption=caption, parse_mode="Markdown"), reply_markup=btn
-            )
-        except Exception as e:
-            print(f"Image update error: {e}")
-
-        mention = user.mention_html() if hasattr(user, "mention_html") else user_name
-        await message.reply_text(f"✅ **+{points} points** for {mention}! You found **{guess}**.", parse_mode="Markdown")
-        
-        if is_last:
-            sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
-            summary = "👾 **GAME OVER** 👾\n\n--- Round Summary ---\n\n"
-            medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
-            for idx, (name, score) in enumerate(sorted_scores):
-                summary += f"{medals[idx] if idx < len(medals) else '🏅'} {name}: {score} points\n"
-            
-            summary += "\nThanks for playing! Start another game by /playgrid."
-            end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("SUPPORT GROUP", url="https://t.me/LeafVillage")]])
-            await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown", reply_markup=end_btn)
+        img = create_grid_image(game["grid"], game["words"], game["found"])
+        await context.bot.edit_message_media(chat_id, game["msg_id"], InputMediaPhoto(img, caption=get_sorted_caption(game["words"], game["found"]), parse_mode="HTML"), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="refresh_grid")]]))
+        await update.message.reply_text(f"✅ <b>{guess} Found!</b>", parse_mode="HTML")
+        if len(game["found"]) == len(game["words"]):
+            await update.message.reply_text("🎉 <b>Round Complete!</b>")
             del active_games[chat_id]
 
-async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    chat_id = query.message.chat_id
-    
-    if chat_id not in active_games:
-        await query.answer("No active game found!", show_alert=True)
-        return
-
-    game = active_games[chat_id]
-    img_bio = create_grid_image(game["grid"], game["words"], game["found"])
-    img_bio.seek(0)
-    
-    caption = get_sorted_caption(game["words"], game["found"])
-    btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
-    
-    try:
-        await query.edit_message_media(
-            media=InputMediaPhoto(img_bio, caption=caption, parse_mode="Markdown"), reply_markup=btn
-        )
-    except Exception:
-        pass
-
-async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    if chat.type not in ["group", "supergroup"]:
-        return
-    chat_id = chat.id
-    if chat_id in active_games:
-        del active_games[chat_id]
-        await update.message.reply_text("⏹ WordGrid game stopped.")
-    else:
-        await update.message.reply_text("No active WordGrid game to stop.")
-
-# --- REGISTER HANDLERS WITH SAFE GROUP PRIORITY (group=5) ---
 application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid"], start_game))
-application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
-application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
-
-__mod_name__ = "WordGrid"
-__help__ = """
-🎮 **WordGrid Game Commands:**
-- /playgrid or /wordgrid: Start a new word search grid game in the group.
-- /stopgame: Stop the active game.
-"""
+application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern="refresh_grid"))
