@@ -112,16 +112,16 @@ def create_grid_image(grid, placed_words, found_words):
     return bio
 
 def get_sorted_caption(placed_words, found_words):
-    caption = "🌐 <b>WORD GRID CHALLENGE</b> 🌐\n\nFind these words:\n"
+    caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\nFind these words:\n"
     sorted_words = sorted(placed_words.keys(), key=len)
     
     for w in sorted_words:
         if w in found_words:
-            caption += f"✅ {w}\n"
+            caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> {w}\n"
         else:
             masked = w[0] + "-" * (len(w) - 1)
             caption += f"<code>{masked}</code> ({len(w)})\n"
-    caption += "\nTap 🔄 Refresh Grid to mark!"
+    caption += "\nTap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!"
     return caption
 
 # --- HANDLERS ---
@@ -134,7 +134,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = chat.id
     if chat_id in active_games:
-        await update.message.reply_text("⚠️ A WordGrid game is already running! Use /stopgame to end it.")
+        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> A WordGrid game is already running! Use /stopgame to end it.")
         return
 
     grid, placed_words = generate_game_grid()
@@ -146,7 +146,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     img_bio.seek(0)
 
     caption = get_sorted_caption(placed_words, [])
-    btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
+    btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
     
     msg = await context.bot.send_photo(chat_id=chat_id, photo=img_bio, caption=caption, parse_mode="HTML", reply_markup=btn)
     active_games[chat_id]["msg_id"] = msg.message_id
@@ -158,9 +158,9 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = chat.id
     if chat_id in active_games:
         del active_games[chat_id]
-        await update.message.reply_text("⏹ <b>WordGrid game has been stopped.</b>", parse_mode="HTML")
+        await update.message.reply_text("<tg-emoji emoji-id=\"6310066608689650607\">⬅️</tg-emoji> <b>WordGrid game has been stopped.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text("<b>ℹ️ No active game running right now.</b>", parse_mode="HTML")
+        await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -203,7 +203,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         img_bio.seek(0)
         
         caption = get_sorted_caption(game["words"], game["found"])
-        btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Grid", callback_data="refresh_grid")]])
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
         
         try:
             await context.bot.edit_message_media(
@@ -213,7 +213,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-        await message.reply_text(f"✅ <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML")
+        await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML")
         
         if is_last:
             sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
@@ -268,7 +268,7 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(msg, parse_mode="HTML")
     except Exception as e:
         LOGGER.error(f"Leaderboard error: {e}")
-        await update.message.reply_text("<b>⚠️ Error fetching leaderboard.</b>", parse_mode="HTML")
+        await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>", parse_mode="HTML")
 
 # --- REGISTER HANDLERS ---
 application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid"], start_game))
