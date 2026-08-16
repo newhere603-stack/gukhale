@@ -231,17 +231,17 @@ def create_grid_image(grid, placed_words, found_words):
     return bio
 
 def get_sorted_caption(placed_words, found_words):
-    caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\nFind these words:\n"
+    caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\n<b>Find these words:</b>\n"
     sorted_words = sorted(placed_words.keys(), key=len)
     
     for w in sorted_words:
         if w in found_words:
-            caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> {w}\n"
+            caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{w}</b>\n"
         else:
             masked = w[0] + "-" * (len(w) - 1)
-            caption += f"{masked} ({len(w)})\n"
+            caption += f"<b>{masked} ({len(w)})</b>\n"
             
-    caption += "\nTap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!"
+    caption += "\n<b>Tap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!</b>"
     return caption
 
 # --- HANDLERS ---
@@ -249,12 +249,12 @@ def get_sorted_caption(placed_words, found_words):
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chat or chat.type not in ["group", "supergroup"]:
-        await update.message.reply_text("This game can only be played in groups!")
+        await update.message.reply_text("<b>This game can only be played in groups!</b>", parse_mode="HTML")
         return
 
     chat_id = chat.id
     if chat_id in active_games:
-        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> A WordGrid game is already running! Use /stopgame to end it.", parse_mode="HTML")
+        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>A WordGrid game is already running! Use /stopgame to end it.</b>", parse_mode="HTML")
         return
 
     grid, placed_words = generate_game_grid()
@@ -307,7 +307,11 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         user = update.effective_user
         mention = user.mention_html()
-        game["round_scores"][user.first_name] = game["round_scores"].get(user.first_name, 0) + points
+        
+        # Store user mention and score properly for summary
+        if user.id not in game["round_scores"]:
+            game["round_scores"][user.id] = {"mention": mention, "score": 0}
+        game["round_scores"][user.id]["score"] += points
         
         try:
             await user_collection.update_one(
@@ -335,15 +339,20 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML")
         
         if is_last:
-            sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
-            summary = "<tg-emoji emoji-id=\"5233477268617053735\">🕹</tg-emoji><tg-emoji emoji-id=\"5233546451950256512\">🕹</tg-emoji><tg-emoji emoji-id=\"5233604395354047945\">🕹</tg-emoji><tg-emoji emoji-id=\"5233544652358962131\">🕹</tg-emoji><tg-emoji emoji-id=\"5233619423444616550\">🕹</tg-emoji><tg-emoji emoji-id=\"5233286945731267091\">🕹</tg-emoji>\n\n<b> Round Summary </b>\n\n"
+            sorted_scores = sorted(game["round_scores"].values(), key=lambda x: x["score"], reverse=True)
+            summary = "<tg-emoji emoji-id=\"5233477268617053735\">🕹</tg-emoji><tg-emoji emoji-id=\"5233546451950256512\">🕹</tg-emoji><tg-emoji emoji-id=\"5233604395354047945\">🕹</tg-emoji><tg-emoji emoji-id=\"5233544652358962131\">🕹</tg-emoji><tg-emoji emoji-id=\"5233619423444616550\">🕹</tg-emoji><tg-emoji emoji-id=\"5233286945731267091\">🕹</tg-emoji>\n\n<b>GAME OVER</b>\n\n<b>--- Round Summary ---</b>\n\n"
             medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
-            for idx, (name, score) in enumerate(sorted_scores):
-                summary += f"{medals[idx] if idx < len(medals) else '🏅'} {name}: {score} points\n"
+            for idx, data in enumerate(sorted_scores):
+                medal = medals[idx] if idx < len(medals) else "🏅"
+                summary += f"{medal} <b>{data['mention']}</b> — <b><code>{data['score']} points</code></b>\n"
             
-            summary += "\nThanks for playing! Start another game by /playgrid."
+            summary += "\n<b>Thanks for playing! Start another game by /playgrid.</b>"
+            
+            # Wrap in blockquote as requested
+            blockquote_summary = f"<blockquote>{summary}</blockquote>"
+            
             end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("Ꮮᴇᴀꜰ ꪜɪʟʟᴀɢᴇ", url="https://t.me/Anime_Group_hai")]])
-            await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="HTML", reply_markup=end_btn)
+            await context.bot.send_message(chat_id=chat_id, text=blockquote_summary, parse_mode="HTML", reply_markup=end_btn)
             del active_games[chat_id]
 
 async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
