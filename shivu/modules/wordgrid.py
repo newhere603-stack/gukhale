@@ -227,7 +227,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No active WordGrid game to stop.")
 
 # --- REGISTER HANDLERS ---
-application.add_handler(CommandHandler(["play", "new", "wordgrid"], start_game))
+application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid"], start_game))
 application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses))
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
