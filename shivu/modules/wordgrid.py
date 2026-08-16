@@ -21,23 +21,19 @@ GLOBAL_FONT_BYTES = None
 def get_bold_font(size):
     global GLOBAL_FONT_BYTES
     try:
-        # Pheli baar RAM mein download karega, uske baad fast load hoga
         if GLOBAL_FONT_BYTES is None:
             url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
             response = requests.get(url, timeout=10)
             GLOBAL_FONT_BYTES = response.content
-        
-        # Memory se direct load karega (No path issues on Heroku)
         return ImageFont.truetype(io.BytesIO(GLOBAL_FONT_BYTES), size)
     except Exception as e:
         LOGGER.error(f"RAM Font load failed: {e}")
         try:
-            # Fallback to common Linux/Heroku Bold font
             return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
         except:
             return ImageFont.load_default()
 
-# Massive Word Pool (600+ words: 3 to 8 letters) to prevent boredom
+# Massive Word Pool
 WORD_LIST = [
     "ACT", "AGE", "AIR", "ALL", "ANT", "ANY", "ARM", "ART", "ASK", "BAD", "BAG", "BAT", "BEE", "BIG", "BOX", "BOY", 
     "BUG", "BUS", "BUT", "BUY", "CAN", "CAR", "CAT", "COW", "CRY", "CUP", "CUT", "DAY", "DOG", "DRY", "EAR", "EAT", 
@@ -78,70 +74,7 @@ WORD_LIST = [
     "TOMB", "TONE", "TOOL", "TOUR", "TOWN", "TREE", "TRIP", "TRUE", "TUBE", "TURN", "TWIN", "TYPE", "UNIT", "UPON", 
     "USER", "VARY", "VAST", "VERY", "VICE", "VIEW", "VOTE", "WAGE", "WAIT", "WAKE", "WALK", "WALL", "WANT", "WARD", 
     "WARM", "WASH", "WAVE", "WAYS", "WEAK", "WEAR", "WEEK", "WELL", "WENT", "WERE", "WEST", "WHAT", "WHEN", "WHOM", 
-    "WIDE", "WIFE", "WILD", "WILL", "WIND", "WINE", "WING", "WIRE", "WISE", "WISH", "WITH", "WOOD", "WORD", "WORK",
-    "ABOUT", "ABOVE", "ACTOR", "ACUTE", "ADAPT", "ADMIT", "ADOPT", "ADULT", "AFTER", "AGAIN", "AGENT", "AGREE", "AHEAD",
-    "ALARM", "ALBUM", "ALERT", "ALIEN", "ALIKE", "ALIVE", "ALLOW", "ALONE", "ALONG", "ALTER", "AMONG", "ANGER", "ANGLE",
-    "ANGRY", "APPLE", "APPLY", "AREAS", "ARENA", "ARGUE", "ARISE", "ARMED", "ARRAY", "ARROW", "ASIAN", "ASIDE", "ASSET",
-    "AUDIO", "AUDIT", "AVOID", "AWARD", "AWARE", "BADLY", "BAKER", "BASES", "BASIC", "BASIS", "BEACH", "BEAST", "BEGIN",
-    "BEING", "BELOW", "BENCH", "BIRTH", "BLACK", "BLADE", "BLAME", "BLIND", "BLOCK", "BLOOD", "BOARD", "BOAST", "BONUS",
-    "BOOST", "BOOTH", "BOUND", "BRAIN", "BRASS", "BRAVE", "BREAD", "BREAK", "BRICK", "BRIEF", "BROAD", "BROKE", "BROWN",
-    "BRUSH", "BUILD", "BUNCH", "BUYER", "CABLE", "CARRY", "CATCH", "CAUSE", "CHAIN", "CHAIR", "CHART", "CHASE", "CHEAP",
-    "CHECK", "CHIEF", "CHILD", "CHINA", "CHOSE", "CIVIL", "CLAIM", "CLASS", "CLEAN", "CLEAR", "CLERK", "CLICK", "CLOCK",
-    "CLOSE", "COACH", "COAST", "COUNT", "COURT", "COVER", "CRAFT", "CRASH", "CREAM", "CRIME", "CROSS", "CROWD", "CROWN",
-    "CURVE", "CYCLE", "DAILY", "DANCE", "DEATH", "DELAY", "DEPTH", "DOUBT", "DRAFT", "DRAMA", "DREAM", "DRESS", "DRINK",
-    "DRIVE", "EARLY", "EARTH", "EIGHT", "ELITE", "EMPTY", "ENEMY", "ENJOY", "ENTER", "ENTRY", "EQUAL", "ERROR", "EVENT",
-    "EXACT", "EXIST", "EXTRA", "FAITH", "FALSE", "FAULT", "FIBER", "FIELD", "FIFTH", "FIFTY", "FIGHT", "FINAL", "FIRST",
-    "FIXED", "FLASH", "FLEET", "FLOOR", "FLUID", "FOCUS", "FORCE", "FORUM", "FOUND", "FRAME", "FRANK", "FRAUD", "FRESH",
-    "FRONT", "FRUIT", "FULLY", "FUNNY", "GIANT", "GIVEN", "GLASS", "GLOBE", "GOING", "GRACE", "GRADE", "GRAND", "GRANT",
-    "GRASS", "GREAT", "GREEN", "GROSS", "GROUP", "GROWN", "GUARD", "GUESS", "GUEST", "GUIDE", "HAPPY", "HEART", "HEAVY",
-    "HENCE", "HORSE", "HOTEL", "HOUSE", "HUMAN", "IDEAL", "IMAGE", "INDEX", "INNER", "INPUT", "ISSUE", "JAPAN", "JOINT",
-    "JUDGE", "KNOWN", "LABEL", "LARGE", "LASER", "LATER", "LAUGH", "LAYER", "LEARN", "LEASE", "LEAST", "LEAVE", "LEGAL",
-    "LEVEL", "LIGHT", "LIMIT", "LINKS", "LIVES", "LOCAL", "LOGIC", "LOOSE", "LOWER", "LUCKY", "MAGIC", "MAJOR", "MAKER",
-    "MARCH", "MATCH", "MAYOR", "MEANT", "MEDIA", "METAL", "MIGHT", "MINOR", "MINUS", "MIXED", "MODEL", "MONEY", "MONTH",
-    "MORAL", "MOTOR", "MOUNT", "MOUSE", "MOUTH", "MOVIE", "MUSIC", "NEEDS", "NEVER", "NIGHT", "NOISE", "NORTH", "NOTED",
-    "NOVEL", "NURSE", "OCCUR", "OCEAN", "OFFER", "OFTEN", "ORDER", "OTHER", "OUGHT", "PAINT", "PANEL", "PAPER", "PARTY",
-    "PEACE", "PHASE", "PHONE", "PHOTO", "PIECE", "PILOT", "PITCH", "PLACE", "PLAIN", "PLANE", "PLANT", "PLATE", "POINT",
-    "POUND", "POWER", "PRESS", "PRICE", "PRIDE", "PRIME", "PRINT", "PRIOR", "PRIZE", "PROOF", "PROUD", "PROVE", "QUEEN",
-    "QUICK", "QUIET", "QUITE", "RADIO", "RAISE", "RANGE", "RAPID", "RATIO", "REACH", "READY", "REFER", "RIGHT", "RIVAL",
-    "RIVER", "ROBOT", "ROUGH", "ROUND", "ROUTE", "ROYAL", "RURAL", "SCALE", "SCENE", "SCOPE", "SCORE", "SENSE", "SERVE",
-    "SEVEN", "SHALL", "SHAPE", "SHARE", "SHARP", "SHEET", "SHELF", "SHELL", "SHIFT", "SHIRT", "SHOCK", "SHOOT", "SHORT",
-    "SHOWN", "SIGHT", "SIXTH", "SKILL", "SLEEP", "SMALL", "SMART", "SMILE", "SMITH", "SMOKE", "SOLID", "SOLVE", "SORRY",
-    "SOUND", "SOUTH", "SPACE", "SPARE", "SPEAK", "SPEED", "SPEND", "SPORT", "SQUAD", "STAFF", "STAGE", "STAND", "START",
-    "STATE", "STEAM", "STEEL", "STICK", "STILL", "STOCK", "STONE", "STORE", "STORM", "STORY", "STRIP", "STUDY", "STUFF",
-    "STYLE", "SUGAR", "SUPER", "SWEET", "TABLE", "TASTE", "TEACH", "TEETH", "TEXAS", "THANK", "THEFT", "THEIR", "THEME",
-    "THERE", "THESE", "THICK", "THING", "THINK", "THIRD", "THOSE", "THREE", "THROW", "TIGHT", "TIMES", "TITLE", "TODAY",
-    "TOPIC", "TOTAL", "TOUCH", "TOUGH", "TOWER", "TRACK", "TRADE", "TRAIN", "TREAT", "TREND", "TRIAL", "TRUST", "TRUTH",
-    "TWICE", "UNDER", "UNDUE", "UNION", "UNITY", "UNTIL", "UPPER", "UPSET", "URBAN", "USAGE", "USUAL", "VALID", "VALUE",
-    "VIDEO", "VIRUS", "VISIT", "VITAL", "VOICE", "WASTE", "WATCH", "WATER", "WHEEL", "WHERE", "WHICH", "WHILE", "WHITE",
-    "WHOLE", "WHOSE", "WOMAN", "WORDS", "WORLD", "WORRY", "WORSE", "WORST", "WORTH", "WOULD", "WOUND", "WRITE", "WRONG",
-    "YIELD", "YOUNG", "ACTION", "ADVICE", "ANIMAL", "ANSWER", "APPEAR", "AROUND", "ARTIST", "ATTACK", "AUTHOR", "BATTLE",
-    "BEAUTY", "BECOME", "BEFORE", "BEHIND", "BELIEF", "BELONG", "BOTTLE", "BRANCH", "BREATH", "BRIDGE", "BRIGHT", "BROKEN",
-    "BUDGET", "BUTTON", "CAMERA", "CANCER", "CASTLE", "CHANCE", "CHANGE", "CHARGE", "CHOICE", "CHOOSE", "CHURCH", "CIRCLE",
-    "CLIENT", "CLOSED", "COFFEE", "COLUMN", "COMBAT", "COMMON", "CORNER", "COURSE", "CREDIT", "CUSTOM", "DAMAGE", "DANGER",
-    "DEBATE", "DECIDE", "DEFEND", "DEGREE", "DEMAND", "DEPEND", "DESIGN", "DESIRE", "DETAIL", "DEVICE", "DIFFER", "DINNER",
-    "DIRECT", "DIVIDE", "DOCTOR", "DOUBLE", "DRAWER", "DRIVER", "DURING", "EASILY", "EFFECT", "EFFORT", "EITHER", "ENERGY",
-    "ENGINE", "ENOUGH", "ENTIRE", "ESCAPE", "ESTATE", "EXCEED", "EXCEPT", "EXPECT", "EXPERT", "EXTEND", "FABRIC", "FACTOR",
-    "FAMILY", "FAMOUS", "FARMER", "FATHER", "FIGURE", "FINGER", "FINISH", "FLIGHT", "FLOWER", "FLYING", "FOLLOW", "FOREST",
-    "FORGET", "FORMAL", "FORMER", "FRIEND", "FUTURE", "GARDEN", "GATHER", "GENDER", "GENTLE", "GLOBAL", "GOLDEN", "GROUND",
-    "GROWTH", "GUILTY", "HANDLE", "HAPPEN", "HEALTH", "HEIGHT", "HIDDEN", "HONEST", "HUNTER", "IGNORE", "IMPACT", "IMPORT",
-    "INCOME", "INDEED", "INJURY", "INSIDE", "INTEND", "INVENT", "ISLAND", "ITSELF", "JACKET", "JUNGLE", "LADDER", "LATEST",
-    "LEADER", "LEGEND", "LENGTH", "LESSON", "LETTER", "LISTEN", "LITTLE", "LIVING", "LOCKED", "LONELY", "MADAME", "MAIDEN",
-    "MANAGE", "MARKET", "MASTER", "MATRIX", "MATTER", "MEMORY", "MENTAL", "METHOD", "MIDDLE", "MIGHTY", "MINUTE", "MIRROR",
-    "MODERN", "MOMENT", "MONKEY", "MOTHER", "MOTION", "MURDER", "MUSCLE", "MUSEUM", "MYSTIC", "NATION", "NATIVE", "NATURE",
-    "NEARLY", "NINETY", "NOBODY", "NORMAL", "NOTICE", "NUMBER", "OBJECT", "OFFICE", "OPTION", "ORANGE", "ORIGIN", "OUTPUT",
-    "PALACE", "PARENT", "PARISH", "PASTEL", "PATENT", "PEOPLE", "PERIOD", "PERSON", "PHRASE", "PLANET", "PLAYER", "PLEASE",
-    "POCKET", "POISON", "POLICE", "POLICY", "PROFIT", "PUBLIC", "PULLER", "PUNISH", "PURPLE", "PURSUE", "PUZZLE", "RABBIT",
-    "RADIAL", "RANDOM", "RATHER", "RATING", "READER", "REASON", "RECORD", "REDUCE", "REFUSE", "REGION", "REMAIN", "REMIND",
-    "REMOVE", "REPAIR", "REPEAT", "REPORT", "RESCUE", "RESIGN", "RESULT", "RETURN", "REVEAL", "REVIEW", "REWARD", "RIDING",
-    "ROCKET", "ROLLER", "RUBBER", "RULING", "SACRED", "SAFETY", "SAILOR", "SALARY", "SAMPLE", "SAVING", "SCARED", "SCHOOL",
-    "SCREEN", "SEARCH", "SEASON", "SECOND", "SECRET", "SECURE", "SELECT", "SENIOR", "SERIES", "SERVER", "SETTLE", "SEVERE",
-    "SHADOW", "SIGNAL", "SILENT", "SILVER", "SIMPLE", "SINGER", "SINGLE", "SISTER", "SKETCH", "SLEEVE", "SLIGHT", "SMOOTH",
-    "SOCIAL", "SOCIETY", "SOLDIER", "SOURCE", "SOVIET", "SPEECH", "SPIRIT", "SPOKEN", "SPREAD", "SPRING", "SQUARE", "STATUS",
-    "STREAM", "STREET", "STRESS", "STRIKE", "STRING", "STRONG", "STUDIO", "SUBMIT", "SUDDEN", "SUFFER", "SUMMER", "SUMMIT",
-    "SUPPLY", "SURELY", "SYMBOL", "SYSTEM", "TACKLE", "TAILOR", "TALENT", "TARGET", "TENNIS", "THANKS", "THEORY", "THIRTY",
-    "THOUGH", "THREAD", "THREAT", "TICKET", "TIMBER", "TISSUE", "TOMATO", "TONGUE", "TOWARD", "TRAVEL", "TREATY", "TRIBAL",
-    "TROPIC", "TWELVE", "TWENTY", "TYPICAL", "UNIQUE", "UNLESS", "UNLIKE", "USEFUL", "VALLEY", "VICTIM", "VISION", "VISUAL",
-    "VOLUME", "WALKER", "WEALTH", "WEAPON", "WEIGHT", "WINDOW", "WINTER", "WONDER", "WORKER", "WRITER", "YELLOW"
+    "WIDE", "WIFE", "WILD", "WILL", "WIND", "WINE", "WING", "WIRE", "WISE", "WISH", "WITH", "WOOD", "WORD", "WORK"
 ]
 
 def generate_game_grid(size=8, num_words=9):
@@ -149,7 +82,6 @@ def generate_game_grid(size=8, num_words=9):
     valid_words = [w for w in WORD_LIST if 3 <= len(w) <= size]
     chosen_words = random.sample(valid_words, min(num_words, len(valid_words)))
     placed_words = {}
-    
     directions = [(0, 1), (1, 0), (1, 1), (-1, 1), (-1, -1), (0, -1), (-1, 0), (1, -1)] 
     
     for word in chosen_words:
@@ -157,47 +89,31 @@ def generate_game_grid(size=8, num_words=9):
         for _ in range(250):
             d_r, d_c = random.choice(directions)
             r, c = random.randint(0, size - 1), random.randint(0, size - 1)
-            
             if 0 <= r + d_r * (len(word)-1) < size and 0 <= c + d_c * (len(word)-1) < size:
                 if all(grid[r + d_r * i][c + d_c * i] in ['', word[i]] for i in range(len(word))):
-                    for i in range(len(word)): 
-                        grid[r + d_r * i][c + d_c * i] = word[i]
+                    for i in range(len(word)): grid[r + d_r * i][c + d_c * i] = word[i]
                     placed_words[word] = [(r + d_r * i, c + d_c * i) for i in range(len(word))]
                     placed = True
                     break
-        if not placed:
-            continue
-
+        if not placed: continue
     for r in range(size):
         for c in range(size):
-            if grid[r][c] == '':
-                grid[r][c] = random.choice(string.ascii_uppercase)
-                
+            if grid[r][c] == '': grid[r][c] = random.choice(string.ascii_uppercase)
     return grid, placed_words
 
 def create_grid_image(grid, placed_words, found_words):
-    # ==========================================
-    # 🔴 MASSIVE SIZING SETUP 🔴
-    # ==========================================
-    cell_size = 100  # Box ka size ab 100x100 pixels ka hoga (Huge)
+    cell_size = 100
     size = len(grid)
     img_size = cell_size * size
-    
     img = Image.new('RGBA', (img_size, img_size), color='#0a0a0a') 
     draw = ImageDraw.Draw(img)
-
-    # Calling the foolproof RAM font loader with size 65
     font = get_bold_font(65)
 
     for r in range(size + 1):
         draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill="#222222", width=3)
         draw.line([(r*cell_size, 0), (r*cell_size, img_size)], fill="#222222", width=3)
 
-    colors = [
-        (60, 150, 120, 180), (180, 70, 70, 180), (60, 150, 60, 180), 
-        (130, 90, 180, 180), (180, 140, 50, 180), (60, 100, 200, 180)
-    ]
-    
+    colors = [(60, 150, 120, 180), (180, 70, 70, 180), (60, 150, 60, 180), (130, 90, 180, 180), (180, 140, 50, 180), (60, 100, 200, 180)]
     overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
 
@@ -206,208 +122,78 @@ def create_grid_image(grid, placed_words, found_words):
             coords = placed_words[word]
             c1, r1 = coords[0][1] * cell_size + cell_size // 2, coords[0][0] * cell_size + cell_size // 2
             c2, r2 = coords[-1][1] * cell_size + cell_size // 2, coords[-1][0] * cell_size + cell_size // 2
-            
             color = colors[i % len(colors)]
-            line_width = 70  # Capsule ab aur moti hogi
+            line_width = 70
             radius = line_width // 2
-            
             overlay_draw.line([(c1, r1), (c2, r2)], fill=color, width=line_width)
             overlay_draw.ellipse([c1 - radius, r1 - radius, c1 + radius, r1 + radius], fill=color)
             overlay_draw.ellipse([c2 - radius, r2 - radius, c2 + radius, r2 + radius], fill=color)
 
     img = Image.alpha_composite(img, overlay)
     draw = ImageDraw.Draw(img)
-
-    # EXACT BOX CENTERING
     for r in range(size):
         for c in range(size):
             x0, y0 = c * cell_size, r * cell_size
             letter = grid[r][c]
-            
             bbox = font.getbbox(letter)
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
-            text_x = x0 + (cell_size - w) / 2 - bbox[0]
-            text_y = y0 + (cell_size - h) / 2 - bbox[1]
-            
-            draw.text((text_x, text_y), letter, fill="#ffffff", font=font)
+            draw.text((x0 + (cell_size - w) / 2 - bbox[0], y0 + (cell_size - h) / 2 - bbox[1]), letter, fill="#ffffff", font=font)
 
     img = img.convert("RGB")
-    bio = io.BytesIO()
-    img.save(bio, format='PNG')
-    bio.name = 'grid.png'
-    return bio
+    bio = io.BytesIO(); img.save(bio, format='PNG'); bio.name = 'grid.png'; return bio
 
 def get_sorted_caption(placed_words, found_words):
     caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\nFind these words:\n"
-    sorted_words = sorted(placed_words.keys(), key=len)
-    
-    for w in sorted_words:
+    for w in sorted(placed_words.keys(), key=len):
         if w in found_words:
             caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> {w}\n"
         else:
-            masked = w[0] + "-" * (len(w) - 1)
-            caption += f"{masked} ({len(w)})\n"
-            
+            caption += f"{w[0] + '-' * (len(w) - 1)} ({len(w)})\n"
     caption += "\nTap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!"
     return caption
 
 # --- HANDLERS ---
-
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    if not chat or chat.type not in ["group", "supergroup"]:
-        await update.message.reply_text("This game can only be played in groups!")
-        return
-
-    chat_id = chat.id
-    if chat_id in active_games:
-        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> A WordGrid game is already running! Use /stopgame to end it.")
-        return
-
+    chat_id = update.effective_chat.id
+    if chat_id in active_games: return await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> Game already running!")
     grid, placed_words = generate_game_grid()
-    active_games[chat_id] = {
-        "grid": grid, "words": placed_words, "found": [], "msg_id": None, "round_scores": {}
-    }
-
-    img_bio = create_grid_image(grid, placed_words, [])
-    img_bio.seek(0)
-
-    caption = get_sorted_caption(placed_words, [])
-    btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
-    
-    msg = await context.bot.send_photo(chat_id=chat_id, photo=img_bio, caption=caption, parse_mode="HTML", reply_markup=btn)
+    active_games[chat_id] = {"grid": grid, "words": placed_words, "found": [], "msg_id": None, "round_scores": {}}
+    img = create_grid_image(grid, placed_words, [])
+    msg = await context.bot.send_photo(chat_id, img, caption=get_sorted_caption(placed_words, []), parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]]))
     active_games[chat_id]["msg_id"] = msg.message_id
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    if not chat or chat.type not in ["group", "supergroup"]:
-        return
-    chat_id = chat.id
+    chat_id = update.effective_chat.id
     if chat_id in active_games:
         del active_games[chat_id]
-        await update.message.reply_text("<tg-emoji emoji-id=\"6310066608689650607\">⬅️</tg-emoji> <b>WordGrid game has been stopped.</b>", parse_mode="HTML")
-    else:
-        await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
+        await update.message.reply_text("<tg-emoji emoji-id=\"6310066608689650607\">⬅️</tg-emoji> <b>WordGrid game stopped.</b>", parse_mode="HTML")
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    if not chat or chat.type not in ["group", "supergroup"]:
-        return
-    
-    chat_id = chat.id
-    if chat_id not in active_games:
-        return
-
-    message = update.effective_message
-    if not message or not message.text:
-        return
-
+    chat_id = update.effective_chat.id
+    if chat_id not in active_games: return
     game = active_games[chat_id]
-    guess = message.text.upper().strip()
-
+    guess = update.message.text.upper().strip()
     if guess in game["words"] and guess not in game["found"]:
-        is_first = len(game["found"]) == 0
-        is_last = len(game["found"]) == len(game["words"]) - 1
-        
-        points = 3 if is_first else (5 if is_last else 2)
         game["found"].append(guess)
-        
-        user = update.effective_user
-        mention = user.mention_html()
-        game["round_scores"][user.first_name] = game["round_scores"].get(user.first_name, 0) + points
-        
-        try:
-            await user_collection.update_one(
-                {"id": user.id},
-                {"$inc": {"grid_points": points}},
-                upsert=True
-            )
-        except Exception as e:
-            LOGGER.error(f"Error updating grid points: {e}")
-        
-        img_bio = create_grid_image(game["grid"], game["words"], game["found"])
-        img_bio.seek(0)
-        
-        caption = get_sorted_caption(game["words"], game["found"])
-        btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
-        
-        try:
-            await context.bot.edit_message_media(
-                chat_id=chat_id, message_id=game["msg_id"],
-                media=InputMediaPhoto(img_bio, caption=caption, parse_mode="HTML"), reply_markup=btn
-            )
-        except Exception:
-            pass
-
-        await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML")
-        
-        if is_last:
-            sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
-            summary = "👾 <b>GAME OVER</b> 👾\n\n--- Round Summary ---\n\n"
-            medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
-            for idx, (name, score) in enumerate(sorted_scores):
-                summary += f"{medals[idx] if idx < len(medals) else '🏅'} {name}: {score} points\n"
-            
-            summary += "\nThanks for playing! Start another game by /playgrid."
-            end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("SUPPORT GROUP", url="https://t.me/LeafVillage")]])
-            await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="HTML", reply_markup=end_btn)
+        points = len(guess) * 2
+        await user_collection.update_one({"id": update.effective_user.id}, {"$inc": {"grid_points": points}}, upsert=True)
+        img = create_grid_image(game["grid"], game["words"], game["found"])
+        await context.bot.edit_message_media(chat_id, game["msg_id"], InputMediaPhoto(img, caption=get_sorted_caption(game["words"], game["found"]), parse_mode="HTML"), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]]))
+        await update.message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} pts for {update.effective_user.mention_html()}! Found {guess}.</b>", parse_mode="HTML")
+        if len(game["found"]) == len(game["words"]):
             del active_games[chat_id]
-
-async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    chat_id = query.message.chat_id
-    
-    if chat_id not in active_games:
-        await query.answer("No active game found!", show_alert=True)
-        return
-
-    game = active_games[chat_id]
-    img_bio = create_grid_image(game["grid"], game["words"], game["found"])
-    img_bio.seek(0)
-    
-    caption = get_sorted_caption(game["words"], game["found"])
-    btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
-    try:
-        await query.edit_message_media(
-            media=InputMediaPhoto(img_bio, caption=caption, parse_mode="HTML"), reply_markup=btn
-        )
-    except Exception:
-        pass
+            await update.message.reply_text("👾 <b>GAME OVER!</b>")
 
 async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        cursor = user_collection.find({"grid_points": {"$gt": 0}}).sort("grid_points", -1).limit(10)
-        top_users = await cursor.to_list(length=10)
-        
-        msg = "🏆 <b>GRID TOP LEADERBOARD</b> 🏆\n\n"
-        if not top_users:
-            msg += "<i>No players on the leaderboard yet! Play WordGrid to score points.</i>"
-        else:
-            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
-            for i, user in enumerate(top_users):
-                medal = medals[i] if i < len(medals) else "🏅"
-                name = user.get('first_name', 'Player')
-                points = user.get('grid_points', 0)
-                msg += f"{medal} <b>{name}</b> — <code>{points} pts</code>\n"
-        
-        await update.message.reply_text(msg, parse_mode="HTML")
-    except Exception as e:
-        LOGGER.error(f"Leaderboard error: {e}")
-        await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>", parse_mode="HTML")
+    cursor = user_collection.find({"grid_points": {"$gt": 0}}).sort("grid_points", -1).limit(10)
+    msg = "🏆 <b>GRID TOP LEADERBOARD</b> 🏆\n\n"
+    for i, user in enumerate(await cursor.to_list(length=10), 1):
+        msg += f"{['🥇','🥈','🥉'][i-1] if i<=3 else '🏅'} <b>{user.get('first_name', 'Player')}</b> — <code>{user.get('grid_points', 0)} pts</code>\n"
+    await update.message.reply_text(msg, parse_mode="HTML")
 
-# --- REGISTER HANDLERS ---
-application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid"], start_game))
-application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
+application.add_handler(CommandHandler(["playgrid", "grid"], start_game))
+application.add_handler(CommandHandler(["stopgame", "endgame"], stop_game))
 application.add_handler(CommandHandler("gridtop", leaderboard_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
-application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
-
-__mod_name__ = "WordGrid"
-__help__ = """
-🎮 <b>WordGrid Game Commands:</b>
-- /playgrid : Start a new word search game.
-- /stopgame : Stop the active game.
-- /gridtop: View the WordGrid Leaderboard.
-"""
+application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.edit_message_caption(caption=get_sorted_caption(active_games[u.callback_query.message.chat_id]["words"], active_games[u.callback_query.message.chat_id]["found"]), parse_mode="HTML") or u.callback_query.answer(), pattern="refresh_grid"))
