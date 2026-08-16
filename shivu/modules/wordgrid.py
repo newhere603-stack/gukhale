@@ -220,7 +220,7 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
     img = Image.new('RGBA', (img_size, img_size), color=bg_color) 
     draw = ImageDraw.Draw(img)
 
-    font = get_bold_font(66)
+    font = get_bold_font(60)
 
     for r in range(size + 1):
         draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill=line_color, width=3)
@@ -302,7 +302,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = chat.id
     if chat_id in active_games:
-        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>A WordGrid game is already running! Use /stopgame or /end to end it.</b>", parse_mode="HTML")
+        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>A WordGrid game is already running! Use /stopgame or /endgrid to end it.</b>", parse_mode="HTML")
         return
 
     cmd = update.message.text.split('@')[0].lower()
