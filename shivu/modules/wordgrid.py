@@ -179,7 +179,7 @@ def create_grid_image(grid, placed_words, found_words):
     img = Image.new('RGBA', (img_size, img_size), color='#0a0a0a') 
     draw = ImageDraw.Draw(img)
 
-    font = get_bold_font(65)
+    font = get_bold_font(70)
 
     for r in range(size + 1):
         draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill="#222222", width=3)
@@ -389,8 +389,8 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>", parse_mode="HTML")
 
 # --- REGISTER HANDLERS ---
-application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid", "new"], start_game))
-application.add_handler(CommandHandler(["stopgame", "end", "endgrid"], stop_game))
+application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid"], start_game))
+application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
 application.add_handler(CommandHandler("gridtop", leaderboard_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
@@ -398,7 +398,7 @@ application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="ref
 __mod_name__ = "WordGrid"
 __help__ = """
 🎮 <b>WordGrid Game Commands:</b>
-- /playgrid or /new: Start a new word search game.
-- /stopgame or /end: Stop the active game.
+- /playgrid: Start a new word search game.
+- /stopgame: Stop the active game.
 - /gridtop: View the WordGrid Leaderboard.
 """
