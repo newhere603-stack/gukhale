@@ -277,7 +277,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = chat.id
     if chat_id in active_games:
         del active_games[chat_id]
-        await update.message.reply_text("<tg-emoji emoji-id=\"6310066608689650607\">⬅️</tg-emoji> <b>WordGrid game has been stopped.</b>", parse_mode="HTML")
+        await update.message.reply_text("<tg-emoji emoji-id=\"630760375418\">🔥</tg-emoji> <b>WordGrid game has been stopped.</b>", parse_mode="HTML")
     else:
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
 
