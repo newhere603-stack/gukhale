@@ -180,7 +180,7 @@ def create_grid_image(grid, placed_words, found_words):
     img = Image.new('RGBA', (img_size, img_size), color='#0a0a0a') 
     draw = ImageDraw.Draw(img)
 
-    font = get_bold_font(67)
+    font = get_bold_font(66)
 
     for r in range(size + 1):
         draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill="#222222", width=3)
@@ -340,11 +340,11 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if is_last:
             sorted_scores = sorted(game["round_scores"].values(), key=lambda x: x["score"], reverse=True)
-            summary = "<tg-emoji emoji-id=\"5233477268617053735\">🕹</tg-emoji><tg-emoji emoji-id=\"5233546451950256512\">🕹</tg-emoji><tg-emoji emoji-id=\"5233604395354047945\">🕹</tg-emoji><tg-emoji emoji-id=\"5233544652358962131\">🕹</tg-emoji><tg-emoji emoji-id=\"5233619423444616550\">🕹</tg-emoji><tg-emoji emoji-id=\"5233286945731267091\">🕹</tg-emoji>\n\n<b>GAME OVER</b>\n\n<b>--- Round Summary ---</b>\n\n"
+            summary = "<tg-emoji emoji-id=\"5233477268617053735\">🕹</tg-emoji><tg-emoji emoji-id=\"5233546451950256512\">🕹</tg-emoji><tg-emoji emoji-id=\"5233604395354047945\">🕹</tg-emoji><tg-emoji emoji-id=\"5233544652358962131\">🕹</tg-emoji><tg-emoji emoji-id=\"5233619423444616550\">🕹</tg-emoji><tg-emoji emoji-id=\"5233286945731267091\">🕹</tg-emoji>\n\n<b>Round Summary</b>\n\n"
             medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
             for idx, data in enumerate(sorted_scores):
                 medal = medals[idx] if idx < len(medals) else "🏅"
-                summary += f"{medal} <b>{data['mention']}</b> — <b><code>{data['score']} points</code></b>\n"
+                summary += f"{medal} <b>{data['mention']}</b> - <b><code>{data['score']} points</code></b>\n"
             
             summary += "\n<b>Thanks for playing! Start another game by /playgrid.</b>"
             
