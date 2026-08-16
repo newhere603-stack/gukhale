@@ -363,7 +363,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = chat.id
     if chat_id in active_games:
         del active_games[chat_id]
-        await update.message.reply_text("✅ <b>The active game has been stopped by an admin. Start another with /new_hard or /new</b>", parse_mode="HTML")
+        await update.message.reply_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by an admin. Start another with /grid_hard or /grid</b>", parse_mode="HTML")
     else:
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
 
@@ -432,7 +432,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
             
         link = get_msg_link(chat, game["msg_id"])
-        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("Go to Grid ➡", url=link)]])
+        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("Go to Grid ⤻", url=link)]])
 
         await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         
@@ -506,7 +506,7 @@ def build_theme_keyboard(chat_id):
     keyboard = [
         [InlineKeyboardButton(auto_btn, callback_data="wg_set_theme_automatic")],
         [InlineKeyboardButton(blk_btn, callback_data="wg_set_theme_black"), InlineKeyboardButton(wht_btn, callback_data="wg_set_theme_white")],
-        [InlineKeyboardButton("⬅️ Back", callback_data="wg_back_settings")]
+        [InlineKeyboardButton("↻ Back", callback_data="wg_back_settings")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -518,7 +518,7 @@ async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("<b>Only admins can change these settings.</b>", parse_mode="HTML")
         return
         
-    text = "⚙️ <b>WordGrid Group Settings</b>\n\nManage the bot's behavior in this chat. Only admins can change these settings."
+    text = "<tg-emoji emoji-id=\"6307567066572396133\">⚙</tg-emoji> <b>WordGrid Group Settings</b>\n\nManage the bot's behavior in this chat. Only admins can change these settings."
     await update.message.reply_text(text, reply_markup=build_settings_keyboard(chat.id), parse_mode="HTML")
 
 async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -546,17 +546,17 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_reply_markup(reply_markup=build_settings_keyboard(chat.id))
         
     elif data == "wg_theme_menu":
-        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> - light during the day, dark at night.\n• <b>Black</b> — always dark board.\n• <b>White</b> — always light board.".format(settings["theme"].capitalize())
+        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> - light during the day, dark at night.\n• <b>Black</b> - always dark board.\n• <b>White</b> - always light board.".format(settings["theme"].capitalize())
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_theme_keyboard(chat.id))
         
     elif data.startswith("wg_set_theme_"):
         theme_val = data.split("_")[-1]
         settings["theme"] = theme_val
-        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> - light during the day, dark at night.\n• <b>Black</b> — always dark board.\n• <b>White</b> — always light board.".format(theme_val.capitalize())
+        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> - light during the day, dark at night.\n• <b>Black</b> - always dark board.\n• <b>White</b> - always light board.".format(theme_val.capitalize())
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_theme_keyboard(chat.id))
         
     elif data == "wg_back_settings":
-        text = "⚙️ <b>WordGrid Group Settings</b>\n\nManage the bot's behavior in this chat. Only admins can change these settings."
+        text = "<tg-emoji emoji-id=\"6307567066572396133\">⚙</tg-emoji> <b>WordGrid Group Settings</b>\n\nManage the bot's behavior in this chat. Only admins can change these settings."
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_settings_keyboard(chat.id))
         
     elif data == "wg_close":
