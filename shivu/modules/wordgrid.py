@@ -398,8 +398,8 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>", parse_mode="HTML")
 
 # --- REGISTER HANDLERS ---
-application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "new"], start_game))
-application.add_handler(CommandHandler(["stopgame", "end", "endgrid"], stop_game))
+application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid"], start_game))
+application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
 application.add_handler(CommandHandler("gridtop", leaderboard_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
