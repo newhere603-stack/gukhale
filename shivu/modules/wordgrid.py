@@ -4,6 +4,7 @@ import io
 import logging
 import html
 import requests
+from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
@@ -11,8 +12,9 @@ from shivu import application, user_collection
 
 LOGGER = logging.getLogger(__name__)
 
-# Game State Storage
+# Game State & Settings Storage
 active_games = {}
+chat_settings = {}  # Format: {chat_id: {"pin": True, "mark_words": True, "theme": "automatic"}}
 
 # ==========================================
 # 🛠 100% FOOLPROOF FONT LOADER (Direct to RAM)
@@ -34,7 +36,7 @@ def get_bold_font(size):
         except:
             return ImageFont.load_default()
 
-# Massive Word Pool (600+ words: 3 to 8 letters) to prevent boredom
+# Massive Word Pool
 WORD_LIST = [
     "ACT", "AGE", "AIR", "ALL", "ANT", "ANY", "ARM", "ART", "ASK", "BAD", "BAG", "BAT", "BEE", "BIG", "BOX", "BOY", 
     "BUG", "BUS", "BUT", "BUY", "CAN", "CAR", "CAT", "COW", "CRY", "CUP", "CUT", "DAY", "DOG", "DRY", "EAR", "EAT", 
@@ -141,9 +143,27 @@ WORD_LIST = [
     "VOLUME", "WALKER", "WEALTH", "WEAPON", "WEIGHT", "WINDOW", "WINTER", "WONDER", "WORKER", "WRITER", "YELLOW"
 ]
 
-def generate_game_grid(size=8, num_words=9):
+def get_chat_settings(chat_id):
+    if chat_id not in chat_settings:
+        chat_settings[chat_id] = {"pin": True, "mark_words": True, "theme": "automatic"}
+    return chat_settings[chat_id]
+
+def is_night_ist():
+    ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    return not (6 <= ist_now.hour < 18)
+
+def generate_game_grid(mode="normal"):
+    if mode == "easy":
+        size, num_words = 6, 6
+        valid_words = [w for w in WORD_LIST if 3 <= len(w) <= 5]
+    elif mode == "hard":
+        size, num_words = 10, 12
+        valid_words = [w for w in WORD_LIST if 5 <= len(w) <= 8]
+    else: # normal
+        size, num_words = 8, 9
+        valid_words = [w for w in WORD_LIST if 3 <= len(w) <= 7]
+
     grid = [['' for _ in range(size)] for _ in range(size)]
-    valid_words = [w for w in WORD_LIST if 3 <= len(w) <= size]
     chosen_words = random.sample(valid_words, min(num_words, len(valid_words)))
     placed_words = {}
     
@@ -151,7 +171,7 @@ def generate_game_grid(size=8, num_words=9):
     
     for word in chosen_words:
         placed = False
-        for _ in range(250):
+        for _ in range(300):
             d_r, d_c = random.choice(directions)
             r, c = random.randint(0, size - 1), random.randint(0, size - 1)
             
@@ -172,43 +192,58 @@ def generate_game_grid(size=8, num_words=9):
                 
     return grid, placed_words
 
-def create_grid_image(grid, placed_words, found_words):
+def create_grid_image(grid, placed_words, found_words, chat_id):
+    settings = get_chat_settings(chat_id)
+    theme = settings["theme"]
+    mark_words = settings["mark_words"]
+
+    if theme == "automatic":
+        is_dark = is_night_ist()
+    else:
+        is_dark = (theme == "black")
+
+    bg_color = "#0a0a0a" if is_dark else "#ffffff"
+    line_color = "#222222" if is_dark else "#cccccc"
+    text_color = "#ffffff" if is_dark else "#000000"
+
     cell_size = 100
     size = len(grid)
     img_size = cell_size * size
     
-    img = Image.new('RGBA', (img_size, img_size), color='#0a0a0a') 
+    img = Image.new('RGBA', (img_size, img_size), color=bg_color) 
     draw = ImageDraw.Draw(img)
 
     font = get_bold_font(66)
 
     for r in range(size + 1):
-        draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill="#222222", width=3)
-        draw.line([(r*cell_size, 0), (r*cell_size, img_size)], fill="#222222", width=3)
+        draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill=line_color, width=3)
+        draw.line([(r*cell_size, 0), (r*cell_size, img_size)], fill=line_color, width=3)
 
-    colors = [
-        (60, 150, 120, 180), (180, 70, 70, 180), (60, 150, 60, 180), 
-        (130, 90, 180, 180), (180, 140, 50, 180), (60, 100, 200, 180)
-    ]
-    
-    overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-    overlay_draw = ImageDraw.Draw(overlay)
+    if mark_words:
+        colors = [
+            (60, 150, 120, 180), (180, 70, 70, 180), (60, 150, 60, 180), 
+            (130, 90, 180, 180), (180, 140, 50, 180), (60, 100, 200, 180)
+        ]
+        
+        overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
 
-    for i, word in enumerate(found_words):
-        if word in placed_words:
-            coords = placed_words[word]
-            c1, r1 = coords[0][1] * cell_size + cell_size // 2, coords[0][0] * cell_size + cell_size // 2
-            c2, r2 = coords[-1][1] * cell_size + cell_size // 2, coords[-1][0] * cell_size + cell_size // 2
-            
-            color = colors[i % len(colors)]
-            line_width = 70
-            radius = line_width // 2
-            
-            overlay_draw.line([(c1, r1), (c2, r2)], fill=color, width=line_width)
-            overlay_draw.ellipse([c1 - radius, r1 - radius, c1 + radius, r1 + radius], fill=color)
-            overlay_draw.ellipse([c2 - radius, r2 - radius, c2 + radius, r2 + radius], fill=color)
+        for i, word in enumerate(found_words):
+            if word in placed_words:
+                coords = placed_words[word]
+                c1, r1 = coords[0][1] * cell_size + cell_size // 2, coords[0][0] * cell_size + cell_size // 2
+                c2, r2 = coords[-1][1] * cell_size + cell_size // 2, coords[-1][0] * cell_size + cell_size // 2
+                
+                color = colors[i % len(colors)]
+                line_width = 70
+                radius = line_width // 2
+                
+                overlay_draw.line([(c1, r1), (c2, r2)], fill=color, width=line_width)
+                overlay_draw.ellipse([c1 - radius, r1 - radius, c1 + radius, r1 + radius], fill=color)
+                overlay_draw.ellipse([c2 - radius, r2 - radius, c2 + radius, r2 + radius], fill=color)
 
-    img = Image.alpha_composite(img, overlay)
+        img = Image.alpha_composite(img, overlay)
+        
     draw = ImageDraw.Draw(img)
 
     for r in range(size):
@@ -222,7 +257,7 @@ def create_grid_image(grid, placed_words, found_words):
             text_x = x0 + (cell_size - w) / 2 - bbox[0]
             text_y = y0 + (cell_size - h) / 2 - bbox[1]
             
-            draw.text((text_x, text_y), letter, fill="#ffffff", font=font)
+            draw.text((text_x, text_y), letter, fill=text_color, font=font)
 
     img = img.convert("RGB")
     bio = io.BytesIO()
@@ -254,15 +289,23 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = chat.id
     if chat_id in active_games:
-        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>A WordGrid game is already running! Use /stopgame to end it.</b>", parse_mode="HTML")
+        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>A WordGrid game is already running! Use /stopgame or /end to end it.</b>", parse_mode="HTML")
         return
 
-    grid, placed_words = generate_game_grid()
+    cmd = update.message.text.split('@')[0].lower()
+    if 'easy' in cmd:
+        mode = "easy"
+    elif 'hard' in cmd:
+        mode = "hard"
+    else:
+        mode = "normal"
+
+    grid, placed_words = generate_game_grid(mode=mode)
     active_games[chat_id] = {
         "grid": grid, "words": placed_words, "found": [], "msg_id": None, "round_scores": {}
     }
 
-    img_bio = create_grid_image(grid, placed_words, [])
+    img_bio = create_grid_image(grid, placed_words, [], chat_id)
     img_bio.seek(0)
 
     caption = get_sorted_caption(placed_words, [])
@@ -271,11 +314,12 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await context.bot.send_photo(chat_id=chat_id, photo=img_bio, caption=caption, parse_mode="HTML", reply_markup=btn)
     active_games[chat_id]["msg_id"] = msg.message_id
 
-    # Automatically pin the game message when started
-    try:
-        await context.bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id)
-    except Exception as e:
-        LOGGER.error(f"Failed to pin game message: {e}")
+    settings = get_chat_settings(chat_id)
+    if settings["pin"]:
+        try:
+            await context.bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id)
+        except Exception as e:
+            LOGGER.error(f"Failed to pin game message: {e}")
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -284,9 +328,15 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = chat.id
     if chat_id in active_games:
         del active_games[chat_id]
-        await update.message.reply_text("<tg-emoji emoji-id=\"630760375418\">🔥</tg-emoji> <b>WordGrid game has been stopped.</b>", parse_mode="HTML")
+        await update.message.reply_text("✅ <b>The active game has been stopped by an admin. Start another with /new_hard or /new</b>", parse_mode="HTML")
     else:
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
+
+def get_msg_link(chat, msg_id):
+    if chat.username:
+        return f"https://t.me/{chat.username}/{msg_id}"
+    else:
+        return f"https://t.me/c/{str(chat.id).replace('-100', '', 1)}/{msg_id}"
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -314,7 +364,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
         mention = user.mention_html()
         
-        # Store user mention and score properly for summary
         if user.id not in game["round_scores"]:
             game["round_scores"][user.id] = {"mention": mention, "score": 0}
         game["round_scores"][user.id]["score"] += points
@@ -328,21 +377,24 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             LOGGER.error(f"Error updating grid points: {e}")
         
-        img_bio = create_grid_image(game["grid"], game["words"], game["found"])
+        img_bio = create_grid_image(game["grid"], game["words"], game["found"], chat_id)
         img_bio.seek(0)
         
         caption = get_sorted_caption(game["words"], game["found"])
-        btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
+        btn_refresh = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
         
         try:
             await context.bot.edit_message_media(
                 chat_id=chat_id, message_id=game["msg_id"],
-                media=InputMediaPhoto(img_bio, caption=caption, parse_mode="HTML"), reply_markup=btn
+                media=InputMediaPhoto(img_bio, caption=caption, parse_mode="HTML"), reply_markup=btn_refresh
             )
         except Exception:
             pass
+            
+        link = get_msg_link(chat, game["msg_id"])
+        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("Go to Grid ➡", url=link)]])
 
-        await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML")
+        await message.reply_text(f"☑️ <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         
         if is_last:
             sorted_scores = sorted(game["round_scores"].values(), key=lambda x: x["score"], reverse=True)
@@ -353,8 +405,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 summary += f"{medal} <b>{data['mention']}</b> +<b><code>{data['score']} points</code></b>\n"
             
             summary += "\n<b>Thanks for playing! Start another game by /playgrid.</b>"
-            
-            # Wrap in blockquote as requested
             blockquote_summary = f"<blockquote>{summary}</blockquote>"
             
             end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("Ꮮᴇᴀꜰ ꪜɪʟʟᴀɢᴇ", url="https://t.me/Anime_Group_hai")]])
@@ -371,7 +421,7 @@ async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     game = active_games[chat_id]
-    img_bio = create_grid_image(game["grid"], game["words"], game["found"])
+    img_bio = create_grid_image(game["grid"], game["words"], game["found"], chat_id)
     img_bio.seek(0)
     
     caption = get_sorted_caption(game["words"], game["found"])
@@ -382,6 +432,97 @@ async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
     except Exception:
         pass
+
+# --- SETTINGS MENU ---
+
+async def is_admin(chat, user_id, bot):
+    if chat.type == 'private':
+        return True
+    member = await bot.get_chat_member(chat.id, user_id)
+    return member.status in ['administrator', 'creator']
+
+def build_settings_keyboard(chat_id):
+    settings = get_chat_settings(chat_id)
+    pin_text = "✅ On" if settings["pin"] else "❌ Off"
+    mark_text = "✅ On" if settings["mark_words"] else "❌ Off"
+    theme_text = settings["theme"].capitalize()
+    
+    keyboard = [
+        [InlineKeyboardButton("📌 Pin", callback_data="ignore"), InlineKeyboardButton(pin_text, callback_data="wg_toggle_pin")],
+        [InlineKeyboardButton("📝 Mark Words", callback_data="ignore"), InlineKeyboardButton(mark_text, callback_data="wg_toggle_mark")],
+        [InlineKeyboardButton("🎨 Theme", callback_data="ignore"), InlineKeyboardButton(theme_text, callback_data="wg_theme_menu")],
+        [InlineKeyboardButton("✖️ Close", callback_data="wg_close")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def build_theme_keyboard(chat_id):
+    settings = get_chat_settings(chat_id)
+    t = settings["theme"]
+    
+    auto_btn = "Automatic ✅" if t == "automatic" else "Automatic"
+    blk_btn = "Black ✅" if t == "black" else "Black"
+    wht_btn = "White ✅" if t == "white" else "White"
+    
+    keyboard = [
+        [InlineKeyboardButton(auto_btn, callback_data="wg_set_theme_automatic")],
+        [InlineKeyboardButton(blk_btn, callback_data="wg_set_theme_black"), InlineKeyboardButton(wht_btn, callback_data="wg_set_theme_white")],
+        [InlineKeyboardButton("⬅️ Back", callback_data="wg_back_settings")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    
+    if not await is_admin(chat, user.id, context.bot):
+        await update.message.reply_text("<b>Only admins can change these settings.</b>", parse_mode="HTML")
+        return
+        
+    text = "⚙️ <b>WordGrid Group Settings</b>\n\nManage the bot's behavior in this chat. Only admins can change these settings."
+    await update.message.reply_text(text, reply_markup=build_settings_keyboard(chat.id), parse_mode="HTML")
+
+async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    chat = update.effective_chat
+    
+    if query.data == "ignore":
+        await query.answer()
+        return
+        
+    if not await is_admin(chat, user.id, context.bot):
+        await query.answer("Only admins can change these settings.", show_alert=True)
+        return
+
+    data = query.data
+    settings = get_chat_settings(chat.id)
+
+    if data == "wg_toggle_pin":
+        settings["pin"] = not settings["pin"]
+        await query.edit_message_reply_markup(reply_markup=build_settings_keyboard(chat.id))
+        
+    elif data == "wg_toggle_mark":
+        settings["mark_words"] = not settings["mark_words"]
+        await query.edit_message_reply_markup(reply_markup=build_settings_keyboard(chat.id))
+        
+    elif data == "wg_theme_menu":
+        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> — light during the day, dark at night (Indian Time, IST).\n• <b>Black</b> — always dark board.\n• <b>White</b> — always light board.".format(settings["theme"].capitalize())
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_theme_keyboard(chat.id))
+        
+    elif data.startswith("wg_set_theme_"):
+        theme_val = data.split("_")[-1]
+        settings["theme"] = theme_val
+        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> — light during the day, dark at night (Indian Time, IST).\n• <b>Black</b> — always dark board.\n• <b>White</b> — always light board.".format(theme_val.capitalize())
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_theme_keyboard(chat.id))
+        
+    elif data == "wg_back_settings":
+        text = "⚙️ <b>WordGrid Group Settings</b>\n\nManage the bot's behavior in this chat. Only admins can change these settings."
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_settings_keyboard(chat.id))
+        
+    elif data == "wg_close":
+        await query.message.delete()
+        
+    await query.answer()
 
 async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -432,18 +573,28 @@ async def refresh_leaderboard_callback(update: Update, context: ContextTypes.DEF
     except Exception as e:
         LOGGER.error(f"Leaderboard refresh error: {e}")
 
+
 # --- REGISTER HANDLERS ---
-application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid"], start_game))
+# New game commands mapped here!
+application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid", "grid_easy", "grid_hard"], start_game))
 application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
-application.add_handler(CommandHandler("gridtop", leaderboard_handler))
+application.add_handler(CommandHandler(["gridtop", "topgrid"], leaderboard_handler))
+application.add_handler(CommandHandler(["helpgrid", "gridsettings"], settings_cmd))
+
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
-application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
-application.add_handler(CallbackQueryHandler(refresh_leaderboard_callback, pattern="refresh_leaderboard"))
+application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="^refresh_grid$"))
+application.add_handler(CallbackQueryHandler(refresh_leaderboard_callback, pattern="^refresh_leaderboard$"))
+
+# Settings Callbacks
+application.add_handler(CallbackQueryHandler(settings_callback, pattern="^wg_|ignore"))
 
 __mod_name__ = "WordGrid"
 __help__ = """
 🎮 <b>WordGrid Game Commands:</b>
-- /playgrid: Start a new word search game.
-- /stopgame: Stop the active game.
+- /grid: Start normal mode.
+- /grid_easy: Start a smaller, easier board.
+- /grid_hard: Start a larger, tougher board.
+- /end: Stop the active game.
 - /gridtop: View the WordGrid Leaderboard.
+- /helpgrid: Manage chat settings for the game.
 """
