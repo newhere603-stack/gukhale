@@ -1,30 +1,10 @@
 import random
 import string
 import io
-import inspect
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-import shivu
-
-# Safely find the running Telegram Application instance (ignoring classes)
-pbot = None
-for attr_name in dir(shivu):
-    attr = getattr(shivu, attr_name)
-    if not inspect.isclass(attr) and hasattr(attr, "add_handler"):
-        pbot = attr
-        break
-
-if not pbot:
-    for name in ["application", "app", "bot", "pbot"]:
-        if hasattr(shivu, name):
-            obj = getattr(shivu, name)
-            if not inspect.isclass(obj) and hasattr(obj, "add_handler"):
-                pbot = obj
-                break
-
-if not pbot:
-    raise ImportError("Could not find a valid Telegram Application instance in shivu package!")
+from shivu import application
 
 # Game State Storage
 active_games = {}
@@ -247,10 +227,10 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No active WordGrid game to stop.")
 
 # --- REGISTER HANDLERS ---
-pbot.add_handler(CommandHandler(["play", "new", "wordgrid"], start_game))
-pbot.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
-pbot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses))
-pbot.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
+application.add_handler(CommandHandler(["play", "new", "wordgrid"], start_game))
+application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses))
+application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
 
 __mod_name__ = "WordGrid"
 __help__ = """
