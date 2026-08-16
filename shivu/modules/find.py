@@ -22,10 +22,10 @@ OWNER_ID = 7657218453
 # Ab humne keys ko sirf lowercase text mein rakha hai taaki exact match ki problem na aaye
 DEFAULT_PRICES = {
     "common": 1000, "rare": 3200, "medium": 2900, 
-    "legendary": 5000, "celestial": 70000, "spicy": 15000, 
-    "exclusive": 12000, "mythic": 35000, "premium edition": 20000, 
+    "legendary": 5000, "celestial": 70000, "spicy": 59000, 
+    "exclusive": 12000, "mythic": 35000, "premium edition": 250000, 
     "sweet": 52000, "valentine": 90000, "winter": 55000, 
-    "neon": 67000, "summer": 60000, "cosmic": 90000
+    "neon": 67000, "summer": 60000, "cosmic": 580000
 }
 
 PREMIUM_RARITIES = {
