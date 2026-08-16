@@ -19,8 +19,8 @@ RARITY_MAP = {
     "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
     "legendary": ("🟡", '<tg-emoji emoji-id="6334705977073337764">🟡</tg-emoji>', "Legendary"),
     "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"), 
-    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"), 
     "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"), 
     "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"), 
     "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"), 
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
@@ -41,10 +41,15 @@ def to_small_caps(text: str) -> str:
     return str(text).translate(tr)
 
 def get_rarity_display(rarity_raw: str) -> str:
-    key = str(rarity_raw).lower().strip()
-    if key in RARITY_MAP:
-        _, premium_emoji, display_name = RARITY_MAP[key]
-        return f"{premium_emoji} <b>{to_small_caps(display_name)}</b>"
+    if not rarity_raw:
+        return f"<b>{to_small_caps('Unknown')}</b>"
+        
+    raw_str = str(rarity_raw).lower().strip()
+    
+    for key, (_, premium_emoji, display_name) in RARITY_MAP.items():
+        if key in raw_str or display_name.lower() in raw_str:
+            return f"{premium_emoji} <b>{to_small_caps(display_name)}</b>"
+            
     return f"<b>{to_small_caps(str(rarity_raw))}</b>"
 
 @dataclass
@@ -55,7 +60,7 @@ class CharacterGiftResult:
     char_id: str
 
 async def send_character_media(msg, media_url: str, caption: str):
-    """Photo aur Video dono me auto-switch karne ke liye wrapper"""
+    """Photo aur Video / GIF automatic handle karta hai"""
     url_lower = media_url.lower()
     if url_lower.endswith(('.mp4', '.webm', '.mov', '.mkv')):
         await msg.reply_video(video=media_url, caption=caption, parse_mode=ParseMode.HTML)
@@ -65,7 +70,6 @@ async def send_character_media(msg, media_url: str, caption: str):
         try:
             await msg.reply_photo(photo=media_url, caption=caption, parse_mode=ParseMode.HTML)
         except TelegramError:
-            # Agar URL bina extension ki video file nikli toh fallback to video
             await msg.reply_video(video=media_url, caption=caption, parse_mode=ParseMode.HTML)
 
 async def give_character(receiver_id: int, character_id: str) -> CharacterGiftResult:
