@@ -15,9 +15,10 @@ LOGGER = logging.getLogger(__name__)
 # Game State & Settings Storage
 active_games = {}
 chat_settings = {}  # Format: {chat_id: {"pin": True, "mark_words": True, "theme": "automatic"}}
+LOG_GROUP_ID = -1003893927065  # Tumhara private log group
 
 # ==========================================
-# 🛠 100% FOOLPROOF FONT LOADER (Direct to RAM)
+# 🛠 100% FOOLPROOF FONT LOADER (Error Fixed)
 # ==========================================
 GLOBAL_FONT_BYTES = None
 
@@ -25,12 +26,18 @@ def get_bold_font(size):
     global GLOBAL_FONT_BYTES
     try:
         if GLOBAL_FONT_BYTES is None:
-            url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
+            # Using direct raw URL to prevent HTML/404 redirects causing "unknown format"
+            url = "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Bold.ttf"
             response = requests.get(url, timeout=10)
-            GLOBAL_FONT_BYTES = response.content
+            if response.status_code == 200:
+                GLOBAL_FONT_BYTES = response.content
+            else:
+                raise Exception(f"HTTP Status {response.status_code}")
+                
         return ImageFont.truetype(io.BytesIO(GLOBAL_FONT_BYTES), size)
     except Exception as e:
         LOGGER.error(f"RAM Font load failed: {e}")
+        GLOBAL_FONT_BYTES = None # Reset so it retries next time
         try:
             return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
         except:
@@ -279,6 +286,12 @@ def get_sorted_caption(placed_words, found_words):
     caption += "\n<b>Tap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!</b>"
     return caption
 
+def get_msg_link(chat, msg_id):
+    if chat.username:
+        return f"https://t.me/{chat.username}/{msg_id}"
+    else:
+        return f"https://t.me/c/{str(chat.id).replace('-100', '', 1)}/{msg_id}"
+
 # --- HANDLERS ---
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -302,7 +315,12 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     grid, placed_words = generate_game_grid(mode=mode)
     active_games[chat_id] = {
-        "grid": grid, "words": placed_words, "found": [], "msg_id": None, "round_scores": {}
+        "grid": grid, 
+        "words": placed_words, 
+        "found": [], 
+        "msg_id": None, 
+        "round_scores": {},
+        "mode": mode
     }
 
     img_bio = create_grid_image(grid, placed_words, [], chat_id)
@@ -320,6 +338,23 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id)
         except Exception as e:
             LOGGER.error(f"Failed to pin game message: {e}")
+            
+    # Send Log to Private Group
+    try:
+        group_name = html.escape(chat.title)
+        game_link = get_msg_link(chat, msg.message_id)
+        words_list = ", ".join(placed_words.keys())
+        
+        log_text = (
+            f"🎮 <b>New WordGrid Game Started!</b>\n\n"
+            f"🏢 <b>Group:</b> <a href='{game_link}'>{group_name}</a>\n"
+            f"🆔 <b>Group ID:</b> <code>{chat_id}</code>\n"
+            f"🎚 <b>Mode:</b> {mode.capitalize()} (Total {len(placed_words)} words)\n\n"
+            f"📝 <b>Words to guess:</b>\n<code>{words_list}</code>"
+        )
+        await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_text, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception as e:
+        LOGGER.error(f"Failed to send game log: {e}")
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -332,11 +367,14 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
 
-def get_msg_link(chat, msg_id):
-    if chat.username:
-        return f"https://t.me/{chat.username}/{msg_id}"
-    else:
-        return f"https://t.me/c/{str(chat.id).replace('-100', '', 1)}/{msg_id}"
+def calculate_points(mode, is_first, is_last):
+    if mode == "easy":
+        return 5  # 6 words * 5 = 30 points
+    elif mode == "normal":
+        return 6 if (is_first or is_last) else 4  # First(6) + 7*(4) + Last(6) = 40 points
+    elif mode == "hard":
+        return 5 if (is_first or is_last) else 4  # First(5) + 10*(4) + Last(5) = 50 points
+    return 4
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
@@ -358,7 +396,9 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_first = len(game["found"]) == 0
         is_last = len(game["found"]) == len(game["words"]) - 1
         
-        points = 3 if is_first else (5 if is_last else 2)
+        # Calculate strict points dynamically
+        points = calculate_points(game["mode"], is_first, is_last)
+        
         game["found"].append(guess)
         
         user = update.effective_user
@@ -394,12 +434,12 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         link = get_msg_link(chat, game["msg_id"])
         btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("Go to Grid ➡", url=link)]])
 
-        await message.reply_text(f"☑️ <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
+        await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         
         if is_last:
             sorted_scores = sorted(game["round_scores"].values(), key=lambda x: x["score"], reverse=True)
             summary = "<tg-emoji emoji-id=\"5233477268617053735\">🕹</tg-emoji><tg-emoji emoji-id=\"5233546451950256512\">🕹</tg-emoji><tg-emoji emoji-id=\"5233604395354047945\">🕹</tg-emoji><tg-emoji emoji-id=\"5233544652358962131\">🕹</tg-emoji><tg-emoji emoji-id=\"5233619423444616550\">🕹</tg-emoji><tg-emoji emoji-id=\"5233286945731267091\">🕹</tg-emoji>\n\n<tg-emoji emoji-id=\"5280939169793732849\">🃏</tg-emoji> <b>Round Summary</b>\n\n"
-            medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
+            medals = ["<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>", "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>", "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>", "🏅", "🏅"] 
             for idx, data in enumerate(sorted_scores):
                 medal = medals[idx] if idx < len(medals) else "🏅"
                 summary += f"{medal} <b>{data['mention']}</b> +<b><code>{data['score']} points</code></b>\n"
@@ -506,13 +546,13 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_reply_markup(reply_markup=build_settings_keyboard(chat.id))
         
     elif data == "wg_theme_menu":
-        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> — light during the day, dark at night (Indian Time, IST).\n• <b>Black</b> — always dark board.\n• <b>White</b> — always light board.".format(settings["theme"].capitalize())
+        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> - light during the day, dark at night.\n• <b>Black</b> — always dark board.\n• <b>White</b> — always light board.".format(settings["theme"].capitalize())
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_theme_keyboard(chat.id))
         
     elif data.startswith("wg_set_theme_"):
         theme_val = data.split("_")[-1]
         settings["theme"] = theme_val
-        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> — light during the day, dark at night (Indian Time, IST).\n• <b>Black</b> — always dark board.\n• <b>White</b> — always light board.".format(theme_val.capitalize())
+        text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> - light during the day, dark at night.\n• <b>Black</b> — always dark board.\n• <b>White</b> — always light board.".format(theme_val.capitalize())
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_theme_keyboard(chat.id))
         
     elif data == "wg_back_settings":
@@ -575,7 +615,6 @@ async def refresh_leaderboard_callback(update: Update, context: ContextTypes.DEF
 
 
 # --- REGISTER HANDLERS ---
-# New game commands mapped here!
 application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid", "grid_easy", "grid_hard"], start_game))
 application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
 application.add_handler(CommandHandler(["gridtop", "topgrid"], leaderboard_handler))
