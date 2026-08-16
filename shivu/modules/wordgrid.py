@@ -2,6 +2,7 @@ import random
 import string
 import io
 import logging
+import html
 import requests
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
@@ -335,13 +336,13 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if is_last:
             sorted_scores = sorted(game["round_scores"].items(), key=lambda x: x[1], reverse=True)
-            summary = "👾 <b>GAME OVER</b> 👾\n\n--- Round Summary ---\n\n"
+            summary = "<tg-emoji emoji-id=\"5233477268617053735\">🕹</tg-emoji><tg-emoji emoji-id=\"5233546451950256512\">🕹</tg-emoji><tg-emoji emoji-id=\"5233604395354047945\">🕹</tg-emoji><tg-emoji emoji-id=\"5233544652358962131\">🕹</tg-emoji><tg-emoji emoji-id=\"5233619423444616550\">🕹</tg-emoji><tg-emoji emoji-id=\"5233286945731267091\">🕹</tg-emoji>\n\n<b> Round Summary </b>\n\n"
             medals = ["🥇", "🥈", "🥉", "🏅", "🏅"] 
             for idx, (name, score) in enumerate(sorted_scores):
                 summary += f"{medals[idx] if idx < len(medals) else '🏅'} {name}: {score} points\n"
             
             summary += "\nThanks for playing! Start another game by /playgrid."
-            end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("SUPPORT GROUP", url="https://t.me/LeafVillage")]])
+            end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("Ꮮᴇᴀꜰ ꪜɪʟʟᴀɢᴇ", url="https://t.me/Anime_Group_hai")]])
             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="HTML", reply_markup=end_btn)
             del active_games[chat_id]
 
@@ -374,19 +375,47 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         msg = "🏆 <b>GRID TOP LEADERBOARD</b> 🏆\n\n"
         if not top_users:
-            msg += "<i>No players on the leaderboard yet! Play WordGrid to score points.</i>"
+            msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
         else:
             medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
             for i, user in enumerate(top_users):
                 medal = medals[i] if i < len(medals) else "🏅"
-                name = user.get('first_name', 'Player')
+                uid = user.get('id')
+                name = html.escape(user.get('first_name', 'Player'))
+                user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else f"<b>{name}</b>"
                 points = user.get('grid_points', 0)
-                msg += f"{medal} <b>{name}</b> — <code>{points} pts</code>\n"
+                msg += f"{medal} <b>{user_mention}</b> — <b><code>{points} pts</code></b>\n"
         
-        await update.message.reply_text(msg, parse_mode="HTML")
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh Leaderboard", callback_data="refresh_leaderboard")]])
+        await update.message.reply_text(msg, parse_mode="HTML", reply_markup=btn)
     except Exception as e:
         LOGGER.error(f"Leaderboard error: {e}")
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>", parse_mode="HTML")
+
+async def refresh_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("Leaderboard refreshed!")
+    try:
+        cursor = user_collection.find({"grid_points": {"$gt": 0}}).sort("grid_points", -1).limit(10)
+        top_users = await cursor.to_list(length=10)
+        
+        msg = "🏆 <b>GRID TOP LEADERBOARD</b> 🏆\n\n"
+        if not top_users:
+            msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
+        else:
+            medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+            for i, user in enumerate(top_users):
+                medal = medals[i] if i < len(medals) else "🏅"
+                uid = user.get('id')
+                name = html.escape(user.get('first_name', 'Player'))
+                user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else f"<b>{name}</b>"
+                points = user.get('grid_points', 0)
+                msg += f"{medal} <b>{user_mention}</b> — <b><code>{points} pts</code></b>\n"
+        
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh", callback_data="refresh_leaderboard")]])
+        await query.edit_message_text(msg, parse_mode="HTML", reply_markup=btn)
+    except Exception as e:
+        LOGGER.error(f"Leaderboard refresh error: {e}")
 
 # --- REGISTER HANDLERS ---
 application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid"], start_game))
@@ -394,6 +423,7 @@ application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
 application.add_handler(CommandHandler("gridtop", leaderboard_handler))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="refresh_grid"))
+application.add_handler(CallbackQueryHandler(refresh_leaderboard_callback, pattern="refresh_leaderboard"))
 
 __mod_name__ = "WordGrid"
 __help__ = """
