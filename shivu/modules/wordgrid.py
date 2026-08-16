@@ -271,6 +271,12 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await context.bot.send_photo(chat_id=chat_id, photo=img_bio, caption=caption, parse_mode="HTML", reply_markup=btn)
     active_games[chat_id]["msg_id"] = msg.message_id
 
+    # Automatically pin the game message when started
+    try:
+        await context.bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id)
+    except Exception as e:
+        LOGGER.error(f"Failed to pin game message: {e}")
+
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if not chat or chat.type not in ["group", "supergroup"]:
