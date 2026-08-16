@@ -388,7 +388,7 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         cursor = user_collection.find({"grid_points": {"$gt": 0}}).sort("grid_points", -1).limit(10)
         top_users = await cursor.to_list(length=10)
         
-        msg = "🏆 <b>GRID TOP LEADERBOARD</b> 🏆\n\n"
+        msg = "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>GRID TOP LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
         else:
@@ -399,7 +399,7 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
                 name = html.escape(user.get('first_name', 'Player'))
                 user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else f"<b>{name}</b>"
                 points = user.get('grid_points', 0)
-                msg += f"{medal} <b>{user_mention}</b> — <b><code>{points} pts</code></b>\n"
+                msg += f"{medal} <b>{user_mention}</b> - <b><code>{points} pts</code></b>\n"
         
         btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh", callback_data="refresh_leaderboard")]])
         await update.message.reply_text(msg, parse_mode="HTML", reply_markup=btn)
@@ -414,7 +414,7 @@ async def refresh_leaderboard_callback(update: Update, context: ContextTypes.DEF
         cursor = user_collection.find({"grid_points": {"$gt": 0}}).sort("grid_points", -1).limit(10)
         top_users = await cursor.to_list(length=10)
         
-        msg = "🏆 <b>GRID TOP LEADERBOARD</b> 🏆\n\n"
+        msg = "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>GRID TOP LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
         else:
@@ -425,7 +425,7 @@ async def refresh_leaderboard_callback(update: Update, context: ContextTypes.DEF
                 name = html.escape(user.get('first_name', 'Player'))
                 user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else f"<b>{name}</b>"
                 points = user.get('grid_points', 0)
-                msg += f"{medal} <b>{user_mention}</b> — <b><code>{points} pts</code></b>\n"
+                msg += f"{medal} <b>{user_mention}</b> - <b><code>{points} pts</code></b>\n"
         
         btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh", callback_data="refresh_leaderboard")]])
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=btn)
