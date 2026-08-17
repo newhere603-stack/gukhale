@@ -172,9 +172,9 @@ def card_caption(char: Char, gcount: int) -> str:
     return (
         f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {to_small_caps('ultimate w-h info')} <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji></b>\n"
         "\n"
-        f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> {bold_sc('name ⬡')} <b>(char.name)</b>\n"
-        f"{emoji} {bold_sc('rarity ⬡')} <b>(text)</b>\n"
-        f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> {bold_sc('anime ⬡')} <b>(char.anime)</b>\n"
+        f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> {bold_sc('name ⬡')} <b>{escape(char.name)}</b>\n"
+        f"{emoji} {bold_sc('rarity ⬡')}<b>{escape(text)}</b>\n"
+        f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> {bold_sc('anime ⬡')} <b>{escape(char.anime)}</b>\n"
         f"<tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> {bold_sc('char id ⬡')} <code>{char.id}</code>\n"
         "\n"
         f"<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> {bold_sc('globally grabbed :')} <code>{gcount}x</code>"
@@ -207,13 +207,12 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
 
 def pagination_kb(cid: str, page: int, total: int, back=False) -> InlineKeyboardMarkup:
     kb = []
-    if total > 1:
-        row = []
-        if page > 0: row.append(InlineKeyboardButton(to_small_caps("⋞ prev"), callback_data=f"owners_{cid}_{page-1}"))
-        if page < total - 1: row.append(InlineKeyboardButton(to_small_caps("next ⋟"), callback_data=f"owners_{cid}_{page+1}"))
-        if row: kb.append(row)
-        
     if back:
+        if total > 1:
+            row = []
+            if page > 0: row.append(InlineKeyboardButton(to_small_caps("⋞ prev"), callback_data=f"owners_{cid}_{page-1}"))
+            if page < total - 1: row.append(InlineKeyboardButton(to_small_caps("next ⋟"), callback_data=f"owners_{cid}_{page+1}"))
+            if row: kb.append(row)
         kb.append([InlineKeyboardButton(to_small_caps("⟲ back to info"), callback_data=f"back_{cid}")])
     else:
         kb.append([InlineKeyboardButton(to_small_caps("owners"), callback_data=f"owners_{cid}_0")])
@@ -264,7 +263,6 @@ async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
 
 # --- ✨ SECURE FILE ID EXTRACTOR ---
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # 🚫 NO REPLY/SILENT DROP FOR NORMAL USERS
     if update.effective_user.id != 7657218453:
         return 
 
