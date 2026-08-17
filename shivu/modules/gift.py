@@ -163,7 +163,7 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
         f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
         f"{Style.LINE}\n"
-        f"<b><i>{to_small_caps(f'<tg-emoji emoji-id=\"5451732530048802485\">⏳</tg-emoji> confirm within {GIFT_TIMEOUT}s to send.')}</i></b>"
+        f"<b><i>{to_small_caps(f'<tg-emoji emoji-id="5451732530048802485">⏳</tg-emoji> confirm within {GIFT_TIMEOUT}s to send.')}</i></b>"
     )
 
     keyboard = [[
