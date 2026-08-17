@@ -7,7 +7,7 @@ from shivu import application, db
 # --- DATABASE COLLECTIONS ---
 user_collection = db['user_collection_lmaoooo']
 market_collection = db['market_collection'] 
-bot_settings_collection = db['bot_settings'] # Naya collection toggle settings save rakhne ke liye
+bot_settings_collection = db['bot_settings'] 
 
 # --- HELPER TO GET LIVE CHARACTER FROM ANY COLLECTION ---
 async def get_live_character_doc(char_id):
@@ -73,7 +73,6 @@ async def get_pmarket_keyboard(user_id):
     
     keyboard = []
     if exchange_enabled:
-        # Changed callback to point to the sub-menu
         keyboard.append([InlineKeyboardButton("♻️ ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}")])
     
     keyboard.append([
@@ -111,7 +110,7 @@ async def toggle_exchange_cmd(update: Update, context: CallbackContext):
         upsert=True
     )
     
-    status = "ᴇɴᴀʙʟᴇᴅ ✅" if new_state else "ᴅɪsᴀʙʟᴇᴅ"
+    status = "ᴇɴᴀʙʟᴇᴅ ✅" if new_state else "ᴅɪsᴀʙʟᴇᴅ ❌"
     await update.message.reply_html(f"<b>PMarket ᴇxᴄʜᴀɴɢᴇ ʙᴜᴛᴛᴏɴ ʜᴀs ʙᴇᴇɴ {status}.</b>")
 
 
@@ -373,7 +372,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     # --------------------------
     elif action == "pm_exc_conf":
         exc_type = parts[1]  # "t2c" or "c2t"
-        amount = int(parts[2])
+        amount = int(parts[2]) # Ye amount ab strictly sirf tokens count hai
         
         user = await user_collection.find_one({'id': user_id})
         tokens = user.get('tokens', 0) if user else 0
@@ -381,21 +380,25 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_exc_menu:{user_id}")]])
 
+        # 1. GET COINS (Sell Tokens, Get Coins)
         if exc_type == "t2c":
             if tokens < amount:
                 await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
                 return
             coins_to_add = amount * 2500
+            # Token minus (-), Coins plus (+)
             await user_collection.update_one({'id': user_id}, {'$inc': {'tokens': -amount, 'balance': coins_to_add}})
             msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{coins_to_add:,}</code> ᴄᴏɪɴs!</b>"
 
+        # 2. GET TOKENS (Spend Coins, Buy Tokens)
         elif exc_type == "c2t":
             coins_to_deduct = amount * 2500
             if coins < coins_to_deduct:
                 await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
                 return
+            # Coins minus (-), Tokens plus (+)
             await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -coins_to_deduct, 'tokens': amount}})
-            msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{coins_to_deduct:,}</code> ᴄᴏɪɴs ғᴏʀ <code>{amount}</code> ᴛᴏᴋᴇɴs!</b>"
+            msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ sᴘᴇɴᴛ <code>{coins_to_deduct:,}</code> ᴄᴏɪɴs ᴛᴏ ʙᴜʏ <code>{amount}</code> ᴛᴏᴋᴇɴs!</b>"
         
         await update_menu(query, msg, kb)
 
@@ -504,9 +507,10 @@ async def exchange_start_t2c(update: Update, context: CallbackContext):
     tokens = user.get('tokens', 0) if user else 0
 
     await query.message.reply_text(
-        f"<b>💱 Sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏғ ᴛᴏᴋᴇɴs ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ ғᴏʀ ᴄᴏɪɴs:</b>\n\n"
-        f"<i>1 ᴛᴏᴋᴇɴ = 2,500 ᴄᴏɪɴs</i>\n"
+        f"<b>💱 ʜᴏᴡ ᴍᴀɴʏ ᴛᴏᴋᴇɴs ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴇʟʟ ғᴏʀ ᴄᴏɪɴs?</b>\n\n"
+        f"<i>1 ᴛᴏᴋᴇɴ = 2,500 ᴄᴏɪɴs.</i>\n"
         f"<b>ʏᴏᴜ ʜᴀᴠᴇ:</b> <code>{tokens:,}</code> ᴛᴏᴋᴇɴs\n\n"
+        f"(Eɴᴛᴇʀ ᴛʜᴇ ɴᴜᴍʙᴇʀ ᴏғ ᴛᴏᴋᴇɴs, ᴇ.ɢ. ᴛʏᴘᴇ <b>1</b> ᴛᴏ ɢᴇᴛ 2500 ᴄᴏɪɴs)\n"
         f"(ᴛʏᴘᴇ /cancel ᴛᴏ ᴀʙᴏʀᴛ ᴛʜᴇ ᴘʀᴏᴄᴇss)",
         parse_mode="HTML"
     )
@@ -530,9 +534,10 @@ async def exchange_start_c2t(update: Update, context: CallbackContext):
     coins = user.get('balance', 0) if user else 0
 
     await query.message.reply_text(
-        f"<b>💱 Sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏғ ᴛᴏᴋᴇɴs ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙᴜʏ:</b>\n\n"
-        f"<i>1 ᴛᴏᴋᴇɴ = 2,500 ᴄᴏɪɴs</i>\n"
+        f"<b>💱 ʜᴏᴡ ᴍᴀɴʏ ᴛᴏᴋᴇɴs ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙᴜʏ ᴡɪᴛʜ ᴄᴏɪɴs?</b>\n\n"
+        f"<i>1 ᴛᴏᴋᴇɴ = 2,500 ᴄᴏɪɴs.</i>\n"
         f"<b>ʏᴏᴜ ʜᴀᴠᴇ:</b> <code>{coins:,}</code> ᴄᴏɪɴs\n\n"
+        f"(Eɴᴛᴇʀ ᴛʜᴇ ɴᴜᴍʙᴇʀ ᴏғ ᴛᴏᴋᴇɴs, ᴇ.ɢ. ᴛʏᴘᴇ <b>1</b> ᴛᴏ sᴘᴇɴᴅ 2500 ᴄᴏɪɴs)\n"
         f"(ᴛʏᴘᴇ /cancel ᴛᴏ ᴀʙᴏʀᴛ ᴛʜᴇ ᴘʀᴏᴄᴇss)",
         parse_mode="HTML"
     )
@@ -550,6 +555,7 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
         await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
         return WAITING_FOR_EXCHANGE_AMOUNT
 
+    # Amount refers strictly to TOKENS requested
     amount = int(amount_text)
     user = await user_collection.find_one({'id': user_id})
     tokens = user.get('tokens', 0) if user else 0
@@ -560,14 +566,14 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
             await update.message.reply_text(f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs! ʏᴏᴜ ᴏɴʟʏ ʜᴀᴠᴇ <code>{tokens:,}</code> ᴛᴏᴋᴇɴs.</b>", parse_mode='HTML')
             return WAITING_FOR_EXCHANGE_AMOUNT
         total_coins = amount * 2500
-        text_msg = f"<i>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{total_coins:,}</code> ᴄᴏɪɴs?</i>"
+        text_msg = f"<i>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ <code>{amount}</code> ᴛᴏᴋᴇɴs ᴛᴏ ɢᴇᴛ <code>{total_coins:,}</code> ᴄᴏɪɴs?</i>"
         
     elif exc_type == 'c2t':
         cost = amount * 2500
         if cost > coins:
             await update.message.reply_text(f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs! ʏᴏᴜ ᴏɴʟʏ ʜᴀᴠᴇ <code>{coins:,}</code> ᴄᴏɪɴs.</b>\n<i>(ʏᴏᴜ ɴᴇᴇᴅ <code>{cost:,}</code> ᴄᴏɪɴs ᴛᴏ ʙᴜʏ <code>{amount}</code> ᴛᴏᴋᴇɴs)</i>", parse_mode='HTML')
             return WAITING_FOR_EXCHANGE_AMOUNT
-        text_msg = f"<i>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ <code>{cost:,}</code> ᴄᴏɪɴs ғᴏʀ <code>{amount}</code> ᴛᴏᴋᴇɴs?</i>"
+        text_msg = f"<i>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴘᴇɴᴅ <code>{cost:,}</code> ᴄᴏɪɴs ᴛᴏ ɢᴇᴛ <code>{amount}</code> ᴛᴏᴋᴇɴs?</i>"
         
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("ᴄᴏɴғɪʀᴍ", callback_data=f"pm_exc_conf:{exc_type}:{amount}:{user_id}")],
@@ -647,5 +653,4 @@ application.add_handler(exchange_conv, group=-2)
 
 application.add_handler(CommandHandler(["pmarket", "shop"], pmarket_command), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd), group=0)
-# Updated pattern to catch the new callbacks securely
 application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):'), group=0)
