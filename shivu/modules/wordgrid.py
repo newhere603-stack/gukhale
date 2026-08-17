@@ -15,6 +15,7 @@ LOGGER = logging.getLogger(__name__)
 # Game State & Settings Storage
 active_games = {}
 chat_settings = {}  # Format: {chat_id: {"pin": True, "mark_words": True, "theme": "automatic"}}
+stop_votes = {}  # NAYA: Voting track karne ke liye
 LOG_GROUP_ID = -1003893927065  # Tumhara private log group
 
 # ==========================================
@@ -292,6 +293,13 @@ def get_msg_link(chat, msg_id):
     else:
         return f"https://t.me/c/{str(chat.id).replace('-100', '', 1)}/{msg_id}"
 
+# Naya function - Admin check karne ke liye (pehle se tha bas thoda adjust kiya gaya hai)
+async def is_admin(chat, user_id, bot):
+    if chat.type == 'private':
+        return True
+    member = await bot.get_chat_member(chat.id, user_id)
+    return member.status in ['administrator', 'creator']
+
 # --- HANDLERS ---
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -314,6 +322,9 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mode = "normal"
 
     grid, placed_words = generate_game_grid(mode=mode)
+    
+    stop_votes.pop(chat_id, None) # NAYA: Purane votes clear karna
+    
     active_games[chat_id] = {
         "grid": grid, 
         "words": placed_words, 
@@ -356,16 +367,76 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         LOGGER.error(f"Failed to send game log: {e}")
 
+# NAYA: Stop game modified with voting system
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
+    user = update.effective_user
+    
     if not chat or chat.type not in ["group", "supergroup"]:
         return
+        
     chat_id = chat.id
-    if chat_id in active_games:
+    if chat_id not in active_games:
+        await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
+        return
+
+    # Check admin status
+    is_adm = await is_admin(chat, user.id, context.bot)
+    
+    if is_adm:
         del active_games[chat_id]
+        stop_votes.pop(chat_id, None)
         await update.message.reply_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by an admin. Start another with /grid_hard or /grid</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
+        # Start voting process for normal users
+        if chat_id not in stop_votes:
+            stop_votes[chat_id] = set()
+            
+        stop_votes[chat_id].add(user.id)
+        votes_needed = 3
+        current_votes = len(stop_votes[chat_id])
+        
+        if current_votes >= votes_needed:
+            del active_games[chat_id]
+            stop_votes.pop(chat_id, None)
+            await update.message.reply_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by community vote (3/3). Start another with /grid_hard or /grid</b>", parse_mode="HTML")
+        else:
+            btn = InlineKeyboardMarkup([[InlineKeyboardButton(f"Vote to Stop ({current_votes}/{votes_needed})", callback_data="wg_vote_stop")]])
+            text = f"<b>🛑 {html.escape(user.first_name)} wants to stop the game.</b>\n\nNon-admins need <b>{votes_needed} votes</b> to stop the game. \n\nClick below to vote!"
+            await update.message.reply_text(text, parse_mode="HTML", reply_markup=btn)
+
+# NAYA: Voting callback handler
+async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    chat_id = query.message.chat_id
+    user = update.effective_user
+    
+    if chat_id not in active_games:
+        await query.answer("No active game running!", show_alert=True)
+        await query.message.delete()
+        return
+        
+    if chat_id not in stop_votes:
+        stop_votes[chat_id] = set()
+        
+    if user.id in stop_votes[chat_id]:
+        await query.answer("You have already voted to stop the game!", show_alert=True)
+        return
+        
+    stop_votes[chat_id].add(user.id)
+    votes_needed = 3
+    current_votes = len(stop_votes[chat_id])
+    
+    if current_votes >= votes_needed:
+        del active_games[chat_id]
+        stop_votes.pop(chat_id, None)
+        await query.answer("Game stopped by vote!", show_alert=True)
+        await query.edit_message_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by community vote (3/3). Start another with /grid_hard or /grid</b>", parse_mode="HTML")
+    else:
+        await query.answer("Vote registered!")
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton(f"Vote to Stop ({current_votes}/{votes_needed})", callback_data="wg_vote_stop")]])
+        text = f"<b>🛑 Vote to stop the game in progress!</b>\n\nNon-admins need <b>{votes_needed} votes</b> to stop the game.\n\nCurrent Votes: <b>{current_votes}/{votes_needed}</b>"
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=btn)
 
 def calculate_points(mode, is_first, is_last):
     if mode == "easy":
@@ -450,6 +521,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("Ꮮᴇᴀꜰ ꪜɪʟʟᴀɢᴇ", url="https://t.me/Anime_Group_hai")]])
             await context.bot.send_message(chat_id=chat_id, text=blockquote_summary, parse_mode="HTML", reply_markup=end_btn)
             del active_games[chat_id]
+            stop_votes.pop(chat_id, None) # NAYA: Votes clear karna last word k baad
 
 async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -474,12 +546,6 @@ async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TY
         pass
 
 # --- SETTINGS MENU ---
-
-async def is_admin(chat, user_id, bot):
-    if chat.type == 'private':
-        return True
-    member = await bot.get_chat_member(chat.id, user_id)
-    return member.status in ['administrator', 'creator']
 
 def build_settings_keyboard(chat_id):
     settings = get_chat_settings(chat_id)
@@ -623,6 +689,8 @@ application.add_handler(CommandHandler(["helpgrid", "gridsettings"], settings_cm
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="^refresh_grid$"))
 application.add_handler(CallbackQueryHandler(refresh_leaderboard_callback, pattern="^refresh_leaderboard$"))
+# NAYA: Voting pattern handle karega ye niche wala 
+application.add_handler(CallbackQueryHandler(vote_stop_callback, pattern="^wg_vote_stop$"))
 
 # Settings Callbacks
 application.add_handler(CallbackQueryHandler(settings_callback, pattern="^wg_|ignore"))
