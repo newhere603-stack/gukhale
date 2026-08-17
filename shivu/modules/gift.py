@@ -41,19 +41,16 @@ def to_small_caps(text: str) -> str:
 def bold_sc(text: str) -> str:
     return f"<b>{to_small_caps(text)}</b>"
 
-# --- ✨ CUSTOM STYLES ---
+# --- ✨ UPGRADED MODERN UI STYLES ---
 class Style:
-    GIFT = "🎁 " + to_small_caps("gift transfer")
-    TO = "👤 " + to_small_caps("recipient :")
-    FROM = "👤 " + to_small_caps("sender :")
-    CHAR = "🍥 " + to_small_caps("character :")
-    ID = "🆔 " + to_small_caps("id :")
-    STATUS = "✨ " + to_small_caps("status :")
+    GIFT = '<tg-emoji emoji-id="5255861796350224063">💖</tg-emoji> <b>' + to_small_caps("secure gift transfer hub") + '</b> <tg-emoji emoji-id="5255861796350224063">💖</tg-emoji>'
+    TO = '<tg-emoji emoji-id="5393592081748877575">👤</tg-emoji> ' + to_small_caps("recipient ⬡")
+    FROM = '<tg-emoji emoji-id="5393592081748877575">👤</tg-emoji> ' + to_small_caps("sender ⬡")
+    CHAR = '<tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> ' + to_small_caps("character ⬡")
+    ID = '<tg-emoji emoji-id="6332443074769196273">🆔</tg-emoji> ' + to_small_caps("char id ⬡")
+    STATUS = '<tg-emoji emoji-id="6093431129749070651">✨</tg-emoji> ' + to_small_caps("status ⬡")
     LINE = "──────────────────"
     SUCCESS = "✅ " + to_small_caps("success")
-    ERROR = to_small_caps("error")
-    WARNING = to_small_caps("warning")
-    INFO = to_small_caps("info")
 
 # --- UTILS ---
 def is_video_url(url):
@@ -157,35 +154,37 @@ async def handle_gift_command(update: Update, context: CallbackContext):
     if not sender_data:
         return await msg.reply_text(f"❌ {bold_sc('you dont own this character.')}", parse_mode=ParseMode.HTML)
     
-    character = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == str(char_id)), None)
-    if not character:
+    # Check if user actually owns this character ID
+    owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == str(char_id)), None)
+    if not owned_char:
         return await msg.reply_text(f"❌ {bold_sc('you dont own this character.')}", parse_mode=ParseMode.HTML)
     
-    global_char = await collection.find_one({'id': character['id']})
+    # Fetch official character data from global collection to ensure correct image & info
+    global_char = await collection.find_one({'id': str(char_id)})
     if not global_char:
-        return await msg.reply_text(f"❌ {bold_sc('character not found in global collection.')}", parse_mode=ParseMode.HTML)
+        global_char = owned_char # Fallback to user inventory item if global missing
 
     pending_gifts[sender_id] = {
-        'character': character, 'receiver_id': receiver.id, 'receiver_name': receiver.first_name,
+        'character': global_char, 'receiver_id': receiver.id, 'receiver_name': receiver.first_name,
         'message_id': None, 'created_at': datetime.now(timezone.utc)
     }
 
     caption = (
-        f"<b>{Style.GIFT}</b>\n"
+        f"{Style.GIFT}\n"
         f"{Style.LINE}\n"
-        f"<b>{Style.TO}</b> <a href='tg://user?id={receiver.id}'>{bold_sc(escape(receiver.first_name))}</a>\n"
-        f"<b>{Style.CHAR}</b> <code>{bold_sc(escape(character['name']))}</code>\n"
-        f"<b>{Style.ID}</b> <code>{character['id']}</code>\n"
+        f"<b>{Style.TO}</b> <a href='tg://user?id={receiver.id}'>{escape(receiver.first_name)}</a>\n"
+        f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
+        f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
         f"{Style.LINE}\n"
         f"<b><i>{to_small_caps(f'⏳ confirm within {GIFT_TIMEOUT}s to send.')}</i></b>"
     )
 
     keyboard = [[
-        InlineKeyboardButton(to_small_caps("✅ confirm"), callback_data=f"gift_z:{sender_id}"),
+        InlineKeyboardButton(to_small_caps("✅ confirm transfer"), callback_data=f"gift_z:{sender_id}"),
         InlineKeyboardButton(to_small_caps("❌ cancel"), callback_data=f"gift_v:{sender_id}")
     ]]
 
-    sent_msg = await reply_media_message(msg, character.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
+    sent_msg = await reply_media_message(msg, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
     if sent_msg: pending_gifts[sender_id]['message_id'] = sent_msg.message_id
     
     async def expire():
@@ -228,12 +227,13 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             
             if await atomic_transfer_character(sender_id, receiver_id, char):
                 final_caption = (
-                    f"<b>🎊 {to_small_caps('gift delivered')} 🎊</b>\n"
+                    f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>{to_small_caps('gift successfully delivered')}</b> <tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji>\n"
                     f"{Style.LINE}\n"
-                    f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_id}'>{bold_sc(escape(receiver_name))}</a>\n"
-                    f"<b>{Style.CHAR}</b> <code>{bold_sc(escape(char['name']))}</code>\n"
+                    f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_id}'>{escape(receiver_name)}</a>\n"
+                    f"<b>{Style.CHAR}</b> <b>{escape(char.get('name', 'Unknown'))}</b>\n"
+                    f"<b>{Style.ID}</b> <code>{char.get('id')}</code>\n"
                     f"{Style.LINE}\n"
-                    f"<b><i>{to_small_caps('✓ character successfully transferred.')}</i></b>"
+                    f"<b><i>{to_small_caps('✓ character added to recipient harem.')}</i></b>"
                 )
                 await query.edit_message_caption(caption=final_caption, parse_mode=ParseMode.HTML)
                 
@@ -244,7 +244,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                     f"{Style.LINE}\n"
                     f"<b>{Style.FROM}</b> {query.from_user.mention_html()}\n"
                     f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_id}'>{escape(receiver_name)}</a>\n"
-                    f"<b>{Style.CHAR}</b> {char['name']} (ɪᴅ: {char['id']})\n"
+                    f"<b>{Style.CHAR}</b> {char.get('name')} (ɪᴅ: {char.get('id')})\n"
                     f"{Style.LINE}\n"
                     f"<b>{Style.STATUS}</b> {Style.SUCCESS}"
                 )
