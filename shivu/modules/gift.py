@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 from html import escape
 from datetime import datetime, timezone
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
@@ -52,7 +53,6 @@ class Style:
     LINE = "──────────────────"
     SUCCESS = "✅ " + to_small_caps("success")
 
-# --- UTILS ---
 def is_video_url(url):
     if not url: return False
     url_lower = url.lower()
@@ -69,7 +69,8 @@ async def reply_media_message(message, media_url, caption, reply_markup=None):
         if is_video_url(media_url):
             return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-    except Exception:
+    except Exception as e:
+        LOGGER.error(f"Media reply failed: {e}")
         return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 async def cleanup_pending_gift(sender_id: int, sent_msg=None):
@@ -94,84 +95,77 @@ async def check_receiver_inventory_size(receiver_id: int) -> bool:
         if result and len(result) > 0:
             return result[0].get('characters_count', 0) < MAX_INVENTORY_SIZE
         return True
-    except Exception:
-        return False
-
-# --- ATOMIC TRANSFER ---
-async def atomic_transfer_character(sender_id: int, receiver_id: int, char_id_val) -> bool:
-    try:
-        pull_result = await user_collection.update_one(
-            {'id': sender_id, '$or': [{'characters.id': str(char_id_val)}, {'characters.id': int(char_id_val) if str(char_id_val).isdigit() else None}]},
-            {'$pull': {'characters': {'$or': [{'id': str(char_id_val)}, {'id': int(char_id_val) if str(char_id_val).isdigit() else None}]}}}
-        )
-        if pull_result.modified_count == 0: return False
+    except Exception as e:
+        LOGGER.error(f"Inventory check error: {e}")
         return True
-    except Exception:
-        return False
 
 # --- HANDLERS ---
 async def handle_gift_command(update: Update, context: CallbackContext):
-    msg = update.message
-    sender_id = msg.from_user.id
+    try:
+        msg = update.message
+        sender_id = msg.from_user.id
 
-    if not msg.reply_to_message:
-        return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("please reply to a user to send a gift.")}', parse_mode=ParseMode.HTML)
+        if not msg.reply_to_message:
+            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("please reply to a user to send a gift.")}', parse_mode=ParseMode.HTML)
 
-    receiver = msg.reply_to_message.from_user
-    if sender_id == receiver.id or receiver.is_bot:
-        return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("invalid user for gift.")}', parse_mode=ParseMode.HTML)
+        receiver = msg.reply_to_message.from_user
+        if sender_id == receiver.id or receiver.is_bot:
+            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("invalid user for gift.")}', parse_mode=ParseMode.HTML)
 
-    if len(context.args) != 1:
-        return await msg.reply_text(f'<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> {bold_sc("usage:")} <code>/gift &lt;id&gt;</code>', parse_mode=ParseMode.HTML)
+        if len(context.args) != 1:
+            return await msg.reply_text(f'<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> {bold_sc("usage:")} <code>/gift &lt;id&gt;</code>', parse_mode=ParseMode.HTML)
 
-    char_id = str(context.args[0])
-    
-    if sender_id in pending_gifts:
-        return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
-    
-    if not await check_receiver_inventory_size(receiver.id):
-        return await msg.reply_text(f"📦 {bold_sc(f'receiver inventory is full (max {MAX_INVENTORY_SIZE}).')}", parse_mode=ParseMode.HTML)
+        char_id = str(context.args[0])
+        
+        if sender_id in pending_gifts:
+            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
+        
+        if not await check_receiver_inventory_size(receiver.id):
+            return await msg.reply_text(f"📦 {bold_sc(f'receiver inventory is full (max {MAX_INVENTORY_SIZE}).')}", parse_mode=ParseMode.HTML)
 
-    sender_data = await user_collection.find_one({'id': sender_id})
-    if not sender_data:
-        return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
-    
-    owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == char_id), None)
-    if not owned_char:
-        return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
-    
-    global_char = await collection.find_one({'$or': [{'id': char_id}, {'id': int(char_id) if char_id.isdigit() else None}]})
-    if not global_char:
-        global_char = owned_char
+        sender_data = await user_collection.find_one({'id': sender_id})
+        if not sender_data:
+            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
+        
+        owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == char_id), None)
+        if not owned_char:
+            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
+        
+        global_char = await collection.find_one({'$or': [{'id': char_id}, {'id': int(char_id) if char_id.isdigit() else None}]})
+        if not global_char:
+            global_char = owned_char
 
-    pending_gifts[sender_id] = {
-        'character': global_char, 'receiver_id': receiver.id, 'receiver_name': receiver.first_name,
-        'message_id': None, 'created_at': datetime.now(timezone.utc)
-    }
+        pending_gifts[sender_id] = {
+            'character': global_char, 'receiver_id': receiver.id, 'receiver_name': receiver.first_name,
+            'message_id': None, 'created_at': datetime.now(timezone.utc)
+        }
 
-    caption = (
-        f"{Style.GIFT}\n"
-        f"{Style.LINE}\n"
-        f"<b>{Style.TO}</b> <a href='tg://user?id={receiver.id}'>{escape(receiver.first_name)}</a>\n"
-        f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
-        f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
-        f"{Style.LINE}\n"
-        f"<b><i>{to_small_caps(f'<tg-emoji emoji-id="5451732530048802485">⏳</tg-emoji> confirm within {GIFT_TIMEOUT}s to send.')}</i></b>"
-    )
+        caption = (
+            f"{Style.GIFT}\n"
+            f"{Style.LINE}\n"
+            f"<b>{Style.TO}</b> <a href='tg://user?id={receiver.id}'>{escape(receiver.first_name)}</a>\n"
+            f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
+            f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
+            f"{Style.LINE}\n"
+            f"<b><i>{to_small_caps(f'<tg-emoji emoji-id="5451732530048802485">⏳</tg-emoji> confirm within {GIFT_TIMEOUT}s to send.')}</i></b>"
+        )
 
-    keyboard = [[
-        InlineKeyboardButton(to_small_caps("confirm"), callback_data=f"gift_z:{sender_id}"),
-        InlineKeyboardButton(to_small_caps("cancel"), callback_data=f"gift_v:{sender_id}")
-    ]]
+        keyboard = [[
+            InlineKeyboardButton(to_small_caps("confirm"), callback_data=f"gift_z:{sender_id}"),
+            InlineKeyboardButton(to_small_caps("cancel"), callback_data=f"gift_v:{sender_id}")
+        ]]
 
-    sent_msg = await reply_media_message(msg, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
-    if sent_msg: pending_gifts[sender_id]['message_id'] = sent_msg.message_id
-    
-    async def expire():
-        await asyncio.sleep(GIFT_TIMEOUT)
-        if sender_id in pending_gifts: await cleanup_pending_gift(sender_id, sent_msg)
-    
-    gift_tasks[sender_id] = asyncio.create_task(expire())
+        sent_msg = await reply_media_message(msg, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
+        if sent_msg: pending_gifts[sender_id]['message_id'] = sent_msg.message_id
+        
+        async def expire():
+            await asyncio.sleep(GIFT_TIMEOUT)
+            if sender_id in pending_gifts: await cleanup_pending_gift(sender_id, sent_msg)
+        
+        gift_tasks[sender_id] = asyncio.create_task(expire())
+    except Exception as e:
+        LOGGER.error(f"Error in handle_gift_command: {e}\n{traceback.format_exc()}")
+        await update.message.reply_text("❌ An error occurred while processing the gift command.")
 
 async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -216,10 +210,6 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             if not owned_char:
                 if query.message: await query.message.delete()
                 return await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
-
-            pull_query = {'id': sender_id, '$or': [{'characters.id': char_id_str}]}
-            if char_id_int is not None:
-                pull_query['$or'].append({'characters.id': char_id_int})
 
             pull_result = await user_collection.update_one(
                 {'id': sender_id, 'characters.id': owned_char['id']},
@@ -276,11 +266,13 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 asyncio.create_task(send_log(context, log_msg))
                     
             except Exception as push_error:
+                LOGGER.error(f"Push error during gift: {push_error}")
                 await user_collection.update_one({'id': sender_id}, {'$push': {'characters': owned_char}})
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
         
         except Exception as e:
+            LOGGER.error(f"Callback gift_z error: {e}\n{traceback.format_exc()}")
             if query.message:
                 try: await query.message.delete()
                 except: pass
@@ -291,7 +283,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             try: await query.message.delete()
             except: pass
 
-# --- FIXED HANDLERS REGISTRATION ---
+# --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):'))
 
