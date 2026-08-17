@@ -6,18 +6,16 @@ from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
-# DHYAN DEIN: Yahan aapko apni us file se clear_char_cache import karna hoga 
-# jisme aapne wo function banaya tha (jaise if file is info.py then: from info import clear_char_cache)
-# Maine niche dummy ke liye import likh diya hai, file ka naam apne hisaab se theek kar lena:
+# ✨ Yahi wo import hai jo dono files ko connect karke instantly cache update karega ✨
 try:
-    from shivu.info import clear_char_cache  # 'info' ko apni check command wali file ke naam se replace karein
+    from shivu.modules.check import clear_char_cache
 except ImportError:
-    def clear_char_cache(cid): pass # Agar import fail ho jaye toh error na aaye
+    def clear_char_cache(cid): pass 
 
 from shivu import LOGGER, application, user_collection, collection
 
 # --- CONFIGURATION ---
-LOG_CHANNEL_ID = -1003893927065 
+LOG_CHANNEL_ID = -1002900862232 
 GIFT_TIMEOUT = 60
 MAX_INVENTORY_SIZE = 1000  # Adjust as needed
 pending_gifts = {}
