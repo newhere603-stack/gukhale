@@ -74,7 +74,7 @@ async def get_pmarket_keyboard(user_id):
     keyboard = []
     if exchange_enabled:
         # Changed callback to point to the sub-menu
-        keyboard.append([InlineKeyboardButton("💱 ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}")])
+        keyboard.append([InlineKeyboardButton("♻️ ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}")])
     
     keyboard.append([
         InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}"),
@@ -111,7 +111,7 @@ async def toggle_exchange_cmd(update: Update, context: CallbackContext):
         upsert=True
     )
     
-    status = "ᴇɴᴀʙʟᴇᴅ ✅" if new_state else "ᴅɪsᴀʙʟᴇᴅ ❌"
+    status = "ᴇɴᴀʙʟᴇᴅ ✅" if new_state else "ᴅɪsᴀʙʟᴇᴅ"
     await update.message.reply_html(f"<b>PMarket ᴇxᴄʜᴀɴɢᴇ ʙᴜᴛᴛᴏɴ ʜᴀs ʙᴇᴇɴ {status}.</b>")
 
 
