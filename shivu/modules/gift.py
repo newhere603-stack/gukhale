@@ -121,7 +121,8 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
         
         if not await check_receiver_inventory_size(receiver.id):
-            return await msg.reply_text(f"📦 {bold_sc(f'receiver inventory is full (max {MAX_INVENTORY_SIZE}).')}", parse_mode=ParseMode.HTML)
+            inv_text = f"receiver inventory is full (max {MAX_INVENTORY_SIZE})."
+            return await msg.reply_text(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
 
         sender_data = await user_collection.find_one({'id': sender_id})
         if not sender_data:
@@ -140,6 +141,7 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             'message_id': None, 'created_at': datetime.now(timezone.utc)
         }
 
+        timeout_text = to_small_caps(f"confirm within {GIFT_TIMEOUT}s to send.")
         caption = (
             f"{Style.GIFT}\n"
             f"{Style.LINE}\n"
@@ -147,7 +149,7 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
             f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
             f"{Style.LINE}\n"
-            f"<b><i>{to_small_caps(f'<tg-emoji emoji-id="5451732530048802485">⏳</tg-emoji> confirm within {GIFT_TIMEOUT}s to send.')}</i></b>"
+            f"<b><i><tg-emoji emoji-id='5451732530048802485'>⏳</tg-emoji> {timeout_text}</i></b>"
         )
 
         keyboard = [[
