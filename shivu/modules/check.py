@@ -173,7 +173,7 @@ def card_caption(char: Char, gcount: int) -> str:
         f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {to_small_caps('ultimate w-h info')} <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji></b>\n"
         "\n"
         f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> {bold_sc('name ⬡')} <b>{escape(char.name)}</b>\n"
-        f"{emoji} {bold_sc('rarity ⬡')}<b>{escape(text)}</b>\n"
+        f"<tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> {bold_sc('rarity ⬡')} {emoji} <b>{escape(text)}</b>\n"
         f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> {bold_sc('anime ⬡')} <b>{escape(char.anime)}</b>\n"
         f"<tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> {bold_sc('char id ⬡')} <code>{char.id}</code>\n"
         "\n"
