@@ -17,6 +17,7 @@ asyncio.set_event_loop(loop)
 
 import shivu.modules.wordgrid
 import wordle_game
+import shivu.modules.gift
 import shivu.modules.pmarket
 import shivu.modules.balance
 import shivu.modules.chatlog
