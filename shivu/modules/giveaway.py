@@ -32,12 +32,23 @@ def get_target_keys(letter_filter, time_filter, scope, chat_id):
     else:
         base_keys = ['gold', 'golds', 'wordseek_points', 'score', 'points']
     
+    # Fetching Current Date/Time in IST (Indian Standard Time)
+    now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    time_prefix = None
+    
+    if time_filter == "today":
+        time_prefix = now_ist.strftime("%Y-%m-%d")
+    elif time_filter == "week":
+        time_prefix = now_ist.strftime("%Y-W%V")
+    elif time_filter == "month":
+        time_prefix = now_ist.strftime("%Y-%m")
+    elif time_filter == "year":
+        time_prefix = now_ist.strftime("%Y")
+
     keys = []
     for b_key in base_keys:
-        time_key = b_key
-        # Agar Today/Week/Month hai, toh time lagayega
-        if time_filter != "all":
-            time_key = f"{time_filter}_{b_key}"
+        # Time tag apply karenge agar All-Time nahi hai
+        time_key = f"{time_prefix}_{b_key}" if time_prefix else b_key
             
         # Agar Scope CHAT hai, toh aage us chat ki ID lag jayegi (Isi chat ka score dikhega)
         if scope == "chat":
