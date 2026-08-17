@@ -3,6 +3,7 @@ import json
 import random
 import logging
 import asyncio
+from datetime import datetime, timedelta
 from telegram import Update, ReactionTypeEmoji
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -314,17 +315,28 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user = update.effective_user
                 user_id = user.id
                 
+                # Fetching Current Date/Time in IST (Indian Standard Time)
+                now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+                today_str = now_ist.strftime("%Y-%m-%d")
+                week_str = now_ist.strftime("%Y-W%V")
+                month_str = now_ist.strftime("%Y-%m")
+                year_str = now_ist.strftime("%Y")
+
                 inc_field = "gold" if length == 5 else f"gold_{length}"
                 
+                # Updating the Dictionary to use Time-Prefixed Keys
                 inc_dict = {
                     inc_field: points_earned,
-                    f"today_{inc_field}": points_earned,
-                    f"week_{inc_field}": points_earned,
-                    f"month_{inc_field}": points_earned,
+                    f"{today_str}_{inc_field}": points_earned,
+                    f"{week_str}_{inc_field}": points_earned,
+                    f"{month_str}_{inc_field}": points_earned,
+                    f"{year_str}_{inc_field}": points_earned,
+                    
                     f"{chat_id}_{inc_field}": points_earned,
-                    f"{chat_id}_today_{inc_field}": points_earned,
-                    f"{chat_id}_week_{inc_field}": points_earned,
-                    f"{chat_id}_month_{inc_field}": points_earned
+                    f"{chat_id}_{today_str}_{inc_field}": points_earned,
+                    f"{chat_id}_{week_str}_{inc_field}": points_earned,
+                    f"{chat_id}_{month_str}_{inc_field}": points_earned,
+                    f"{chat_id}_{year_str}_{inc_field}": points_earned
                 }
                 
                 # OPTIMIZATION: Ultra-fast single database round-trip using upsert=True
