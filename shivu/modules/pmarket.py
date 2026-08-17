@@ -68,13 +68,13 @@ async def update_menu(query, text, keyboard):
 
 # --- PMARKET KEYBOARD GENERATOR HELPER ---
 async def get_pmarket_keyboard(user_id):
-    # Check if admin has enabled the exchange feature
     settings = await bot_settings_collection.find_one({'_id': 'pmarket_settings'})
     exchange_enabled = settings.get('exchange_enabled', True) if settings else True
     
     keyboard = []
     if exchange_enabled:
-        keyboard.append([InlineKeyboardButton("💱 ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_start_exc:{user_id}")])
+        # Changed callback to point to the sub-menu
+        keyboard.append([InlineKeyboardButton("💱 ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}")])
     
     keyboard.append([
         InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}"),
@@ -144,6 +144,15 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     elif action == "pm_m":
         keyboard = await get_pmarket_keyboard(user_id)
         await update_menu(query, "<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>", keyboard)
+
+    # --- EXCHANGE SUB-MENU ---
+    elif action == "pm_exc_menu":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("ɢᴇᴛ ᴄᴏɪɴs", callback_data=f"pm_start_exc_t2c:{user_id}"),
+             InlineKeyboardButton("ɢᴇᴛ ᴛᴏᴋᴇɴ", callback_data=f"pm_start_exc_c2t:{user_id}")],
+            [InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")]
+        ])
+        await update_menu(query, "<b>💱 ᴇxᴄʜᴀɴɢᴇ ᴍᴇɴᴜ</b>\n\n<i>ᴡʜᴀᴛ ᴡᴏᴜʟᴅ ʏᴏᴜ ʟɪᴋᴇ ᴛᴏ ᴅᴏ?</i>", keyboard)
 
     elif action == "pm_r":
         rarity_key = parts[1]
@@ -363,27 +372,33 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     # EXCHANGE CONFIRM LOGIC
     # --------------------------
     elif action == "pm_exc_conf":
-        amount = int(parts[1])
+        exc_type = parts[1]  # "t2c" or "c2t"
+        amount = int(parts[2])
+        
         user = await user_collection.find_one({'id': user_id})
         tokens = user.get('tokens', 0) if user else 0
+        coins = user.get('balance', 0) if user else 0
         
-        if tokens < amount:
-            await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
-            return
-            
-        coins_to_add = amount * 2500
-        await user_collection.update_one(
-            {'id': user_id}, 
-            {'$inc': {'tokens': -amount, 'balance': coins_to_add}}
-        )
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_exc_menu:{user_id}")]])
+
+        if exc_type == "t2c":
+            if tokens < amount:
+                await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
+                return
+            coins_to_add = amount * 2500
+            await user_collection.update_one({'id': user_id}, {'$inc': {'tokens': -amount, 'balance': coins_to_add}})
+            msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{coins_to_add:,}</code> ᴄᴏɪɴs!</b>"
+
+        elif exc_type == "c2t":
+            coins_to_deduct = amount * 2500
+            if coins < coins_to_deduct:
+                await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
+                return
+            await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -coins_to_deduct, 'tokens': amount}})
+            msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{coins_to_deduct:,}</code> ᴄᴏɪɴs ғᴏʀ <code>{amount}</code> ᴛᴏᴋᴇɴs!</b>"
         
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")]])
-        
-        await update_menu(
-            query, 
-            f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{coins_to_add:,}</code> ᴄᴏɪɴs!</b>", 
-            kb
-        )
+        await update_menu(query, msg, kb)
+
 
 # ========================
 # CONVERSATION HANDLERS
@@ -469,8 +484,10 @@ async def ask_price(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 
-# --- 2. EXCHANGE CONVERSATION ---
-async def exchange_start(update: Update, context: CallbackContext):
+# --- 2. EXCHANGE CONVERSATION (T2C and C2T) ---
+
+# Get Coins (Tokens -> Coins)
+async def exchange_start_t2c(update: Update, context: CallbackContext):
     query = update.callback_query
     parts = query.data.split(':')
     owner_id = int(parts[-1])
@@ -481,14 +498,41 @@ async def exchange_start(update: Update, context: CallbackContext):
         
     await query.answer()
     context.user_data['exc_owner_id'] = owner_id
+    context.user_data['exc_type'] = 't2c'
     
     user = await user_collection.find_one({'id': owner_id})
     tokens = user.get('tokens', 0) if user else 0
 
     await query.message.reply_text(
-        f"<b>💱 Sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏғ ᴛᴏᴋᴇɴs ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ:</b>\n\n"
+        f"<b>💱 Sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏғ ᴛᴏᴋᴇɴs ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ ғᴏʀ ᴄᴏɪɴs:</b>\n\n"
         f"<i>1 ᴛᴏᴋᴇɴ = 2,500 ᴄᴏɪɴs</i>\n"
         f"<b>ʏᴏᴜ ʜᴀᴠᴇ:</b> <code>{tokens:,}</code> ᴛᴏᴋᴇɴs\n\n"
+        f"(ᴛʏᴘᴇ /cancel ᴛᴏ ᴀʙᴏʀᴛ ᴛʜᴇ ᴘʀᴏᴄᴇss)",
+        parse_mode="HTML"
+    )
+    return WAITING_FOR_EXCHANGE_AMOUNT
+
+# Get Tokens (Coins -> Tokens)
+async def exchange_start_c2t(update: Update, context: CallbackContext):
+    query = update.callback_query
+    parts = query.data.split(':')
+    owner_id = int(parts[-1])
+    
+    if query.from_user.id != owner_id:
+        await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ!", show_alert=True)
+        return ConversationHandler.END
+        
+    await query.answer()
+    context.user_data['exc_owner_id'] = owner_id
+    context.user_data['exc_type'] = 'c2t'
+    
+    user = await user_collection.find_one({'id': owner_id})
+    coins = user.get('balance', 0) if user else 0
+
+    await query.message.reply_text(
+        f"<b>💱 Sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏғ ᴛᴏᴋᴇɴs ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙᴜʏ:</b>\n\n"
+        f"<i>1 ᴛᴏᴋᴇɴ = 2,500 ᴄᴏɪɴs</i>\n"
+        f"<b>ʏᴏᴜ ʜᴀᴠᴇ:</b> <code>{coins:,}</code> ᴄᴏɪɴs\n\n"
         f"(ᴛʏᴘᴇ /cancel ᴛᴏ ᴀʙᴏʀᴛ ᴛʜᴇ ᴘʀᴏᴄᴇss)",
         parse_mode="HTML"
     )
@@ -498,6 +542,7 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     if not update.message or not update.message.text: return WAITING_FOR_EXCHANGE_AMOUNT
     user_id = update.message.from_user.id
     expected_owner = context.user_data.get('exc_owner_id')
+    exc_type = context.user_data.get('exc_type')
     if expected_owner and user_id != expected_owner: return WAITING_FOR_EXCHANGE_AMOUNT
 
     amount_text = update.message.text.strip()
@@ -508,26 +553,35 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     amount = int(amount_text)
     user = await user_collection.find_one({'id': user_id})
     tokens = user.get('tokens', 0) if user else 0
+    coins = user.get('balance', 0) if user else 0
     
-    if amount > tokens:
-        await update.message.reply_text(f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs! ʏᴏᴜ ᴏɴʟʏ ʜᴀᴠᴇ <code>{tokens:,}</code> ᴛᴏᴋᴇɴs.</b>", parse_mode='HTML')
-        return WAITING_FOR_EXCHANGE_AMOUNT
+    if exc_type == 't2c':
+        if amount > tokens:
+            await update.message.reply_text(f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs! ʏᴏᴜ ᴏɴʟʏ ʜᴀᴠᴇ <code>{tokens:,}</code> ᴛᴏᴋᴇɴs.</b>", parse_mode='HTML')
+            return WAITING_FOR_EXCHANGE_AMOUNT
+        total_coins = amount * 2500
+        text_msg = f"<i>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{total_coins:,}</code> ᴄᴏɪɴs?</i>"
         
-    coins = amount * 2500
-    
+    elif exc_type == 'c2t':
+        cost = amount * 2500
+        if cost > coins:
+            await update.message.reply_text(f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs! ʏᴏᴜ ᴏɴʟʏ ʜᴀᴠᴇ <code>{coins:,}</code> ᴄᴏɪɴs.</b>\n<i>(ʏᴏᴜ ɴᴇᴇᴅ <code>{cost:,}</code> ᴄᴏɪɴs ᴛᴏ ʙᴜʏ <code>{amount}</code> ᴛᴏᴋᴇɴs)</i>", parse_mode='HTML')
+            return WAITING_FOR_EXCHANGE_AMOUNT
+        text_msg = f"<i>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ <code>{cost:,}</code> ᴄᴏɪɴs ғᴏʀ <code>{amount}</code> ᴛᴏᴋᴇɴs?</i>"
+        
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("ᴄᴏɴғɪʀᴍ", callback_data=f"pm_exc_conf:{amount}:{user_id}")],
-        [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pm_m:{user_id}")]
+        [InlineKeyboardButton("ᴄᴏɴғɪʀᴍ", callback_data=f"pm_exc_conf:{exc_type}:{amount}:{user_id}")],
+        [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pm_exc_menu:{user_id}")]
     ])
     
     await update.message.reply_text(
-        f"<b>💱 ᴄᴏɴғɪʀᴍ ᴇxᴄʜᴀɴɢᴇ</b>\n\n"
-        f"<i>ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴇxᴄʜᴀɴɢᴇ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{coins:,}</code> ᴄᴏɪɴs?</i>",
+        f"<b>ᴄᴏɴғɪʀᴍ ᴇxᴄʜᴀɴɢᴇ</b>\n\n{text_msg}",
         reply_markup=keyboard,
         parse_mode='HTML'
     )
     
     context.user_data.pop('exc_owner_id', None)
+    context.user_data.pop('exc_type', None)
     return ConversationHandler.END
 
 
@@ -536,6 +590,7 @@ async def cancel_process(update: Update, context: CallbackContext):
     context.user_data.pop('sell_character', None)
     context.user_data.pop('sell_owner_id', None)
     context.user_data.pop('exc_owner_id', None)
+    context.user_data.pop('exc_type', None)
     await update.message.reply_text("<b>ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
     return ConversationHandler.END
 
@@ -543,8 +598,9 @@ async def timeout_process(update: Update, context: CallbackContext):
     context.user_data.pop('sell_character', None)
     context.user_data.pop('sell_owner_id', None)
     context.user_data.pop('exc_owner_id', None)
+    context.user_data.pop('exc_type', None)
     
-    msg = "<b>⌛ Sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ ᴅᴜᴇ ᴛᴏ ɪɴᴀᴄᴛɪᴠɪᴛʏ (60s Timeout). ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket.</b>"
+    msg = "<b>⌛ sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ ᴅᴜᴇ ᴛᴏ ɪɴᴀᴄᴛɪᴠɪᴛʏ (60s Timeout). ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket.</b>"
     if update.message:
         await update.message.reply_text(msg, parse_mode='HTML')
     elif update.callback_query and update.callback_query.message:
@@ -571,7 +627,10 @@ sell_conv = ConversationHandler(
 )
 
 exchange_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(exchange_start, pattern=r"^pm_start_exc:")],
+    entry_points=[
+        CallbackQueryHandler(exchange_start_t2c, pattern=r"^pm_start_exc_t2c:"),
+        CallbackQueryHandler(exchange_start_c2t, pattern=r"^pm_start_exc_c2t:")
+    ],
     states={
         WAITING_FOR_EXCHANGE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_exchange_amount)],
         ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
@@ -588,4 +647,5 @@ application.add_handler(exchange_conv, group=-2)
 
 application.add_handler(CommandHandler(["pmarket", "shop"], pmarket_command), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd), group=0)
-application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf):'), group=0)
+# Updated pattern to catch the new callbacks securely
+application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):'), group=0)
