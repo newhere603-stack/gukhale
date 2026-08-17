@@ -1,12 +1,12 @@
 import asyncio
-import html
+from html import escape
 from datetime import datetime, timezone
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
-# ✨ Yahi wo import hai jo dono files ko connect karke instantly cache update karega ✨
+# ✨ Cache clear import for instant updates ✨
 try:
     from shivu.modules.check import clear_char_cache
 except ImportError:
@@ -15,7 +15,7 @@ except ImportError:
 from shivu import LOGGER, application, user_collection, collection
 
 # --- CONFIGURATION ---
-LOG_CHANNEL_ID = -1003893927065 
+LOG_CHANNEL_ID = -1002900862232 
 GIFT_TIMEOUT = 60
 MAX_INVENTORY_SIZE = 1000  # Adjust as needed
 pending_gifts = {}
@@ -103,14 +103,12 @@ async def check_receiver_inventory_size(receiver_id: int) -> bool:
 # --- ATOMIC TRANSFER ---
 async def atomic_transfer_character(sender_id: int, receiver_id: int, character: dict) -> bool:
     try:
-        # Step 1: Pull from sender
         pull_result = await user_collection.update_one(
             {'id': sender_id, 'characters.id': character['id']},
             {'$pull': {'characters': {'id': character['id']}}}
         )
         if pull_result.modified_count == 0: return False
         
-        # Step 2: Push to receiver
         try:
             receiver_data = await user_collection.find_one({'id': receiver_id})
             if receiver_data:
@@ -123,12 +121,10 @@ async def atomic_transfer_character(sender_id: int, receiver_id: int, character:
                     'created_at': datetime.now(timezone.utc), 'last_active': datetime.now(timezone.utc)
                 })
             
-            # ✨ INSTANT UPDATE: Purana cache yahan turant clear ho jayega! ✨
             clear_char_cache(character['id'])
             return True
             
         except Exception as push_error:
-            # Step 3: Rollback
             await user_collection.update_one({'id': sender_id}, {'$push': {'characters': character}})
             return False
     except Exception:
@@ -241,20 +237,18 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 )
                 await query.edit_message_caption(caption=final_caption, parse_mode=ParseMode.HTML)
                 
-                # Fast Background Logging
                 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 log_msg = (
                     f"📢 <b>#ɢɪꜰᴛ_ʟᴏɢ</b>\n"
                     f"🕒 <b>ᴛɪᴍᴇꜱᴛᴀᴍᴘ:</b> <code>{timestamp}</code>\n"
                     f"{Style.LINE}\n"
                     f"<b>{Style.FROM}</b> {query.from_user.mention_html()}\n"
-                    f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_id}'>{html.escape(receiver_name)}</a>\n"
+                    f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_id}'>{escape(receiver_name)}</a>\n"
                     f"<b>{Style.CHAR}</b> {char['name']} (ɪᴅ: {char['id']})\n"
                     f"{Style.LINE}\n"
                     f"<b>{Style.STATUS}</b> {Style.SUCCESS}"
                 )
                 asyncio.create_task(send_log(context, log_msg))
-                # 🚫 DM WALA CODE YAHAN SE COMPLETELY HATA DIYA GAYA HAI! 🚫
                     
             else:
                 await query.message.delete()
@@ -267,11 +261,9 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
     elif action == "gift_v":
         await query.message.delete()
 
-# Register Handlers
 application.add_handler(CommandHandler("gift", handle_gift_command, block=False))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):', block=False))
 
-# Background cleanup task for stale pending gifts
 async def cleanup_stale_gifts():
     while True:
         try:
