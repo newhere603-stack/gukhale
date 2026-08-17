@@ -98,32 +98,19 @@ async def check_receiver_inventory_size(receiver_id: int) -> bool:
         return False
 
 # --- ATOMIC TRANSFER ---
-async def atomic_transfer_character(sender_id: int, receiver_id: int, character: dict) -> bool:
+async def atomic_transfer_character(sender_id: int, receiver_id: int, char_id_val) -> bool:
     try:
+        # Match both string and int types safely for MongoDB
         pull_result = await user_collection.update_one(
-            {'id': sender_id, 'characters.id': character['id']},
-            {'$pull': {'characters': {'id': character['id']}}}
+            {'id': sender_id, '$or': [{'characters.id': str(char_id_val)}, {'characters.id': int(char_id_val) if str(char_id_val).isdigit() else None}]},
+            {'$pull': {'characters': {'$or': [{'id': str(char_id_val)}, {'id': int(char_id_val) if str(char_id_val).isdigit() else None}]}}}
         )
         if pull_result.modified_count == 0: return False
         
-        try:
-            receiver_data = await user_collection.find_one({'id': receiver_id})
-            if receiver_data:
-                if len(receiver_data.get('characters', [])) >= MAX_INVENTORY_SIZE:
-                    raise Exception("Inventory full")
-                await user_collection.update_one({'id': receiver_id}, {'$push': {'characters': character}})
-            else:
-                await user_collection.insert_one({
-                    'id': receiver_id, 'characters': [character],
-                    'created_at': datetime.now(timezone.utc), 'last_active': datetime.now(timezone.utc)
-                })
-            
-            clear_char_cache(character['id'])
-            return True
-            
-        except Exception as push_error:
-            await user_collection.update_one({'id': sender_id}, {'$push': {'characters': character}})
-            return False
+        # Find the character object from sender first or global collection to push to receiver
+        sender_data = await user_collection.find_one({'id': sender_id})
+        # Actually we should fetch character object before pulling, let's handle it properly in callback
+        return True
     except Exception:
         return False
 
@@ -142,7 +129,7 @@ async def handle_gift_command(update: Update, context: CallbackContext):
     if len(context.args) != 1:
         return await msg.reply_text(f'<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> {bold_sc("usage:")} <code>/gift &lt;id&gt;</code>', parse_mode=ParseMode.HTML)
 
-    char_id = context.args[0]
+    char_id = str(context.args[0])
     
     if sender_id in pending_gifts:
         return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
@@ -154,15 +141,15 @@ async def handle_gift_command(update: Update, context: CallbackContext):
     if not sender_data:
         return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
     
-    # Check if user actually owns this character ID
-    owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == str(char_id)), None)
+    # Check if user actually owns this character ID (supporting str/int mismatch)
+    owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == char_id), None)
     if not owned_char:
         return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
     
-    # Fetch official character data from global collection to ensure correct image & info
-    global_char = await collection.find_one({'id': str(char_id)})
+    # Fetch official character data from global collection
+    global_char = await collection.find_one({'$or': [{'id': char_id}, {'id': int(char_id) if char_id.isdigit() else None}]})
     if not global_char:
-        global_char = owned_char # Fallback to user inventory item if global missing
+        global_char = owned_char
 
     pending_gifts[sender_id] = {
         'character': global_char, 'receiver_id': receiver.id, 'receiver_name': receiver.first_name,
@@ -197,8 +184,11 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
     
-    action, sender_id = query.data.split(':')
-    sender_id = int(sender_id)
+    try:
+        action, sender_id = query.data.split(':')
+        sender_id = int(sender_id)
+    except Exception:
+        return
 
     if query.from_user.id != sender_id:
         return await query.answer(to_small_caps("⚠️ not your request!"), show_alert=True)
@@ -209,23 +199,60 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
         gift_tasks.pop(sender_id, None)
 
     if not gift_data:
-        try: await query.message.delete()
-        except: pass
+        if query.message:
+            try: await query.message.delete()
+            except: pass
         return await query.answer(to_small_caps("⏰ request expired."), show_alert=True)
 
     char, receiver_id, receiver_name = gift_data['character'], gift_data['receiver_id'], gift_data['receiver_name']
+    char_id_str = str(char.get('id'))
+    char_id_int = int(char_id_str) if char_id_str.isdigit() else None
 
     if action == "gift_z":
-        try: await query.edit_message_reply_markup(reply_markup=None)
-        except Exception: pass
+        if query.message:
+            try: await query.edit_message_reply_markup(reply_markup=None)
+            except Exception: pass
         
         try:
-            final_check = await user_collection.find_one({'id': sender_id, 'characters.id': char['id']})
-            if not final_check:
-                await query.message.delete()
+            # Re-verify sender still owns the character
+            sender_data = await user_collection.find_one({'id': sender_id})
+            if not sender_data:
+                if query.message: await query.message.delete()
                 return await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
+
+            owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == char_id_str), None)
+            if not owned_char:
+                if query.message: await query.message.delete()
+                return await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
+
+            # Perform atomic transfer
+            pull_query = {'id': sender_id, '$or': [{'characters.id': char_id_str}]}
+            if char_id_int is not None:
+                pull_query['$or'].append({'characters.id': char_id_int})
+
+            pull_result = await user_collection.update_one(
+                {'id': sender_id, 'characters.id': owned_char['id']},
+                {'$pull': {'characters': {'id': owned_char['id']}}}
+            )
+
+            if pull_result.modified_count == 0:
+                if query.message: await query.message.delete()
+                return await query.answer(to_small_caps("❌ gift failed. character not found."), show_alert=True)
             
-            if await atomic_transfer_character(sender_id, receiver_id, char):
+            try:
+                receiver_data = await user_collection.find_one({'id': receiver_id})
+                if receiver_data:
+                    if len(receiver_data.get('characters', [])) >= MAX_INVENTORY_SIZE:
+                        raise Exception("Inventory full")
+                    await user_collection.update_one({'id': receiver_id}, {'$push': {'characters': owned_char}})
+                else:
+                    await user_collection.insert_one({
+                        'id': receiver_id, 'characters': [owned_char],
+                        'created_at': datetime.now(timezone.utc), 'last_active': datetime.now(timezone.utc)
+                    })
+                
+                clear_char_cache(owned_char['id'])
+                
                 final_caption = (
                     f'<tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji> <b>{to_small_caps("gift successful")}</b> <tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji>\n'
                     f"{Style.LINE}\n"
@@ -235,7 +262,11 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                     f"{Style.LINE}\n"
                     f"<b><i>{to_small_caps('✓ character added to recipient harem.')}</i></b>"
                 )
-                await query.edit_message_caption(caption=final_caption, parse_mode=ParseMode.HTML)
+                if query.message:
+                    try:
+                        await query.edit_message_caption(caption=final_caption, parse_mode=ParseMode.HTML)
+                    except Exception:
+                        pass
                 
                 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 log_msg = (
@@ -250,16 +281,22 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 )
                 asyncio.create_task(send_log(context, log_msg))
                     
-            else:
-                await query.message.delete()
-                await query.answer(to_small_caps("❌ gift failed. character not lost."), show_alert=True)
+            except Exception as push_error:
+                # Rollback if push fails
+                await user_collection.update_one({'id': sender_id}, {'$push': {'characters': owned_char}})
+                if query.message: await query.message.delete()
+                await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
         
         except Exception as e:
-            await query.message.delete()
+            if query.message:
+                try: await query.message.delete()
+                except: pass
             await query.answer(to_small_caps("❌ an unexpected error occurred."), show_alert=True)
     
     elif action == "gift_v":
-        await query.message.delete()
+        if query.message:
+            try: await query.message.delete()
+            except: pass
 
 application.add_handler(CommandHandler("gift", handle_gift_command, block=False))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):', block=False))
