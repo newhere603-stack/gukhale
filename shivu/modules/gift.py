@@ -15,7 +15,7 @@ except ImportError:
 from shivu import LOGGER, application, user_collection, collection
 
 # --- CONFIGURATION ---
-LOG_CHANNEL_ID = -1002900862232 
+LOG_CHANNEL_ID = -1003893927065 
 GIFT_TIMEOUT = 60
 MAX_INVENTORY_SIZE = 1000  # Adjust as needed
 pending_gifts = {}
