@@ -180,8 +180,8 @@ async def handle_gift_command(update: Update, context: CallbackContext):
     )
 
     keyboard = [[
-        InlineKeyboardButton(to_small_caps("✅ confirm transfer"), callback_data=f"gift_z:{sender_id}"),
-        InlineKeyboardButton(to_small_caps("❌ cancel"), callback_data=f"gift_v:{sender_id}")
+        InlineKeyboardButton(to_small_caps("confirm"), callback_data=f"gift_z:{sender_id}"),
+        InlineKeyboardButton(to_small_caps("cancel"), callback_data=f"gift_v:{sender_id}")
     ]]
 
     sent_msg = await reply_media_message(msg, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
@@ -252,7 +252,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                     
             else:
                 await query.message.delete()
-                await query.answer(to_small_caps("❌ transfer failed. character not lost."), show_alert=True)
+                await query.answer(to_small_caps("❌ gift failed. character not lost."), show_alert=True)
         
         except Exception as e:
             await query.message.delete()
