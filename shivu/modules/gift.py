@@ -43,11 +43,11 @@ def bold_sc(text: str) -> str:
 
 # --- ✨ UPGRADED MODERN UI STYLES ---
 class Style:
-    GIFT = '<tg-emoji emoji-id="5255861796350224063">💖</tg-emoji> <b>' + to_small_caps("secure gift transfer hub") + '</b> <tg-emoji emoji-id="5255861796350224063">💖</tg-emoji>'
-    TO = '<tg-emoji emoji-id="5393592081748877575">👤</tg-emoji> ' + to_small_caps("recipient ⬡")
-    FROM = '<tg-emoji emoji-id="5393592081748877575">👤</tg-emoji> ' + to_small_caps("sender ⬡")
-    CHAR = '<tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> ' + to_small_caps("character ⬡")
-    ID = '<tg-emoji emoji-id="6332443074769196273">🆔</tg-emoji> ' + to_small_caps("char id ⬡")
+    GIFT = '<tg-emoji emoji-id="5255861796350224063">💖</tg-emoji> <b>' + to_small_caps("gift transfer hub") + '</b> <tg-emoji emoji-id="5255861796350224063">💖</tg-emoji>'
+    TO = '<tg-emoji emoji-id="6337080578591956016">😆</tg-emoji> ' + to_small_caps("Rec ⬡")
+    FROM = '<tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> ' + to_small_caps("sender ⬡")
+    CHAR = '<tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> ' + to_small_caps("name ⬡")
+    ID = '<tg-emoji emoji-id="6332443074769196273">🆔</tg-emoji> ' + to_small_caps("chr id ⬡")
     STATUS = '<tg-emoji emoji-id="6093431129749070651">✨</tg-emoji> ' + to_small_caps("status ⬡")
     LINE = "──────────────────"
     SUCCESS = "✅ " + to_small_caps("success")
@@ -133,31 +133,31 @@ async def handle_gift_command(update: Update, context: CallbackContext):
     sender_id = msg.from_user.id
 
     if not msg.reply_to_message:
-        return await msg.reply_text(f"❌ {bold_sc('please reply to a user to send a gift.')}", parse_mode=ParseMode.HTML)
+        return await msg.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> {bold_sc('please reply to a user to send a gift.')}", parse_mode=ParseMode.HTML)
 
     receiver = msg.reply_to_message.from_user
     if sender_id == receiver.id or receiver.is_bot:
-        return await msg.reply_text(f"❌ {bold_sc('invalid user for gift.')}", parse_mode=ParseMode.HTML)
+        return await msg.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> {bold_sc('invalid user for gift.')}", parse_mode=ParseMode.HTML)
 
     if len(context.args) != 1:
-        return await msg.reply_text(f"💡 {bold_sc('usage:')} <code>/gift &lt;id&gt;</code>", parse_mode=ParseMode.HTML)
+        return await msg.reply_text(f"<tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> {bold_sc('usage:')} <code>/gift &lt;id&gt;</code>", parse_mode=ParseMode.HTML)
 
     char_id = context.args[0]
     
     if sender_id in pending_gifts:
-        return await msg.reply_text(f"⚠️ {bold_sc('one gift is already in progress...')}", parse_mode=ParseMode.HTML)
+        return await msg.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji {bold_sc('one gift is already in progress...')}", parse_mode=ParseMode.HTML)
     
     if not await check_receiver_inventory_size(receiver.id):
         return await msg.reply_text(f"📦 {bold_sc(f'receiver inventory is full (max {MAX_INVENTORY_SIZE}).')}", parse_mode=ParseMode.HTML)
 
     sender_data = await user_collection.find_one({'id': sender_id})
     if not sender_data:
-        return await msg.reply_text(f"❌ {bold_sc('you dont own this character.')}", parse_mode=ParseMode.HTML)
+        return await msg.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji {bold_sc('you dont own this character.')}", parse_mode=ParseMode.HTML)
     
     # Check if user actually owns this character ID
     owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == str(char_id)), None)
     if not owned_char:
-        return await msg.reply_text(f"❌ {bold_sc('you dont own this character.')}", parse_mode=ParseMode.HTML)
+        return await msg.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji {bold_sc('you dont own this character.')}", parse_mode=ParseMode.HTML)
     
     # Fetch official character data from global collection to ensure correct image & info
     global_char = await collection.find_one({'id': str(char_id)})
@@ -176,7 +176,7 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
         f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
         f"{Style.LINE}\n"
-        f"<b><i>{to_small_caps(f'⏳ confirm within {GIFT_TIMEOUT}s to send.')}</i></b>"
+        f"<b><i>{to_small_caps(f'<tg-emoji emoji-id=\"5451732530048802485\">⏳</tg-emoji> confirm within {GIFT_TIMEOUT}s to send.')}</i></b>"
     )
 
     keyboard = [[
@@ -227,7 +227,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             
             if await atomic_transfer_character(sender_id, receiver_id, char):
                 final_caption = (
-                    f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>{to_small_caps('gift successfully delivered')}</b> <tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji>\n"
+                    f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>{to_small_caps('gift successful')}</b> <tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji>\n"
                     f"{Style.LINE}\n"
                     f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_id}'>{escape(receiver_name)}</a>\n"
                     f"<b>{Style.CHAR}</b> <b>{escape(char.get('name', 'Unknown'))}</b>\n"
