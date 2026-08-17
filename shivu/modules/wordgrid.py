@@ -281,8 +281,9 @@ def get_sorted_caption(placed_words, found_words):
         if w in found_words:
             caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{w}</b>\n"
         else:
-            masked = w[0] + "-" * (len(w) - 1)
-            caption += f"<b>{masked} ({len(w)})</b>\n"
+            # FORMAT FIX: Screenshot ke according proper space aur dash add kiya
+            masked = w[0] + "".join(" -" for _ in range(len(w) - 1))
+            caption += f"<b>{masked} &nbsp;&nbsp;({len(w)})</b>\n"
             
     caption += "\n<b>Tap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!</b>"
     return caption
