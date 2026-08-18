@@ -4,6 +4,7 @@ import io
 import logging
 import html
 import requests
+import asyncio
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
@@ -24,6 +25,27 @@ active_games = {}
 chat_settings = {}  # Format: {chat_id: {"pin": True, "mark_words": True, "theme": "automatic"}}
 stop_votes = {}  # Voting track karne ke liye
 LOG_GROUP_ID = -1003893927065  # Tumhara private log group
+
+# ==========================================
+# 🛠 100% FOOLPROOF LAZY DB LOADER
+# ==========================================
+DB_LOADED = False
+
+async def ensure_db_loaded():
+    """Bot restart hone ke baad state restore karne ke liye safe lazy loader"""
+    global DB_LOADED
+    if not DB_LOADED:
+        try:
+            async for game in grid_games_col.find({}):
+                active_games[game['_id']] = game['game_data']
+                
+            async for setting in grid_settings_col.find({}):
+                chat_settings[setting['_id']] = setting['settings']
+                
+            DB_LOADED = True
+            LOGGER.info("✅ WordGrid DB State Loaded Successfully!")
+        except Exception as e:
+            LOGGER.error(f"Error loading WordGrid state from DB: {e}")
 
 # ==========================================
 # 🛠 100% FOOLPROOF FONT LOADER
@@ -202,6 +224,7 @@ async def is_admin(chat, user_id, bot):
 # --- HANDLERS ---
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_db_loaded() # FIX: Reload state safely
     chat = update.effective_chat
     if not chat or chat.type not in ["group", "supergroup"]:
         await update.message.reply_text("<b>This game can only be played in groups!</b>", parse_mode="HTML")
@@ -270,6 +293,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LOGGER.error(f"Failed to send game log: {e}")
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_db_loaded() # FIX: Reload state safely
     chat = update.effective_chat
     user = update.effective_user
     
@@ -309,6 +333,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(text, parse_mode="HTML", reply_markup=btn)
 
 async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_db_loaded() # FIX: Reload state safely
     query = update.callback_query
     chat_id = query.message.chat_id
     user = update.effective_user
@@ -352,6 +377,7 @@ def calculate_points(mode, is_first, is_last):
     return 4
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_db_loaded() # FIX: Reload state safely
     chat = update.effective_chat
     if not chat or chat.type not in ["group", "supergroup"]:
         return
@@ -459,6 +485,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await grid_games_col.delete_one({'_id': chat_id}) # DB DELETE ON FINISH
 
 async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_db_loaded() # FIX: Reload state safely
     query = update.callback_query
     await query.answer()
     chat_id = query.message.chat_id
@@ -512,6 +539,7 @@ def build_theme_keyboard(chat_id):
     return InlineKeyboardMarkup(keyboard)
 
 async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_db_loaded() # FIX: Reload state safely
     chat = update.effective_chat
     user = update.effective_user
     
@@ -523,6 +551,7 @@ async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=build_settings_keyboard(chat.id), parse_mode="HTML")
 
 async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_db_loaded() # FIX: Reload state safely
     query = update.callback_query
     user = update.effective_user
     chat = update.effective_chat
@@ -698,23 +727,6 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=keyboard)
     except Exception as e:
         pass
-
-# --- STARTUP DB LOADING TASK ---
-async def load_grid_state(context: ContextTypes.DEFAULT_TYPE = None):
-    try:
-        async for game in grid_games_col.find({}):
-            active_games[game['_id']] = game['game_data']
-            
-        async for setting in grid_settings_col.find({}):
-            chat_settings[setting['_id']] = setting['settings']
-            
-        LOGGER.info("WordGrid DB State Loaded Successfully!")
-    except Exception as e:
-        LOGGER.error(f"Error loading WordGrid state from DB: {e}")
-
-# Register startup job
-if application.job_queue:
-    application.job_queue.run_once(load_grid_state, 0)
 
 
 # --- REGISTER HANDLERS ---
