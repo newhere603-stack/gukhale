@@ -11,7 +11,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMe
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from shivu import application, user_collection, db
-# Yahan se tumhari nayi file se hazaron words automatically load honge!
+# Tumhari nayi easy words wali file jisme sab letters ek sath hain
 from shivu.modules.words_data_full_az import WORD_LIST
 
 LOGGER = logging.getLogger(__name__)
@@ -22,9 +22,9 @@ grid_settings_col = db['grid_settings']
 
 # Game State & Settings Storage
 active_games = {}
-chat_settings = {}  # Format: {chat_id: {"pin": True, "mark_words": True, "theme": "automatic"}}
-stop_votes = {}  # Voting track karne ke liye
-LOG_GROUP_ID = -1003893927065  # Tumhara private log group
+chat_settings = {}  
+stop_votes = {}  
+LOG_GROUP_ID = -1003893927065  
 
 # ==========================================
 # 🛠 100% FOOLPROOF LAZY DB LOADER
@@ -32,7 +32,7 @@ LOG_GROUP_ID = -1003893927065  # Tumhara private log group
 DB_LOADED = False
 
 async def ensure_db_loaded():
-    """Bot restart hone ke baad state restore karne ke liye safe lazy loader"""
+    """Bot restart hone ke baad state restore karne ke liye"""
     global DB_LOADED
     if not DB_LOADED:
         try:
@@ -81,24 +81,40 @@ def is_night_ist():
     ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
     return not (6 <= ist_now.hour < 18)
 
+# ==========================================
+# 🧠 SMART WORD PICKER (FIXED ALGORITHM)
+# ==========================================
 def generate_game_grid(mode="normal"):
+    # Yahan hum fix sequence set kar rahe hain ki kitne letter ke kitne words aayenge
     if mode == "easy":
-        size, num_words = 6, 6
-        valid_words = [w for w in WORD_LIST if 3 <= len(w) <= 5]
+        size = 6
+        target_lengths = [3, 3, 4, 4, 5, 5] # 6 Words: Do 3-letter, do 4-letter, do 5-letter
     elif mode == "hard":
-        size, num_words = 10, 12
-        valid_words = [w for w in WORD_LIST if 5 <= len(w) <= 8]
+        size = 10
+        target_lengths = [4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 7] # 12 Words (Thode hard length wale)
     else: # normal
-        size, num_words = 8, 9
-        valid_words = [w for w in WORD_LIST if 3 <= len(w) <= 7]
+        size = 8
+        target_lengths = [3, 3, 4, 4, 5, 5, 6, 6, 7] # 9 Words: Perfect mix sequence
 
     grid = [['' for _ in range(size)] for _ in range(size)]
+    chosen_words = []
     
-    chosen_words = random.sample(valid_words, min(num_words, len(valid_words)))
+    # Word_List me se fix pattern ke hisaab se words nikalna
+    for length in target_lengths:
+        # Same length ke saare words filter karo jo abhi tak nahi chune gaye
+        pool = [w for w in WORD_LIST if len(w) == length and w not in chosen_words]
+        
+        # Agar by chance us length ka word list me na bacha ho toh kisi bhi length ka utha lo
+        if not pool: 
+            pool = [w for w in WORD_LIST if w not in chosen_words]
+            
+        if pool:
+            chosen_words.append(random.choice(pool))
+            
     placed_words = {}
-    
     directions = [(0, 1), (1, 0), (1, 1), (-1, 1), (-1, -1), (0, -1), (-1, 0), (1, -1)] 
     
+    # Words ko grid me fit karna
     for word in chosen_words:
         placed = False
         for _ in range(300):
@@ -115,6 +131,7 @@ def generate_game_grid(mode="normal"):
         if not placed:
             continue
 
+    # Khali jagah par random alphabets bharna
     for r in range(size):
         for c in range(size):
             if grid[r][c] == '':
@@ -197,6 +214,7 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
 
 def get_sorted_caption(placed_words, found_words):
     caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\n<b>Find these words:</b>\n"
+    # Ye line tumhare words ko chote se bade sequence me set karti hai
     sorted_words = sorted(placed_words.keys(), key=len)
     
     for w in sorted_words:
@@ -222,9 +240,8 @@ async def is_admin(chat, user_id, bot):
     return member.status in ['administrator', 'creator']
 
 # --- HANDLERS ---
-
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ensure_db_loaded() # FIX: Reload state safely
+    await ensure_db_loaded() 
     chat = update.effective_chat
     if not chat or chat.type not in ["group", "supergroup"]:
         await update.message.reply_text("<b>This game can only be played in groups!</b>", parse_mode="HTML")
@@ -265,7 +282,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await context.bot.send_photo(chat_id=chat_id, photo=img_bio, caption=caption, parse_mode="HTML", reply_markup=btn)
     
     active_games[chat_id]["msg_id"] = msg.message_id
-    # LIVE SAVE TO DB
     await grid_games_col.update_one({'_id': chat_id}, {'$set': {'game_data': active_games[chat_id]}}, upsert=True)
 
     settings = get_chat_settings(chat_id)
@@ -293,7 +309,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LOGGER.error(f"Failed to send game log: {e}")
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ensure_db_loaded() # FIX: Reload state safely
+    await ensure_db_loaded() 
     chat = update.effective_chat
     user = update.effective_user
     
@@ -310,7 +326,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_adm:
         del active_games[chat_id]
         stop_votes.pop(chat_id, None)
-        await grid_games_col.delete_one({'_id': chat_id}) # DB DELETE
+        await grid_games_col.delete_one({'_id': chat_id})
         
         await update.message.reply_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by an admin. Start another with /grid_hard or /grid</b>", parse_mode="HTML")
     else:
@@ -324,7 +340,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if current_votes >= votes_needed:
             del active_games[chat_id]
             stop_votes.pop(chat_id, None)
-            await grid_games_col.delete_one({'_id': chat_id}) # DB DELETE
+            await grid_games_col.delete_one({'_id': chat_id})
             
             await update.message.reply_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by community vote (3/3). Start another with /grid_hard or /grid</b>", parse_mode="HTML")
         else:
@@ -333,7 +349,7 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(text, parse_mode="HTML", reply_markup=btn)
 
 async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ensure_db_loaded() # FIX: Reload state safely
+    await ensure_db_loaded() 
     query = update.callback_query
     chat_id = query.message.chat_id
     user = update.effective_user
@@ -357,7 +373,7 @@ async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if current_votes >= votes_needed:
         del active_games[chat_id]
         stop_votes.pop(chat_id, None)
-        await grid_games_col.delete_one({'_id': chat_id}) # DB DELETE
+        await grid_games_col.delete_one({'_id': chat_id})
         
         await query.answer("Game stopped by vote!", show_alert=True)
         await query.edit_message_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by community vote (3/3). Start another with /grid_hard or /grid</b>", parse_mode="HTML")
@@ -377,7 +393,7 @@ def calculate_points(mode, is_first, is_last):
     return 4
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ensure_db_loaded() # FIX: Reload state safely
+    await ensure_db_loaded() 
     chat = update.effective_chat
     if not chat or chat.type not in ["group", "supergroup"]:
         return
@@ -404,13 +420,11 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
         mention = user.mention_html()
         
-        # BSON Dict Key Safety: Ensure user ID is string
         uid_str = str(user.id)
         if uid_str not in game["round_scores"]:
             game["round_scores"][uid_str] = {"mention": mention, "score": 0}
         game["round_scores"][uid_str]["score"] += points
         
-        # LIVE SAVE TO DB (Scores update)
         await grid_games_col.update_one({'_id': chat_id}, {'$set': {'game_data': game}}, upsert=True)
         
         now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
@@ -482,10 +496,10 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=chat_id, text=blockquote_summary, parse_mode="HTML", reply_markup=end_btn)
             del active_games[chat_id]
             stop_votes.pop(chat_id, None)
-            await grid_games_col.delete_one({'_id': chat_id}) # DB DELETE ON FINISH
+            await grid_games_col.delete_one({'_id': chat_id}) 
 
 async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ensure_db_loaded() # FIX: Reload state safely
+    await ensure_db_loaded() 
     query = update.callback_query
     await query.answer()
     chat_id = query.message.chat_id
@@ -539,7 +553,7 @@ def build_theme_keyboard(chat_id):
     return InlineKeyboardMarkup(keyboard)
 
 async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ensure_db_loaded() # FIX: Reload state safely
+    await ensure_db_loaded() 
     chat = update.effective_chat
     user = update.effective_user
     
@@ -551,7 +565,7 @@ async def settings_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, reply_markup=build_settings_keyboard(chat.id), parse_mode="HTML")
 
 async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await ensure_db_loaded() # FIX: Reload state safely
+    await ensure_db_loaded() 
     query = update.callback_query
     user = update.effective_user
     chat = update.effective_chat
@@ -592,11 +606,10 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "wg_close":
         await query.message.delete()
         
-    # SAVE DB SETTINGS
     await grid_settings_col.update_one({'_id': chat.id}, {'$set': {'settings': settings}}, upsert=True)
     await query.answer()
 
-# --- LEADERBOARD LOGIC & UI FIXES (WITH TIME FILTERS) ---
+# --- LEADERBOARD LOGIC & UI FIXES ---
 
 WG_LEADERBOARD_STATES = {}
 
@@ -725,7 +738,7 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     
     try:
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=keyboard)
-    except Exception as e:
+    except Exception:
         pass
 
 
