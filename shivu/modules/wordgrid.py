@@ -4,7 +4,6 @@ import string
 import io
 import logging
 import html
-import requests
 import asyncio
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
@@ -44,35 +43,28 @@ async def ensure_db_loaded():
             LOGGER.error(f"Error loading WordGrid state from DB: {e}")
 
 # ==========================================
-# 🛠 SMART AUTO-DOWNLOAD FONT LOADER (HEROKU & VPS SAFE)
+# 🚀 ZERO-LAG OFFLINE FONT LOADER (NO INTERNET NEEDED)
 # ==========================================
 def get_bold_font(size):
-    font_filename = "Roboto-Bold.ttf"
+    # Internet link hata diya hai. Ab ye direct VPS/Heroku ke inbuilt fonts use karega.
+    # Isse 404 lag aane ka chance 0% ho gaya hai.
+    font_paths = [
+        "Roboto-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/ubuntu/Ubuntu-B.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
+    ]
     
-    # Agar file nahi hai (jaise Heroku restart par), toh code khud download karega
-    if not os.path.exists(font_filename):
-        try:
-            # 100% Working Permanent Direct GitHub Link
-            url = "https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf"
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                with open(font_filename, "wb") as f:
-                    f.write(response.content)
-            else:
-                LOGGER.error(f"Failed to auto-download font. Status: {response.status_code}")
-        except Exception as e:
-            LOGGER.error(f"Font download error: {e}")
-
-    # File save hone ke baad direct load karega (0 ms latency)
-    try:
-        return ImageFont.truetype(font_filename, size)
-    except Exception as e:
-        LOGGER.error(f"Local Font load failed: {e}")
-        # Agar fir bhi fail ho gaya to OS ke default fonts use karega
-        try:
-            return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
-        except Exception:
-            return ImageFont.load_default()
+    for path in font_paths:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except:
+                pass
+                
+    # Agar VPS me koi font nahi mili toh direct basic font use karega (Instant load)
+    return ImageFont.load_default()
 
 def get_chat_settings(chat_id):
     if chat_id not in chat_settings:
@@ -190,11 +182,19 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
             x0, y0 = c * cell_size, r * cell_size
             letter = grid[r][c]
             
-            bbox = font.getbbox(letter)
-            w = bbox[2] - bbox[0]
-            h = bbox[3] - bbox[1]
-            text_x = x0 + (cell_size - w) / 2 - bbox[0]
-            text_y = y0 + (cell_size - h) / 2 - bbox[1]
+            # Agar default font chota hai to center me manage karega
+            try:
+                bbox = font.getbbox(letter)
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                text_x = x0 + (cell_size - w) / 2 - bbox[0]
+                text_y = y0 + (cell_size - h) / 2 - bbox[1]
+            except AttributeError:
+                # Fallback for older PIL versions with load_default()
+                w, h = font.getsize(letter)
+                text_x = x0 + (cell_size - w) / 2
+                text_y = y0 + (cell_size - h) / 2
+
             draw.text((text_x, text_y), letter, fill=text_color, font=font)
 
     img = img.convert("RGB")
@@ -404,6 +404,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         link = get_msg_link(chat, game["msg_id"])
         btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
         try:
+            # FASTEST REPLY SYSTEM
             await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         except Exception:
             pass
