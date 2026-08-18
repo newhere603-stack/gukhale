@@ -117,7 +117,7 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
     img = Image.new('RGBA', (img_size, img_size), color=bg_color) 
     draw = ImageDraw.Draw(img)
 
-    font = get_bold_font(60)
+    font = get_bold_font(50)
 
     for r in range(size + 1):
         draw.line([(0, r*cell_size), (img_size, r*cell_size)], fill=line_color, width=3)
