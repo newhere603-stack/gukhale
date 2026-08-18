@@ -10,7 +10,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMe
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from shivu import application, user_collection
-# NAYA IMPORT: Yahan se tumhari nayi file se hazaron words automatically load honge!
+# Yahan se tumhari nayi file se hazaron words automatically load honge!
 from shivu.modules.words_data_full_az import WORD_LIST
 
 LOGGER = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ stop_votes = {}  # Voting track karne ke liye
 LOG_GROUP_ID = -1003893927065  # Tumhara private log group
 
 # ==========================================
-# 🛠 100% FOOLPROOF FONT LOADER (Error Fixed)
+# 🛠 100% FOOLPROOF FONT LOADER
 # ==========================================
 GLOBAL_FONT_BYTES = None
 
@@ -30,7 +30,6 @@ def get_bold_font(size):
     global GLOBAL_FONT_BYTES
     try:
         if GLOBAL_FONT_BYTES is None:
-            # Using direct raw URL to prevent HTML/404 redirects causing "unknown format"
             url = "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Bold.ttf"
             response = requests.get(url, timeout=10)
             if response.status_code == 200:
@@ -41,7 +40,7 @@ def get_bold_font(size):
         return ImageFont.truetype(io.BytesIO(GLOBAL_FONT_BYTES), size)
     except Exception as e:
         LOGGER.error(f"RAM Font load failed: {e}")
-        GLOBAL_FONT_BYTES = None # Reset so it retries next time
+        GLOBAL_FONT_BYTES = None 
         try:
             return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
         except:
@@ -69,7 +68,6 @@ def generate_game_grid(mode="normal"):
 
     grid = [['' for _ in range(size)] for _ in range(size)]
     
-    # YAHAN HAI LOGIC: random.sample ki wajah se har game mein ekdum naye random words aayenge
     chosen_words = random.sample(valid_words, min(num_words, len(valid_words)))
     placed_words = {}
     
@@ -250,7 +248,9 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         group_name = html.escape(chat.title)
         game_link = get_msg_link(chat, msg.message_id)
-        words_list = ", ".join(placed_words.keys())
+        
+        # LOGS FIX: First letter Capital, no commas, separated by space
+        words_list = " ".join([w.capitalize() for w in placed_words.keys()])
         
         log_text = (
             f"🎮 <b>New WordGrid Game Started!</b>\n\n"
@@ -370,7 +370,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             game["round_scores"][user.id] = {"mention": mention, "score": 0}
         game["round_scores"][user.id]["score"] += points
         
-        # LOGIC UPDATE: Global aur Chat specific dono mein points add honge
         try:
             inc_dict = {
                 "grid_points": points,
@@ -475,7 +474,7 @@ def build_theme_keyboard(chat_id):
     keyboard = [
         [InlineKeyboardButton(auto_btn, callback_data="wg_set_theme_automatic")],
         [InlineKeyboardButton(blk_btn, callback_data="wg_set_theme_black"), InlineKeyboardButton(wht_btn, callback_data="wg_set_theme_white")],
-        [InlineKeyboardButton("↻ Back", callback_data="wg_back_settings")]
+        [InlineKeyboardButton("Back", callback_data="wg_back_settings")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -533,15 +532,14 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     await query.answer()
 
-# --- NAYA LEADERBOARD LOGIC & UI ---
+# --- LEADERBOARD LOGIC & UI FIXES ---
 
 def get_grid_top_keyboard(scope="global"):
-    # Jo mode select hoga usme ek target/symbol dikhega
     global_btn = "ɢʟᴏʙᴀʟ ⎋" if scope == "global" else "ɢʟᴏʙᴀʟ"
     chat_btn = "ᴛʜɪs ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴛʜɪs ᴄʜᴀᴛ"
     
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Refresh 🔄", callback_data=f"wg_top_{scope}")],
+        [InlineKeyboardButton("⟳", callback_data=f"wg_top_{scope}")],
         [
             InlineKeyboardButton(global_btn, callback_data="wg_top_global"),
             InlineKeyboardButton(chat_btn, callback_data="wg_top_chat")
@@ -556,19 +554,26 @@ async def fetch_grid_leaderboard(chat_id, scope="global"):
         top_users = await cursor.to_list(length=10)
         
         title_scope = "GLOBAL" if scope == "global" else "THIS CHAT"
-        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WORDGRID {title_scope} LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WORDGRID LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
         
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
         else:
-            medals = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
             for i, user in enumerate(top_users):
-                medal = medals[i] if i < len(medals) else "🏅"
                 uid = user.get('id', user.get('_id'))
-                name = html.escape(user.get('first_name', 'Player'))
-                user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else f"<b>{name}</b>"
+                
+                # NAME FIX: Exact naam uthayega (First Name -> Username -> Unknown)
+                first_name = user.get('first_name', '')
+                if not first_name or first_name.strip() == '':
+                    first_name = user.get('username', 'Unknown')
+                
+                name = html.escape(first_name)
+                user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else name
+                
                 points = user.get(sort_key, 0)
-                msg += f"{medal} <b>{user_mention}</b> - <b><code>{points:,} pts</code></b>\n"
+                
+                # FORMAT FIX: Bold Numbers & Bold "pts"
+                msg += f"<b>{i + 1}.</b> {user_mention} - {points:,} <b>pts</b>\n"
         return msg
     except Exception as e:
         LOGGER.error(f"Leaderboard fetch error: {e}")
@@ -576,7 +581,6 @@ async def fetch_grid_leaderboard(chat_id, scope="global"):
 
 async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    # Default open par hamesha "Global" dikhayenge
     msg = await fetch_grid_leaderboard(chat_id, scope="global")
     keyboard = get_grid_top_keyboard(scope="global")
     
@@ -586,7 +590,6 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     query = update.callback_query
     chat_id = query.message.chat_id
     
-    # Check ki global chahiye ya this chat
     scope = "global" if "global" in query.data else "chat"
     
     await query.answer(f"Fetching {scope} leaderboard...")
@@ -597,7 +600,6 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     try:
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=keyboard)
     except Exception as e:
-        # Message not modified error handle karne ke liye
         pass
 
 # --- REGISTER HANDLERS ---
@@ -608,8 +610,6 @@ application.add_handler(CommandHandler(["helpgrid", "gridsettings"], settings_cm
 
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="^refresh_grid$"))
-
-# Yahan par callback register kiya hai dono buttons ke liye
 application.add_handler(CallbackQueryHandler(grid_leaderboard_callback, pattern="^wg_top_"))
 application.add_handler(CallbackQueryHandler(vote_stop_callback, pattern="^wg_vote_stop$"))
 application.add_handler(CallbackQueryHandler(settings_callback, pattern="^wg_|ignore"))
