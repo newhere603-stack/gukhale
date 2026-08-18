@@ -176,6 +176,49 @@ async def set_exchange_limit_cmd(update: Update, context: CallbackContext):
     
     await update.message.reply_html(f"✅ <b>Dᴀɪʟʏ ᴇxᴄʜᴀɴɢᴇ ʟɪᴍɪᴛ ʜᴀs ʙᴇᴇɴ ᴜᴘᴅᴀᴛᴇᴅ ᴛᴏ <code>{new_limit}</code> ᴛᴏᴋᴇɴs!</b>")
 
+# 🌟 NEW OWNER COMMAND TO FORCE DELIST A CHARACTER 🌟
+async def force_delist_cmd(update: Update, context: CallbackContext):
+    if update.effective_user.id != OWNER_ID:
+        return
+        
+    if not context.args:
+        await update.message.reply_text("⚠️ <b>Iɴᴠᴀʟɪᴅ ғᴏʀᴍᴀᴛ.</b>\nUsaɢᴇ: <code>/forcedelist <character_id></code>", parse_mode="HTML")
+        return
+        
+    char_id = context.args[0]
+    
+    # Character ID string ya int dono format me check karega
+    query = {'$or': [{'character.id': char_id}, {'character.id': int(char_id) if char_id.isdigit() else char_id}]}
+    listings = await market_collection.find(query).to_list(length=None)
+    
+    if not listings:
+        await update.message.reply_html(f"⚠️ <b>Nᴏ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs ғᴏᴜɴᴅ ғᴏʀ ᴄʜᴀʀᴀᴄᴛᴇʀ ID <code>{char_id}</code> ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ.</b>")
+        return
+        
+    count = 0
+    for item in listings:
+        seller_id = item['seller_id']
+        char = item['character']
+        market_id = item['_id']
+        
+        # Wapas seller ke harem mein push kar dega
+        await user_collection.update_one({'id': seller_id}, {'$push': {'characters': char}})
+        # Market se hamesha ke liye delete
+        await market_collection.delete_one({'_id': market_id})
+        count += 1
+        
+        # Log action
+        seller_mention = f"<a href='tg://user?id={seller_id}'>{seller_id}</a>"
+        log_details = (
+            f"🛡️ <b>Aᴅᴍɪɴ Fᴏʀᴄᴇ Dᴇʟɪsᴛ</b>\n"
+            f"👤 <b>Sᴇʟʟᴇʀ:</b> {seller_mention}\n"
+            f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {char.get('name')} (<code>{char.get('id')}</code>)\n"
+            f"❌ <b>Aᴄᴛɪᴏɴ:</b> Rᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ ʙʏ Bᴏᴛ Oᴡɴᴇʀ."
+        )
+        await send_market_log(context, "📉 FORCE DELISTED", log_details)
+        
+    await update.message.reply_html(f"✅ <b>Sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ <code>{count}</code> ʟɪsᴛɪɴɢ(s) ғᴏʀ ᴄʜᴀʀᴀᴄᴛᴇʀ ID <code>{char_id}</code> ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛʜᴇᴍ ᴛᴏ ᴛʜᴇɪʀ ᴏᴡɴᴇʀs.</b>")
+
 # ========================
 # BUY & MARKET CALLBACKS
 # ========================
@@ -585,6 +628,12 @@ async def ask_price(update: Update, context: CallbackContext):
         return WAITING_FOR_PRICE
 
     price = int(price_text)
+    
+    # 🌟 LIMIT LOGIC 🌟
+    if price > 1000000:
+        await update.message.reply_text("<b>⚠️ ᴍᴀxɪᴍᴜᴍ ᴘʀɪᴄᴇ ʟɪᴍɪᴛ ɪs 1,000,000 ᴄᴏɪɴs. ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ʟᴏᴡᴇʀ ᴀᴍᴏᴜɴᴛ.</b>", parse_mode='HTML')
+        return WAITING_FOR_PRICE
+
     character = context.user_data.get('sell_character')
 
     if not character:
@@ -799,4 +848,5 @@ application.add_handler(exchange_conv, group=-2)
 application.add_handler(CommandHandler(["pmarket", "shop"], pmarket_command), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd), group=0)
 application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd), group=0)
+application.add_handler(CommandHandler("forcedelist", force_delist_cmd), group=0) # NEW COMMAND REGISTERED HERE
 application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):'), group=0)
