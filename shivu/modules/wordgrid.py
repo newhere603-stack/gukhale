@@ -139,7 +139,7 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
                 c2, r2 = coords[-1][1] * cell_size + cell_size // 2, coords[-1][0] * cell_size + cell_size // 2
                 
                 color = colors[i % len(colors)]
-                line_width = 50
+                line_width = 50 # Isko kam karne se line patli hogi (eg. 40 ya 35)
                 radius = line_width // 2
                 
                 overlay_draw.line([(c1, r1), (c2, r2)], fill=color, width=line_width)
@@ -175,10 +175,8 @@ def get_sorted_caption(placed_words, found_words):
     
     for w in sorted_words:
         if w in found_words:
-            # Done words ab blockquote me with copyable <code> tag aayenge
             caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <code>{w}</code>\n"
         else:
-            # FIX: Hata diya &nbsp; aur replace kiya code tag se so tap to copy ban jaye
             masked = w[0] + "".join("-" for _ in range(len(w) - 1))
             caption += f"<code>{masked} ({len(w)})</code>\n"
             
@@ -371,10 +369,26 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             game["round_scores"][user.id] = {"mention": mention, "score": 0}
         game["round_scores"][user.id]["score"] += points
         
+        # TIME-STAMPED POINTS SAVING LOGIC ADDED HERE!
+        now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+        today_str = now_ist.strftime("%Y-%m-%d")
+        week_str = now_ist.strftime("%Y-W%V")
+        month_str = now_ist.strftime("%Y-%m")
+        year_str = now_ist.strftime("%Y")
+
         try:
             inc_dict = {
                 "grid_points": points,
-                f"{chat_id}_grid_points": points
+                f"{today_str}_grid_points": points,
+                f"{week_str}_grid_points": points,
+                f"{month_str}_grid_points": points,
+                f"{year_str}_grid_points": points,
+                
+                f"{chat_id}_grid_points": points,
+                f"{chat_id}_{today_str}_grid_points": points,
+                f"{chat_id}_{week_str}_grid_points": points,
+                f"{chat_id}_{month_str}_grid_points": points,
+                f"{chat_id}_{year_str}_grid_points": points
             }
             
             await user_collection.update_one(
@@ -395,7 +409,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         img_bio.seek(0)
         
         caption = get_sorted_caption(game["words"], game["found"])
-        btn_refresh = InlineKeyboardMarkup([[InlineKeyboardButton("ʀᴇꜰʀᴇsʜ ɢʀɪᴅ", callback_data="refresh_grid")]])
+        btn_refresh = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
         
         try:
             await context.bot.edit_message_media(
@@ -406,7 +420,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
             
         link = get_msg_link(chat, game["msg_id"])
-        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
+        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("Go to Grid ⤻", url=link)]])
 
         await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         
@@ -533,28 +547,80 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     await query.answer()
 
-# --- LEADERBOARD LOGIC & UI FIXES ---
+# --- LEADERBOARD LOGIC & UI FIXES (WITH TIME FILTERS) ---
 
-def get_grid_top_keyboard(scope="global"):
-    global_btn = "ɢʟᴏʙᴀʟ ⎋" if scope == "global" else "ɢʟᴏʙᴀʟ"
-    chat_btn = "ᴛʜɪs ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴛʜɪs ᴄʜᴀᴛ"
+WG_LEADERBOARD_STATES = {}
+
+def get_wg_user_state(chat_id):
+    if chat_id not in WG_LEADERBOARD_STATES:
+        WG_LEADERBOARD_STATES[chat_id] = {
+            "scope": "global",
+            "time": "all"
+        }
+    return WG_LEADERBOARD_STATES[chat_id]
+
+def get_wg_target_key(time_filter, scope, chat_id):
+    base_key = "grid_points"
+    now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    time_prefix = None
     
+    if time_filter == "today":
+        time_prefix = now_ist.strftime("%Y-%m-%d")
+    elif time_filter == "week":
+        time_prefix = now_ist.strftime("%Y-W%V")
+    elif time_filter == "month":
+        time_prefix = now_ist.strftime("%Y-%m")
+    elif time_filter == "year":
+        time_prefix = now_ist.strftime("%Y")
+
+    time_key = f"{time_prefix}_{base_key}" if time_prefix else base_key
+        
+    if scope == "chat":
+        return f"{chat_id}_{time_key}"
+    return time_key
+
+def get_grid_top_keyboard(state):
+    scope = state["scope"]
+    time_f = state["time"]
+
+    global_btn = "ɢʟᴏʙᴀʟ ⎋" if scope == "global" else "ɢʟᴏʙᴀʟ"
+    chat_btn = "ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴄʜᴀᴛ"
+    
+    today_btn = "ᴛᴏᴅᴀʏ ⎋" if time_f == "today" else "ᴛᴏᴅᴀʏ"
+    week_btn = "ᴡᴇᴇᴋ ⎋" if time_f == "week" else "ᴡᴇᴇᴋ"
+    month_btn = "ᴍᴏɴᴛʜ ⎋" if time_f == "month" else "ᴍᴏɴᴛʜ"
+    year_btn = "ʏᴇᴀʀ ⎋" if time_f == "year" else "ʏᴇᴀʀ"
+    all_btn = "ᴀʟʟ-ᴛɪᴍᴇ ⎋" if time_f == "all" else "ᴀʟʟ-ᴛɪᴍᴇ"
+
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⟳", callback_data=f"wg_top_{scope}")],
         [
-            InlineKeyboardButton(global_btn, callback_data="wg_top_global"),
-            InlineKeyboardButton(chat_btn, callback_data="wg_top_chat")
+            InlineKeyboardButton(global_btn, callback_data="wg_top_scope_global"),
+            InlineKeyboardButton("⟳", callback_data="wg_top_refresh"),
+            InlineKeyboardButton(chat_btn, callback_data="wg_top_scope_chat")
+        ],
+        [
+            InlineKeyboardButton(today_btn, callback_data="wg_top_time_today"),
+            InlineKeyboardButton(week_btn, callback_data="wg_top_time_week"),
+            InlineKeyboardButton(month_btn, callback_data="wg_top_time_month")
+        ],
+        [
+            InlineKeyboardButton(year_btn, callback_data="wg_top_time_year"),
+            InlineKeyboardButton(all_btn, callback_data="wg_top_time_all")
         ]
     ])
 
-async def fetch_grid_leaderboard(chat_id, scope="global"):
-    sort_key = "grid_points" if scope == "global" else f"{chat_id}_grid_points"
+async def fetch_grid_leaderboard(chat_id, state):
+    scope = state["scope"]
+    time_f = state["time"]
+    
+    sort_key = get_wg_target_key(time_f, scope, chat_id)
     
     try:
         cursor = user_collection.find({sort_key: {"$gt": 0}}).sort(sort_key, -1).limit(10)
         top_users = await cursor.to_list(length=10)
         
         title_scope = "GLOBAL" if scope == "global" else "THIS CHAT"
+        time_title = "" if time_f == "all" else f" ({time_f.upper()})"
         msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WORDGRID LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
         
         if not top_users:
@@ -572,7 +638,8 @@ async def fetch_grid_leaderboard(chat_id, scope="global"):
                 
                 points = user.get(sort_key, 0)
                 
-                msg += f"<b>{i + 1}.</b> {user_mention} - {points:,} <b>pts</b>\n"
+                # FORMAT FIX: Name is now BOLD and Points are now MONO (copyable)
+                msg += f"<b>{i + 1}.</b> <b>{user_mention}</b> - <code>{points:,}</code> <b>pts</b>\n"
         return msg
     except Exception as e:
         LOGGER.error(f"Leaderboard fetch error: {e}")
@@ -580,21 +647,33 @@ async def fetch_grid_leaderboard(chat_id, scope="global"):
 
 async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    msg = await fetch_grid_leaderboard(chat_id, scope="global")
-    keyboard = get_grid_top_keyboard(scope="global")
+    state = get_wg_user_state(chat_id)
+    
+    msg = await fetch_grid_leaderboard(chat_id, state)
+    keyboard = get_grid_top_keyboard(state)
     
     await update.message.reply_text(msg, parse_mode="HTML", reply_markup=keyboard)
 
 async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    data = query.data
     chat_id = query.message.chat_id
     
-    scope = "global" if "global" in query.data else "chat"
+    state = get_wg_user_state(chat_id)
+
+    if data == "wg_top_scope_global":
+        state["scope"] = "global"
+    elif data == "wg_top_scope_chat":
+        state["scope"] = "chat"
+    elif data.startswith("wg_top_time_"):
+        state["time"] = data.replace("wg_top_time_", "")
+    elif data == "wg_top_refresh":
+        pass 
+        
+    await query.answer()
     
-    await query.answer(f"Fetching {scope} leaderboard...")
-    
-    msg = await fetch_grid_leaderboard(chat_id, scope=scope)
-    keyboard = get_grid_top_keyboard(scope=scope)
+    msg = await fetch_grid_leaderboard(chat_id, state)
+    keyboard = get_grid_top_keyboard(state)
     
     try:
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=keyboard)
