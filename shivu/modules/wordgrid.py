@@ -8,14 +8,17 @@ from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+
 from shivu import application, user_collection
+# NAYA IMPORT: Yahan se tumhari nayi file se hazaron words automatically load honge!
+from shivu.modules.words_data_full_az import WORD_LIST
 
 LOGGER = logging.getLogger(__name__)
 
 # Game State & Settings Storage
 active_games = {}
 chat_settings = {}  # Format: {chat_id: {"pin": True, "mark_words": True, "theme": "automatic"}}
-stop_votes = {}  # NAYA: Voting track karne ke liye
+stop_votes = {}  # Voting track karne ke liye
 LOG_GROUP_ID = -1003893927065  # Tumhara private log group
 
 # ==========================================
@@ -44,113 +47,6 @@ def get_bold_font(size):
         except:
             return ImageFont.load_default()
 
-# Massive Word Pool
-WORD_LIST = [
-    "ACT", "AGE", "AIR", "ALL", "ANT", "ANY", "ARM", "ART", "ASK", "BAD", "BAG", "BAT", "BEE", "BIG", "BOX", "BOY", 
-    "BUG", "BUS", "BUT", "BUY", "CAN", "CAR", "CAT", "COW", "CRY", "CUP", "CUT", "DAY", "DOG", "DRY", "EAR", "EAT", 
-    "EGG", "END", "EYE", "FAR", "FAT", "FEW", "FIT", "FLY", "FUN", "GAS", "GET", "GOD", "HAT", "HIT", "HOT", "HOW", 
-    "HUG", "ICE", "ILL", "INK", "JAM", "JAR", "JOB", "JOY", "KEY", "KID", "LAP", "LAW", "LEG", "LET", "LIP", "LOG", 
-    "LOW", "MAD", "MAN", "MAP", "MAT", "MAY", "MEN", "MIX", "MOB", "MUD", "MUG", "NET", "NEW", "NOD", "NOT", "NOW", 
-    "NUT", "OAK", "ODD", "OFF", "OLD", "ONE", "OUT", "OWL", "OWN", "PAN", "PAY", "PEG", "PEN", "PET", "PIG", "PIN", 
-    "POT", "PRO", "PUT", "RAW", "RED", "RID", "RIP", "ROB", "ROW", "RUB", "RUN", "SAD", "SAY", "SEA", "SEE", "SET", 
-    "SHE", "SIT", "SKY", "SON", "SUN", "TAP", "TAX", "TEA", "TEN", "TIE", "TIN", "TIP", "TOE", "TOP", "TOY", "TRY", 
-    "TWO", "USE", "VAN", "VET", "WAR", "WAS", "WAY", "WEB", "WET", "WHO", "WHY", "WIN", "YES", "YET", "YOU", "ZOO",
-    "ABLE", "ALSO", "AREA", "ARMY", "AWAY", "BABY", "BACK", "BALL", "BAND", "BANK", "BASE", "BATH", "BEAR", "BEAT", 
-    "BIRD", "BLOW", "BLUE", "BOAT", "BODY", "BONE", "BOOK", "BORN", "BOTH", "BOWL", "BURN", "BUSH", "BUSY", "CALL", 
-    "CALM", "CAMP", "CARE", "CASH", "CAST", "CHAT", "CITY", "CLUB", "COAL", "COAT", "COLD", "COME", "COOK", "COOL", 
-    "COPE", "COPY", "CORE", "COST", "CREW", "CROP", "DARK", "DATA", "DATE", "DAWN", "DAYS", "DEAD", "DEAL", "DEAN", 
-    "DEAR", "DEBT", "DEEP", "DEER", "DESK", "DIAL", "DIET", "DIRT", "DISH", "DOOR", "DOSE", "DOWN", "DRAW", "DROP", 
-    "DRUG", "DUAL", "DUKE", "DUST", "DUTY", "EACH", "EARN", "EAST", "EASY", "EDGE", "ELSE", "EVEN", "EVER", "EVIL", 
-    "EXIT", "FACE", "FACT", "FAIL", "FAIR", "FALL", "FARM", "FAST", "FEAR", "FEEL", "FEET", "FILL", "FILM", "FIND", 
-    "FINE", "FIRE", "FIRM", "FISH", "FIVE", "FLAT", "FLOW", "FOOD", "FOOT", "FORD", "FORM", "FREE", "FUND", "GAME", 
-    "GANG", "GATE", "GIFT", "GIRL", "GLAD", "GOAL", "GOES", "GOLD", "GOLF", "GOOD", "GRAY", "GREY", "GROW", "GULF", 
-    "HAIR", "HALF", "HALL", "HAND", "HANG", "HARD", "HARM", "HATE", "HAVE", "HEAD", "HEAR", "HEAT", "HELP", "HERE", 
-    "HERO", "HIGH", "HILL", "HOLE", "HOME", "HOPE", "HOST", "HOUR", "IDEA", "INTO", "IRON", "ITEM", "JACK", "JANE", 
-    "JEAN", "JOHN", "JOIN", "JUMP", "JURY", "JUST", "KEEN", "KEEP", "KICK", "KILL", "KIND", "KING", "KNEE", "KNEW", 
-    "KNOW", "LACK", "LADY", "LAKE", "LAND", "LANE", "LAST", "LATE", "LEAD", "LEFT", "LESS", "LIFE", "LIFT", "LIKE", 
-    "LINE", "LINK", "LIST", "LIVE", "LOAD", "LOAN", "LOCK", "LOGO", "LONG", "LOOK", "LORD", "LOSE", "LOSS", "LOST", 
-    "LOVE", "LUCK", "MADE", "MAIL", "MAIN", "MAKE", "MALE", "MANY", "MARK", "MASS", "MATT", "MEAL", "MEAN", "MEAT", 
-    "MEET", "MENU", "MERE", "MIKE", "MILE", "MILK", "MILL", "MIND", "MINE", "MISS", "MODE", "MOOD", "MOON", "MORE", 
-    "MOST", "MOVE", "MUCH", "MUST", "NAME", "NAVY", "NEAR", "NECK", "NEED", "NEWS", "NEXT", "NICE", "NINE", "NONE", 
-    "NOSE", "NOTE", "ONLY", "OPEN", "ORAL", "OVER", "PACE", "PACK", "PAGE", "PAID", "PAIN", "PAIR", "PALM", "PARK", 
-    "PART", "PASS", "PAST", "PATH", "PEAK", "PICK", "PINE", "PINK", "PIPE", "PLAN", "PLAY", "PLOT", "PLUG", "PLUS", 
-    "POEM", "POET", "POOL", "POOR", "PORT", "POST", "PULL", "PURE", "PUSH", "RACE", "RAIL", "RAIN", "RANK", "RARE", 
-    "RATE", "READ", "REAL", "REAR", "RELY", "RENT", "REST", "RICE", "RICH", "RIDE", "RING", "RISE", "RISK", "ROAD", 
-    "ROCK", "ROLE", "ROLL", "ROOF", "ROOM", "ROOT", "ROSE", "RULE", "RUSH", "SAFE", "SAID", "SAKE", "SALE", "SALT", 
-    "SAME", "SAND", "SAVE", "SEAT", "SEED", "SEEK", "SEEM", "SELL", "SEND", "SETT", "SHIP", "SHOE", "SHOP", "SHOT", 
-    "SHOW", "SHUT", "SICK", "SIDE", "SIGN", "SITE", "SIZE", "SKIN", "SLIP", "SLOW", "SNOW", "SOFT", "SOIL", "SOLD", 
-    "SOLE", "SOME", "SONG", "SOON", "SORT", "SOUL", "SPOT", "STAR", "STAY", "STEP", "STOP", "SUCH", "SUIT", "SURE", 
-    "TAKE", "TALE", "TALK", "TALL", "TANK", "TAPE", "TASK", "TEAM", "TEAR", "TELL", "TEND", "TERM", "TEST", "TEXT", 
-    "THAN", "THAT", "THEM", "THEN", "THEY", "THIN", "THIS", "THOU", "THUS", "TICK", "TIME", "TINY", "TIRE", "TOLL", 
-    "TOMB", "TONE", "TOOL", "TOUR", "TOWN", "TREE", "TRIP", "TRUE", "TUBE", "TURN", "TWIN", "TYPE", "UNIT", "UPON", 
-    "USER", "VARY", "VAST", "VERY", "VICE", "VIEW", "VOTE", "WAGE", "WAIT", "WAKE", "WALK", "WALL", "WANT", "WARD", 
-    "WARM", "WASH", "WAVE", "WAYS", "WEAK", "WEAR", "WEEK", "WELL", "WENT", "WERE", "WEST", "WHAT", "WHEN", "WHOM", 
-    "WIDE", "WIFE", "WILD", "WILL", "WIND", "WINE", "WING", "WIRE", "WISE", "WISH", "WITH", "WOOD", "WORD", "WORK",
-    "ABOUT", "ABOVE", "ACTOR", "ACUTE", "ADAPT", "ADMIT", "ADOPT", "ADULT", "AFTER", "AGAIN", "AGENT", "AGREE", "AHEAD",
-    "ALARM", "ALBUM", "ALERT", "ALIEN", "ALIKE", "ALIVE", "ALLOW", "ALONE", "ALONG", "ALTER", "AMONG", "ANGER", "ANGLE",
-    "ANGRY", "APPLE", "APPLY", "AREAS", "ARENA", "ARGUE", "ARISE", "ARMED", "ARRAY", "ARROW", "ASIAN", "ASIDE", "ASSET",
-    "AUDIO", "AUDIT", "AVOID", "AWARD", "AWARE", "BADLY", "BAKER", "BASES", "BASIC", "BASIS", "BEACH", "BEAST", "BEGIN",
-    "BEING", "BELOW", "BENCH", "BIRTH", "BLACK", "BLADE", "BLAME", "BLIND", "BLOCK", "BLOOD", "BOARD", "BOAST", "BONUS",
-    "BOOST", "BOOTH", "BOUND", "BRAIN", "BRASS", "BRAVE", "BREAD", "BREAK", "BRICK", "BRIEF", "BROAD", "BROKE", "BROWN",
-    "BRUSH", "BUILD", "BUNCH", "BUYER", "CABLE", "CARRY", "CATCH", "CAUSE", "CHAIN", "CHAIR", "CHART", "CHASE", "CHEAP",
-    "CHECK", "CHIEF", "CHILD", "CHINA", "CHOSE", "CIVIL", "CLAIM", "CLASS", "CLEAN", "CLEAR", "CLERK", "CLICK", "CLOCK",
-    "CLOSE", "COACH", "COAST", "COUNT", "COURT", "COVER", "CRAFT", "CRASH", "CREAM", "CRIME", "CROSS", "CROWD", "CROWN",
-    "CURVE", "CYCLE", "DAILY", "DANCE", "DEATH", "DELAY", "DEPTH", "DOUBT", "DRAFT", "DRAMA", "DREAM", "DRESS", "DRINK",
-    "DRIVE", "EARLY", "EARTH", "EIGHT", "ELITE", "EMPTY", "ENEMY", "ENJOY", "ENTER", "ENTRY", "EQUAL", "ERROR", "EVENT",
-    "EXACT", "EXIST", "EXTRA", "FAITH", "FALSE", "FAULT", "FIBER", "FIELD", "FIFTH", "FIFTY", "FIGHT", "FINAL", "FIRST",
-    "FIXED", "FLASH", "FLEET", "FLOOR", "FLUID", "FOCUS", "FORCE", "FORUM", "FOUND", "FRAME", "FRANK", "FRAUD", "FRESH",
-    "FRONT", "FRUIT", "FULLY", "FUNNY", "GIANT", "GIVEN", "GLASS", "GLOBE", "GOING", "GRACE", "GRADE", "GRAND", "GRANT",
-    "GRASS", "GREAT", "GREEN", "GROSS", "GROUP", "GROWN", "GUARD", "GUESS", "GUEST", "GUIDE", "HAPPY", "HEART", "HEAVY",
-    "HENCE", "HORSE", "HOTEL", "HOUSE", "HUMAN", "IDEAL", "IMAGE", "INDEX", "INNER", "INPUT", "ISSUE", "JAPAN", "JOINT",
-    "JUDGE", "KNOWN", "LABEL", "LARGE", "LASER", "LATER", "LAUGH", "LAYER", "LEARN", "LEASE", "LEAST", "LEAVE", "LEGAL",
-    "LEVEL", "LIGHT", "LIMIT", "LINKS", "LIVES", "LOCAL", "LOGIC", "LOOSE", "LOWER", "LUCKY", "MAGIC", "MAJOR", "MAKER",
-    "MARCH", "MATCH", "MAYOR", "MEANT", "MEDIA", "METAL", "MIGHT", "MINOR", "MINUS", "MIXED", "MODEL", "MONEY", "MONTH",
-    "MORAL", "MOTOR", "MOUNT", "MOUSE", "MOUTH", "MOVIE", "MUSIC", "NEEDS", "NEVER", "NIGHT", "NOISE", "NORTH", "NOTED",
-    "NOVEL", "NURSE", "OCCUR", "OCEAN", "OFFER", "OFTEN", "ORDER", "OTHER", "OUGHT", "PAINT", "PANEL", "PAPER", "PARTY",
-    "PEACE", "PHASE", "PHONE", "PHOTO", "PIECE", "PILOT", "PITCH", "PLACE", "PLAIN", "PLANE", "PLANT", "PLATE", "POINT",
-    "POUND", "POWER", "PRESS", "PRICE", "PRIDE", "PRIME", "PRINT", "PRIOR", "PRIZE", "PROOF", "PROUD", "PROVE", "QUEEN",
-    "QUICK", "QUIET", "QUITE", "RADIO", "RAISE", "RANGE", "RAPID", "RATIO", "REACH", "READY", "REFER", "RIGHT", "RIVAL",
-    "RIVER", "ROBOT", "ROUGH", "ROUND", "ROUTE", "ROYAL", "RURAL", "SCALE", "SCENE", "SCOPE", "SCORE", "SENSE", "SERVE",
-    "SEVEN", "SHALL", "SHAPE", "SHARE", "SHARP", "SHEET", "SHELF", "SHELL", "SHIFT", "SHIRT", "SHOCK", "SHOOT", "SHORT",
-    "SHOWN", "SIGHT", "SIXTH", "SKILL", "SLEEP", "SMALL", "SMART", "SMILE", "SMITH", "SMOKE", "SOLID", "SOLVE", "SORRY",
-    "SOUND", "SOUTH", "SPACE", "SPARE", "SPEAK", "SPEED", "SPEND", "SPORT", "SQUAD", "STAFF", "STAGE", "STAND", "START",
-    "STATE", "STEAM", "STEEL", "STICK", "STILL", "STOCK", "STONE", "STORE", "STORM", "STORY", "STRIP", "STUDY", "STUFF",
-    "STYLE", "SUGAR", "SUPER", "SWEET", "TABLE", "TASTE", "TEACH", "TEETH", "TEXAS", "THANK", "THEFT", "THEIR", "THEME",
-    "THERE", "THESE", "THICK", "THING", "THINK", "THIRD", "THOSE", "THREE", "THROW", "TIGHT", "TIMES", "TITLE", "TODAY",
-    "TOPIC", "TOTAL", "TOUCH", "TOUGH", "TOWER", "TRACK", "TRADE", "TRAIN", "TREAT", "TREND", "TRIAL", "TRUST", "TRUTH",
-    "TWICE", "UNDER", "UNDUE", "UNION", "UNITY", "UNTIL", "UPPER", "UPSET", "URBAN", "USAGE", "USUAL", "VALID", "VALUE",
-    "VIDEO", "VIRUS", "VISIT", "VITAL", "VOICE", "WASTE", "WATCH", "WATER", "WHEEL", "WHERE", "WHICH", "WHILE", "WHITE",
-    "WHOLE", "WHOSE", "WOMAN", "WORDS", "WORLD", "WORRY", "WORSE", "WORST", "WORTH", "WOULD", "WOUND", "WRITE", "WRONG",
-    "YIELD", "YOUNG", "ACTION", "ADVICE", "ANIMAL", "ANSWER", "APPEAR", "AROUND", "ARTIST", "ATTACK", "AUTHOR", "BATTLE",
-    "BEAUTY", "BECOME", "BEFORE", "BEHIND", "BELIEF", "BELONG", "BOTTLE", "BRANCH", "BREATH", "BRIDGE", "BRIGHT", "BROKEN",
-    "BUDGET", "BUTTON", "CAMERA", "CANCER", "CASTLE", "CHANCE", "CHANGE", "CHARGE", "CHOICE", "CHOOSE", "CHURCH", "CIRCLE",
-    "CLIENT", "CLOSED", "COFFEE", "COLUMN", "COMBAT", "COMMON", "CORNER", "COURSE", "CREDIT", "CUSTOM", "DAMAGE", "DANGER",
-    "DEBATE", "DECIDE", "DEFEND", "DEGREE", "DEMAND", "DEPEND", "DESIGN", "DESIRE", "DETAIL", "DEVICE", "DIFFER", "DINNER",
-    "DIRECT", "DIVIDE", "DOCTOR", "DOUBLE", "DRAWER", "DRIVER", "DURING", "EASILY", "EFFECT", "EFFORT", "EITHER", "ENERGY",
-    "ENGINE", "ENOUGH", "ENTIRE", "ESCAPE", "ESTATE", "EXCEED", "EXCEPT", "EXPECT", "EXPERT", "EXTEND", "FABRIC", "FACTOR",
-    "FAMILY", "FAMOUS", "FARMER", "FATHER", "FIGURE", "FINGER", "FINISH", "FLIGHT", "FLOWER", "FLYING", "FOLLOW", "FOREST",
-    "FORGET", "FORMAL", "FORMER", "FRIEND", "FUTURE", "GARDEN", "GATHER", "GENDER", "GENTLE", "GLOBAL", "GOLDEN", "GROUND",
-    "GROWTH", "GUILTY", "HANDLE", "HAPPEN", "HEALTH", "HEIGHT", "HIDDEN", "HONEST", "HUNTER", "IGNORE", "IMPACT", "IMPORT",
-    "INCOME", "INDEED", "INJURY", "INSIDE", "INTEND", "INVENT", "ISLAND", "ITSELF", "JACKET", "JUNGLE", "LADDER", "LATEST",
-    "LEADER", "LEGEND", "LENGTH", "LESSON", "LETTER", "LISTEN", "LITTLE", "LIVING", "LOCKED", "LONELY", "MADAME", "MAIDEN",
-    "MANAGE", "MARKET", "MASTER", "MATRIX", "MATTER", "MEMORY", "MENTAL", "METHOD", "MIDDLE", "MIGHTY", "MINUTE", "MIRROR",
-    "MODERN", "MOMENT", "MONKEY", "MOTHER", "MOTION", "MURDER", "MUSCLE", "MUSEUM", "MYSTIC", "NATION", "NATIVE", "NATURE",
-    "NEARLY", "NINETY", "NOBODY", "NORMAL", "NOTICE", "NUMBER", "OBJECT", "OFFICE", "OPTION", "ORANGE", "ORIGIN", "OUTPUT",
-    "PALACE", "PARENT", "PARISH", "PASTEL", "PATENT", "PEOPLE", "PERIOD", "PERSON", "PHRASE", "PLANET", "PLAYER", "PLEASE",
-    "POCKET", "POISON", "POLICE", "POLICY", "PROFIT", "PUBLIC", "PULLER", "PUNISH", "PURPLE", "PURSUE", "PUZZLE", "RABBIT",
-    "RADIAL", "RANDOM", "RATHER", "RATING", "READER", "REASON", "RECORD", "REDUCE", "REFUSE", "REGION", "REMAIN", "REMIND",
-    "REMOVE", "REPAIR", "REPEAT", "REPORT", "RESCUE", "RESIGN", "RESULT", "RETURN", "REVEAL", "REVIEW", "REWARD", "RIDING",
-    "ROCKET", "ROLLER", "RUBBER", "RULING", "SACRED", "SAFETY", "SAILOR", "SALARY", "SAMPLE", "SAVING", "SCARED", "SCHOOL",
-    "SCREEN", "SEARCH", "SEASON", "SECOND", "SECRET", "SECURE", "SELECT", "SENIOR", "SERIES", "SERVER", "SETTLE", "SEVERE",
-    "SHADOW", "SIGNAL", "SILENT", "SILVER", "SIMPLE", "SINGER", "SINGLE", "SISTER", "SKETCH", "SLEEVE", "SLIGHT", "SMOOTH",
-    "SOCIAL", "SOCIETY", "SOLDIER", "SOURCE", "SOVIET", "SPEECH", "SPIRIT", "SPOKEN", "SPREAD", "SPRING", "SQUARE", "STATUS",
-    "STREAM", "STREET", "STRESS", "STRIKE", "STRING", "STRONG", "STUDIO", "SUBMIT", "SUDDEN", "SUFFER", "SUMMER", "SUMMIT",
-    "SUPPLY", "SURELY", "SYMBOL", "SYSTEM", "TACKLE", "TAILOR", "TALENT", "TARGET", "TENNIS", "THANKS", "THEORY", "THIRTY",
-    "THOUGH", "THREAD", "THREAT", "TICKET", "TIMBER", "TISSUE", "TOMATO", "TONGUE", "TOWARD", "TRAVEL", "TREATY", "TRIBAL",
-    "TROPIC", "TWELVE", "TWENTY", "TYPICAL", "UNIQUE", "UNLESS", "UNLIKE", "USEFUL", "VALLEY", "VICTIM", "VISION", "VISUAL",
-    "VOLUME", "WALKER", "WEALTH", "WEAPON", "WEIGHT", "WINDOW", "WINTER", "WONDER", "WORKER", "WRITER", "YELLOW"
-]
-
 def get_chat_settings(chat_id):
     if chat_id not in chat_settings:
         chat_settings[chat_id] = {"pin": True, "mark_words": True, "theme": "automatic"}
@@ -172,6 +68,8 @@ def generate_game_grid(mode="normal"):
         valid_words = [w for w in WORD_LIST if 3 <= len(w) <= 7]
 
     grid = [['' for _ in range(size)] for _ in range(size)]
+    
+    # YAHAN HAI LOGIC: random.sample ki wajah se har game mein ekdum naye random words aayenge
     chosen_words = random.sample(valid_words, min(num_words, len(valid_words)))
     placed_words = {}
     
@@ -281,7 +179,6 @@ def get_sorted_caption(placed_words, found_words):
         if w in found_words:
             caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{w}</b>\n"
         else:
-            # FORMAT FIX: Screenshot ke according proper space aur dash add kiya
             masked = w[0] + "".join(" -" for _ in range(len(w) - 1))
             caption += f"<b>{masked} &nbsp;&nbsp;({len(w)})</b>\n"
             
@@ -294,7 +191,6 @@ def get_msg_link(chat, msg_id):
     else:
         return f"https://t.me/c/{str(chat.id).replace('-100', '', 1)}/{msg_id}"
 
-# Naya function - Admin check karne ke liye (pehle se tha bas thoda adjust kiya gaya hai)
 async def is_admin(chat, user_id, bot):
     if chat.type == 'private':
         return True
@@ -324,7 +220,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     grid, placed_words = generate_game_grid(mode=mode)
     
-    stop_votes.pop(chat_id, None) # NAYA: Purane votes clear karna
+    stop_votes.pop(chat_id, None) 
     
     active_games[chat_id] = {
         "grid": grid, 
@@ -351,7 +247,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             LOGGER.error(f"Failed to pin game message: {e}")
             
-    # Send Log to Private Group
     try:
         group_name = html.escape(chat.title)
         game_link = get_msg_link(chat, msg.message_id)
@@ -368,7 +263,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         LOGGER.error(f"Failed to send game log: {e}")
 
-# NAYA: Stop game modified with voting system
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     user = update.effective_user
@@ -381,7 +275,6 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> No active game running right now.</b>", parse_mode="HTML")
         return
 
-    # Check admin status
     is_adm = await is_admin(chat, user.id, context.bot)
     
     if is_adm:
@@ -389,7 +282,6 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stop_votes.pop(chat_id, None)
         await update.message.reply_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by an admin. Start another with /grid_hard or /grid</b>", parse_mode="HTML")
     else:
-        # Start voting process for normal users
         if chat_id not in stop_votes:
             stop_votes[chat_id] = set()
             
@@ -406,7 +298,6 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = f"<b>🛑 {html.escape(user.first_name)} wants to stop the game.</b>\n\nNon-admins need <b>{votes_needed} votes</b> to stop the game. \n\nClick below to vote!"
             await update.message.reply_text(text, parse_mode="HTML", reply_markup=btn)
 
-# NAYA: Voting callback handler
 async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     chat_id = query.message.chat_id
@@ -441,11 +332,11 @@ async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 def calculate_points(mode, is_first, is_last):
     if mode == "easy":
-        return 5  # 6 words * 5 = 30 points
+        return 5  
     elif mode == "normal":
-        return 6 if (is_first or is_last) else 4  # First(6) + 7*(4) + Last(6) = 40 points
+        return 6 if (is_first or is_last) else 4  
     elif mode == "hard":
-        return 5 if (is_first or is_last) else 4  # First(5) + 10*(4) + Last(5) = 50 points
+        return 5 if (is_first or is_last) else 4  
     return 4
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -468,7 +359,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_first = len(game["found"]) == 0
         is_last = len(game["found"]) == len(game["words"]) - 1
         
-        # Calculate strict points dynamically
         points = calculate_points(game["mode"], is_first, is_last)
         
         game["found"].append(guess)
@@ -480,10 +370,22 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             game["round_scores"][user.id] = {"mention": mention, "score": 0}
         game["round_scores"][user.id]["score"] += points
         
+        # LOGIC UPDATE: Global aur Chat specific dono mein points add honge
         try:
+            inc_dict = {
+                "grid_points": points,
+                f"{chat_id}_grid_points": points
+            }
+            
             await user_collection.update_one(
                 {"id": user.id},
-                {"$inc": {"grid_points": points}},
+                {
+                    "$inc": inc_dict,
+                    "$setOnInsert": {
+                        "first_name": user.first_name,
+                        "username": user.username
+                    }
+                },
                 upsert=True
             )
         except Exception as e:
@@ -522,7 +424,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("Ꮮᴇᴀꜰ ꪜɪʟʟᴀɢᴇ", url="https://t.me/Anime_Group_hai")]])
             await context.bot.send_message(chat_id=chat_id, text=blockquote_summary, parse_mode="HTML", reply_markup=end_btn)
             del active_games[chat_id]
-            stop_votes.pop(chat_id, None) # NAYA: Votes clear karna last word k baad
+            stop_votes.pop(chat_id, None)
 
 async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -631,55 +533,72 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     await query.answer()
 
+# --- NAYA LEADERBOARD LOGIC & UI ---
+
+def get_grid_top_keyboard(scope="global"):
+    # Jo mode select hoga usme ek target/symbol dikhega
+    global_btn = "ɢʟᴏʙᴀʟ ⎋" if scope == "global" else "ɢʟᴏʙᴀʟ"
+    chat_btn = "ᴛʜɪs ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴛʜɪs ᴄʜᴀᴛ"
+    
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Refresh 🔄", callback_data=f"wg_top_{scope}")],
+        [
+            InlineKeyboardButton(global_btn, callback_data="wg_top_global"),
+            InlineKeyboardButton(chat_btn, callback_data="wg_top_chat")
+        ]
+    ])
+
+async def fetch_grid_leaderboard(chat_id, scope="global"):
+    sort_key = "grid_points" if scope == "global" else f"{chat_id}_grid_points"
+    
+    try:
+        cursor = user_collection.find({sort_key: {"$gt": 0}}).sort(sort_key, -1).limit(10)
+        top_users = await cursor.to_list(length=10)
+        
+        title_scope = "GLOBAL" if scope == "global" else "THIS CHAT"
+        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WORDGRID {title_scope} LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+        
+        if not top_users:
+            msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
+        else:
+            medals = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+            for i, user in enumerate(top_users):
+                medal = medals[i] if i < len(medals) else "🏅"
+                uid = user.get('id', user.get('_id'))
+                name = html.escape(user.get('first_name', 'Player'))
+                user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else f"<b>{name}</b>"
+                points = user.get(sort_key, 0)
+                msg += f"{medal} <b>{user_mention}</b> - <b><code>{points:,} pts</code></b>\n"
+        return msg
+    except Exception as e:
+        LOGGER.error(f"Leaderboard fetch error: {e}")
+        return "<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>"
+
 async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        cursor = user_collection.find({"grid_points": {"$gt": 0}}).sort("grid_points", -1).limit(10)
-        top_users = await cursor.to_list(length=10)
-        
-        msg = "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>GRID TOP LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
-        if not top_users:
-            msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
-        else:
-            medals = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
-            for i, user in enumerate(top_users):
-                medal = medals[i] if i < len(medals) else "🏅"
-                uid = user.get('id')
-                name = html.escape(user.get('first_name', 'Player'))
-                user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else f"<b>{name}</b>"
-                points = user.get('grid_points', 0)
-                msg += f"{medal} <b>{user_mention}</b> - <b><code>{points} pts</code></b>\n"
-        
-        btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh", callback_data="refresh_leaderboard")]])
-        await update.message.reply_text(msg, parse_mode="HTML", reply_markup=btn)
-    except Exception as e:
-        LOGGER.error(f"Leaderboard error: {e}")
-        await update.message.reply_text("<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>", parse_mode="HTML")
+    chat_id = update.effective_chat.id
+    # Default open par hamesha "Global" dikhayenge
+    msg = await fetch_grid_leaderboard(chat_id, scope="global")
+    keyboard = get_grid_top_keyboard(scope="global")
+    
+    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=keyboard)
 
-async def refresh_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("Leaderboard refreshed!")
+    chat_id = query.message.chat_id
+    
+    # Check ki global chahiye ya this chat
+    scope = "global" if "global" in query.data else "chat"
+    
+    await query.answer(f"Fetching {scope} leaderboard...")
+    
+    msg = await fetch_grid_leaderboard(chat_id, scope=scope)
+    keyboard = get_grid_top_keyboard(scope=scope)
+    
     try:
-        cursor = user_collection.find({"grid_points": {"$gt": 0}}).sort("grid_points", -1).limit(10)
-        top_users = await cursor.to_list(length=10)
-        
-        msg = "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>GRID TOP LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
-        if not top_users:
-            msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
-        else:
-            medals = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
-            for i, user in enumerate(top_users):
-                medal = medals[i] if i < len(medals) else "🏅"
-                uid = user.get('id')
-                name = html.escape(user.get('first_name', 'Player'))
-                user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else f"<b>{name}</b>"
-                points = user.get('grid_points', 0)
-                msg += f"{medal} <b>{user_mention}</b> - <b><code>{points} pts</code></b>\n"
-        
-        btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh", callback_data="refresh_leaderboard")]])
-        await query.edit_message_text(msg, parse_mode="HTML", reply_markup=btn)
+        await query.edit_message_text(msg, parse_mode="HTML", reply_markup=keyboard)
     except Exception as e:
-        LOGGER.error(f"Leaderboard refresh error: {e}")
-
+        # Message not modified error handle karne ke liye
+        pass
 
 # --- REGISTER HANDLERS ---
 application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid", "grid_easy", "grid_hard"], start_game))
@@ -689,11 +608,10 @@ application.add_handler(CommandHandler(["helpgrid", "gridsettings"], settings_cm
 
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="^refresh_grid$"))
-application.add_handler(CallbackQueryHandler(refresh_leaderboard_callback, pattern="^refresh_leaderboard$"))
-# NAYA: Voting pattern handle karega ye niche wala 
-application.add_handler(CallbackQueryHandler(vote_stop_callback, pattern="^wg_vote_stop$"))
 
-# Settings Callbacks
+# Yahan par callback register kiya hai dono buttons ke liye
+application.add_handler(CallbackQueryHandler(grid_leaderboard_callback, pattern="^wg_top_"))
+application.add_handler(CallbackQueryHandler(vote_stop_callback, pattern="^wg_vote_stop$"))
 application.add_handler(CallbackQueryHandler(settings_callback, pattern="^wg_|ignore"))
 
 __mod_name__ = "WordGrid"
