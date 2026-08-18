@@ -43,8 +43,8 @@ except Exception:
     pass
 
 char_cache = TTLCache(maxsize=100000, ttl=3600)
-user_cache = TTLCache(maxsize=60000, ttl=1800)
-query_cache = LRUCache(maxsize=20000)
+user_cache = TTLCache(maxsize=60000, ttl=300) 
+query_cache = TTLCache(maxsize=20000, ttl=30) 
 count_cache = TTLCache(maxsize=40000, ttl=2400)
 feedback_cache = TTLCache(maxsize=15000, ttl=4800)
 view_cache = TTLCache(maxsize=8000, ttl=900)
@@ -102,7 +102,8 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
     except Exception:
         return []
 
-async def search_chars(q: str, lim: int = 200) -> List[Dict]:
+# FIX 1: Search limit badha kar 1000 kar di gayi hai (Fast pagination ke liye)
+async def search_chars(q: str, lim: int = 1000) -> List[Dict]:
     k = cache_key('search', q, lim)
     if k in query_cache: 
         return query_cache[k]
@@ -252,20 +253,32 @@ async def inlinequery(update: Update, context) -> None:
             if am:
                 anime_filter = am.group(1)
                 sq = sq.replace(am.group(0), '').strip()
-                all_chars = await search_chars(sq, lim=200)
+                all_chars = await search_chars(sq, lim=1000)
                 rx = re.compile(re.escape(anime_filter), re.IGNORECASE)
                 all_chars = [c for c in all_chars if rx.search(c.get('anime', ''))]
             else:
-                all_chars = await search_chars(sq, lim=200)
+                all_chars = await search_chars(sq, lim=1000)
             if fm: 
                 all_chars = await filter_chars(all_chars, fm, uid)
             if not fm or fm not in ['new', 'trending']:
                 all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
         
         all_chars = dedupe(all_chars)
-        chars = all_chars[off:off+25]
-        has_more = len(all_chars) > off + 25
-        noff = str(off + 25) if has_more else ""
+        
+        # FIX 2: 25 characters ki jagah Telegram ki max limit (50) set kardi
+        chars = all_chars[off:off+50]
+        has_more = len(all_chars) > off + 50
+        noff = str(off + 50) if has_more else ""
+
+        # Live Data fetching ab 50 ke hisab se karega
+        live_ids = [c.get('id') for c in chars if c.get('id')]
+        if live_ids:
+            live_docs = await collection.find({'id': {'$in': live_ids}}, {'_id': 0}).to_list(length=50)
+            live_map = {d['id']: d for d in live_docs}
+            for ch in chars:
+                cid = ch.get('id')
+                if cid and cid in live_map:
+                    ch.update(live_map[cid]) 
         
         results = []
         for ch in chars:
@@ -291,7 +304,7 @@ async def inlinequery(update: Update, context) -> None:
             else:
                 results.append(InlineQueryResultPhoto(id=rid, photo_url=img, thumbnail_url=img, title=title, description=desc, caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd))
         
-        await query.answer(results, next_offset=noff, cache_time=300, is_personal=is_coll)
+        await query.answer(results, next_offset=noff, cache_time=5, is_personal=is_coll)
     except Exception as e:
         LOGGER.error(f"Inline query error: {e}")
         try:
