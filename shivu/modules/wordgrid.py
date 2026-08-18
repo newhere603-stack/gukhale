@@ -180,7 +180,7 @@ def get_sorted_caption(placed_words, found_words):
         else:
             # FIX: Hata diya &nbsp; aur replace kiya code tag se so tap to copy ban jaye
             masked = w[0] + "".join(" -" for _ in range(len(w) - 1))
-            caption += f"<code>{masked}    ({len(w)})</code>\n"
+            caption += f"<code>{masked} ({len(w)})</code>\n"
             
     caption += "\n<b>Tap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!</b>"
     return caption
@@ -395,7 +395,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         img_bio.seek(0)
         
         caption = get_sorted_caption(game["words"], game["found"])
-        btn_refresh = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
+        btn_refresh = InlineKeyboardMarkup([[InlineKeyboardButton("ʀᴇꜰʀᴇsʜ ɢʀɪᴅ", callback_data="refresh_grid")]])
         
         try:
             await context.bot.edit_message_media(
@@ -406,7 +406,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
             
         link = get_msg_link(chat, game["msg_id"])
-        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("Go to Grid ⤻", url=link)]])
+        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
 
         await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         
