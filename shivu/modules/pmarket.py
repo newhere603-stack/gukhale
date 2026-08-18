@@ -1,5 +1,6 @@
 import asyncio
-from datetime import datetime, timezone
+import html
+from datetime import datetime, timedelta
 from bson import ObjectId
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, TypeHandler
@@ -14,14 +15,19 @@ user_collection = db['user_collection_lmaoooo']
 market_collection = db['market_collection'] 
 bot_settings_collection = db['bot_settings'] 
 
+# --- HELPER: GET INDIAN STANDARD TIME (IST) ---
+def get_ist_now():
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
+
 # --- HELPER: SEND LOGS TO LOG GROUP ---
 async def send_market_log(context: CallbackContext, action: str, details: str):
+    ist_now = get_ist_now()
     log_msg = (
         f"<b>⚡️ PMARKET ʟᴏɢs | {action}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"{details}\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🕒 <i>{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC</i>"
+        f"🕒 <i>{ist_now.strftime('%Y-%m-%d %I:%M:%S %p')} IST</i>"
     )
     try:
         await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_msg, parse_mode='HTML')
@@ -37,7 +43,7 @@ async def get_token_limit_info(user_id):
     if not user:
         return global_limit, 0, ""
 
-    today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    today_str = get_ist_now().strftime('%Y-%m-%d')
     last_date = user.get('last_token_exchange_date', '')
     used_today = user.get('daily_token_limit_used', 0)
 
@@ -203,7 +209,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     # --- EXCHANGE SUB-MENU ---
     elif action == "pm_exc_menu":
         global_limit, used_today, _ = await get_token_limit_info(user_id)
-        limit_text = f"♾️ (Oᴡɴᴇʀ Bʏᴘᴀss)" if user_id == OWNER_ID else f"{global_limit - used_today} ʟᴇғᴛ ᴛᴏᴅᴀʏ"
+        limit_text = f"♾️" if user_id == OWNER_ID else f"{global_limit - used_today} ʟᴇғᴛ ᴛᴏᴅᴀʏ"
 
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("ɢᴇᴛ ᴄᴏɪɴs", callback_data=f"pm_start_exc_t2c:{user_id}"),
@@ -376,10 +382,18 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await user_collection.update_one({'id': seller_id}, {'$inc': {'balance': price}})
         await market_collection.delete_one({'_id': ObjectId(market_id)})
 
-        # Log to group
+        # Log with user mentions
+        seller = await user_collection.find_one({'id': seller_id})
+        
+        buyer_name = buyer.get('first_name', 'Unknown') if buyer else update.effective_user.first_name
+        seller_name = seller.get('first_name', 'Unknown') if seller else 'Unknown'
+        
+        buyer_mention = f"<a href='tg://user?id={user_id}'>{html.escape(buyer_name)}</a>"
+        seller_mention = f"<a href='tg://user?id={seller_id}'>{html.escape(seller_name)}</a>"
+
         log_details = (
-            f"👤 <b>Bᴜʏᴇʀ:</b> <code>{user_id}</code>\n"
-            f"🏪 <b>Sᴇʟʟᴇʀ:</b> <code>{seller_id}</code>\n"
+            f"👤 <b>Bᴜʏᴇʀ:</b> {buyer_mention}\n"
+            f"🏪 <b>Sᴇʟʟᴇʀ:</b> {seller_mention}\n"
             f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {char.get('name')} (<code>{char.get('id')}</code>)\n"
             f"💰 <b>Pʀɪᴄᴇ:</b> {price:,} ᴄᴏɪɴs"
         )
@@ -421,9 +435,12 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await user_collection.update_one({'id': user_id}, {'$push': {'characters': char}})
             await market_collection.delete_one({'_id': ObjectId(market_id)})
             
-            # Log to group
+            user_name = update.effective_user.first_name
+            seller_mention = f"<a href='tg://user?id={user_id}'>{html.escape(user_name)}</a>"
+            
+            # Log with user mention
             log_details = (
-                f"👤 <b>Sᴇʟʟᴇʀ:</b> <code>{user_id}</code>\n"
+                f"👤 <b>Sᴇʟʟᴇʀ:</b> {seller_mention}\n"
                 f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {char.get('name')} (<code>{char.get('id')}</code>)\n"
                 f"❌ <b>Aᴄᴛɪᴏɴ:</b> Rᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ."
             )
@@ -465,6 +482,9 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_exc_menu:{user_id}")]])
 
+        user_name = update.effective_user.first_name
+        user_mention = f"<a href='tg://user?id={user_id}'>{html.escape(user_name)}</a>"
+
         # Update Query Setup
         if exc_type == "t2c":
             if tokens < amount:
@@ -476,7 +496,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{coins_to_add:,}</code> ᴄᴏɪɴs!</b>"
             
             log_action = "🔄 TOKENS TO COINS"
-            log_details = f"👤 <b>Usᴇʀ:</b> <code>{user_id}</code>\n📉 <b>Sᴏʟᴅ:</b> {amount} ᴛᴏᴋᴇɴs\n📈 <b>Rᴇᴄᴇɪᴠᴇᴅ:</b> {coins_to_add:,} ᴄᴏɪɴs"
+            log_details = f"👤 <b>Usᴇʀ:</b> {user_mention}\n📉 <b>Sᴏʟᴅ:</b> {amount} ᴛᴏᴋᴇɴs\n📈 <b>Rᴇᴄᴇɪᴠᴇᴅ:</b> {coins_to_add:,} ᴄᴏɪɴs"
 
         elif exc_type == "c2t":
             coins_to_deduct = amount * 2500
@@ -488,7 +508,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ sᴘᴇɴᴛ <code>{coins_to_deduct:,}</code> ᴄᴏɪɴs ᴛᴏ ʙᴜʏ <code>{amount}</code> ᴛᴏᴋᴇɴs!</b>"
             
             log_action = "🔄 COINS TO TOKENS"
-            log_details = f"👤 <b>Usᴇʀ:</b> <code>{user_id}</code>\n📉 <b>Sᴘᴇɴᴛ:</b> {coins_to_deduct:,} ᴄᴏɪɴs\n📈 <b>Rᴇᴄᴇɪᴠᴇᴅ:</b> {amount} ᴛᴏᴋᴇɴs"
+            log_details = f"👤 <b>Usᴇʀ:</b> {user_mention}\n📉 <b>Sᴘᴇɴᴛ:</b> {coins_to_deduct:,} ᴄᴏɪɴs\n📈 <b>Rᴇᴄᴇɪᴠᴇᴅ:</b> {amount} ᴛᴏᴋᴇɴs"
 
         # Increment user's daily limit (Except owner)
         if user_id != OWNER_ID:
@@ -578,9 +598,12 @@ async def ask_price(update: Update, context: CallbackContext):
     await user_collection.update_one({'id': user_id}, {'$pull': {'characters': {'id': char_id_val}}})
     await market_collection.insert_one({'seller_id': user_id, 'price': price, 'character': final_character})
 
-    # Log to group
+    user_name = update.message.from_user.first_name
+    user_mention = f"<a href='tg://user?id={user_id}'>{html.escape(user_name)}</a>"
+
+    # Log with user mention
     log_details = (
-        f"👤 <b>Sᴇʟʟᴇʀ:</b> <code>{user_id}</code>\n"
+        f"👤 <b>Sᴇʟʟᴇʀ:</b> {user_mention}\n"
         f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {final_character.get('name')} (<code>{final_character.get('id')}</code>)\n"
         f"💰 <b>Pʀɪᴄᴇ Sᴇᴛ:</b> {price:,} ᴄᴏɪɴs"
     )
