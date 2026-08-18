@@ -208,19 +208,32 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 if query.message: await query.message.delete()
                 return await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
 
-            owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == char_id_str), None)
-            if not owned_char:
+            user_characters = sender_data.get('characters', [])
+            
+            # --- FIXED LOGIC --- 
+            # Sirf 1st matching character ko loop se find karke list se remove karenge
+            found = False
+            owned_char = None
+            for i, c in enumerate(user_characters):
+                if str(c.get('id')) == char_id_str:
+                    owned_char = c
+                    del user_characters[i]
+                    found = True
+                    break
+            
+            if not found:
                 if query.message: await query.message.delete()
                 return await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
 
+            # Updated list wapas database me $set kar rahe hain
             pull_result = await user_collection.update_one(
-                {'id': sender_id, 'characters.id': owned_char['id']},
-                {'$pull': {'characters': {'id': owned_char['id']}}}
+                {'id': sender_id},
+                {'$set': {'characters': user_characters}}
             )
 
             if pull_result.modified_count == 0:
                 if query.message: await query.message.delete()
-                return await query.answer(to_small_caps("❌ gift failed. character not found."), show_alert=True)
+                return await query.answer(to_small_caps("❌ gift failed. please try again."), show_alert=True)
             
             try:
                 receiver_data = await user_collection.find_one({'id': receiver_id})
@@ -269,6 +282,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                     
             except Exception as push_error:
                 LOGGER.error(f"Push error during gift: {push_error}")
+                # Agar fail hua to sender ko wapas character de do 
                 await user_collection.update_one({'id': sender_id}, {'$push': {'characters': owned_char}})
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
