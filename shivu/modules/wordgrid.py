@@ -139,7 +139,7 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
                 c2, r2 = coords[-1][1] * cell_size + cell_size // 2, coords[-1][0] * cell_size + cell_size // 2
                 
                 color = colors[i % len(colors)]
-                line_width = 70
+                line_width = 50
                 radius = line_width // 2
                 
                 overlay_draw.line([(c1, r1), (c2, r2)], fill=color, width=line_width)
