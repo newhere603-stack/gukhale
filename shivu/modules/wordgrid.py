@@ -43,12 +43,12 @@ async def ensure_db_loaded():
                 chat_settings[setting['_id']] = setting['settings']
                 
             DB_LOADED = True
-            LOGGER.info("✅ WordGrid DB State Loaded Successfully!")
+            LOGGER.info("WordGrid DB State Loaded Successfully!")
         except Exception as e:
             LOGGER.error(f"Error loading WordGrid state from DB: {e}")
 
 # ==========================================
-# 🛠 100% FOOLPROOF FONT LOADER
+# 🛠 100% FOOLPROOF FONT LOADER (FIXED)
 # ==========================================
 GLOBAL_FONT_BYTES = None
 
@@ -56,8 +56,8 @@ def get_bold_font(size):
     global GLOBAL_FONT_BYTES
     try:
         if GLOBAL_FONT_BYTES is None:
-            url = "https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Bold.ttf"
-            response = requests.get(url, timeout=10)
+            url = "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/roboto/static/Roboto-Bold.ttf"
+            response = requests.get(url, timeout=5)
             if response.status_code == 200:
                 GLOBAL_FONT_BYTES = response.content
             else:
@@ -66,11 +66,13 @@ def get_bold_font(size):
         return ImageFont.truetype(io.BytesIO(GLOBAL_FONT_BYTES), size)
     except Exception as e:
         LOGGER.error(f"RAM Font load failed: {e}")
-        GLOBAL_FONT_BYTES = None 
         try:
             return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
-        except:
-            return ImageFont.load_default()
+        except Exception:
+            try:
+                return ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", size)
+            except Exception:
+                return ImageFont.load_default()
 
 def get_chat_settings(chat_id):
     if chat_id not in chat_settings:
@@ -85,26 +87,22 @@ def is_night_ist():
 # 🧠 SMART WORD PICKER (FIXED ALGORITHM)
 # ==========================================
 def generate_game_grid(mode="normal"):
-    # Yahan hum fix sequence set kar rahe hain ki kitne letter ke kitne words aayenge
     if mode == "easy":
         size = 6
-        target_lengths = [3, 3, 4, 4, 5, 5] # 6 Words: Do 3-letter, do 4-letter, do 5-letter
+        target_lengths = [3, 3, 4, 4, 5, 5]
     elif mode == "hard":
         size = 10
-        target_lengths = [4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 7] # 12 Words (Thode hard length wale)
-    else: # normal
+        target_lengths = [4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 7]
+    else:
         size = 8
-        target_lengths = [3, 3, 4, 4, 5, 5, 6, 6, 7] # 9 Words: Perfect mix sequence
+        target_lengths = [3, 3, 4, 4, 5, 5, 6, 6, 7]
 
     grid = [['' for _ in range(size)] for _ in range(size)]
     chosen_words = []
     
-    # Word_List me se fix pattern ke hisaab se words nikalna
     for length in target_lengths:
-        # Same length ke saare words filter karo jo abhi tak nahi chune gaye
         pool = [w for w in WORD_LIST if len(w) == length and w not in chosen_words]
         
-        # Agar by chance us length ka word list me na bacha ho toh kisi bhi length ka utha lo
         if not pool: 
             pool = [w for w in WORD_LIST if w not in chosen_words]
             
@@ -114,7 +112,6 @@ def generate_game_grid(mode="normal"):
     placed_words = {}
     directions = [(0, 1), (1, 0), (1, 1), (-1, 1), (-1, -1), (0, -1), (-1, 0), (1, -1)] 
     
-    # Words ko grid me fit karna
     for word in chosen_words:
         placed = False
         for _ in range(300):
@@ -131,7 +128,6 @@ def generate_game_grid(mode="normal"):
         if not placed:
             continue
 
-    # Khali jagah par random alphabets bharna
     for r in range(size):
         for c in range(size):
             if grid[r][c] == '':
@@ -214,7 +210,6 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
 
 def get_sorted_caption(placed_words, found_words):
     caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\n<b>Find these words:</b>\n"
-    # Ye line tumhare words ko chote se bade sequence me set karti hai
     sorted_words = sorted(placed_words.keys(), key=len)
     
     for w in sorted_words:
@@ -356,7 +351,10 @@ async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     if chat_id not in active_games:
         await query.answer("No active game running!", show_alert=True)
-        await query.message.delete()
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
         return
         
     if chat_id not in stop_votes:
@@ -479,7 +477,10 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         link = get_msg_link(chat, game["msg_id"])
         btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
 
-        await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
+        try:
+            await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
+        except Exception:
+            pass
         
         if is_last:
             sorted_scores = sorted(game["round_scores"].values(), key=lambda x: x["score"], reverse=True)
@@ -493,7 +494,10 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             blockquote_summary = f"<blockquote>{summary}</blockquote>"
             
             end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("Ꮮᴇᴀꜰ ꪜɪʟʟᴀɢᴇ", url="https://t.me/Anime_Group_hai")]])
-            await context.bot.send_message(chat_id=chat_id, text=blockquote_summary, parse_mode="HTML", reply_markup=end_btn)
+            try:
+                await context.bot.send_message(chat_id=chat_id, text=blockquote_summary, parse_mode="HTML", reply_markup=end_btn)
+            except Exception:
+                pass
             del active_games[chat_id]
             stop_votes.pop(chat_id, None)
             await grid_games_col.delete_one({'_id': chat_id}) 
