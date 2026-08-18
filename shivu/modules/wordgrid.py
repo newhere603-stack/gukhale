@@ -48,7 +48,7 @@ async def ensure_db_loaded():
             LOGGER.error(f"Error loading WordGrid state from DB: {e}")
 
 # ==========================================
-# 🛠 100% FOOLPROOF FONT LOADER (FIXED)
+# 🛠 FONT LOADER
 # ==========================================
 GLOBAL_FONT_BYTES = None
 
@@ -84,7 +84,7 @@ def is_night_ist():
     return not (6 <= ist_now.hour < 18)
 
 # ==========================================
-# 🧠 SMART WORD PICKER (FIXED ALGORITHM)
+# 🧠 SMART WORD PICKER
 # ==========================================
 def generate_game_grid(mode="normal"):
     if mode == "easy":
@@ -136,6 +136,7 @@ def generate_game_grid(mode="normal"):
     return grid, placed_words
 
 def create_grid_image(grid, placed_words, found_words, chat_id):
+    """Ye CPU intensive kaam hai, isliye isko thread me call karenge"""
     settings = get_chat_settings(chat_id)
     theme = settings["theme"]
     mark_words = settings["mark_words"]
@@ -256,7 +257,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mode = "normal"
 
     grid, placed_words = generate_game_grid(mode=mode)
-    
     stop_votes.pop(chat_id, None) 
     
     active_games[chat_id] = {
@@ -268,7 +268,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "mode": mode
     }
 
-    img_bio = create_grid_image(grid, placed_words, [], chat_id)
+    # THREADING: Image ko background thread me banayenge taaki bot freeze na ho
+    img_bio = await asyncio.to_thread(create_grid_image, grid, placed_words, [], chat_id)
     img_bio.seek(0)
 
     caption = get_sorted_caption(placed_words, [])
@@ -289,9 +290,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         group_name = html.escape(chat.title)
         game_link = get_msg_link(chat, msg.message_id)
-        
         words_list = " ".join([w.capitalize() for w in placed_words.keys()])
-        
         log_text = (
             f"🎮 <b>New WordGrid Game Started!</b>\n\n"
             f"🏢 <b>Group:</b> <a href='{game_link}'>{group_name}</a>\n"
@@ -301,7 +300,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_text, parse_mode="HTML", disable_web_page_preview=True)
     except Exception as e:
-        LOGGER.error(f"Failed to send game log: {e}")
+        pass
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await ensure_db_loaded() 
@@ -322,7 +321,6 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del active_games[chat_id]
         stop_votes.pop(chat_id, None)
         await grid_games_col.delete_one({'_id': chat_id})
-        
         await update.message.reply_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by an admin. Start another with /grid_hard or /grid</b>", parse_mode="HTML")
     else:
         if chat_id not in stop_votes:
@@ -336,7 +334,6 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del active_games[chat_id]
             stop_votes.pop(chat_id, None)
             await grid_games_col.delete_one({'_id': chat_id})
-            
             await update.message.reply_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by community vote (3/3). Start another with /grid_hard or /grid</b>", parse_mode="HTML")
         else:
             btn = InlineKeyboardMarkup([[InlineKeyboardButton(f"Vote to Stop ({current_votes}/{votes_needed})", callback_data="wg_vote_stop")]])
@@ -382,12 +379,9 @@ async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=btn)
 
 def calculate_points(mode, is_first, is_last):
-    if mode == "easy":
-        return 5  
-    elif mode == "normal":
-        return 6 if (is_first or is_last) else 4  
-    elif mode == "hard":
-        return 5 if (is_first or is_last) else 4  
+    if mode == "easy": return 5  
+    elif mode == "normal": return 6 if (is_first or is_last) else 4  
+    elif mode == "hard": return 5 if (is_first or is_last) else 4  
     return 4
 
 async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -413,76 +407,66 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         points = calculate_points(game["mode"], is_first, is_last)
         
+        # SARA STATE TURANT UPDATE KARO 
         game["found"].append(guess)
-        
         user = update.effective_user
         mention = user.mention_html()
-        
         uid_str = str(user.id)
+        
         if uid_str not in game["round_scores"]:
             game["round_scores"][uid_str] = {"mention": mention, "score": 0}
         game["round_scores"][uid_str]["score"] += points
-        
-        await grid_games_col.update_one({'_id': chat_id}, {'$set': {'game_data': game}}, upsert=True)
-        
-        now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
-        today_str = now_ist.strftime("%Y-%m-%d")
-        week_str = now_ist.strftime("%Y-W%V")
-        month_str = now_ist.strftime("%Y-%m")
-        year_str = now_ist.strftime("%Y")
 
+        # OPTIMIZATION: User ko turant reply do, user ko zero lag lagega!
+        link = get_msg_link(chat, game["msg_id"])
+        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
         try:
+            await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
+        except Exception:
+            pass
+        
+        # Ab DB query aur Image Edit ka kaam Background Task me chalega
+        async def background_update_task():
+            now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+            today_str = now_ist.strftime("%Y-%m-%d")
+            week_str = now_ist.strftime("%Y-W%V")
+            month_str = now_ist.strftime("%Y-%m")
+            year_str = now_ist.strftime("%Y")
+
             inc_dict = {
                 "grid_points": points,
                 f"{today_str}_grid_points": points,
                 f"{week_str}_grid_points": points,
                 f"{month_str}_grid_points": points,
                 f"{year_str}_grid_points": points,
-                
                 f"{chat_id}_grid_points": points,
                 f"{chat_id}_{today_str}_grid_points": points,
                 f"{chat_id}_{week_str}_grid_points": points,
                 f"{chat_id}_{month_str}_grid_points": points,
                 f"{chat_id}_{year_str}_grid_points": points
             }
+            try:
+                await grid_games_col.update_one({'_id': chat_id}, {'$set': {'game_data': game}}, upsert=True)
+                await user_collection.update_one({"id": user.id}, {"$inc": inc_dict, "$setOnInsert": {"first_name": user.first_name, "username": user.username}}, upsert=True)
+            except Exception as e:
+                LOGGER.error(f"Error updating grid points: {e}")
             
-            await user_collection.update_one(
-                {"id": user.id},
-                {
-                    "$inc": inc_dict,
-                    "$setOnInsert": {
-                        "first_name": user.first_name,
-                        "username": user.username
-                    }
-                },
-                upsert=True
-            )
-        except Exception as e:
-            LOGGER.error(f"Error updating grid points: {e}")
-        
-        img_bio = create_grid_image(game["grid"], game["words"], game["found"], chat_id)
-        img_bio.seek(0)
-        
-        caption = get_sorted_caption(game["words"], game["found"])
-        btn_refresh = InlineKeyboardMarkup([[InlineKeyboardButton("ʀᴇꜰʀᴇsʜ ɢʀɪᴅ", callback_data="refresh_grid")]])
-        
-        try:
-            await context.bot.edit_message_media(
-                chat_id=chat_id, message_id=game["msg_id"],
-                media=InputMediaPhoto(img_bio, caption=caption, parse_mode="HTML"), reply_markup=btn_refresh
-            )
-        except Exception:
-            pass
+            # THREADING: Nayi Grid image background thread me banegi
+            img_bio = await asyncio.to_thread(create_grid_image, game["grid"], game["words"], list(game["found"]), chat_id)
+            img_bio.seek(0)
+            caption = get_sorted_caption(game["words"], game["found"])
+            btn_refresh = InlineKeyboardMarkup([[InlineKeyboardButton("ʀᴇꜰʀᴇsʜ ɢʀɪᴅ", callback_data="refresh_grid")]])
             
-        link = get_msg_link(chat, game["msg_id"])
-        btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
+            try:
+                await context.bot.edit_message_media(
+                    chat_id=chat_id, message_id=game["msg_id"],
+                    media=InputMediaPhoto(img_bio, caption=caption, parse_mode="HTML"), reply_markup=btn_refresh
+                )
+            except Exception:
+                pass
 
-        try:
-            await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
-        except Exception:
-            pass
-        
         if is_last:
+            await background_update_task() # Last me pehle grid update hone denge fir summary aayegi
             sorted_scores = sorted(game["round_scores"].values(), key=lambda x: x["score"], reverse=True)
             summary = "<tg-emoji emoji-id=\"5233477268617053735\">🕹</tg-emoji><tg-emoji emoji-id=\"5233546451950256512\">🕹</tg-emoji><tg-emoji emoji-id=\"5233604395354047945\">🕹</tg-emoji><tg-emoji emoji-id=\"5233544652358962131\">🕹</tg-emoji><tg-emoji emoji-id=\"5233619423444616550\">🕹</tg-emoji><tg-emoji emoji-id=\"5233286945731267091\">🕹</tg-emoji>\n\n<tg-emoji emoji-id=\"5280939169793732849\">🃏</tg-emoji> <b>Round Summary</b>\n\n"
             medals = ["<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>", "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>", "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>", "🏅", "🏅"] 
@@ -492,7 +476,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             summary += "\n<b>Thanks for playing! Start another game by /playgrid.</b>"
             blockquote_summary = f"<blockquote>{summary}</blockquote>"
-            
             end_btn = InlineKeyboardMarkup([[InlineKeyboardButton("Ꮮᴇᴀꜰ ꪜɪʟʟᴀɢᴇ", url="https://t.me/Anime_Group_hai")]])
             try:
                 await context.bot.send_message(chat_id=chat_id, text=blockquote_summary, parse_mode="HTML", reply_markup=end_btn)
@@ -501,6 +484,9 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del active_games[chat_id]
             stop_votes.pop(chat_id, None)
             await grid_games_col.delete_one({'_id': chat_id}) 
+        else:
+            # Agar last guess nahi hai, toh image edit/DB task background me chhod do, turant aage bado!
+            asyncio.create_task(background_update_task())
 
 async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await ensure_db_loaded() 
@@ -513,7 +499,8 @@ async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     game = active_games[chat_id]
-    img_bio = create_grid_image(game["grid"], game["words"], game["found"], chat_id)
+    # THREADING: Refresh ko bhi thread kiya hai
+    img_bio = await asyncio.to_thread(create_grid_image, game["grid"], game["words"], game["found"], chat_id)
     img_bio.seek(0)
     
     caption = get_sorted_caption(game["words"], game["found"])
@@ -687,7 +674,7 @@ async def fetch_grid_leaderboard(chat_id, state):
         
         title_scope = "GLOBAL" if scope == "global" else "THIS CHAT"
         time_title = "" if time_f == "all" else f" ({time_f.upper()})"
-        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WORDGRID {title_scope} LEADERBOARD{time_title}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WORDGRID LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
         
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
@@ -744,7 +731,6 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=keyboard)
     except Exception:
         pass
-
 
 # --- REGISTER HANDLERS ---
 application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid", "grid_easy", "grid_hard"], start_game))
