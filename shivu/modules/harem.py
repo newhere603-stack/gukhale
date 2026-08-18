@@ -43,7 +43,6 @@ RARITIES = {
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
 }
 
-
 def rarity_display(key: str) -> str:
     db_emoji, _, name = RARITIES.get(key, RARITIES["common"])
     return f"{db_emoji} {name}"
@@ -61,10 +60,8 @@ def rarity_emoji(display: str) -> str:
             return prem_e
     return db_emoji
 
-
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
-
 
 @dataclass
 class Character:
@@ -92,7 +89,6 @@ class Character:
             gender=data.get('gender')
         )
 
-
 @dataclass
 class DisplayOptions:
     show_url: bool = False
@@ -100,7 +96,6 @@ class DisplayOptions:
     preview_image: bool = True
     show_rarity_full: bool = False
     compact_mode: bool = False
-
 
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s ʜᴀʀᴇᴍ - ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
@@ -110,7 +105,6 @@ DEFAULT_STYLE = {
     'footer': "\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
-
 
 @dataclass
 class UserCollection:
@@ -126,7 +120,6 @@ class UserCollection:
         # Rarity Filter
         if mode in RARITIES:
             target_name = RARITIES[mode][2].lower()
-            # Matching target name to avoid DB emoji mismatches
             return [c for c in chars if target_name in c.rarity.lower()]
             
         # Latest Mode
@@ -141,7 +134,7 @@ class UserCollection:
         if mode == "waifus":
             return [c for c in chars if c.gender and c.gender.lower() in ['female', 'f', 'girl']]
             
-        # Default Mode (Chronological from DB)
+        # Default Mode
         return chars
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
@@ -155,7 +148,6 @@ class UserCollection:
         for char in characters:
             grouped.setdefault(char.anime, []).append(char)
         return grouped
-
 
 class MediaHelper:
     VIDEO_EXT = ('.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v')
@@ -191,7 +183,6 @@ class MediaHelper:
         except TelegramError as e:
             LOGGER.warning(f"Media send failed, falling back to text: {e}")
             return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
-
 
 class HaremMessageBuilder:
     def __init__(self, collection: UserCollection, page: int, total_pages: int,
@@ -252,7 +243,6 @@ class HaremMessageBuilder:
             event=event_str,
             count=count
         )
-
 
 class HaremHandler:
     CHARACTERS_PER_PAGE = 10
@@ -319,22 +309,24 @@ class HaremHandler:
             f"✨ ʜᴀʀᴇᴍ ({total_chars})", switch_inline_query_current_chat=f"collection.{user_id}"
         )]]
 
-        nav = []
-        if page > 0:
-            prev_page = max(0, page - step)
-            nav.append(InlineKeyboardButton("ᴘʀᴇᴠ", callback_data=f"harem_page:{prev_page}:{user_id}:{step}"))
-        if page < total_pages - 1:
-            next_page = min(total_pages - 1, page + step)
-            nav.append(InlineKeyboardButton("ɴᴇxᴛ", callback_data=f"harem_page:{next_page}:{user_id}:{step}"))
-        if nav:
-            keyboard.append(nav)
+        # Fix: Buttons sirf tab dikhenge jab page 1 se zyada honge
+        if total_pages > 1:
+            nav = []
+            if page > 0:
+                prev_page = max(0, page - step)
+                nav.append(InlineKeyboardButton("ᴘʀᴇᴠ", callback_data=f"harem_page:{prev_page}:{user_id}:{step}"))
+            if page < total_pages - 1:
+                next_page = min(total_pages - 1, page + step)
+                nav.append(InlineKeyboardButton("ɴᴇxᴛ", callback_data=f"harem_page:{next_page}:{user_id}:{step}"))
+            if nav:
+                keyboard.append(nav)
 
-        # Skip button setup with Toggle logic
-        if total_pages > 2:
-            if step == 1:
-                keyboard.append([InlineKeyboardButton("⭆ 2x", callback_data=f"harem_2x:{page}:{user_id}:2")])
-            else:
-                keyboard.append([InlineKeyboardButton("⭆ 1x", callback_data=f"harem_2x:{page}:{user_id}:1")])
+            # Fix: 2x button sirf tab aayega jab 2 se zyada page ho
+            if total_pages > 2:
+                if step == 1:
+                    keyboard.append([InlineKeyboardButton("⭆ 2x", callback_data=f"harem_2x:{page}:{user_id}:2")])
+                else:
+                    keyboard.append([InlineKeyboardButton("⭆ 1x", callback_data=f"harem_2x:{page}:{user_id}:1")])
 
         keyboard.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"harem_close:{user_id}")])
         return InlineKeyboardMarkup(keyboard)
@@ -390,7 +382,7 @@ class HaremHandler:
                 await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
                 return
             except TelegramError as e:
-                # Ignored to prevent creating new duplicate harem messages
+                # Fix: Catching not modified error jisse multiple message nahi banenge
                 if "not modified" in str(e).lower():
                     return
                 LOGGER.warning(f"ᴇᴅɪᴛ ғᴀɪʟᴇᴅ, ʀᴇsᴇɴᴅɪɴɢ: {e}")
@@ -401,13 +393,13 @@ class HaremHandler:
             try:
                 await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
             except TelegramError as e:
+                # Fix: Yaha bhi error ignore kiya jayega
                 if "not modified" in str(e).lower():
                     return
                 LOGGER.warning(f"ᴇᴅɪᴛ ᴛᴇxᴛ ғᴀɪʟᴇᴅ: {e}")
                 await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
         else:
             await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
-
 
 class ModeHandler:
     IMG = "https://files.catbox.moe/sgo9in.png"
@@ -479,7 +471,6 @@ class ModeHandler:
         await query.answer(f"✓ {label} sᴇʟᴇᴄᴛᴇᴅ")
         await self.show_mode_menu(update, user_id)
 
-
 class UnfavHandler:
     def __init__(self):
         self.user_db = db['user_collection_lmaoooo']
@@ -539,7 +530,6 @@ class UnfavHandler:
         elif action == 'harem_unfav_no':
             await query.edit_message_caption(caption="<b>ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.</b>", parse_mode='HTML')
 
-
 async def verify_owner(query, user_id_str: str) -> Optional[int]:
     try:
         owner_id = int(user_id_str)
@@ -551,11 +541,9 @@ async def verify_owner(query, user_id_str: str) -> Optional[int]:
         return None
     return owner_id
 
-
 harem_handler = HaremHandler()
 mode_handler = ModeHandler()
 unfav_handler = UnfavHandler()
-
 
 async def harem_command(update: Update, context: CallbackContext):
     try:
@@ -564,11 +552,9 @@ async def harem_command(update: Update, context: CallbackContext):
         LOGGER.error(f"Error in harem_command: {e}", exc_info=True)
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ʟᴏᴀᴅɪɴɢ ʜᴀʀᴇᴍ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>", parse_mode='HTML')
 
-
 async def harem_page_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     try:
-        # Step dynamically catch hoga yaha se
         parts = query.data.split(':')
         page_str = parts[1]
         user_id_str = parts[2]
@@ -583,7 +569,6 @@ async def harem_page_callback(update: Update, context: CallbackContext):
         LOGGER.error(f"Error in harem_page_callback: {e}", exc_info=True)
         await query.answer("ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴘᴀɢᴇ", show_alert=True)
 
-
 async def smode_command(update: Update, context: CallbackContext):
     try:
         await mode_handler.show_mode_menu(update, update.effective_user.id)
@@ -591,13 +576,11 @@ async def smode_command(update: Update, context: CallbackContext):
         LOGGER.error(f"Error in smode_command: {e}", exc_info=True)
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴍᴏᴅᴇ ᴍᴇɴᴜ.</b>", parse_mode='HTML')
 
-
 async def mode_callback(update: Update, context: CallbackContext):
     try:
         await mode_handler.handle_mode_callback(update, context)
     except TelegramError as e:
         LOGGER.error(f"Error in mode_callback: {e}", exc_info=True)
-
 
 async def unfav_command(update: Update, context: CallbackContext):
     try:
@@ -606,13 +589,11 @@ async def unfav_command(update: Update, context: CallbackContext):
         LOGGER.error(f"Error in unfav_command: {e}", exc_info=True)
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ᴘʀᴏᴄᴇssɪɴɢ ᴜɴғᴀᴠ ᴄᴏᴍᴍᴀɴᴅ.</b>", parse_mode='HTML')
 
-
 async def unfav_callback(update: Update, context: CallbackContext):
     try:
         await unfav_handler.handle_unfav_callback(update)
     except TelegramError as e:
         LOGGER.error(f"Error in unfav_callback: {e}", exc_info=True)
-
 
 async def harem_2x_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -636,7 +617,6 @@ async def harem_2x_callback(update: Update, context: CallbackContext):
     except Exception as e:
         LOGGER.error(f"Error in harem_2x_callback: {e}", exc_info=True)
 
-
 async def harem_close_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     _, _, user_id_str = query.data.partition(':')
@@ -644,7 +624,6 @@ async def harem_close_callback(update: Update, context: CallbackContext):
         return
     await query.answer()
     await query.message.delete()
-
 
 application.add_handler(CommandHandler(["harem", "collection"], harem_command, block=False))
 application.add_handler(CommandHandler("smode", smode_command, block=False))
