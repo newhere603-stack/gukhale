@@ -472,7 +472,7 @@ async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TY
     img_bio.seek(0)
     
     caption = get_sorted_caption(game["words"], game["found"])
-    btn = InlineKeyboardMarkup([[InlineKeyboardButton("Refresh Grid", callback_data="refresh_grid")]])
+    btn = InlineKeyboardMarkup([[InlineKeyboardButton("ʀᴇꜰʀᴇsʜ ɢʀɪᴅ", callback_data="refresh_grid")]])
     try:
         await query.edit_message_media(
             media=InputMediaPhoto(img_bio, caption=caption, parse_mode="HTML"), reply_markup=btn
