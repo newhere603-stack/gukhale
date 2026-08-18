@@ -89,6 +89,7 @@ async def get_cached_characters():
     global _cached_characters, _last_cache_time
     current_time = time.time()
     if not _cached_characters or (current_time - _last_cache_time) > 300:
+        # Reverted limit lock back to None (Saare characters load honge smoothly)
         _cached_characters = await collection.find({'auction_exclusive': {'$ne': True}}).to_list(length=None)
         _last_cache_time = current_time
     return _cached_characters
@@ -266,10 +267,12 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     async with locks[chat_id]:
         message_counts[chat_id] = message_counts.get(chat_id, 0) + 1
         
-        # 🔥 Fast Frequency Check via Cache (DB lag removed)
         if chat_id not in chat_frequency_cache:
             try:
+                # String and Integer dono type check karega taaki DB fail na ho
                 chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
+                if not chat_data:
+                    chat_data = await user_totals_collection.find_one({'chat_id': int(chat_id)})
                 chat_frequency_cache[chat_id] = chat_data.get('message_frequency', MESSAGE_FREQUENCY) if chat_data else MESSAGE_FREQUENCY
             except Exception:
                 chat_frequency_cache[chat_id] = MESSAGE_FREQUENCY
@@ -580,7 +583,8 @@ async def main():
         application.add_handler(CommandHandler(["rarity_off"], rarity_off_cmd, block=False))
         application.add_handler(CommandHandler(["name"], name_cmd, block=False))
 
-        application.add_handler(MessageHandler(filters.ALL, message_counter, block=False), group=1)
+        # 🔥 FIX: Isko group -99 diya hai taaki dusre modules text intercept na kar sake
+        application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, message_counter, block=False), group=-99)
 
         await application.initialize()
         await application.start()
