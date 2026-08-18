@@ -75,6 +75,7 @@ class Character:
     img_url: Optional[str] = None
     is_video: bool = False
     event_emoji: Optional[str] = None
+    gender: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Optional['Character']:
@@ -87,7 +88,8 @@ class Character:
             rarity=data.get('rarity', rarity_display('common')),
             img_url=data.get('img_url'),
             is_video=data.get('is_video', False),
-            event_emoji=data.get('event_emoji') or data.get('event')
+            event_emoji=data.get('event_emoji') or data.get('event'),
+            gender=data.get('gender')
         )
 
 
@@ -119,14 +121,28 @@ class UserCollection:
 
     def get_filtered_characters(self) -> List[Character]:
         mode = self.filter_mode
+        chars = self.characters
+        
+        # Rarity Filter
         if mode in RARITIES:
-            target = rarity_display(mode)
-            return [c for c in self.characters if c.rarity == target]
+            target_name = RARITIES[mode][2].lower()
+            # Matching target name to avoid DB emoji mismatches
+            return [c for c in chars if target_name in c.rarity.lower()]
+            
+        # Latest Mode
         if mode == "latest":
-            return list(reversed(self.characters))
+            return list(reversed(chars))
+            
+        # Animes Mode
         if mode == "animes":
-            return sorted(self.characters, key=lambda c: c.anime)
-        return self.characters
+            return sorted(chars, key=lambda c: (c.anime, c.id))
+            
+        # Waifus Mode
+        if mode == "waifus":
+            return [c for c in chars if c.gender and c.gender.lower() in ['female', 'f', 'girl']]
+            
+        # Default Mode (Chronological from DB)
+        return chars
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
         counts: Dict[str, int] = {}
@@ -246,7 +262,6 @@ class HaremHandler:
         self.user_db = db['user_collection_lmaoooo']
 
     async def load_user_collection(self, user_id: int) -> Optional[UserCollection]:
-        """Loads basic collection from user DB extremely fast."""
         user = await self.user_db.find_one({'id': user_id})
         if not user:
             return None
@@ -254,7 +269,6 @@ class HaremHandler:
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
         favorite = Character.from_dict(user.get('favorites')) if user.get('favorites') else None
 
-        # Clean up fav asynchronously if no longer owned
         if favorite and not any(c.id == favorite.id for c in characters):
             asyncio.create_task(self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}}))
             favorite = None
@@ -265,7 +279,6 @@ class HaremHandler:
         )
 
     async def update_live_data(self, characters: List[Character]):
-        """Only fetch and update data for the characters currently visible on the page."""
         if not characters:
             return
         unique_ids = list({c.id for c in characters})
@@ -282,9 +295,9 @@ class HaremHandler:
                 if doc.get('img_url'):
                     c.img_url = doc.get('img_url')
                 c.is_video = doc.get('is_video', c.is_video)
+                c.gender = doc.get('gender', c.gender)
 
     async def get_anime_counts(self, anime_list: List[str]) -> Dict[str, int]:
-        """Superfast single database aggregation instead of looping."""
         if not anime_list:
             return {}
         
@@ -301,24 +314,32 @@ class HaremHandler:
             counts[doc['_id']] = doc['count']
         return counts
 
-    def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int) -> InlineKeyboardMarkup:
+    def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int, step: int = 1) -> InlineKeyboardMarkup:
         keyboard = [[InlineKeyboardButton(
             f"✨ ʜᴀʀᴇᴍ ({total_chars})", switch_inline_query_current_chat=f"collection.{user_id}"
         )]]
 
         nav = []
         if page > 0:
-            nav.append(InlineKeyboardButton("ᴘʀᴇᴠ", callback_data=f"harem_page:{page - 1}:{user_id}"))
+            prev_page = max(0, page - step)
+            nav.append(InlineKeyboardButton("ᴘʀᴇᴠ", callback_data=f"harem_page:{prev_page}:{user_id}:{step}"))
         if page < total_pages - 1:
-            nav.append(InlineKeyboardButton("ɴᴇxᴛ", callback_data=f"harem_page:{page + 1}:{user_id}"))
+            next_page = min(total_pages - 1, page + step)
+            nav.append(InlineKeyboardButton("ɴᴇxᴛ", callback_data=f"harem_page:{next_page}:{user_id}:{step}"))
         if nav:
             keyboard.append(nav)
 
-        keyboard.append([InlineKeyboardButton("⭆ 2x", callback_data=f"harem_2x:{page}:{user_id}")])
+        # Skip button setup with Toggle logic
+        if total_pages > 2:
+            if step == 1:
+                keyboard.append([InlineKeyboardButton("⭆ 2x", callback_data=f"harem_2x:{page}:{user_id}:2")])
+            else:
+                keyboard.append([InlineKeyboardButton("⭆ 1x", callback_data=f"harem_2x:{page}:{user_id}:1")])
+
         keyboard.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"harem_close:{user_id}")])
         return InlineKeyboardMarkup(keyboard)
 
-    async def show_harem(self, update: Update, context: CallbackContext, page: int = 0, edit: bool = False):
+    async def show_harem(self, update: Update, context: CallbackContext, page: int = 0, edit: bool = False, step: int = 1):
         user = update.effective_user
         user_id = user.id
         user_name = user.first_name
@@ -332,38 +353,34 @@ class HaremHandler:
             await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
             return
 
-        filtered = collection.get_filtered_characters()
-        if not filtered:
+        display_order = collection.get_filtered_characters()
+        if not display_order:
             await message.reply_text(
-                f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ʀᴀʀɪᴛʏ: {rarity_premium_display(collection.filter_mode)}</b>\n"
+                f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ᴛʜɪs ᴍᴏᴅᴇ: {rarity_premium_display(collection.filter_mode) if collection.filter_mode in RARITIES else collection.filter_mode}</b>\n"
                 f"<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /smode</b>",
                 parse_mode='HTML'
             )
             return
 
-        display_order = filtered if collection.filter_mode in ("latest",) else sorted(filtered, key=lambda c: (c.anime, c.id))
         total_pages = math.ceil(len(display_order) / self.CHARACTERS_PER_PAGE)
         page = max(0, min(page, total_pages - 1))
 
         start = page * self.CHARACTERS_PER_PAGE
         current = display_order[start:start + self.CHARACTERS_PER_PAGE]
 
-        # ⚡ OPTIMIZATION: Update only required characters from live database
         chars_to_update = list(current)
-        display_char = collection.favorite if collection.favorite else (random.choice(filtered) if filtered else None)
+        display_char = collection.favorite if collection.favorite else (random.choice(display_order) if display_order else None)
         if display_char:
             chars_to_update.append(display_char)
             
         await self.update_live_data(chars_to_update)
 
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
-
-        # ⚡ OPTIMIZATION: Fast aggregated anime counts
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
         
         builder = HaremMessageBuilder(collection, page, total_pages, style, options, user_name, user_id)
         text = builder.build_message(current, anime_counts)
-        markup = self._build_keyboard(page, total_pages, len(display_order), user_id)
+        markup = self._build_keyboard(page, total_pages, len(display_order), user_id, step)
 
         media_url = display_char.img_url if display_char else None
         is_video = display_char.is_video if display_char else False
@@ -373,12 +390,21 @@ class HaremHandler:
                 await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
                 return
             except TelegramError as e:
+                # Ignored to prevent creating new duplicate harem messages
+                if "not modified" in str(e).lower():
+                    return
                 LOGGER.warning(f"ᴇᴅɪᴛ ғᴀɪʟᴇᴅ, ʀᴇsᴇɴᴅɪɴɢ: {e}")
 
         if media_url:
             await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
         elif edit:
-            await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
+            try:
+                await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
+            except TelegramError as e:
+                if "not modified" in str(e).lower():
+                    return
+                LOGGER.warning(f"ᴇᴅɪᴛ ᴛᴇxᴛ ғᴀɪʟᴇᴅ: {e}")
+                await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
         else:
             await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
 
@@ -542,12 +568,17 @@ async def harem_command(update: Update, context: CallbackContext):
 async def harem_page_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     try:
-        _, page_str, user_id_str = query.data.split(':')
+        # Step dynamically catch hoga yaha se
+        parts = query.data.split(':')
+        page_str = parts[1]
+        user_id_str = parts[2]
+        step = int(parts[3]) if len(parts) > 3 else 1
+        
         user_id = await verify_owner(query, user_id_str)
         if user_id is None:
             return
         await query.answer()
-        await harem_handler.show_harem(update, context, int(page_str), edit=True)
+        await harem_handler.show_harem(update, context, int(page_str), edit=True, step=step)
     except (ValueError, TelegramError) as e:
         LOGGER.error(f"Error in harem_page_callback: {e}", exc_info=True)
         await query.answer("ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴘᴀɢᴇ", show_alert=True)
@@ -586,13 +617,22 @@ async def unfav_callback(update: Update, context: CallbackContext):
 async def harem_2x_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     try:
-        _, curr_page_str, user_id_str = query.data.split(':')
+        parts = query.data.split(':')
+        curr_page_str = parts[1]
+        user_id_str = parts[2]
+        target_step = int(parts[3]) if len(parts) > 3 else 2
+        
         user_id = await verify_owner(query, user_id_str)
         if user_id is None:
             return
-        await query.answer("2x ᴘᴀɢᴇ sᴋɪᴘ")
-        target_page = int(curr_page_str) + 2
-        await harem_handler.show_harem(update, context, target_page, edit=True)
+            
+        curr_page = int(curr_page_str)
+        target_page = curr_page + target_step
+        
+        msg = "2x ᴘᴀɢᴇ sᴋɪᴘ ᴏɴ" if target_step == 2 else "1x (ɴᴏʀᴍᴀʟ) sᴋɪᴘ ᴏɴ"
+        await query.answer(msg)
+        
+        await harem_handler.show_harem(update, context, target_page, edit=True, step=target_step)
     except Exception as e:
         LOGGER.error(f"Error in harem_2x_callback: {e}", exc_info=True)
 
