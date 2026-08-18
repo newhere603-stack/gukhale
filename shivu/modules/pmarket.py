@@ -1,13 +1,51 @@
 import asyncio
+from datetime import datetime, timezone
 from bson import ObjectId
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, TypeHandler
 from shivu import application, db
 
+# --- CONFIGURATION ---
+LOG_GROUP_ID = -1003893927065
+OWNER_ID = 7657218453
+
 # --- DATABASE COLLECTIONS ---
 user_collection = db['user_collection_lmaoooo']
 market_collection = db['market_collection'] 
 bot_settings_collection = db['bot_settings'] 
+
+# --- HELPER: SEND LOGS TO LOG GROUP ---
+async def send_market_log(context: CallbackContext, action: str, details: str):
+    log_msg = (
+        f"<b>⚡️ PMARKET ʟᴏɢs | {action}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{details}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🕒 <i>{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC</i>"
+    )
+    try:
+        await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_msg, parse_mode='HTML')
+    except Exception as e:
+        print(f"Failed to send log to group: {e}")
+
+# --- HELPER: GET DAILY LIMIT INFO ---
+async def get_token_limit_info(user_id):
+    settings = await bot_settings_collection.find_one({'_id': 'pmarket_settings'})
+    global_limit = settings.get('daily_token_limit', 70) if settings else 70
+
+    user = await user_collection.find_one({'id': user_id})
+    if not user:
+        return global_limit, 0, ""
+
+    today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    last_date = user.get('last_token_exchange_date', '')
+    used_today = user.get('daily_token_limit_used', 0)
+
+    if last_date != today_str:
+        used_today = 0 # Reset if day changed
+
+    return global_limit, used_today, today_str
+
 
 # --- HELPER TO GET LIVE CHARACTER FROM ANY COLLECTION ---
 async def get_live_character_doc(char_id):
@@ -97,7 +135,7 @@ async def pmarket_command(update: Update, context: CallbackContext):
 
 # OWNER COMMAND TO TOGGLE EXCHANGE BUTTON
 async def toggle_exchange_cmd(update: Update, context: CallbackContext):
-    if update.effective_user.id != 7657218453:
+    if update.effective_user.id != OWNER_ID:
         return
         
     settings = await bot_settings_collection.find_one({'_id': 'pmarket_settings'})
@@ -113,6 +151,24 @@ async def toggle_exchange_cmd(update: Update, context: CallbackContext):
     status = "ᴇɴᴀʙʟᴇᴅ ✅" if new_state else "ᴅɪsᴀʙʟᴇᴅ ❌"
     await update.message.reply_html(f"<b>PMarket ᴇxᴄʜᴀɴɢᴇ ʙᴜᴛᴛᴏɴ ʜᴀs ʙᴇᴇɴ {status}.</b>")
 
+# OWNER COMMAND TO SET EXCHANGE LIMIT
+async def set_exchange_limit_cmd(update: Update, context: CallbackContext):
+    if update.effective_user.id != OWNER_ID:
+        return
+        
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text("⚠️ <b>Iɴᴠᴀʟɪᴅ ғᴏʀᴍᴀᴛ.</b>\nUsaɢᴇ: <code>/set_exchange_limit <amount></code>", parse_mode="HTML")
+        return
+        
+    new_limit = int(context.args[0])
+    
+    await bot_settings_collection.update_one(
+        {'_id': 'pmarket_settings'}, 
+        {'$set': {'daily_token_limit': new_limit}}, 
+        upsert=True
+    )
+    
+    await update.message.reply_html(f"✅ <b>Dᴀɪʟʏ ᴇxᴄʜᴀɴɢᴇ ʟɪᴍɪᴛ ʜᴀs ʙᴇᴇɴ ᴜᴘᴅᴀᴛᴇᴅ ᴛᴏ <code>{new_limit}</code> ᴛᴏᴋᴇɴs!</b>")
 
 # ========================
 # BUY & MARKET CALLBACKS
@@ -146,12 +202,15 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
     # --- EXCHANGE SUB-MENU ---
     elif action == "pm_exc_menu":
+        global_limit, used_today, _ = await get_token_limit_info(user_id)
+        limit_text = f"♾️ (Oᴡɴᴇʀ Bʏᴘᴀss)" if user_id == OWNER_ID else f"{global_limit - used_today} ʟᴇғᴛ ᴛᴏᴅᴀʏ"
+
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("ɢᴇᴛ ᴄᴏɪɴs", callback_data=f"pm_start_exc_t2c:{user_id}"),
              InlineKeyboardButton("ɢᴇᴛ ᴛᴏᴋᴇɴ", callback_data=f"pm_start_exc_c2t:{user_id}")],
             [InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_m:{user_id}")]
         ])
-        await update_menu(query, "<b>💱 ᴇxᴄʜᴀɴɢᴇ ᴍᴇɴᴜ</b>\n\n<i>ᴡʜᴀᴛ ᴡᴏᴜʟᴅ ʏᴏᴜ ʟɪᴋᴇ ᴛᴏ ᴅᴏ?</i>", keyboard)
+        await update_menu(query, f"<b>💱 ᴇxᴄʜᴀɴɢᴇ ᴍᴇɴᴜ</b>\n\n<i>Dᴀɪʟʏ Lɪᴍɪᴛ: {limit_text}</i>\n<i>ᴡʜᴀᴛ ᴡᴏᴜʟᴅ ʏᴏᴜ ʟɪᴋᴇ ᴛᴏ ᴅᴏ?</i>", keyboard)
 
     elif action == "pm_r":
         rarity_key = parts[1]
@@ -317,6 +376,15 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await user_collection.update_one({'id': seller_id}, {'$inc': {'balance': price}})
         await market_collection.delete_one({'_id': ObjectId(market_id)})
 
+        # Log to group
+        log_details = (
+            f"👤 <b>Bᴜʏᴇʀ:</b> <code>{user_id}</code>\n"
+            f"🏪 <b>Sᴇʟʟᴇʀ:</b> <code>{seller_id}</code>\n"
+            f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {char.get('name')} (<code>{char.get('id')}</code>)\n"
+            f"💰 <b>Pʀɪᴄᴇ:</b> {price:,} ᴄᴏɪɴs"
+        )
+        await send_market_log(context, "🛒 CHARACTER SOLD", log_details)
+
         await query.message.edit_caption(
             caption=f"🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b> ʏᴏᴜ sᴜᴄᴄᴇssғᴜʟʟʏ ʙᴏᴜɢʜᴛ <b>{to_small_caps(char.get('name'))}</b> ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}.",
             parse_mode='HTML'
@@ -352,6 +420,15 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             char = item['character']
             await user_collection.update_one({'id': user_id}, {'$push': {'characters': char}})
             await market_collection.delete_one({'_id': ObjectId(market_id)})
+            
+            # Log to group
+            log_details = (
+                f"👤 <b>Sᴇʟʟᴇʀ:</b> <code>{user_id}</code>\n"
+                f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {char.get('name')} (<code>{char.get('id')}</code>)\n"
+                f"❌ <b>Aᴄᴛɪᴏɴ:</b> Rᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ."
+            )
+            await send_market_log(context, "📉 CHARACTER DELISTED", log_details)
+
             await query.answer(f"✅ sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛᴏ ɪɴᴠᴇɴᴛᴏʀʏ!", show_alert=True)
         
         cursor = market_collection.find({'seller_id': user_id})
@@ -372,34 +449,58 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     # --------------------------
     elif action == "pm_exc_conf":
         exc_type = parts[1]  # "t2c" or "c2t"
-        amount = int(parts[2]) # Ye amount ab strictly sirf tokens count hai
+        amount = int(parts[2]) 
         
         user = await user_collection.find_one({'id': user_id})
         tokens = user.get('tokens', 0) if user else 0
         coins = user.get('balance', 0) if user else 0
         
+        # Limit check before final processing
+        global_limit, used_today, today_str = await get_token_limit_info(user_id)
+        if user_id != OWNER_ID:
+            if amount + used_today > global_limit:
+                available = max(0, global_limit - used_today)
+                await query.answer(f"⚠️ Dᴀɪʟʏ ʟɪᴍɪᴛ ʀᴇᴀᴄʜᴇᴅ! Yᴏᴜ ᴄᴀɴ ᴏɴʟʏ ᴇxᴄʜᴀɴɢᴇ {available} ᴍᴏʀᴇ ᴛᴏᴋᴇɴs ᴛᴏᴅᴀʏ.", show_alert=True)
+                return
+
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"pm_exc_menu:{user_id}")]])
 
-        # 1. GET COINS (Sell Tokens, Get Coins)
+        # Update Query Setup
         if exc_type == "t2c":
             if tokens < amount:
                 await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
                 return
             coins_to_add = amount * 2500
-            # Token minus (-), Coins plus (+)
+            
             await user_collection.update_one({'id': user_id}, {'$inc': {'tokens': -amount, 'balance': coins_to_add}})
             msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{coins_to_add:,}</code> ᴄᴏɪɴs!</b>"
+            
+            log_action = "🔄 TOKENS TO COINS"
+            log_details = f"👤 <b>Usᴇʀ:</b> <code>{user_id}</code>\n📉 <b>Sᴏʟᴅ:</b> {amount} ᴛᴏᴋᴇɴs\n📈 <b>Rᴇᴄᴇɪᴠᴇᴅ:</b> {coins_to_add:,} ᴄᴏɪɴs"
 
-        # 2. GET TOKENS (Spend Coins, Buy Tokens)
         elif exc_type == "c2t":
             coins_to_deduct = amount * 2500
             if coins < coins_to_deduct:
                 await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
                 return
-            # Coins minus (-), Tokens plus (+)
+            
             await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -coins_to_deduct, 'tokens': amount}})
             msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ sᴘᴇɴᴛ <code>{coins_to_deduct:,}</code> ᴄᴏɪɴs ᴛᴏ ʙᴜʏ <code>{amount}</code> ᴛᴏᴋᴇɴs!</b>"
-        
+            
+            log_action = "🔄 COINS TO TOKENS"
+            log_details = f"👤 <b>Usᴇʀ:</b> <code>{user_id}</code>\n📉 <b>Sᴘᴇɴᴛ:</b> {coins_to_deduct:,} ᴄᴏɪɴs\n📈 <b>Rᴇᴄᴇɪᴠᴇᴅ:</b> {amount} ᴛᴏᴋᴇɴs"
+
+        # Increment user's daily limit (Except owner)
+        if user_id != OWNER_ID:
+            user_fresh = await user_collection.find_one({'id': user_id})
+            last_date = user_fresh.get('last_token_exchange_date', '')
+            
+            if last_date != today_str:
+                await user_collection.update_one({'id': user_id}, {'$set': {'daily_token_limit_used': amount, 'last_token_exchange_date': today_str}})
+            else:
+                await user_collection.update_one({'id': user_id}, {'$inc': {'daily_token_limit_used': amount}})
+
+        await send_market_log(context, log_action, log_details)
         await update_menu(query, msg, kb)
 
 
@@ -476,6 +577,14 @@ async def ask_price(update: Update, context: CallbackContext):
 
     await user_collection.update_one({'id': user_id}, {'$pull': {'characters': {'id': char_id_val}}})
     await market_collection.insert_one({'seller_id': user_id, 'price': price, 'character': final_character})
+
+    # Log to group
+    log_details = (
+        f"👤 <b>Sᴇʟʟᴇʀ:</b> <code>{user_id}</code>\n"
+        f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {final_character.get('name')} (<code>{final_character.get('id')}</code>)\n"
+        f"💰 <b>Pʀɪᴄᴇ Sᴇᴛ:</b> {price:,} ᴄᴏɪɴs"
+    )
+    await send_market_log(context, "📈 CHARACTER LISTED", log_details)
 
     context.user_data.pop('sell_character', None)
     context.user_data.pop('sell_owner_id', None)
@@ -555,8 +664,21 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
         await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
         return WAITING_FOR_EXCHANGE_AMOUNT
 
-    # Amount refers strictly to TOKENS requested
     amount = int(amount_text)
+    
+    # 🌟 PRE-CHECK: ENFORCE DAILY TOKEN LIMIT 🌟
+    global_limit, used_today, _ = await get_token_limit_info(user_id)
+    if user_id != OWNER_ID:
+        if amount + used_today > global_limit:
+            available = max(0, global_limit - used_today)
+            await update.message.reply_text(
+                f"⚠️ <b>Dᴀɪʟʏ Lɪᴍɪᴛ Exᴄᴇᴇᴅᴇᴅ!</b>\n"
+                f"Yᴏᴜ ᴄᴀɴ ᴏɴʟʏ ᴇxᴄʜᴀɴɢᴇ <code>{global_limit}</code> ᴛᴏᴋᴇɴs ᴘᴇʀ ᴅᴀʏ.\n"
+                f"Yᴏᴜ ʜᴀᴠᴇ <code>{available}</code> ᴛᴏᴋᴇɴs ʟᴇғᴛ ғᴏʀ ᴛᴏᴅᴀʏ.", 
+                parse_mode='HTML'
+            )
+            return WAITING_FOR_EXCHANGE_AMOUNT
+
     user = await user_collection.find_one({'id': user_id})
     tokens = user.get('tokens', 0) if user else 0
     coins = user.get('balance', 0) if user else 0
@@ -653,4 +775,5 @@ application.add_handler(exchange_conv, group=-2)
 
 application.add_handler(CommandHandler(["pmarket", "shop"], pmarket_command), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd), group=0)
+application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd), group=0)
 application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):'), group=0)
