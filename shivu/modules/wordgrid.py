@@ -1,3 +1,4 @@
+import os
 import random
 import string
 import io
@@ -11,7 +12,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMe
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from shivu import application, user_collection, db
-# Tumhari nayi easy words wali file jisme sab letters ek sath hain
 from shivu.modules.words_data_full_az import WORD_LIST
 
 LOGGER = logging.getLogger(__name__)
@@ -26,13 +26,9 @@ chat_settings = {}
 stop_votes = {}  
 LOG_GROUP_ID = -1003893927065  
 
-# ==========================================
-# 🛠 100% FOOLPROOF LAZY DB LOADER
-# ==========================================
 DB_LOADED = False
 
 async def ensure_db_loaded():
-    """Bot restart hone ke baad state restore karne ke liye"""
     global DB_LOADED
     if not DB_LOADED:
         try:
@@ -48,31 +44,35 @@ async def ensure_db_loaded():
             LOGGER.error(f"Error loading WordGrid state from DB: {e}")
 
 # ==========================================
-# 🛠 FONT LOADER
+# 🛠 SMART AUTO-DOWNLOAD FONT LOADER (HEROKU & VPS SAFE)
 # ==========================================
-GLOBAL_FONT_BYTES = None
-
 def get_bold_font(size):
-    global GLOBAL_FONT_BYTES
-    try:
-        if GLOBAL_FONT_BYTES is None:
-            url = "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/roboto/static/Roboto-Bold.ttf"
-            response = requests.get(url, timeout=5)
+    font_filename = "Roboto-Bold.ttf"
+    
+    # Agar file nahi hai (jaise Heroku restart par), toh code khud download karega
+    if not os.path.exists(font_filename):
+        try:
+            # 100% Working Permanent Direct GitHub Link
+            url = "https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Bold.ttf"
+            response = requests.get(url, timeout=10)
             if response.status_code == 200:
-                GLOBAL_FONT_BYTES = response.content
+                with open(font_filename, "wb") as f:
+                    f.write(response.content)
             else:
-                raise Exception(f"HTTP Status {response.status_code}")
-                
-        return ImageFont.truetype(io.BytesIO(GLOBAL_FONT_BYTES), size)
+                LOGGER.error(f"Failed to auto-download font. Status: {response.status_code}")
+        except Exception as e:
+            LOGGER.error(f"Font download error: {e}")
+
+    # File save hone ke baad direct load karega (0 ms latency)
+    try:
+        return ImageFont.truetype(font_filename, size)
     except Exception as e:
-        LOGGER.error(f"RAM Font load failed: {e}")
+        LOGGER.error(f"Local Font load failed: {e}")
+        # Agar fir bhi fail ho gaya to OS ke default fonts use karega
         try:
             return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
         except Exception:
-            try:
-                return ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", size)
-            except Exception:
-                return ImageFont.load_default()
+            return ImageFont.load_default()
 
 def get_chat_settings(chat_id):
     if chat_id not in chat_settings:
@@ -102,10 +102,8 @@ def generate_game_grid(mode="normal"):
     
     for length in target_lengths:
         pool = [w for w in WORD_LIST if len(w) == length and w not in chosen_words]
-        
         if not pool: 
             pool = [w for w in WORD_LIST if w not in chosen_words]
-            
         if pool:
             chosen_words.append(random.choice(pool))
             
@@ -136,7 +134,6 @@ def generate_game_grid(mode="normal"):
     return grid, placed_words
 
 def create_grid_image(grid, placed_words, found_words, chat_id):
-    """Ye CPU intensive kaam hai, isliye isko thread me call karenge"""
     settings = get_chat_settings(chat_id)
     theme = settings["theme"]
     mark_words = settings["mark_words"]
@@ -156,7 +153,6 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
     
     img = Image.new('RGBA', (img_size, img_size), color=bg_color) 
     draw = ImageDraw.Draw(img)
-
     font = get_bold_font(50)
 
     for r in range(size + 1):
@@ -168,7 +164,6 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
             (60, 150, 120, 180), (180, 70, 70, 180), (60, 150, 60, 180), 
             (130, 90, 180, 180), (180, 140, 50, 180), (60, 100, 200, 180)
         ]
-        
         overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
         overlay_draw = ImageDraw.Draw(overlay)
 
@@ -200,7 +195,6 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
             h = bbox[3] - bbox[1]
             text_x = x0 + (cell_size - w) / 2 - bbox[0]
             text_y = y0 + (cell_size - h) / 2 - bbox[1]
-            
             draw.text((text_x, text_y), letter, fill=text_color, font=font)
 
     img = img.convert("RGB")
@@ -249,12 +243,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     cmd = update.message.text.split('@')[0].lower()
-    if 'easy' in cmd:
-        mode = "easy"
-    elif 'hard' in cmd:
-        mode = "hard"
-    else:
-        mode = "normal"
+    mode = "easy" if 'easy' in cmd else "hard" if 'hard' in cmd else "normal"
 
     grid, placed_words = generate_game_grid(mode=mode)
     stop_votes.pop(chat_id, None) 
@@ -268,7 +257,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "mode": mode
     }
 
-    # THREADING: Image ko background thread me banayenge taaki bot freeze na ho
     img_bio = await asyncio.to_thread(create_grid_image, grid, placed_words, [], chat_id)
     img_bio.seek(0)
 
@@ -284,8 +272,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if settings["pin"]:
         try:
             await context.bot.pin_chat_message(chat_id=chat_id, message_id=msg.message_id)
-        except Exception as e:
-            LOGGER.error(f"Failed to pin game message: {e}")
+        except Exception:
+            pass
             
     try:
         group_name = html.escape(chat.title)
@@ -299,7 +287,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📝 <b>Words to guess:</b>\n<code>{words_list}</code>"
         )
         await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_text, parse_mode="HTML", disable_web_page_preview=True)
-    except Exception as e:
+    except Exception:
         pass
 
 async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -325,7 +313,6 @@ async def stop_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         if chat_id not in stop_votes:
             stop_votes[chat_id] = set()
-            
         stop_votes[chat_id].add(user.id)
         votes_needed = 3
         current_votes = len(stop_votes[chat_id])
@@ -369,7 +356,6 @@ async def vote_stop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         del active_games[chat_id]
         stop_votes.pop(chat_id, None)
         await grid_games_col.delete_one({'_id': chat_id})
-        
         await query.answer("Game stopped by vote!", show_alert=True)
         await query.edit_message_text("<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>The active game has been stopped by community vote (3/3). Start another with /grid_hard or /grid</b>", parse_mode="HTML")
     else:
@@ -404,10 +390,8 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if guess in game["words"] and guess not in game["found"]:
         is_first = len(game["found"]) == 0
         is_last = len(game["found"]) == len(game["words"]) - 1
-        
         points = calculate_points(game["mode"], is_first, is_last)
         
-        # SARA STATE TURANT UPDATE KARO 
         game["found"].append(guess)
         user = update.effective_user
         mention = user.mention_html()
@@ -417,7 +401,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             game["round_scores"][uid_str] = {"mention": mention, "score": 0}
         game["round_scores"][uid_str]["score"] += points
 
-        # OPTIMIZATION: User ko turant reply do, user ko zero lag lagega!
         link = get_msg_link(chat, game["msg_id"])
         btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
         try:
@@ -425,7 +408,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         
-        # Ab DB query aur Image Edit ka kaam Background Task me chalega
         async def background_update_task():
             now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
             today_str = now_ist.strftime("%Y-%m-%d")
@@ -448,10 +430,9 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await grid_games_col.update_one({'_id': chat_id}, {'$set': {'game_data': game}}, upsert=True)
                 await user_collection.update_one({"id": user.id}, {"$inc": inc_dict, "$setOnInsert": {"first_name": user.first_name, "username": user.username}}, upsert=True)
-            except Exception as e:
-                LOGGER.error(f"Error updating grid points: {e}")
+            except Exception:
+                pass
             
-            # THREADING: Nayi Grid image background thread me banegi
             img_bio = await asyncio.to_thread(create_grid_image, game["grid"], game["words"], list(game["found"]), chat_id)
             img_bio.seek(0)
             caption = get_sorted_caption(game["words"], game["found"])
@@ -466,7 +447,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
         if is_last:
-            await background_update_task() # Last me pehle grid update hone denge fir summary aayegi
+            await background_update_task() 
             sorted_scores = sorted(game["round_scores"].values(), key=lambda x: x["score"], reverse=True)
             summary = "<tg-emoji emoji-id=\"5233477268617053735\">🕹</tg-emoji><tg-emoji emoji-id=\"5233546451950256512\">🕹</tg-emoji><tg-emoji emoji-id=\"5233604395354047945\">🕹</tg-emoji><tg-emoji emoji-id=\"5233544652358962131\">🕹</tg-emoji><tg-emoji emoji-id=\"5233619423444616550\">🕹</tg-emoji><tg-emoji emoji-id=\"5233286945731267091\">🕹</tg-emoji>\n\n<tg-emoji emoji-id=\"5280939169793732849\">🃏</tg-emoji> <b>Round Summary</b>\n\n"
             medals = ["<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>", "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>", "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>", "🏅", "🏅"] 
@@ -485,7 +466,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             stop_votes.pop(chat_id, None)
             await grid_games_col.delete_one({'_id': chat_id}) 
         else:
-            # Agar last guess nahi hai, toh image edit/DB task background me chhod do, turant aage bado!
             asyncio.create_task(background_update_task())
 
 async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -499,7 +479,6 @@ async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     game = active_games[chat_id]
-    # THREADING: Refresh ko bhi thread kiya hai
     img_bio = await asyncio.to_thread(create_grid_image, game["grid"], game["words"], game["found"], chat_id)
     img_bio.seek(0)
     
@@ -513,7 +492,6 @@ async def refresh_grid_callback(update: Update, context: ContextTypes.DEFAULT_TY
         pass
 
 # --- SETTINGS MENU ---
-
 def build_settings_keyboard(chat_id):
     settings = get_chat_settings(chat_id)
     pin_text = "✅ On" if settings["pin"] else "❌ Off"
@@ -575,41 +553,32 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "wg_toggle_pin":
         settings["pin"] = not settings["pin"]
         await query.edit_message_reply_markup(reply_markup=build_settings_keyboard(chat.id))
-        
     elif data == "wg_toggle_mark":
         settings["mark_words"] = not settings["mark_words"]
         await query.edit_message_reply_markup(reply_markup=build_settings_keyboard(chat.id))
-        
     elif data == "wg_theme_menu":
         text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> - light during the day, dark at night.\n• <b>Black</b> - always dark board.\n• <b>White</b> - always light board.".format(settings["theme"].capitalize())
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_theme_keyboard(chat.id))
-        
     elif data.startswith("wg_set_theme_"):
         theme_val = data.split("_")[-1]
         settings["theme"] = theme_val
         text = "🎨 <b>Board Theme</b>\n\nCurrent mode: <b>{}</b>\n\n• <b>Automatic</b> - light during the day, dark at night.\n• <b>Black</b> - always dark board.\n• <b>White</b> - always light board.".format(theme_val.capitalize())
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_theme_keyboard(chat.id))
-        
     elif data == "wg_back_settings":
         text = "<tg-emoji emoji-id=\"6307567066572396133\">⚙</tg-emoji> <b>WordGrid Group Settings</b>\n\nManage the bot's behavior in this chat. Only admins can change these settings."
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=build_settings_keyboard(chat.id))
-        
     elif data == "wg_close":
         await query.message.delete()
         
     await grid_settings_col.update_one({'_id': chat.id}, {'$set': {'settings': settings}}, upsert=True)
     await query.answer()
 
-# --- LEADERBOARD LOGIC & UI FIXES ---
-
+# --- LEADERBOARD LOGIC ---
 WG_LEADERBOARD_STATES = {}
 
 def get_wg_user_state(chat_id):
     if chat_id not in WG_LEADERBOARD_STATES:
-        WG_LEADERBOARD_STATES[chat_id] = {
-            "scope": "global",
-            "time": "all"
-        }
+        WG_LEADERBOARD_STATES[chat_id] = {"scope": "global", "time": "all"}
     return WG_LEADERBOARD_STATES[chat_id]
 
 def get_wg_target_key(time_filter, scope, chat_id):
@@ -617,20 +586,13 @@ def get_wg_target_key(time_filter, scope, chat_id):
     now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
     time_prefix = None
     
-    if time_filter == "today":
-        time_prefix = now_ist.strftime("%Y-%m-%d")
-    elif time_filter == "week":
-        time_prefix = now_ist.strftime("%Y-W%V")
-    elif time_filter == "month":
-        time_prefix = now_ist.strftime("%Y-%m")
-    elif time_filter == "year":
-        time_prefix = now_ist.strftime("%Y")
+    if time_filter == "today": time_prefix = now_ist.strftime("%Y-%m-%d")
+    elif time_filter == "week": time_prefix = now_ist.strftime("%Y-W%V")
+    elif time_filter == "month": time_prefix = now_ist.strftime("%Y-%m")
+    elif time_filter == "year": time_prefix = now_ist.strftime("%Y")
 
     time_key = f"{time_prefix}_{base_key}" if time_prefix else base_key
-        
-    if scope == "chat":
-        return f"{chat_id}_{time_key}"
-    return time_key
+    return f"{chat_id}_{time_key}" if scope == "chat" else time_key
 
 def get_grid_top_keyboard(state):
     scope = state["scope"]
@@ -638,7 +600,6 @@ def get_grid_top_keyboard(state):
 
     global_btn = "ɢʟᴏʙᴀʟ ⎋" if scope == "global" else "ɢʟᴏʙᴀʟ"
     chat_btn = "ᴛʜɪs ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴛʜɪs ᴄʜᴀᴛ"
-    
     today_btn = "ᴛᴏᴅᴀʏ ⎋" if time_f == "today" else "ᴛᴏᴅᴀʏ"
     week_btn = "ᴡᴇᴇᴋ ⎋" if time_f == "week" else "ᴡᴇᴇᴋ"
     month_btn = "ᴍᴏɴᴛʜ ⎋" if time_f == "month" else "ᴍᴏɴᴛʜ"
@@ -646,26 +607,14 @@ def get_grid_top_keyboard(state):
     all_btn = "ᴀʟʟ-ᴛɪᴍᴇ ⎋" if time_f == "all" else "ᴀʟʟ-ᴛɪᴍᴇ"
 
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(global_btn, callback_data="wg_top_scope_global"),
-            InlineKeyboardButton("⟳", callback_data="wg_top_refresh"),
-            InlineKeyboardButton(chat_btn, callback_data="wg_top_scope_chat")
-        ],
-        [
-            InlineKeyboardButton(today_btn, callback_data="wg_top_time_today"),
-            InlineKeyboardButton(week_btn, callback_data="wg_top_time_week"),
-            InlineKeyboardButton(month_btn, callback_data="wg_top_time_month")
-        ],
-        [
-            InlineKeyboardButton(year_btn, callback_data="wg_top_time_year"),
-            InlineKeyboardButton(all_btn, callback_data="wg_top_time_all")
-        ]
+        [InlineKeyboardButton(global_btn, callback_data="wg_top_scope_global"), InlineKeyboardButton("⟳", callback_data="wg_top_refresh"), InlineKeyboardButton(chat_btn, callback_data="wg_top_scope_chat")],
+        [InlineKeyboardButton(today_btn, callback_data="wg_top_time_today"), InlineKeyboardButton(week_btn, callback_data="wg_top_time_week"), InlineKeyboardButton(month_btn, callback_data="wg_top_time_month")],
+        [InlineKeyboardButton(year_btn, callback_data="wg_top_time_year"), InlineKeyboardButton(all_btn, callback_data="wg_top_time_all")]
     ])
 
 async def fetch_grid_leaderboard(chat_id, state):
     scope = state["scope"]
     time_f = state["time"]
-    
     sort_key = get_wg_target_key(time_f, scope, chat_id)
     
     try:
@@ -681,52 +630,37 @@ async def fetch_grid_leaderboard(chat_id, state):
         else:
             for i, user in enumerate(top_users):
                 uid = user.get('id', user.get('_id'))
-                
                 first_name = user.get('first_name', '')
                 if not first_name or first_name.strip() == '':
                     first_name = user.get('username', 'Unknown')
-                
                 name = html.escape(first_name)
                 user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else name
-                
                 points = user.get(sort_key, 0)
-                
                 msg += f"<b>{i + 1}.</b> <b>{user_mention}</b> - <code>{points:,}</code> <b>pts</b>\n"
         return msg
     except Exception as e:
-        LOGGER.error(f"Leaderboard fetch error: {e}")
         return "<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>"
 
 async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     state = get_wg_user_state(chat_id)
-    
     msg = await fetch_grid_leaderboard(chat_id, state)
     keyboard = get_grid_top_keyboard(state)
-    
     await update.message.reply_text(msg, parse_mode="HTML", reply_markup=keyboard)
 
 async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     chat_id = query.message.chat_id
-    
     state = get_wg_user_state(chat_id)
 
-    if data == "wg_top_scope_global":
-        state["scope"] = "global"
-    elif data == "wg_top_scope_chat":
-        state["scope"] = "chat"
-    elif data.startswith("wg_top_time_"):
-        state["time"] = data.replace("wg_top_time_", "")
-    elif data == "wg_top_refresh":
-        pass 
+    if data == "wg_top_scope_global": state["scope"] = "global"
+    elif data == "wg_top_scope_chat": state["scope"] = "chat"
+    elif data.startswith("wg_top_time_"): state["time"] = data.replace("wg_top_time_", "")
         
     await query.answer()
-    
     msg = await fetch_grid_leaderboard(chat_id, state)
     keyboard = get_grid_top_keyboard(state)
-    
     try:
         await query.edit_message_text(msg, parse_mode="HTML", reply_markup=keyboard)
     except Exception:
