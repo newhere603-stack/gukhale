@@ -170,17 +170,19 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
     return bio
 
 def get_sorted_caption(placed_words, found_words):
-    caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\n<b>Find these words:</b>\n"
+    caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\n<b>Find these words:</b>\n<blockquote>"
     sorted_words = sorted(placed_words.keys(), key=len)
     
     for w in sorted_words:
         if w in found_words:
-            caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{w}</b>\n"
+            # Done words ab blockquote me with copyable <code> tag aayenge
+            caption += f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <code>{w}</code>\n"
         else:
+            # FIX: Hata diya &nbsp; aur replace kiya code tag se so tap to copy ban jaye
             masked = w[0] + "".join(" -" for _ in range(len(w) - 1))
-            caption += f"<b>{masked} &nbsp;&nbsp;({len(w)})</b>\n"
+            caption += f"<code>{masked}    ({len(w)})</code>\n"
             
-    caption += "\n<b>Tap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!</b>"
+    caption += "</blockquote>\n<b>Tap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!</b>"
     return caption
 
 def get_msg_link(chat, msg_id):
@@ -249,7 +251,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
         group_name = html.escape(chat.title)
         game_link = get_msg_link(chat, msg.message_id)
         
-        # LOGS FIX: First letter Capital, no commas, separated by space
         words_list = " ".join([w.capitalize() for w in placed_words.keys()])
         
         log_text = (
@@ -474,7 +475,7 @@ def build_theme_keyboard(chat_id):
     keyboard = [
         [InlineKeyboardButton(auto_btn, callback_data="wg_set_theme_automatic")],
         [InlineKeyboardButton(blk_btn, callback_data="wg_set_theme_black"), InlineKeyboardButton(wht_btn, callback_data="wg_set_theme_white")],
-        [InlineKeyboardButton("Back", callback_data="wg_back_settings")]
+        [InlineKeyboardButton("↻ Back", callback_data="wg_back_settings")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -562,7 +563,6 @@ async def fetch_grid_leaderboard(chat_id, scope="global"):
             for i, user in enumerate(top_users):
                 uid = user.get('id', user.get('_id'))
                 
-                # NAME FIX: Exact naam uthayega (First Name -> Username -> Unknown)
                 first_name = user.get('first_name', '')
                 if not first_name or first_name.strip() == '':
                     first_name = user.get('username', 'Unknown')
@@ -572,7 +572,6 @@ async def fetch_grid_leaderboard(chat_id, scope="global"):
                 
                 points = user.get(sort_key, 0)
                 
-                # FORMAT FIX: Bold Numbers & Bold "pts"
                 msg += f"<b>{i + 1}.</b> {user_mention} - {points:,} <b>pts</b>\n"
         return msg
     except Exception as e:
