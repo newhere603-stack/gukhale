@@ -425,10 +425,17 @@ async def guess(update: Update, context: CallbackContext) -> None:
         spawn_messages.pop(chat_id, None)
 
         # -------------------------------------------------------------------------
-        # 3. BACKGROUND TASKS (Database updates, Message Delete)
+        # 3. BACKGROUND TASKS (Database updates, Message Delete & REACTION)
         # -------------------------------------------------------------------------
         async def process_background_tasks():
             try:
+                # User ki message par INSTANT but background me random reaction add karega
+                try:
+                    reactions = ["🔥", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️", "🤩", "🐳"]
+                    await update.message.set_reaction(reaction=random.choice(reactions))
+                except Exception:
+                    pass
+
                 # User DB update (Character add karna)
                 user = await user_collection.find_one({'id': user_id})
                 if user:
