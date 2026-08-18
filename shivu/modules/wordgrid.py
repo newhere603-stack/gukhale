@@ -170,7 +170,7 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
     return bio
 
 def get_sorted_caption(placed_words, found_words):
-    caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\n<b>Find these words:</b>\n<blockquote>"
+    caption = "<tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> <b>WORD GRID CHALLENGE</b> <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji>\n\n<b>Find these words:</b>\n"
     sorted_words = sorted(placed_words.keys(), key=len)
     
     for w in sorted_words:
@@ -182,7 +182,7 @@ def get_sorted_caption(placed_words, found_words):
             masked = w[0] + "".join(" -" for _ in range(len(w) - 1))
             caption += f"<code>{masked}    ({len(w)})</code>\n"
             
-    caption += "</blockquote>\n<b>Tap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!</b>"
+    caption += "\n<b>Tap <tg-emoji emoji-id=\"5260491539167073671\">🔄</tg-emoji> Refresh Grid to mark!</b>"
     return caption
 
 def get_msg_link(chat, msg_id):
