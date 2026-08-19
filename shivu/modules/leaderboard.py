@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 from html import escape
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
@@ -20,6 +21,18 @@ def sc(t):
 def is_sudo(user_id):
     return user_id == OWNER_ID or str(user_id) in SUDO_USERS or user_id in SUDO_USERS
 
+# ---------- Superfast Cache System ----------
+LB_CACHE = {}
+CACHE_TTL = 300  # 5 minutes tak result memory me save rahega jisse page instant switch honge
+
+async def get_cached_data(key, fetch_function):
+    now = time.time()
+    if key in LB_CACHE and now - LB_CACHE[key]['time'] < CACHE_TTL:
+        return LB_CACHE[key]['data']
+    
+    data = await fetch_function()
+    LB_CACHE[key] = {'time': now, 'data': data}
+    return data
 
 # ---------- Smart Database & Field Handlers ----------
 
@@ -119,7 +132,6 @@ async def send_or_edit(update, context, text, kb, edit):
         except BadRequest as e:
             if "not modified" in str(e).lower():
                 return
-            
             try:
                 await q.message.delete()
             except Exception:
@@ -182,14 +194,19 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
 
 # ---------- Top by balance ----------
 
+async def fetch_top_balance():
+    # Only fetches necessary fields (ignores massive characters array for speed)
+    data = await user_collection.find(
+        {}, 
+        {"id": 1, "user_id": 1, "_id": 1, "first_name": 1, "balance": 1, "coins": 1, "wallet": 1, "money": 1, "gold": 1, "bal": 1}
+    ).to_list(length=None)
+    return sorted(data, key=lambda x: extract_balance(x), reverse=True)[:10]
+
 async def top_balance(update: Update, context: CallbackContext, edit=False):
-    # FIXED: Fetch all users instead of just the first 50
-    data = await user_collection.find({}).to_list(length=None)
+    sorted_data = await get_cached_data("top_balance", fetch_top_balance)
 
-    if not data:
+    if not sorted_data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
-
-    sorted_data = sorted(data, key=lambda x: extract_balance(x), reverse=True)[:10]
 
     rows = []
     for i, u in enumerate(sorted_data, 1):
@@ -209,14 +226,18 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
 
 # ---------- Top by tokens ----------
 
+async def fetch_top_tokens():
+    data = await user_collection.find(
+        {}, 
+        {"id": 1, "user_id": 1, "_id": 1, "first_name": 1, "tokens": 1, "token": 1, "gems": 1}
+    ).to_list(length=None)
+    return sorted(data, key=lambda x: extract_tokens(x), reverse=True)[:10]
+
 async def top_tokens(update: Update, context: CallbackContext, edit=False):
-    # FIXED: Fetch all users instead of just the first 50
-    data = await user_collection.find({}).to_list(length=None)
+    sorted_data = await get_cached_data("top_tokens", fetch_top_tokens)
 
-    if not data:
+    if not sorted_data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
-
-    sorted_data = sorted(data, key=lambda x: extract_tokens(x), reverse=True)[:10]
 
     rows = []
     for i, u in enumerate(sorted_data, 1):
@@ -236,12 +257,15 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
 
 # ---------- Top by characters ----------
 
-async def top_characters(update: Update, context: CallbackContext, edit=False):
-    data = await user_collection.aggregate([
+async def fetch_top_characters():
+    return await user_collection.aggregate([
         {"$match": {"characters": {"$exists": True, "$type": "array"}}},
         {"$project": {"user_id": {"$ifNull": ["$id", "$user_id"]}, "first_name": 1, "count": {"$size": "$characters"}}},
         {"$sort": {"count": -1}}, {"$limit": 10}
     ]).to_list(10)
+
+async def top_characters(update: Update, context: CallbackContext, edit=False):
+    data = await get_cached_data("top_chars", fetch_top_characters)
 
     if not data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
@@ -263,8 +287,11 @@ async def top_characters(update: Update, context: CallbackContext, edit=False):
 
 # ---------- Top groups ----------
 
+async def fetch_top_groups():
+    return await top_global_groups_collection.find({}).sort('count', -1).limit(10).to_list(10)
+
 async def top_groups(update: Update, context: CallbackContext, edit=False):
-    data = await top_global_groups_collection.find({}).sort('count', -1).limit(10).to_list(10)
+    data = await get_cached_data("top_groups", fetch_top_groups)
 
     if not data:
         return await send_or_edit(update, context, f"<b>{sc('no data.')}</b>", None, edit)
@@ -276,6 +303,9 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
 
 
 # ---------- My Profile (Fixed & Upgraded) ----------
+
+async def fetch_total_collectors():
+    return await user_collection.count_documents({"characters": {"$exists": True, "$type": "array"}})
 
 async def my_profile(update: Update, context: CallbackContext, edit=False):
     user_id = update.effective_user.id
@@ -290,25 +320,21 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         )
         return await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
 
-    # Characters & Stats
     characters = user.get('characters', [])
     char_count = len(characters)
     balance = extract_balance(user)
     tokens = extract_tokens(user)
 
-    # Calculate collection progress
-    total_collectors = await user_collection.count_documents({
-        "characters": {"$exists": True, "$type": "array"}
-    })
+    total_collectors = await get_cached_data("total_collectors", fetch_total_collectors)
     
     total_available_chars = max(100, char_count, 1)
     completion_pct = round((char_count / total_available_chars) * 100, 1)
     progress_bar = generate_progress_bar(char_count, total_available_chars)
 
-    # Calculate rank
+    # Calculate rank efficiently
     better_than = await user_collection.count_documents({
         "characters": {"$exists": True, "$type": "array"},
-        "$expr": {"$gt": [{"$size": "$characters"}, char_count]}
+        f"characters.{char_count}": {"$exists": True} 
     })
     rank = better_than + 1
     badge = get_rank_badge(rank)
@@ -362,7 +388,7 @@ async def stats(update: Update, context: CallbackContext, edit=False):
 
     users = await user_collection.count_documents({})
     groups = len(await group_user_totals_collection.distinct('group_id'))
-    collectors = await user_collection.count_documents({"characters": {"$exists": True, "$type": "array"}})
+    collectors = await get_cached_data("total_collectors", fetch_total_collectors)
 
     total_chars_result = await user_collection.aggregate([
         {"$match": {"characters": {"$exists": True, "$type": "array"}}},
@@ -392,8 +418,9 @@ async def export_users(update: Update, context: CallbackContext):
     if not is_sudo(update.effective_user.id):
         return await update.message.reply_text(f"<b>{sc('unauthorized.')}</b>", parse_mode='HTML')
 
-    users = await user_collection.find({}).to_list(None)
-    lines = [f"[{u.get('id') or u.get('user_id')}] {u.get('first_name')} | @{u.get('username')} | {len(u.get('characters', []))} chars"
+    # Exclude character arrays to prevent massive RAM usage during export
+    users = await user_collection.find({}, {"characters": 0}).to_list(None)
+    lines = [f"[{u.get('id') or u.get('user_id')}] {u.get('first_name')} | @{u.get('username')} | Bal: {extract_balance(u)}"
               for u in users]
     content = f"USER EXPORT — {datetime.now()}\nTotal: {len(users):,}\n{'='*50}\n\n" + "\n".join(lines)
 
