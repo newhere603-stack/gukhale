@@ -22,6 +22,10 @@ except ImportError:
 
 OWNER_ID = 7657218453
 
+# Ye dictionary store karegi ki konsi URL ka kya Telegram file_id hai
+# Taaki baar baar download na karna pade
+MEDIA_CACHE = {}
+
 DEFAULT_PRICES = {
     "common": 1000, "rare": 3200, "medium": 2900, 
     "legendary": 5000, "celestial": 70000, "spicy": 59000, 
@@ -81,7 +85,6 @@ def get_rarity_emoji_and_name(r_str: str):
     name_part = extract_rarity_name(r_str)
     name_lower = name_part.lower()
     
-    # Agar emoji mil gaya to wo use karega varna default star emoji
     emoji = PREMIUM_RARITIES.get(name_lower, '<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji>')
     return emoji, name_part
 
@@ -218,7 +221,6 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     r_emoji, r_name = get_rarity_emoji_and_name(char.get('rarity', 'Unknown'))
     status_text = f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('SOLD')}" if char.get('is_sold') else f"<tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> {bold_sc('AVAILABLE')}"
 
-    # Star hata kar Rarity Fix ki hai yaha
     caption = f"""<tg-emoji emoji-id="5278702045883292456">🛍</tg-emoji> {bold_sc(f'DAILY DEALS ({index+1}/2)')}
 
 <tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(str(char.get('name', 'Unknown')).upper())}
@@ -241,51 +243,71 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
         [InlineKeyboardButton(to_small_caps("Refresh (30,000 💸)"), callback_data=f"mp_ref_{user_id}")]
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
+    
     img_url = char.get('img_url')
+    # CACHE CHECK: Agar pehle se load kiya hai to direct telegram wala file_id le lega
+    media_source = MEDIA_CACHE.get(img_url, img_url) if img_url else None
     
     is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
     media_class = InputMediaVideo if is_video else InputMediaPhoto
 
+    msg = None
     if is_edit:
         try:
             if update_obj.message.photo or update_obj.message.video or update_obj.message.animation:
                 if img_url:
                     try:
-                        await update_obj.edit_message_media(
-                            media=media_class(media=img_url, caption=caption, parse_mode='HTML'), 
+                        msg = await update_obj.edit_message_media(
+                            media=media_class(media=media_source, caption=caption, parse_mode='HTML'), 
                             reply_markup=reply_markup
                         )
                     except BadRequest as e:
-                        if "video" in str(e).lower() or "animation" in str(e).lower():
-                            await update_obj.edit_message_media(
-                                media=InputMediaVideo(media=img_url, caption=caption, parse_mode='HTML'), 
+                        if "message is not modified" in str(e).lower():
+                            msg = update_obj.message
+                        elif "video" in str(e).lower() or "animation" in str(e).lower():
+                            msg = await update_obj.edit_message_media(
+                                media=InputMediaVideo(media=media_source, caption=caption, parse_mode='HTML'), 
                                 reply_markup=reply_markup
                             )
                         else:
                             raise e
                 else:
-                    await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    msg = await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
             else:
-                await update_obj.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+                msg = await update_obj.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+        except BadRequest as e:
+            if "message is not modified" in str(e).lower():
+                msg = update_obj.message
+            else:
+                logging.error(f"UI Edit Error in MP: {e}")
         except Exception as e:
             logging.error(f"UI Edit Error in MP: {e}")
     else:
         if img_url:
             try:
                 if is_video:
-                    await update_obj.message.reply_video(video=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    msg = await update_obj.message.reply_video(video=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
                 else:
-                    await update_obj.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    msg = await update_obj.message.reply_photo(photo=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
             except BadRequest as e:
                 if "video" in str(e).lower() or "animation" in str(e).lower():
                     try:
-                        await update_obj.message.reply_video(video=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                        msg = await update_obj.message.reply_video(video=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
                     except BadRequest:
-                        await update_obj.message.reply_animation(animation=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                        msg = await update_obj.message.reply_animation(animation=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
                 else:
                     raise e
         else:
-            await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+            msg = await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+            
+    # CACHE SAVE: Ek baar bhej diya to iska ID save karlo
+    if msg and img_url and img_url not in MEDIA_CACHE:
+        if msg.photo:
+            MEDIA_CACHE[img_url] = msg.photo[-1].file_id
+        elif msg.video:
+            MEDIA_CACHE[img_url] = msg.video.file_id
+        elif msg.animation:
+            MEDIA_CACHE[img_url] = msg.animation.file_id
 
 
 async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
@@ -315,7 +337,6 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
 
     r_emoji, r_name = get_rarity_emoji_and_name(active_auc['rarity'])
 
-    # Auction UI me bhi Rarity Emoji fix kar diya hai
     caption = f"""<tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji> 𝗟𝗜𝗩𝗘 𝗔𝗨𝗖𝗧𝗜𝗢𝗡 <tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji>
 
 <tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(active_auc['char_name'])}
@@ -336,33 +357,51 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     ]
     
     reply_markup = InlineKeyboardMarkup(buttons)
+    
     img_url = active_auc.get('img_url')
+    media_source = MEDIA_CACHE.get(img_url, img_url) if img_url else None
     
     is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
     media_class = InputMediaVideo if is_video else InputMediaPhoto
     
+    msg = None
     try:
         if query.message.photo or query.message.video or query.message.animation:
             if img_url:
                 try:
-                    await query.edit_message_media(
-                        media=media_class(media=img_url, caption=caption, parse_mode='HTML'), 
+                    msg = await query.edit_message_media(
+                        media=media_class(media=media_source, caption=caption, parse_mode='HTML'), 
                         reply_markup=reply_markup
                     )
                 except BadRequest as e:
-                    if "video" in str(e).lower() or "animation" in str(e).lower():
-                        await query.edit_message_media(
-                            media=InputMediaVideo(media=img_url, caption=caption, parse_mode='HTML'), 
+                    if "message is not modified" in str(e).lower():
+                        msg = query.message
+                    elif "video" in str(e).lower() or "animation" in str(e).lower():
+                        msg = await query.edit_message_media(
+                            media=InputMediaVideo(media=media_source, caption=caption, parse_mode='HTML'), 
                             reply_markup=reply_markup
                         )
                     else:
                         raise e
             else:
-                await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                msg = await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         else:
-            await query.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+            msg = await query.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+    except BadRequest as e:
+        if "message is not modified" in str(e).lower():
+            msg = query.message
+        else:
+            logging.error(f"UI Edit Error in Auction: {e}")
     except Exception as e:
         logging.error(f"UI Edit Error in Auction: {e}")
+        
+    if msg and img_url and img_url not in MEDIA_CACHE:
+        if msg.photo:
+            MEDIA_CACHE[img_url] = msg.photo[-1].file_id
+        elif msg.video:
+            MEDIA_CACHE[img_url] = msg.video.file_id
+        elif msg.animation:
+            MEDIA_CACHE[img_url] = msg.animation.file_id
 
 
 # --- Commands & Callbacks ---
@@ -406,7 +445,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 increment = int(parts[3])
                 current_proposed = int(parts[4])
                 new_proposed = current_proposed + increment
-                await query.answer() # FAST SWITCH: Turant loading band karne ke liye
+                await query.answer() 
                 await render_auction_ui(query, active_auc, user_id, new_proposed)
                 return
 
@@ -472,7 +511,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
             
             if data.startswith("mp_nav_"):
                 index = int(parts[3])
-                await query.answer() # FAST SWITCH: Page change karte hi instant click feel hoga
+                await query.answer()
                 await render_mp_message(query, user, index, is_edit=True)
                 return
 
@@ -519,7 +558,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 return
 
             elif data.startswith("mp_back_"):
-                await query.answer() # FAST SWITCH
+                await query.answer() 
                 await render_mp_message(query, user, 0, is_edit=True)
                 return
 
@@ -571,27 +610,40 @@ async def start_auction(update: Update, context: CallbackContext):
     }
     await auction_collection.insert_one(auction_data)
     
-    msg = (
+    text_msg = (
         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION STARTED!')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
         f"{bold_sc('CHARACTER:')} {bold_sc(char.get('name'))}\n"
         f"{bold_sc('STARTING BID:')} {bold_sc(f'{starting_bid:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
     )
     
     img_url = char.get('img_url')
+    media_source = MEDIA_CACHE.get(img_url, img_url) if img_url else None
     
+    msg = None
     if img_url:
         try:
-            await update.message.reply_photo(photo=img_url, caption=msg, parse_mode='HTML')
+            if img_url and str(img_url).lower().endswith(('.mp4', '.gif')):
+                msg = await update.message.reply_video(video=media_source, caption=text_msg, parse_mode='HTML')
+            else:
+                msg = await update.message.reply_photo(photo=media_source, caption=text_msg, parse_mode='HTML')
         except BadRequest as e:
             if "video" in str(e).lower() or "animation" in str(e).lower():
                 try:
-                    await update.message.reply_video(video=img_url, caption=msg, parse_mode='HTML')
+                    msg = await update.message.reply_video(video=media_source, caption=text_msg, parse_mode='HTML')
                 except BadRequest:
-                    await update.message.reply_animation(animation=img_url, caption=msg, parse_mode='HTML')
+                    msg = await update.message.reply_animation(animation=media_source, caption=text_msg, parse_mode='HTML')
             else:
                 raise e
     else:
-        await update.message.reply_text(msg, parse_mode='HTML')
+        msg = await update.message.reply_text(text_msg, parse_mode='HTML')
+        
+    if msg and img_url and img_url not in MEDIA_CACHE:
+        if msg.photo:
+            MEDIA_CACHE[img_url] = msg.photo[-1].file_id
+        elif msg.video:
+            MEDIA_CACHE[img_url] = msg.video.file_id
+        elif msg.animation:
+            MEDIA_CACHE[img_url] = msg.animation.file_id
 
 
 async def end_auction(update: Update, context: CallbackContext):
