@@ -10,13 +10,11 @@ from telegram.error import BadRequest
 from shivu import application, OWNER_ID, user_collection, top_global_groups_collection, group_user_totals_collection
 from shivu import sudo_users as SUDO_USERS
 
-
 def sc(t):
     return t.translate(str.maketrans(
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
         "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘǫʀꜱᴛᴜᴠᴡxʏᴢABCDEFGHIJKLMNOPQRSTUVWXYZ"
     ))
-
 
 def is_sudo(user_id):
     return user_id == OWNER_ID or str(user_id) in SUDO_USERS or user_id in SUDO_USERS
@@ -35,7 +33,6 @@ async def get_cached_data(key, fetch_function):
     return data
 
 # ---------- Smart Database & Field Handlers ----------
-
 async def get_user_document(user_id):
     """Fetches user document matching both integer and string formats"""
     try:
@@ -56,7 +53,6 @@ async def get_user_document(user_id):
     })
     return user
 
-
 def extract_balance(user_doc):
     """Safely extracts balance/coins from any user document schema"""
     if not user_doc or not isinstance(user_doc, dict):
@@ -76,7 +72,6 @@ def extract_balance(user_doc):
                         return int(sub_val)
     return 0
 
-
 def extract_tokens(user_doc):
     """Safely extracts tokens"""
     if not user_doc or not isinstance(user_doc, dict):
@@ -89,7 +84,6 @@ def extract_tokens(user_doc):
             elif isinstance(val, str) and val.isdigit():
                 return int(val)
     return 0
-
 
 def get_rank_badge(rank: int) -> str:
     if rank == 1:
@@ -104,7 +98,6 @@ def get_rank_badge(rank: int) -> str:
         return "⭐ ᴛᴏᴘ 50"
     return "🏅 ᴄᴏʟʟᴇᴄᴛᴏʀ"
 
-
 def generate_progress_bar(current: int, total: int, length: int = 8) -> str:
     if total <= 0:
         return "░" * length
@@ -112,11 +105,9 @@ def generate_progress_bar(current: int, total: int, length: int = 8) -> str:
     filled = int(round(length * percentage))
     return "▬" * filled + "┈" * (length - filled)
 
-
 def format_custom_header(heading: str, rows):
     header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{heading}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
     return header + "\n".join(rows)
-
 
 # ---------- Updated send_or_edit function ----------
 async def send_or_edit(update, context, text, kb, edit):
@@ -163,17 +154,17 @@ async def send_or_edit(update, context, text, kb, edit):
             reply_markup=kb
         )
 
-
 def back_close_buttons(refresh_cb, extra_row=None):
-    rows = [[InlineKeyboardButton("⟳", callback_data=refresh_cb), InlineKeyboardButton("≼", callback_data="lb_menu")]]
+    # Change callback data to trigger cache clear when refresh is pressed
+    refresh_data = refresh_cb.replace("lb_", "lb_refresh_")
+    
+    rows = [[InlineKeyboardButton("⟳", callback_data=refresh_data), InlineKeyboardButton("≼", callback_data="lb_menu")]]
     if extra_row:
         rows.append(extra_row)
     rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")])
     return InlineKeyboardMarkup(rows)
 
-
 # ---------- /tops menu ----------
-
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>𝗦𝗘𝗟𝗘𝗖𝗧 𝗧𝗛𝗘 𝗧𝗢𝗣 𝗟𝗜𝗦𝗧</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
     kb = InlineKeyboardMarkup([
@@ -191,11 +182,8 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
     ])
     await send_or_edit(update, context, text, kb, edit)
 
-
 # ---------- Top by balance ----------
-
 async def fetch_top_balance():
-    # Only fetches necessary fields (ignores massive characters array for speed)
     data = await user_collection.find(
         {}, 
         {"id": 1, "user_id": 1, "_id": 1, "first_name": 1, "balance": 1, "coins": 1, "wallet": 1, "money": 1, "gold": 1, "bal": 1}
@@ -223,9 +211,7 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗖𝗢𝗜𝗡 𝗛𝗢𝗟𝗗𝗘𝗥𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
 
-
 # ---------- Top by tokens ----------
-
 async def fetch_top_tokens():
     data = await user_collection.find(
         {}, 
@@ -254,9 +240,7 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗧𝗢𝗞𝗘𝗡 𝗛𝗢𝗟𝗗𝗘𝗥", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
 
-
 # ---------- Top by characters ----------
-
 async def fetch_top_characters():
     return await user_collection.aggregate([
         {"$match": {"characters": {"$exists": True, "$type": "array"}}},
@@ -284,9 +268,7 @@ async def top_characters(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗥𝗔𝗕𝗕𝗘𝗥𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_chars"), edit)
 
-
 # ---------- Top groups ----------
-
 async def fetch_top_groups():
     return await top_global_groups_collection.find({}).sort('count', -1).limit(10).to_list(10)
 
@@ -301,9 +283,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗥𝗢𝗨𝗣𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
 
-
-# ---------- My Profile (Fixed & Upgraded) ----------
-
+# ---------- My Profile ----------
 async def fetch_total_collectors():
     return await user_collection.count_documents({"characters": {"$exists": True, "$type": "array"}})
 
@@ -331,7 +311,6 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     completion_pct = round((char_count / total_available_chars) * 100, 1)
     progress_bar = generate_progress_bar(char_count, total_available_chars)
 
-    # Calculate rank efficiently
     better_than = await user_collection.count_documents({
         "characters": {"$exists": True, "$type": "array"},
         f"characters.{char_count}": {"$exists": True} 
@@ -365,7 +344,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
             InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")
         ],
         [
-            InlineKeyboardButton("⟳", callback_data="lb_profile"),
+            InlineKeyboardButton("⟳", callback_data="lb_refresh_profile"),
             InlineKeyboardButton("⋞", callback_data="lb_menu")
         ],
         [
@@ -375,9 +354,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
 
     await send_or_edit(update, context, text, profile_kb, edit)
 
-
 # ---------- Owner/sudo stats ----------
-
 async def stats(update: Update, context: CallbackContext, edit=False):
     user_id = update.effective_user.id
     if not is_sudo(user_id):
@@ -406,19 +383,16 @@ async def stats(update: Update, context: CallbackContext, edit=False):
         f"<i><b>{datetime.now().strftime('%H:%M:%S')}</b></i>"
     )
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⟳", callback_data="lb_stats")],
+        [InlineKeyboardButton("⟳", callback_data="lb_refresh_stats")],
         [InlineKeyboardButton("×", callback_data="lb_close")]
     ])
     await send_or_edit(update, context, text, kb, edit)
 
-
 # ---------- Export commands (sudo only) ----------
-
 async def export_users(update: Update, context: CallbackContext):
     if not is_sudo(update.effective_user.id):
         return await update.message.reply_text(f"<b>{sc('unauthorized.')}</b>", parse_mode='HTML')
 
-    # Exclude character arrays to prevent massive RAM usage during export
     users = await user_collection.find({}, {"characters": 0}).to_list(None)
     lines = [f"[{u.get('id') or u.get('user_id')}] {u.get('first_name')} | @{u.get('username')} | Bal: {extract_balance(u)}"
               for u in users]
@@ -429,7 +403,6 @@ async def export_users(update: Update, context: CallbackContext):
     with open('users.txt', 'rb') as f:
         await context.bot.send_document(update.effective_chat.id, f, caption=f"<b>{sc('users')}</b>: <b>{len(users):,}</b>", parse_mode='HTML')
     os.remove('users.txt')
-
 
 async def export_groups(update: Update, context: CallbackContext):
     if not is_sudo(update.effective_user.id):
@@ -445,9 +418,7 @@ async def export_groups(update: Update, context: CallbackContext):
         await context.bot.send_document(update.effective_chat.id, f, caption=f"<b>{sc('groups')}</b>: <b>{len(groups):,}</b>", parse_mode='HTML')
     os.remove('groups.txt')
 
-
 # ---------- Callback router ----------
-
 CALLBACKS = {
     "lb_menu": tops_menu,
     "lb_profile": my_profile,
@@ -458,18 +429,36 @@ CALLBACKS = {
     "lb_stats": stats,
 }
 
-
+# --------- Refresh & Cache clear Logic ----------
 async def cb(update: Update, context: CallbackContext):
     data = update.callback_query.data
+    
     if data == "lb_close":
         return await update.callback_query.message.delete()
+        
+    if data.startswith("lb_refresh_"):
+        actual_cb = data.replace("lb_refresh_", "lb_")
+        
+        cache_map = {
+            "lb_bal": "top_balance",
+            "lb_tokens": "top_tokens",
+            "lb_chars": "top_chars",
+            "lb_gtop": "top_groups",
+            "lb_profile": "total_collectors",
+            "lb_stats": "total_collectors"
+        }
+        
+        cache_key = cache_map.get(actual_cb)
+        if cache_key in LB_CACHE:
+            del LB_CACHE[cache_key]
+            
+        data = actual_cb
+
     handler = CALLBACKS.get(data)
     if handler:
         await handler(update, context, edit=True)
 
-
 # ---------- Handlers ----------
-
 application.add_handler(CommandHandler(['tops', 'top'], tops_menu, block=False))
 application.add_handler(CommandHandler('balancetop', top_balance, block=False))
 application.add_handler(CommandHandler('chartop', top_characters, block=False))
