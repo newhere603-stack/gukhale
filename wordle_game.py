@@ -142,7 +142,6 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         msg = await context.bot.send_message(chat_id=chat_id, text=f"<b>Game started! Guess the {length}-letter word!</b>", parse_mode="HTML")
         
-        # Save game in DB
         game_data = {
             "chat_id": chat_id,
             "target": target,
@@ -259,6 +258,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = game["target"]
     feedback = get_wordle_hints(text, target)
 
+    # ⚡ Superfast Atomic Database Update
     updated_game = await game_collection.find_one_and_update(
         {"chat_id": chat_id},
         {"$push": {"guesses": [feedback, text]}},
@@ -266,58 +266,52 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     attempts = len(updated_game["guesses"])
-    
-    board_lines = [f"<b>{length}-letter mode · {attempts}/{updated_game['max_attempts']}</b>\n"]
-    for fb, guess_word in updated_game["guesses"]:
-        board_lines.append(f"{fb} {to_bold_sans_serif(guess_word)}")
-        
-    board_text = "\n".join(board_lines)
-    
     won = (text == target)
     lost = (attempts >= updated_game["max_attempts"] and not won)
-    should_delete = DELETE_SETTINGS.get(chat_id, False)
-    old_message_id = updated_game.get("message_id")
+    
+    # Text Generation ekdum pehle jaisa
+    if won:
+        points_earned = updated_game["max_attempts"] - attempts + 1
+        suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
+        # Sirf win ka message, grid nahi!
+        msg_text = f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()}\nAdded {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
+    elif lost:
+        # Sirf loose ka message, grid nahi!
+        msg_text = f"<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>"
+    else:
+        # Continue game ka grid message
+        board_lines = [f"<b>{length}-letter mode · {attempts}/{updated_game['max_attempts']}</b>\n"]
+        for fb, guess_word in updated_game["guesses"]:
+            board_lines.append(f"{fb} {to_bold_sans_serif(guess_word)}")
+        msg_text = "\n".join(board_lines)
 
     try:
-        if not won and not lost:
-            # Yahan se reply hata diya hai, ab seedha send hoga
-            new_msg = await context.bot.send_message(chat_id=chat_id, text=board_text, parse_mode="HTML")
+        # ⚡ Send immediately bina kisi blocking or reply tag ke!
+        new_msg = await context.bot.send_message(chat_id=chat_id, text=msg_text, parse_mode="HTML")
+        
+        # ⚡ Baki sab kuch Background Task mein
+        async def background_cleanup():
+            should_delete = DELETE_SETTINGS.get(chat_id, False)
+            old_message_id = updated_game.get("message_id")
             
-            await game_collection.update_one({"chat_id": chat_id}, {"$set": {"message_id": new_msg.message_id}})
-            
-            if should_delete and old_message_id: 
-                asyncio.create_task(safe_delete_message(context, chat_id, old_message_id))
-            
-        elif won:
-            points_earned = updated_game["max_attempts"] - attempts + 1
-            await game_collection.delete_one({"chat_id": chat_id}) 
-            
-            user = update.effective_user
-            inc_field = "gold" if length == 5 else f"gold_{length}"
-            now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
-            
-            asyncio.create_task(update_user_gold_task(user.id, user.first_name, user.username, points_earned, inc_field, chat_id, now_ist))
-            if should_delete and old_message_id: 
-                asyncio.create_task(safe_delete_message(context, chat_id, old_message_id))
+            if won or lost:
+                await game_collection.delete_one({"chat_id": chat_id})
+                if won:
+                    user = update.effective_user
+                    inc_field = "gold" if length == 5 else f"gold_{length}"
+                    now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+                    await update_user_gold_task(user.id, user.first_name, user.username, points_earned, inc_field, chat_id, now_ist)
+                    
+                    try: await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
+                    except Exception: pass
+            else:
+                await game_collection.update_one({"chat_id": chat_id}, {"$set": {"message_id": new_msg.message_id}})
                 
-            suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
-            win_msg = f"{board_text}\n\n<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()}\nAdded {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
-            
-            # Yahan bhi reply hata diya
-            await context.bot.send_message(chat_id=chat_id, text=win_msg, parse_mode="HTML")
-            
-            async def set_reaction_safe():
-                try: await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
-                except Exception as reaction_error: LOGGER.error(f"Reaction fail ho gaya: {reaction_error}")
-            asyncio.create_task(set_reaction_safe())
-            
-        elif lost:
-            await game_collection.delete_one({"chat_id": chat_id})
-            if should_delete and old_message_id: 
-                asyncio.create_task(safe_delete_message(context, chat_id, old_message_id))
-            
-            # Yahan bhi reply hata diya
-            await context.bot.send_message(chat_id=chat_id, text=f"{board_text}\n\n<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
+            if should_delete and old_message_id:
+                await safe_delete_message(context, chat_id, old_message_id)
+
+        # Start the background tasks
+        asyncio.create_task(background_cleanup())
 
     except Exception as e:
         LOGGER.error(f"Error handling guess: {e}")
