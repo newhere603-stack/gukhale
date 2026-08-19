@@ -3,7 +3,7 @@ import traceback
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo, InputMediaAnimation
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.error import BadRequest
 from shivu import application, db, user_collection
@@ -21,10 +21,6 @@ except ImportError:
     pass
 
 OWNER_ID = 7657218453
-
-# Ye dictionary store karegi ki konsi URL ka kya Telegram file_id hai
-# Taaki baar baar download na karna pade
-MEDIA_CACHE = {}
 
 DEFAULT_PRICES = {
     "common": 1000, "rare": 3200, "medium": 2900, 
@@ -104,6 +100,18 @@ def get_current_mp_day():
         return (now - timedelta(days=1)).strftime('%Y-%m-%d')
     return now.strftime('%Y-%m-%d')
 
+# -- Media Helper --
+def get_media_info(char_doc):
+    if char_doc.get('cached_photo_id'):
+        return char_doc['cached_photo_id'], InputMediaPhoto, 'photo'
+    elif char_doc.get('cached_video_id'):
+        return char_doc['cached_video_id'], InputMediaVideo, 'video'
+    elif char_doc.get('cached_anim_id'):
+        return char_doc['cached_anim_id'], InputMediaAnimation, 'animation'
+    
+    img_url = char_doc.get('img_url')
+    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
+    return img_url, (InputMediaVideo if is_video else InputMediaPhoto), 'url'
 
 # --- Set Price Command (Owner Only) ---
 async def set_mp_price(update: Update, context: CallbackContext):
@@ -125,7 +133,6 @@ async def set_mp_price(update: Update, context: CallbackContext):
             await update.message.reply_text(bold_sc(f"Price set to {price:,}."), parse_mode='HTML')
     except Exception as e:
         pass
-
 
 # --- Toggle Rarity Command (Owner Only) ---
 async def toggle_rarity(update: Update, context: CallbackContext):
@@ -244,18 +251,14 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
     
+    media_source, media_class, media_type = get_media_info(char)
     img_url = char.get('img_url')
-    # CACHE CHECK: Agar pehle se load kiya hai to direct telegram wala file_id le lega
-    media_source = MEDIA_CACHE.get(img_url, img_url) if img_url else None
-    
-    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
-    media_class = InputMediaVideo if is_video else InputMediaPhoto
 
     msg = None
     if is_edit:
         try:
             if update_obj.message.photo or update_obj.message.video or update_obj.message.animation:
-                if img_url:
+                if media_source:
                     try:
                         msg = await update_obj.edit_message_media(
                             media=media_class(media=media_source, caption=caption, parse_mode='HTML'), 
@@ -264,7 +267,7 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
                     except BadRequest as e:
                         if "message is not modified" in str(e).lower():
                             msg = update_obj.message
-                        elif "video" in str(e).lower() or "animation" in str(e).lower():
+                        elif media_type == 'url' and ("video" in str(e).lower() or "animation" in str(e).lower()):
                             msg = await update_obj.edit_message_media(
                                 media=InputMediaVideo(media=media_source, caption=caption, parse_mode='HTML'), 
                                 reply_markup=reply_markup
@@ -283,12 +286,18 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
         except Exception as e:
             logging.error(f"UI Edit Error in MP: {e}")
     else:
-        if img_url:
+        if media_source:
             try:
-                if is_video:
+                if media_type == 'photo':
+                    msg = await update_obj.message.reply_photo(photo=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                elif media_type in ['video', 'animation']:
                     msg = await update_obj.message.reply_video(video=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
                 else:
-                    msg = await update_obj.message.reply_photo(photo=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
+                    if is_video:
+                        msg = await update_obj.message.reply_video(video=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    else:
+                        msg = await update_obj.message.reply_photo(photo=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
             except BadRequest as e:
                 if "video" in str(e).lower() or "animation" in str(e).lower():
                     try:
@@ -300,14 +309,16 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
         else:
             msg = await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
             
-    # CACHE SAVE: Ek baar bhej diya to iska ID save karlo
-    if msg and img_url and img_url not in MEDIA_CACHE:
-        if msg.photo:
-            MEDIA_CACHE[img_url] = msg.photo[-1].file_id
-        elif msg.video:
-            MEDIA_CACHE[img_url] = msg.video.file_id
-        elif msg.animation:
-            MEDIA_CACHE[img_url] = msg.animation.file_id
+    # PERMANENT DB CACHING: Agar URL use hui aur message send hua to uski ID main collection me save kar do
+    if msg and media_type == 'url' and img_url:
+        update_data = {}
+        if msg.photo: update_data['cached_photo_id'] = msg.photo[-1].file_id
+        elif msg.video: update_data['cached_video_id'] = msg.video.file_id
+        elif msg.animation: update_data['cached_anim_id'] = msg.animation.file_id
+        
+        if update_data:
+            await collection.update_one({'id': char.get('id')}, {'$set': update_data})
+            char.update(update_data)
 
 
 async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
@@ -358,16 +369,13 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     
     reply_markup = InlineKeyboardMarkup(buttons)
     
+    media_source, media_class, media_type = get_media_info(active_auc)
     img_url = active_auc.get('img_url')
-    media_source = MEDIA_CACHE.get(img_url, img_url) if img_url else None
-    
-    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
-    media_class = InputMediaVideo if is_video else InputMediaPhoto
     
     msg = None
     try:
         if query.message.photo or query.message.video or query.message.animation:
-            if img_url:
+            if media_source:
                 try:
                     msg = await query.edit_message_media(
                         media=media_class(media=media_source, caption=caption, parse_mode='HTML'), 
@@ -376,7 +384,7 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
                 except BadRequest as e:
                     if "message is not modified" in str(e).lower():
                         msg = query.message
-                    elif "video" in str(e).lower() or "animation" in str(e).lower():
+                    elif media_type == 'url' and ("video" in str(e).lower() or "animation" in str(e).lower()):
                         msg = await query.edit_message_media(
                             media=InputMediaVideo(media=media_source, caption=caption, parse_mode='HTML'), 
                             reply_markup=reply_markup
@@ -395,13 +403,16 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     except Exception as e:
         logging.error(f"UI Edit Error in Auction: {e}")
         
-    if msg and img_url and img_url not in MEDIA_CACHE:
-        if msg.photo:
-            MEDIA_CACHE[img_url] = msg.photo[-1].file_id
-        elif msg.video:
-            MEDIA_CACHE[img_url] = msg.video.file_id
-        elif msg.animation:
-            MEDIA_CACHE[img_url] = msg.animation.file_id
+    if msg and media_type == 'url' and img_url:
+        update_data = {}
+        if msg.photo: update_data['cached_photo_id'] = msg.photo[-1].file_id
+        elif msg.video: update_data['cached_video_id'] = msg.video.file_id
+        elif msg.animation: update_data['cached_anim_id'] = msg.animation.file_id
+        
+        if update_data:
+            await auction_collection.update_one({'_id': active_auc['_id']}, {'$set': update_data})
+            await collection.update_one({'id': active_auc['char_id']}, {'$set': update_data})
+            active_auc.update(update_data)
 
 
 # --- Commands & Callbacks ---
@@ -608,6 +619,12 @@ async def start_auction(update: Update, context: CallbackContext):
         'top_bids': [], 
         'status': 'active'
     }
+    
+    # Check current DB cache for immediate use
+    if char.get('cached_photo_id'): auction_data['cached_photo_id'] = char['cached_photo_id']
+    elif char.get('cached_video_id'): auction_data['cached_video_id'] = char['cached_video_id']
+    elif char.get('cached_anim_id'): auction_data['cached_anim_id'] = char['cached_anim_id']
+        
     await auction_collection.insert_one(auction_data)
     
     text_msg = (
@@ -616,16 +633,22 @@ async def start_auction(update: Update, context: CallbackContext):
         f"{bold_sc('STARTING BID:')} {bold_sc(f'{starting_bid:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
     )
     
-    img_url = char.get('img_url')
-    media_source = MEDIA_CACHE.get(img_url, img_url) if img_url else None
+    media_source, media_class, media_type = get_media_info(auction_data)
+    img_url = auction_data.get('img_url')
     
     msg = None
-    if img_url:
+    if media_source:
         try:
-            if img_url and str(img_url).lower().endswith(('.mp4', '.gif')):
+            if media_type == 'photo':
+                msg = await update.message.reply_photo(photo=media_source, caption=text_msg, parse_mode='HTML')
+            elif media_type in ['video', 'animation']:
                 msg = await update.message.reply_video(video=media_source, caption=text_msg, parse_mode='HTML')
             else:
-                msg = await update.message.reply_photo(photo=media_source, caption=text_msg, parse_mode='HTML')
+                is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
+                if is_video:
+                    msg = await update.message.reply_video(video=media_source, caption=text_msg, parse_mode='HTML')
+                else:
+                    msg = await update.message.reply_photo(photo=media_source, caption=text_msg, parse_mode='HTML')
         except BadRequest as e:
             if "video" in str(e).lower() or "animation" in str(e).lower():
                 try:
@@ -637,13 +660,15 @@ async def start_auction(update: Update, context: CallbackContext):
     else:
         msg = await update.message.reply_text(text_msg, parse_mode='HTML')
         
-    if msg and img_url and img_url not in MEDIA_CACHE:
-        if msg.photo:
-            MEDIA_CACHE[img_url] = msg.photo[-1].file_id
-        elif msg.video:
-            MEDIA_CACHE[img_url] = msg.video.file_id
-        elif msg.animation:
-            MEDIA_CACHE[img_url] = msg.animation.file_id
+    if msg and media_type == 'url' and img_url:
+        update_data = {}
+        if msg.photo: update_data['cached_photo_id'] = msg.photo[-1].file_id
+        elif msg.video: update_data['cached_video_id'] = msg.video.file_id
+        elif msg.animation: update_data['cached_anim_id'] = msg.animation.file_id
+        
+        if update_data:
+            await auction_collection.update_one({'_id': auction_data['_id']}, {'$set': update_data})
+            await collection.update_one({'id': char.get('id')}, {'$set': update_data})
 
 
 async def end_auction(update: Update, context: CallbackContext):
