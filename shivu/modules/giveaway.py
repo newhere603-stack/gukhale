@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.helpers import mention_html
@@ -12,6 +13,10 @@ LOGGER = logging.getLogger(__name__)
 # Temporary state tracking for filters (chat_id -> state dict)
 LEADERBOARD_STATES = {}
 
+# --- 🔥 Superfast Cache System ---
+WS_LB_CACHE = {}
+CACHE_TTL = 300  # 5 minutes tak result memory me save rahega
+
 def get_user_state(chat_id):
     if chat_id not in LEADERBOARD_STATES:
         LEADERBOARD_STATES[chat_id] = {
@@ -21,7 +26,7 @@ def get_user_state(chat_id):
         }
     return LEADERBOARD_STATES[chat_id]
 
-# Yeh naya function sirf utna hi score filter karega jitna us scope mein valid hai
+# Yeh function sirf utna hi score filter karega jitna us scope mein valid hai
 def get_target_keys(letter_filter, time_filter, scope, chat_id):
     if letter_filter == "4":
         base_keys = ['gold_4', 'points_4', 'golds_4']
@@ -47,10 +52,8 @@ def get_target_keys(letter_filter, time_filter, scope, chat_id):
 
     keys = []
     for b_key in base_keys:
-        # Time tag apply karenge agar All-Time nahi hai
         time_key = f"{time_prefix}_{b_key}" if time_prefix else b_key
             
-        # Agar Scope CHAT hai, toh aage us chat ki ID lag jayegi (Isi chat ka score dikhega)
         if scope == "chat":
             final_key = f"{chat_id}_{time_key}"
         else:
@@ -63,7 +66,6 @@ def extract_gold(user_doc, target_keys):
     if not user_doc or not isinstance(user_doc, dict):
         return 0
     
-    # Sirf targeted keys ka hi score fetch karega
     for key in target_keys:
         val = user_doc.get(key)
         if val is not None:
@@ -146,6 +148,37 @@ def get_wordseek_keyboard(state):
         ]
     ])
 
+async def get_cached_wordseek_lb(chat_id, scope_f, time_f, letter_f, target_keys):
+    """Smart cache function to return fast results"""
+    if scope_f == "global":
+        cache_key = f"ws_global_{time_f}_{letter_f}"
+    else:
+        cache_key = f"ws_chat_{chat_id}_{time_f}_{letter_f}"
+        
+    now = time.time()
+    if cache_key in WS_LB_CACHE and now - WS_LB_CACHE[cache_key]['time'] < CACHE_TTL:
+        return WS_LB_CACHE[cache_key]['data']
+
+    # Projection: Sirf zaroorat ka data nikalega, characters array ignore kar dega (Superfast)
+    query_filter = {"$or": [{k: {"$exists": True}} for k in target_keys]}
+    projection = {"id": 1, "user_id": 1, "_id": 1, "first_name": 1}
+    for k in target_keys:
+        projection[k] = 1
+
+    data = await user_collection.find(query_filter, projection).to_list(None)
+    
+    user_scores = []
+    for u in data:
+        gold = extract_gold(u, target_keys)
+        if gold > 0:
+            user_scores.append((u, gold))
+
+    sorted_data = sorted(user_scores, key=lambda x: x[1], reverse=True)[:20]
+    
+    WS_LB_CACHE[cache_key] = {'time': now, 'data': sorted_data}
+    return sorted_data
+
+
 async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=False):
     chat_id = update.effective_chat.id
     state = get_user_state(chat_id)
@@ -157,25 +190,15 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
     # Target keys set kar lega depending on Global ya Chat hai
     target_keys = get_target_keys(letter_f, time_f, scope_f, chat_id)
     
-    # Optimised MongoDB Query: Yeh sirf unhi users ko layega jinhone points score kiye hain
-    query_filter = {"$or": [{k: {"$exists": True}} for k in target_keys]}
-    data = await user_collection.find(query_filter).to_list(None)
-    
-    user_scores = []
-    for u in data:
-        gold = extract_gold(u, target_keys)
-        if gold > 0:
-            user_scores.append((u, gold))
+    # Fetch data through optimized cache system
+    sorted_data = await get_cached_wordseek_lb(chat_id, scope_f, time_f, letter_f, target_keys)
 
-    if not user_scores:
+    if not sorted_data:
         text = (
             "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
             "<i>No data found for this mode! Play some games to rank up!</i>"
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
-
-    # Sort karke top 20 nikalna
-    sorted_data = sorted(user_scores, key=lambda x: x[1], reverse=True)[:20]
 
     rows = []
     for i, (u, gold_val) in enumerate(sorted_data, 1):
