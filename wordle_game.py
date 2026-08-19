@@ -210,7 +210,7 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await game_collection.delete_one({"chat_id": chat_id})
         await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was:{target.lower()}</blockquote></b>", parse_mode="HTML")
     else:
-        await update.message.reply_text("<b><blockquote>ℹ️ No active wordseek running.</blockquote></b>", parse_mode="HTML")
+        await update.message.reply_text("<b>ℹ️ No active game running.</b>", parse_mode="HTML")
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat:
@@ -256,6 +256,20 @@ async def background_db_update(user_id, first_name, username, inc_dict):
         )
     except Exception as db_err:
         LOGGER.error(f"Database error while updating gold: {db_err}")
+
+# Fix for Motor Future object error in asyncio.create_task()
+async def background_update_msg_id(chat_id, msg_id):
+    try:
+        await game_collection.update_one({"chat_id": chat_id}, {"$set": {"message_id": msg_id}})
+    except Exception as e:
+        LOGGER.error(f"Error updating message ID: {e}")
+
+async def background_delete_game(chat_id):
+    try:
+        await game_collection.delete_one({"chat_id": chat_id})
+    except Exception as e:
+        LOGGER.error(f"Error deleting game: {e}")
+
 
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text or not update.effective_chat:
@@ -316,8 +330,8 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Bina tag kiye sidha send
             msg = await context.bot.send_message(chat_id=chat_id, text=board_text, parse_mode="HTML")
             
-            # Message ID DB me update background me hoga
-            asyncio.create_task(game_collection.update_one({"chat_id": chat_id}, {"$set": {"message_id": msg.message_id}}))
+            # Future issue fixed: Ab ye properly background coroutine use kar raha hai
+            asyncio.create_task(background_update_msg_id(chat_id, msg.message_id))
             
             if should_delete and old_message_id:
                 asyncio.create_task(background_delete(context, chat_id, old_message_id))
@@ -325,8 +339,8 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif won:
             points_earned = updated_game["max_attempts"] - attempt_num + 1
             
-            # DB clean up fast background me
-            asyncio.create_task(game_collection.delete_one({"chat_id": chat_id}))
+            # Future issue fixed
+            asyncio.create_task(background_delete_game(chat_id))
             
             user = update.effective_user
             now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
@@ -363,7 +377,9 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             asyncio.create_task(set_reaction_safe())
             
         elif lost:
-            asyncio.create_task(game_collection.delete_one({"chat_id": chat_id}))
+            # Future issue fixed
+            asyncio.create_task(background_delete_game(chat_id))
+            
             if should_delete and old_message_id:
                 asyncio.create_task(background_delete(context, chat_id, old_message_id))
             
