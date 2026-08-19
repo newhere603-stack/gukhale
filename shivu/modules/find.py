@@ -1,8 +1,9 @@
 import random
 import traceback
 import logging
+import re
 from datetime import datetime, timedelta, timezone
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from shivu import application, db, user_collection
 
@@ -14,6 +15,7 @@ except ImportError:
 
 try:
     auction_collection = db['auctions']
+    mp_config = db['mp_config'] # Naya database collection settings store karne ke liye
 except ImportError:
     pass
 
@@ -67,7 +69,6 @@ def bold_sc(text: str) -> str:
     return f"<b>{to_small_caps(text)}</b>"
 
 def extract_rarity_name(r_str: str) -> str:
-    """Extracts only the alphabetic name (e.g. 'Legendary') from string like '🟠 LEGENDARY'"""
     text_part = ""
     for i, c in enumerate(r_str):
         if c.isalpha():
@@ -93,7 +94,6 @@ def get_price(char):
     name_part = extract_rarity_name(r_str).lower()
     
     return DEFAULT_PRICES.get(name_part, 50000)
-
 
 def get_current_mp_day():
     IST = timezone(timedelta(hours=5, minutes=30))
@@ -125,6 +125,36 @@ async def set_mp_price(update: Update, context: CallbackContext):
         pass
 
 
+# --- Toggle Rarity Command (Owner Only) ---
+async def toggle_rarity(update: Update, context: CallbackContext):
+    if update.effective_user.id != OWNER_ID:
+        return
+        
+    if not context.args:
+        msg = "Usage: /togglerarity [rarity_name]\nExample: /togglerarity common"
+        await update.message.reply_text(f"<blockquote>{bold_sc(msg)}</blockquote>", parse_mode='HTML')
+        return
+        
+    rarity = " ".join(context.args).lower()
+    
+    config = await mp_config.find_one({'_id': 'settings'})
+    if not config:
+        config = {'_id': 'settings', 'disabled_rarities': []}
+        await mp_config.insert_one(config)
+        
+    disabled = config.get('disabled_rarities', [])
+    
+    if rarity in disabled:
+        disabled.remove(rarity)
+        status = "ENABLED"
+    else:
+        disabled.append(rarity)
+        status = "DISABLED"
+        
+    await mp_config.update_one({'_id': 'settings'}, {'$set': {'disabled_rarities': disabled}})
+    await update.message.reply_text(bold_sc(f"Rarity '{rarity}' has been {status} in Marketplace."), parse_mode='HTML')
+
+
 # --- Deals Loader ---
 async def load_user_deals(user_id):
     user = await user_collection.find_one({'id': user_id})
@@ -134,12 +164,23 @@ async def load_user_deals(user_id):
     mp_data = user.get('mp_data', {})
     
     if mp_data.get('day') != current_day or not mp_data.get('chars'):
-        total_chars = await collection.count_documents({'auction_exclusive': {'$ne': True}})
-        if total_chars < 2: return None
+        # Check enabled/disabled rarities
+        config = await mp_config.find_one({'_id': 'settings'})
+        disabled_rarities = config.get('disabled_rarities', []) if config else []
+        
+        base_query = {'auction_exclusive': {'$ne': True}}
+        if disabled_rarities:
+            # Regex to exclude disabled rarities safely
+            pattern = "|".join([re.escape(r) for r in disabled_rarities])
+            base_query['rarity'] = {'$not': {'$regex': pattern, '$options': 'i'}}
+            
+        total_chars = await collection.count_documents(base_query)
+        if total_chars < 2: 
+            return None # Not enough chars matching the allowed rarities
             
         indices = random.sample(range(total_chars), 2)
-        char1 = await collection.find_one({'auction_exclusive': {'$ne': True}}, skip=indices[0])
-        char2 = await collection.find_one({'auction_exclusive': {'$ne': True}}, skip=indices[1])
+        char1 = await collection.find_one(base_query, skip=indices[0])
+        char2 = await collection.find_one(base_query, skip=indices[1])
         
         formatted_chars = []
         for c in [char1, char2]:
@@ -203,11 +244,18 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     reply_markup = InlineKeyboardMarkup(buttons)
     img_url = char.get('img_url')
 
+    # Video or Photo check
+    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
+    media_class = InputMediaVideo if is_video else InputMediaPhoto
+
     if is_edit:
         try:
-            if update_obj.message.photo:
+            if update_obj.message.photo or update_obj.message.video or update_obj.message.animation:
                 if img_url:
-                    await update_obj.edit_message_media(media=InputMediaPhoto(media=img_url, caption=caption, parse_mode='HTML'), reply_markup=reply_markup)
+                    await update_obj.edit_message_media(
+                        media=media_class(media=img_url, caption=caption, parse_mode='HTML'), 
+                        reply_markup=reply_markup
+                    )
                 else:
                     await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
             else:
@@ -216,7 +264,10 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
             logging.error(f"UI Edit Error in MP: {e}")
     else:
         if img_url:
-            await update_obj.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+            if is_video:
+                await update_obj.message.reply_video(video=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+            else:
+                await update_obj.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         else:
             await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
 
@@ -268,10 +319,16 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     reply_markup = InlineKeyboardMarkup(buttons)
     img_url = active_auc.get('img_url')
     
+    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
+    media_class = InputMediaVideo if is_video else InputMediaPhoto
+    
     try:
-        if query.message.photo:
+        if query.message.photo or query.message.video or query.message.animation:
             if img_url:
-                await query.edit_message_media(media=InputMediaPhoto(media=img_url, caption=caption, parse_mode='HTML'), reply_markup=reply_markup)
+                await query.edit_message_media(
+                    media=media_class(media=img_url, caption=caption, parse_mode='HTML'), 
+                    reply_markup=reply_markup
+                )
             else:
                 await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         else:
@@ -285,7 +342,7 @@ async def marketplace(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     user = await load_user_deals(user_id)
     if not user:
-        await update.message.reply_text(bold_sc("Please /start the bot first."), parse_mode='HTML')
+        await update.message.reply_text(bold_sc("Please /start the bot first or Not enough characters matching the allowed rarities."), parse_mode='HTML')
         return
     await render_mp_message(update, user, 0, is_edit=False)
 
@@ -486,8 +543,15 @@ async def start_auction(update: Update, context: CallbackContext):
         f"{bold_sc('CHARACTER:')} {bold_sc(char.get('name'))}\n"
         f"{bold_sc('STARTING BID:')} {bold_sc(f'{starting_bid:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
     )
-    if char.get('img_url'):
-        await update.message.reply_photo(photo=char.get('img_url'), caption=msg, parse_mode='HTML')
+    
+    img_url = char.get('img_url')
+    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
+    
+    if img_url:
+        if is_video:
+            await update.message.reply_video(video=img_url, caption=msg, parse_mode='HTML')
+        else:
+            await update.message.reply_photo(photo=img_url, caption=msg, parse_mode='HTML')
     else:
         await update.message.reply_text(msg, parse_mode='HTML')
 
@@ -534,4 +598,5 @@ application.add_handler(CommandHandler(["mp", "marketplace"], marketplace, block
 application.add_handler(CommandHandler("setprice", set_mp_price, block=False))
 application.add_handler(CommandHandler("startauction", start_auction, block=False))
 application.add_handler(CommandHandler("endauction", end_auction, block=False))
+application.add_handler(CommandHandler("togglerarity", toggle_rarity, block=False))
 application.add_handler(CallbackQueryHandler(marketplace_callbacks, pattern="^(mp_|auc_)", block=False))
