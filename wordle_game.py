@@ -131,10 +131,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     chat_id = chat.id
 
     if chat.type == "private":
-        await update.message.reply_text(
-            "<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", 
-            parse_mode="HTML"
-        )
+        await update.message.reply_text("<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", parse_mode="HTML")
         return
 
     if not WORDSEEK_ENABLED.get(chat_id, True):
@@ -147,15 +144,12 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     command = update.message.text.split()[0].lower()
     length = 5
-    if "4" in command:
-        length = 4
-    elif "6" in command:
-        length = 6
+    if "4" in command: length = 4
+    elif "6" in command: length = 6
     elif context.args:
         try:
             arg = int(context.args[0])
-            if arg in [4, 5, 6]:
-                length = arg
+            if arg in [4, 5, 6]: length = arg
         except ValueError:
             pass
 
@@ -165,7 +159,15 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     target = random.choice(list(word_pool))
-    ACTIVE_GAMES[chat_id] = {"target": target, "length": length, "guesses": [], "max_attempts": 30, "message_id": None}
+    # OPTIMIZATION: Added a `guessed_words_set` for instant duplicate checking
+    ACTIVE_GAMES[chat_id] = {
+        "target": target, 
+        "length": length, 
+        "guesses": [], 
+        "guessed_words_set": set(),
+        "max_attempts": 30, 
+        "message_id": None
+    }
 
     try:
         msg = await context.bot.send_message(
@@ -175,25 +177,20 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         ACTIVE_GAMES[chat_id]["message_id"] = msg.message_id
         
-        chat_name = chat.title if chat.title else "Group"
-        chat_link = f"https://t.me/{chat.username}" if chat.username else f"ID: {chat.id}"
-        
-        log_text = (
-            f"🎮 <b>New WordSeek Game Started!</b>\n"
-            f"<b>Group:</b> {chat_name}\n"
-            f"<b>Link/ID:</b> {chat_link}\n"
-            f"<b>Target Word:</b> <code>{target}</code>"
-        )
-        
-        try:
-            await context.bot.send_message(
-                chat_id=LOG_GROUP_ID,
-                text=log_text,
-                parse_mode="HTML",
-                disable_web_page_preview=True
-            )
-        except Exception as log_e:
-            LOGGER.error(f"Could not send log to log group: {log_e}")
+        # Fire-and-forget logging (Fast!)
+        async def send_log():
+            try:
+                chat_name = chat.title if chat.title else "Group"
+                chat_link = f"https://t.me/{chat.username}" if chat.username else f"ID: {chat.id}"
+                log_text = (
+                    f"🎮 <b>New WordSeek Game Started!</b>\n"
+                    f"<b>Group:</b> {chat_name}\n"
+                    f"<b>Link/ID:</b> {chat_link}\n"
+                    f"<b>Target Word:</b> <code>{target}</code>"
+                )
+                await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_text, parse_mode="HTML", disable_web_page_preview=True)
+            except Exception: pass
+        asyncio.create_task(send_log())
             
     except Exception as e:
         LOGGER.error(f"Error starting game: {e}")
@@ -202,21 +199,16 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat:
         return
     chat_id = update.effective_chat.id
-    if not WORDSEEK_ENABLED.get(chat_id, True):
+    if not WORDSEEK_ENABLED.get(chat_id, True) or chat_id not in ACTIVE_GAMES:
+        await update.message.reply_text("<b>ℹ️ No active wordseek running.</b>", parse_mode="HTML")
         return
 
-    if chat_id in ACTIVE_GAMES:
-        target = ACTIVE_GAMES[chat_id]["target"]
-        del ACTIVE_GAMES[chat_id]
-        await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was:{target.lower()}</blockquote></b>", parse_mode="HTML")
-    else:
-        await update.message.reply_text("<b>ℹ️ No active game running.</b>", parse_mode="HTML")
+    target = ACTIVE_GAMES[chat_id]["target"]
+    del ACTIVE_GAMES[chat_id]
+    await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was: {target.lower()}</blockquote></b>", parse_mode="HTML")
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_chat:
-        return
-    chat_id = update.effective_chat.id
-    if not WORDSEEK_ENABLED.get(chat_id, True):
+    if not update.effective_chat or not WORDSEEK_ENABLED.get(update.effective_chat.id, True):
         return
         
     help_text = (
@@ -238,18 +230,50 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /togglewordseek → Enable/Disable bot in chat\n"
         "• /helpword → Show this help menu"
     )
-    
     await update.message.reply_text(help_text, parse_mode="HTML")
+
+# Helper function to fire and forget database updates
+async def update_user_gold_task(user_id, first_name, username, points, inc_field, chat_id, now_ist):
+    try:
+        today_str = now_ist.strftime("%Y-%m-%d")
+        week_str = now_ist.strftime("%Y-W%V")
+        month_str = now_ist.strftime("%Y-%m")
+        year_str = now_ist.strftime("%Y")
+
+        inc_dict = {
+            inc_field: points,
+            f"{today_str}_{inc_field}": points,
+            f"{week_str}_{inc_field}": points,
+            f"{month_str}_{inc_field}": points,
+            f"{year_str}_{inc_field}": points,
+            f"{chat_id}_{inc_field}": points,
+            f"{chat_id}_{today_str}_{inc_field}": points,
+            f"{chat_id}_{week_str}_{inc_field}": points,
+            f"{chat_id}_{month_str}_{inc_field}": points,
+            f"{chat_id}_{year_str}_{inc_field}": points
+        }
+        
+        await user_collection.update_one(
+            {"id": user_id},
+            {"$inc": inc_dict, "$setOnInsert": {"first_name": first_name, "username": username}},
+            upsert=True
+        )
+    except Exception as db_err:
+        LOGGER.error(f"Database error while updating gold: {db_err}")
+
+# Helper for parallel delete
+async def safe_delete_message(context, chat_id, message_id):
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
 
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text or not update.effective_chat:
         return
 
     chat_id = update.effective_chat.id
-    if not WORDSEEK_ENABLED.get(chat_id, True):
-        return
-
-    if chat_id not in ACTIVE_GAMES:
+    if not WORDSEEK_ENABLED.get(chat_id, True) or chat_id not in ACTIVE_GAMES:
         return
 
     original_text = update.message.text.strip()
@@ -263,27 +287,20 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     valid_list = VALID_WORDS_4 if length == 4 else (VALID_WORDS_6 if length == 6 else VALID_WORDS_5)
     
     if text not in valid_list:
-        error_msg = f"{original_text.lower()} is not a valid word."
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=error_msg,
-            parse_mode="HTML"
-        )
+        # Firing validation error in background to keep logic moving fast
+        asyncio.create_task(context.bot.send_message(chat_id=chat_id, text=f"{original_text.lower()} is not a valid word.", parse_mode="HTML"))
         return
 
-    guessed_words = [g[1] for g in game["guesses"]]
-    if text in guessed_words:
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="Someone has already guessed your word. Please try another one!",
-            parse_mode="HTML"
-        )
+    # O(1) Instant Check
+    if text in game["guessed_words_set"]:
+        asyncio.create_task(context.bot.send_message(chat_id=chat_id, text="Someone has already guessed your word. Please try another one!", parse_mode="HTML"))
         return
 
     target = game["target"]
     feedback = get_wordle_hints(text, target)
 
     game["guesses"].append((feedback, text))
+    game["guessed_words_set"].add(text) # Add to set for fast duplicate check
     attempt_num = len(game["guesses"])
 
     board_lines = [f"<b>{length}-letter mode · {attempt_num}/{game['max_attempts']}</b>\n"]
@@ -299,83 +316,49 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         if not won and not lost:
-            msg = await context.bot.send_message(chat_id=chat_id, text=board_text, parse_mode="HTML")
-            game["message_id"] = msg.message_id
-            if should_delete and old_message_id:
+            # OPTIMIZATION: Edit message instead of delete+send (if delete is false), or parallelize them!
+            if not should_delete and old_message_id:
                 try:
-                    await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
+                    await context.bot.edit_message_text(chat_id=chat_id, message_id=old_message_id, text=board_text, parse_mode="HTML")
                 except Exception:
-                    pass
+                    # Fallback to sending if edit fails
+                    msg = await context.bot.send_message(chat_id=chat_id, text=board_text, parse_mode="HTML")
+                    game["message_id"] = msg.message_id
+            else:
+                # Parallel API Execution: Send & Delete at the exactly same time!
+                tasks = [context.bot.send_message(chat_id=chat_id, text=board_text, parse_mode="HTML")]
+                if old_message_id and should_delete:
+                    tasks.append(safe_delete_message(context, chat_id, old_message_id))
+                
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                # First task result is the new message object
+                if not isinstance(results[0], Exception):
+                    game["message_id"] = results[0].message_id
             
         elif won:
             points_earned = game["max_attempts"] - attempt_num + 1
             del ACTIVE_GAMES[chat_id]
             
-            try:
-                user = update.effective_user
-                user_id = user.id
-                
-                # Fetching Current Date/Time in IST (Indian Standard Time)
-                now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
-                today_str = now_ist.strftime("%Y-%m-%d")
-                week_str = now_ist.strftime("%Y-W%V")
-                month_str = now_ist.strftime("%Y-%m")
-                year_str = now_ist.strftime("%Y")
-
-                inc_field = "gold" if length == 5 else f"gold_{length}"
-                
-                # Updating the Dictionary to use Time-Prefixed Keys
-                inc_dict = {
-                    inc_field: points_earned,
-                    f"{today_str}_{inc_field}": points_earned,
-                    f"{week_str}_{inc_field}": points_earned,
-                    f"{month_str}_{inc_field}": points_earned,
-                    f"{year_str}_{inc_field}": points_earned,
-                    
-                    f"{chat_id}_{inc_field}": points_earned,
-                    f"{chat_id}_{today_str}_{inc_field}": points_earned,
-                    f"{chat_id}_{week_str}_{inc_field}": points_earned,
-                    f"{chat_id}_{month_str}_{inc_field}": points_earned,
-                    f"{chat_id}_{year_str}_{inc_field}": points_earned
-                }
-                
-                # OPTIMIZATION: Ultra-fast single database round-trip using upsert=True
-                await user_collection.update_one(
-                    {"id": user_id},
-                    {
-                        "$inc": inc_dict,
-                        "$setOnInsert": {
-                            "first_name": user.first_name,
-                            "username": user.username
-                        }
-                    },
-                    upsert=True
-                )
-                    
-            except Exception as db_err:
-                LOGGER.error(f"Database error while updating gold: {db_err}")
+            user = update.effective_user
+            inc_field = "gold" if length == 5 else f"gold_{length}"
+            now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
             
+            # Non-blocking Database Call
+            asyncio.create_task(update_user_gold_task(user.id, user.first_name, user.username, points_earned, inc_field, chat_id, now_ist))
+            
+            # Non-blocking Delete
             if should_delete and old_message_id:
-                try:
-                    await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
-                except Exception:
-                    pass
+                asyncio.create_task(safe_delete_message(context, chat_id, old_message_id))
             
             suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
+            win_msg = f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()}\nAdded {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
             
-            win_msg = (
-                f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()}\nAdded {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
-            )
             await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
             
-            # OPTIMIZATION: Non-blocking background task for reaction so it never delays the response
+            # Non-blocking Reaction
             async def set_reaction_safe():
                 try:
-                    await context.bot.set_message_reaction(
-                        chat_id=chat_id, 
-                        message_id=update.message.message_id, 
-                        reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))]
-                    )
+                    await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
                 except Exception as reaction_error:
                     LOGGER.error(f"Reaction fail ho gaya: {reaction_error}")
             
@@ -383,10 +366,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         elif lost:
             if should_delete and old_message_id:
-                try:
-                    await context.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
-                except Exception:
-                    pass
+                asyncio.create_task(safe_delete_message(context, chat_id, old_message_id))
             del ACTIVE_GAMES[chat_id]
             await update.message.reply_text(f"<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML", reply_to_message_id=update.message.message_id)
 
