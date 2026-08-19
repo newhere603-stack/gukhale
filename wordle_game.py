@@ -91,19 +91,19 @@ async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
 async def toggle_wordseek_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat: return
     if not await is_admin(update, context):
-        await update.message.reply_text("<b>❌ Only group admins can enable or disable WordSeek.</b>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="<b>❌ Only group admins can enable or disable WordSeek.</b>", parse_mode="HTML")
         return
     chat_id = update.effective_chat.id
     new_status = not WORDSEEK_ENABLED.get(chat_id, True)
     WORDSEEK_ENABLED[chat_id] = new_status
-    await update.message.reply_text(f"<b>WordSeek Game is now: {'ENABLED ✅' if new_status else 'DISABLED ❌'}</b>", parse_mode="HTML")
+    await context.bot.send_message(chat_id=chat_id, text=f"<b>WordSeek Game is now: {'ENABLED ✅' if new_status else 'DISABLED ❌'}</b>", parse_mode="HTML")
 
 async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat: return
     chat_id = update.effective_chat.id
     new_status = not DELETE_SETTINGS.get(chat_id, False)
     DELETE_SETTINGS[chat_id] = new_status
-    await update.message.reply_text(f"<b>Auto-Delete is now: {'ENABLED 🗑️' if new_status else 'DISABLED 🛡️'}</b>", parse_mode="HTML")
+    await context.bot.send_message(chat_id=chat_id, text=f"<b>Auto-Delete is now: {'ENABLED 🗑️' if new_status else 'DISABLED 🛡️'}</b>", parse_mode="HTML")
 
 async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message: return
@@ -111,15 +111,15 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     chat_id = chat.id
 
     if chat.type == "private":
-        await update.message.reply_text("<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=chat_id, text="<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", parse_mode="HTML")
         return
     if not WORDSEEK_ENABLED.get(chat_id, True):
-        await update.message.reply_text("<b>WordSeek is currently disabled in this chat.</b>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=chat_id, text="<b>WordSeek is currently disabled in this chat.</b>", parse_mode="HTML")
         return
 
     active_game = await game_collection.find_one({"chat_id": chat_id})
     if active_game:
-        await update.message.reply_text("<b>There is already a game in progress in this chat. Use /end to end it.</b>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=chat_id, text="<b>There is already a game in progress in this chat. Use /end to end it.</b>", parse_mode="HTML")
         return
 
     command = update.message.text.split()[0].lower()
@@ -134,7 +134,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     word_pool = WORDS_4_COMMON if length == 4 else (WORDS_6_COMMON if length == 6 else WORDS_5_COMMON)
     if not word_pool:
-        await update.message.reply_text(f"<b>⚠️ Error: No common words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=chat_id, text=f"<b>⚠️ Error: No common words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
         return
 
     target = random.choice(list(word_pool))
@@ -148,7 +148,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "target": target,
             "length": length,
             "max_attempts": 30,
-            "guesses": [], # Format: [[feedback, word], ...]
+            "guesses": [], 
             "message_id": msg.message_id
         }
         await game_collection.insert_one(game_data)
@@ -170,12 +170,12 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     active_game = await game_collection.find_one({"chat_id": chat_id})
     if not active_game:
-        await update.message.reply_text("<b><blockquote>ℹ️ No active wordseek running.</blockquote></b>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=chat_id, text="<b><blockquote>ℹ️ No active wordseek running.</blockquote></b>", parse_mode="HTML")
         return
 
     target = active_game["target"]
     await game_collection.delete_one({"chat_id": chat_id})
-    await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was: {target.lower()}</blockquote></b>", parse_mode="HTML")
+    await context.bot.send_message(chat_id=chat_id, text=f"<b><blockquote>🛑 Game ended.\nThe word was: {target.lower()}</blockquote></b>", parse_mode="HTML")
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat: return
@@ -197,7 +197,7 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /toggledelete → Toggle auto-delete hints\n"
         "• /togglewordseek → Enable/Disable bot in chat"
     )
-    await update.message.reply_text(help_text, parse_mode="HTML")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=help_text, parse_mode="HTML")
 
 async def update_user_gold_task(user_id, first_name, username, points, inc_field, chat_id, now_ist):
     try:
@@ -251,7 +251,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.create_task(context.bot.send_message(chat_id=chat_id, text=f"{original_text.lower()} is not a valid word.", parse_mode="HTML"))
         return
 
-    # Check already guessed
     guessed_words = [g[1] for g in game.get("guesses", [])]
     if text in guessed_words:
         asyncio.create_task(context.bot.send_message(chat_id=chat_id, text="Someone has already guessed your word. Please try another one!", parse_mode="HTML"))
@@ -260,7 +259,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target = game["target"]
     feedback = get_wordle_hints(text, target)
 
-    # Superfast Single DB Call: Add guess and get the new list instantly
     updated_game = await game_collection.find_one_and_update(
         {"chat_id": chat_id},
         {"$push": {"guesses": [feedback, text]}},
@@ -269,7 +267,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     attempts = len(updated_game["guesses"])
     
-    # Board create ho raha hai (Stacked style)
     board_lines = [f"<b>{length}-letter mode · {attempts}/{updated_game['max_attempts']}</b>\n"]
     for fb, guess_word in updated_game["guesses"]:
         board_lines.append(f"{fb} {to_bold_sans_serif(guess_word)}")
@@ -283,13 +280,11 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         if not won and not lost:
-            # User ke naye guess pe naya message reply bhejega
-            new_msg = await update.message.reply_text(board_text, parse_mode="HTML", reply_to_message_id=update.message.message_id)
+            # Yahan se reply hata diya hai, ab seedha send hoga
+            new_msg = await context.bot.send_message(chat_id=chat_id, text=board_text, parse_mode="HTML")
             
-            # DB mein naya message ID update
             await game_collection.update_one({"chat_id": chat_id}, {"$set": {"message_id": new_msg.message_id}})
             
-            # Agar auto-delete on hai to purana wala bina lag ke udd jayega
             if should_delete and old_message_id: 
                 asyncio.create_task(safe_delete_message(context, chat_id, old_message_id))
             
@@ -308,7 +303,8 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
             win_msg = f"{board_text}\n\n<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()}\nAdded {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
             
-            await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
+            # Yahan bhi reply hata diya
+            await context.bot.send_message(chat_id=chat_id, text=win_msg, parse_mode="HTML")
             
             async def set_reaction_safe():
                 try: await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
@@ -319,7 +315,9 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await game_collection.delete_one({"chat_id": chat_id})
             if should_delete and old_message_id: 
                 asyncio.create_task(safe_delete_message(context, chat_id, old_message_id))
-            await update.message.reply_text(f"{board_text}\n\n<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML", reply_to_message_id=update.message.message_id)
+            
+            # Yahan bhi reply hata diya
+            await context.bot.send_message(chat_id=chat_id, text=f"{board_text}\n\n<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
 
     except Exception as e:
         LOGGER.error(f"Error handling guess: {e}")
