@@ -63,7 +63,7 @@ RARITIES = {
 
 rarity_status_cache = {}
 group_settings_cache = {}  
-chat_frequency_cache = {} # Speed optimize karne ke liye cache
+chat_frequency_cache = {} 
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
 first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
@@ -73,6 +73,44 @@ grabbed_spawns = set()
 
 _cached_characters = []
 _last_cache_time = 0
+
+# --- 🔥 Anti-Spam variables ---
+user_message_times = {}
+blocked_users = {}
+
+async def check_and_handle_flood(update: Update) -> bool:
+    """Check karta hai agar user flood kar raha hai to block karega 10 mins ke liye"""
+    user = update.effective_user
+    if not user:
+        return False
+        
+    user_id = user.id
+    now = time.time()
+    
+    # Check if user is already blocked
+    if user_id in blocked_users:
+        if now < blocked_users[user_id]:
+            return True  # User is blocked, ignore their actions
+        else:
+            del blocked_users[user_id]  # Block time over, unblock
+            
+    # Record message timestamp
+    user_message_times.setdefault(user_id, []).append(now)
+    # Keep only timestamps from the last 4 seconds
+    user_message_times[user_id] = [t for t in user_message_times[user_id] if now - t < 4]
+    
+    # Threshold: Agar 4 seconds mein 7 messages bhej diye, to spam hai
+    if len(user_message_times[user_id]) >= 7:
+        blocked_users[user_id] = now + 600  # 10 minutes (600 seconds) block
+        safe_name = escape(user.first_name)
+        msg = f'<b><tg-emoji emoji-id="5420323339723881652">⚠️</tg-emoji> {safe_name} ɪs ғʟᴏᴏᴅɪɴɢ: ʙʟᴏᴄᴋᴇᴅ ғᴏʀ 𝟷𝟶 ᴍɪɴᴜᴛᴇs ғᴏʀ ᴜsɪɴɢ ᴛʜᴇ ʙᴏᴛ.</b>'
+        try:
+            await update.message.reply_html(msg)
+        except Exception:
+            pass
+        return True
+        
+    return False
 
 async def setup_database_indexes():
     """Bot start hote hi database indexing kar dega taaki fast response mile"""
@@ -89,7 +127,6 @@ async def get_cached_characters():
     global _cached_characters, _last_cache_time
     current_time = time.time()
     if not _cached_characters or (current_time - _last_cache_time) > 300:
-        # Reverted limit lock back to None (Saare characters load honge smoothly)
         _cached_characters = await collection.find({'auction_exclusive': {'$ne': True}}).to_list(length=None)
         _last_cache_time = current_time
     return _cached_characters
@@ -113,7 +150,6 @@ def get_rarity_key(rarity_str):
     return None
 
 
-# 🔥 Time Formatter Helper Function
 def format_time_taken(seconds):
     if seconds < 60:
         return f"{seconds}s"
@@ -261,6 +297,10 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     if not update.message and not update.edited_message:
         return
 
+    # 🔥 Spam Protection for normal messages (ignores them for spawn count if flooding)
+    if await check_and_handle_flood(update):
+        return
+
     chat_id = str(update.effective_chat.id)
     locks.setdefault(chat_id, asyncio.Lock())
 
@@ -269,7 +309,6 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
         
         if chat_id not in chat_frequency_cache:
             try:
-                # String and Integer dono type check karega taaki DB fail na ho
                 chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
                 if not chat_data:
                     chat_data = await user_totals_collection.find_one({'chat_id': int(chat_id)})
@@ -337,8 +376,11 @@ async def _bump_counter(coll, query, update_fields, inc_field='count', inc_by=1)
         await coll.insert_one({**query, **update_fields, inc_field: inc_by})
 
 
-# 🔥 UPDATED GUESS FUNCTION: SUPER FAST REPLY, BACKGROUND TASKS FOR DB/DELETE 🔥
 async def guess(update: Update, context: CallbackContext) -> None:
+    # 🔥 Spam Protection Check for Grab (blocks grab spammers)
+    if await check_and_handle_flood(update):
+        return
+
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
@@ -346,7 +388,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
         if chat_id not in last_characters:
             return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
 
-        # Agar pehle hi memory me lock ho chuka hai to turant reject kardo
         if chat_id in first_correct_guesses:
             return await update.message.reply_html(
                 '<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ by sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>'
@@ -373,9 +414,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=spawn_message_links[chat_id])]])
             return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
-        # -------------------------------------------------------------------------
-        # 1. INSTANT MEMORY LOCK (Dusre users ko yahi se block kar dega)
-        # -------------------------------------------------------------------------
+        # First Correct Guess Lock
         first_correct_guesses[chat_id] = user_id
         
         time_taken_seconds = 0
@@ -392,9 +431,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
         if eu.username:
             user_fields['username'] = eu.username
 
-        # -------------------------------------------------------------------------
-        # 2. MESSAGE PREPARATION & INSTANT REPLY (No wait for Database/Delete)
-        # -------------------------------------------------------------------------
         rarity_str = character.get('rarity', '🟢 Common')
         r_key = get_rarity_key(rarity_str)
         
@@ -419,27 +455,20 @@ async def guess(update: Update, context: CallbackContext) -> None:
         
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
         
-        # User ko message INSTANTLY chala jayega (Without any DB/API lag)
         await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
 
-        # State vars clear karna (Taaki despawn/error na aaye)
         spawn_message_links.pop(chat_id, None)
         spawn_times.pop(chat_id, None)
         spawn_messages.pop(chat_id, None)
 
-        # -------------------------------------------------------------------------
-        # 3. BACKGROUND TASKS (Database updates, Message Delete & REACTION)
-        # -------------------------------------------------------------------------
         async def process_background_tasks():
             try:
-                # User ki message par INSTANT but background me random reaction add karega
                 try:
                     reactions = ["🔥", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️", "🤩", "🐳"]
                     await update.message.set_reaction(reaction=random.choice(reactions))
                 except Exception:
                     pass
 
-                # User DB update (Character add karna)
                 user = await user_collection.find_one({'id': user_id})
                 if user:
                     changed = {k: v for k, v in user_fields.items() if user.get(k) != v}
@@ -455,7 +484,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                         'bot_started': False
                     })
 
-                # Cache clear
                 try:
                     from shivu.modules.inline import user_cache, query_cache
                     user_cache.pop(f"u{user_id}", None)
@@ -463,7 +491,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 except Exception:
                     pass
 
-                # Spawn message delete
                 should_delete = await get_group_setting(chat_id, 'grab_delete', False)
                 if should_delete and spawn_msg_id:
                     try:
@@ -471,14 +498,12 @@ async def guess(update: Update, context: CallbackContext) -> None:
                     except BadRequest:
                         pass
 
-                # Group Stats DB update
                 await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
                 await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
 
             except Exception as e:
                 LOGGER.error(f"Error in background grab process: {e}")
 
-        # Task ko piche run hone ke liye bhej diya (Main thread free ho gayi)
         asyncio.create_task(process_background_tasks())
 
     except Exception:
@@ -569,7 +594,6 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
 
 async def main():
     try:
-        # 🔥 Startup database indexes setup for instant performance
         await setup_database_indexes()
         
         await load_rarity_status()
@@ -583,7 +607,6 @@ async def main():
         application.add_handler(CommandHandler(["rarity_off"], rarity_off_cmd, block=False))
         application.add_handler(CommandHandler(["name"], name_cmd, block=False))
 
-        # 🔥 FIX: Isko group -99 diya hai taaki dusre modules text intercept na kar sake
         application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, message_counter, block=False), group=-99)
 
         await application.initialize()
