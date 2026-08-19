@@ -210,7 +210,7 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await game_collection.delete_one({"chat_id": chat_id})
         await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was:{target.lower()}</blockquote></b>", parse_mode="HTML")
     else:
-        await update.message.reply_text("<b>ℹ️ No active game running.</b>", parse_mode="HTML")
+        await update.message.reply_text("<b><blockquote>ℹ️ No active game running.</blockquote></b>", parse_mode="HTML")
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat:
