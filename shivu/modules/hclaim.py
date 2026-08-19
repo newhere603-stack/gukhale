@@ -56,13 +56,6 @@ def to_small_caps(text: str) -> str:
     tr = str.maketrans(normal, small)
     return str(text).translate(tr)
 
-def get_safe_time(dt):
-    if dt is None:
-        return None
-    if hasattr(dt, 'tzinfo') and dt.tzinfo is not None:
-        return dt.astimezone(IST).replace(tzinfo=None)
-    return dt
-
 def create_log_message(title: str, data: dict) -> str:
     timestamp = datetime.now(IST).strftime("%I:%M %p • %d/%m/%y")
     base = f"<b>{title}</b>\n\n"
@@ -84,25 +77,29 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         logger.error(f"Log error: {e}")
 
-def can_claim_today(last_claim_dt) -> bool:
-    if not last_claim_dt:
+# --- FIX: Database time ko accurately handle karna 4 AM reset ke liye ---
+def can_claim_today(last_claim_utc) -> bool:
+    if not last_claim_utc:
         return True
     
-    now = datetime.now(IST)
+    # MongoDB saves as naive UTC, usme properly UTC timezone attach karna
+    if last_claim_utc.tzinfo is None:
+        last_claim_utc = last_claim_utc.replace(tzinfo=timezone.utc)
     
-    if last_claim_dt.tzinfo is None:
-        last_claim_dt = last_claim_dt.replace(tzinfo=IST)
-    else:
-        last_claim_dt = last_claim_dt.astimezone(IST)
+    # User ka last claim time accurately IST mein convert karna
+    last_claim_ist = last_claim_utc.astimezone(IST)
+    now_ist = datetime.now(IST)
     
-    today_4am = now.replace(hour=4, minute=0, second=0, microsecond=0)
+    # Aaj ki subah 4 baje ka exact time nikalna
+    today_4am = now_ist.replace(hour=4, minute=0, second=0, microsecond=0)
     
-    if now < today_4am:
+    # Agar current time 4 AM se pehle hai, toh reset time kal subah 4 baje ka manna jayega
+    if now_ist < today_4am:
         reset_threshold = today_4am - timedelta(days=1)
     else:
         reset_threshold = today_4am
         
-    return last_claim_dt < reset_threshold
+    return last_claim_ist < reset_threshold
 
 
 # ==========================================
@@ -115,11 +112,13 @@ async def swaifu(update: Update, context: CallbackContext):
         raw_first_name = update.effective_user.first_name or "User"
         safe_first_name = html.escape(to_small_caps(raw_first_name))
         
-        now = datetime.now(IST)
+        # Ab properly UTC time ko databse mein save karenge taaki PyMongo usko galat na samjhe
+        now_utc = datetime.now(timezone.utc)
+        
         user_data = await user_collection.find_one({'id': user_id})
         
         if user_data and 'last_swaifu_claim' in user_data:
-            last_claim = get_safe_time(user_data['last_swaifu_claim'])
+            last_claim = user_data['last_swaifu_claim']
             if not can_claim_today(last_claim):
                 msg = f"<b>{to_small_caps('You have already claimed your waifu today! Come back tomorrow.')}</b>"
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
@@ -158,12 +157,13 @@ async def swaifu(update: Update, context: CallbackContext):
 
         img_url = character.get('img_url', '')
 
+        # Yahan par now_utc save ho raha hai
         await user_collection.update_one(
             {'id': user_id},
             {
                 '$push': {'characters': character},
                 '$set': {
-                    'last_swaifu_claim': now,
+                    'last_swaifu_claim': now_utc,
                     'first_name': raw_first_name
                 }
             },
@@ -203,12 +203,14 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
     try:
         user_id = update.effective_user.id
         raw_first_name = update.effective_user.first_name or "User"
-        now = datetime.now(IST)
+        
+        # Proper UTC time for DB storage
+        now_utc = datetime.now(timezone.utc)
 
         user_data = await user_collection.find_one({'id': user_id})
         
         if user_data and 'last_coin_claim' in user_data:
-            last_claim = get_safe_time(user_data['last_coin_claim'])
+            last_claim = user_data['last_coin_claim']
             if not can_claim_today(last_claim):
                 msg = f"<b>{to_small_caps('You have already claimed your daily coins!')}</b>"
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
@@ -216,12 +218,13 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 
         coins_won = random.randint(1000, 10000)
 
+        # Update UTC time to avoid daily reset bugs
         await user_collection.update_one(
             {'id': user_id},
             {
                 '$inc': {'balance': coins_won},
                 '$set': {
-                    'last_coin_claim': now,
+                    'last_coin_claim': now_utc,
                     'first_name': raw_first_name
                 }
             },
