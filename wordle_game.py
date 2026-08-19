@@ -8,21 +8,22 @@ from telegram import Update, ReactionTypeEmoji
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 from pymongo import ReturnDocument
 
-# Yahan 'db' import kar lena apne main database connection se
+# Yahan se 'db' import kar lena
 from shivu import application, user_collection, db
 
 LOGGER = logging.getLogger(__name__)
 
-# MongoDB collection game state save karne ke liye (Restart proof)
+# Game memory ko permanent karne ke liye MongoDB Collection
 game_collection = db['wordseek_games']
 
 DELETE_SETTINGS = {}
 WORDSEEK_ENABLED = {}  
 
+# Safe reactions list (Telegram-approved bot emojis)
 REACTION_EMOJIS = ["🔥", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️", "🤩", "🐳"]
-LOG_GROUP_ID = -1003893927065  
+LOG_GROUP_ID = -1003893927065  # Aapka log group ID
 
-# --- FAST JSON LOADING ---
+# --- FAST JSON LOADING (NO FALLBACKS) ---
 def load_words_from_json(filename):
     try:
         paths_to_check = [filename, os.path.join("wordseek", filename), os.path.join("shivu", filename)]
@@ -36,14 +37,17 @@ def load_words_from_json(filename):
         LOGGER.error(f"Error loading {filename}: {e}")
     return set()
 
+# Load ALL words (For guessing validation)
 WORDS_4_ALL = load_words_from_json("all-four.json")
 WORDS_5_ALL = load_words_from_json("all-five.json")
 WORDS_6_ALL = load_words_from_json("all-six.json")
 
+# Load COMMON words (For selecting the target word)
 WORDS_4_COMMON = load_words_from_json("common-four.json")
 WORDS_5_COMMON = load_words_from_json("common-five.json")
 WORDS_6_COMMON = load_words_from_json("common-six.json")
 
+# Valid words pool (ALL + COMMON) for checking user guesses
 VALID_WORDS_4 = WORDS_4_ALL | WORDS_4_COMMON
 VALID_WORDS_5 = WORDS_5_ALL | WORDS_5_COMMON
 VALID_WORDS_6 = WORDS_6_ALL | WORDS_6_COMMON
@@ -51,10 +55,14 @@ VALID_WORDS_6 = WORDS_6_ALL | WORDS_6_COMMON
 def to_bold_sans_serif(text: str) -> str:
     result = []
     for char in text:
-        if 'A' <= char <= 'Z': result.append(chr(ord(char) + 0x1D5D4 - ord('A')))
-        elif 'a' <= char <= 'z': result.append(chr(ord(char) + 0x1D5EE - ord('a')))
-        elif '0' <= char <= '9': result.append(chr(ord(char) + 0x1D7EC - ord('0')))
-        else: result.append(char)
+        if 'A' <= char <= 'Z':
+            result.append(chr(ord(char) + 0x1D5D4 - ord('A')))
+        elif 'a' <= char <= 'z':
+            result.append(chr(ord(char) + 0x1D5EE - ord('a')))
+        elif '0' <= char <= '9':
+            result.append(chr(ord(char) + 0x1D7EC - ord('0')))
+        else:
+            result.append(char)
     return "".join(result)
 
 def get_wordle_hints(guess: str, target: str) -> str:
@@ -80,8 +88,10 @@ def get_wordle_hints(guess: str, target: str) -> str:
 async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     chat = update.effective_chat
     user = update.effective_user
-    if not chat or not user: return False
-    if chat.type == "private": return True
+    if not chat or not user:
+        return False
+    if chat.type == "private":
+        return True
     try:
         member = await context.bot.get_chat_member(chat.id, user.id)
         return member.status in ["creator", "administrator"]
@@ -89,37 +99,53 @@ async def is_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
         return False
 
 async def toggle_wordseek_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_chat: return
-    if not await is_admin(update, context):
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="<b>❌ Only group admins can enable or disable WordSeek.</b>", parse_mode="HTML")
+    if not update.effective_chat:
         return
+    
+    if not await is_admin(update, context):
+        await update.message.reply_text("<b>❌ Only group admins can enable or disable WordSeek.</b>", parse_mode="HTML")
+        return
+
     chat_id = update.effective_chat.id
-    new_status = not WORDSEEK_ENABLED.get(chat_id, True)
+    current_status = WORDSEEK_ENABLED.get(chat_id, True)
+    new_status = not current_status
     WORDSEEK_ENABLED[chat_id] = new_status
-    await context.bot.send_message(chat_id=chat_id, text=f"<b>WordSeek Game is now: {'ENABLED ✅' if new_status else 'DISABLED ❌'}</b>", parse_mode="HTML")
+    
+    status_text = "ENABLED ✅" if new_status else "DISABLED ❌"
+    await update.message.reply_text(f"<b>WordSeek Game is now: {status_text}</b>", parse_mode="HTML")
 
 async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_chat: return
+    if not update.effective_chat:
+        return
     chat_id = update.effective_chat.id
-    new_status = not DELETE_SETTINGS.get(chat_id, False)
-    DELETE_SETTINGS[chat_id] = new_status
-    await context.bot.send_message(chat_id=chat_id, text=f"<b>Auto-Delete is now: {'ENABLED 🗑️' if new_status else 'DISABLED 🛡️'}</b>", parse_mode="HTML")
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        return
+
+    current_status = DELETE_SETTINGS.get(chat_id, False)
+    NEW_STATUS = not current_status
+    DELETE_SETTINGS[chat_id] = NEW_STATUS
+    status_text = "ENABLED 🗑️" if NEW_STATUS else "DISABLED 🛡️"
+    await update.message.reply_text(f"<b>Auto-Delete is now: {status_text}</b>", parse_mode="HTML")
 
 async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_chat or not update.message: return
+    if not update.effective_chat or not update.message:
+        return
+    
     chat = update.effective_chat
     chat_id = chat.id
 
     if chat.type == "private":
-        await context.bot.send_message(chat_id=chat_id, text="<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", parse_mode="HTML")
-        return
-    if not WORDSEEK_ENABLED.get(chat_id, True):
-        await context.bot.send_message(chat_id=chat_id, text="<b>WordSeek is currently disabled in this chat.</b>", parse_mode="HTML")
+        await update.message.reply_text("<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", parse_mode="HTML")
         return
 
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        await update.message.reply_text("<b>WordSeek is currently disabled in this chat.</b>", parse_mode="HTML")
+        return
+
+    # Check DB before starting a new game (Restart Proof)
     active_game = await game_collection.find_one({"chat_id": chat_id})
     if active_game:
-        await context.bot.send_message(chat_id=chat_id, text="<b>There is already a game in progress in this chat. Use /end to end it.</b>", parse_mode="HTML")
+        await update.message.reply_text("<b>There is already a game in progress in this chat. Use /end to end it.</b>", parse_mode="HTML")
         return
 
     command = update.message.text.split()[0].lower()
@@ -130,32 +156,40 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         try:
             arg = int(context.args[0])
             if arg in [4, 5, 6]: length = arg
-        except ValueError: pass
+        except ValueError:
+            pass
 
     word_pool = WORDS_4_COMMON if length == 4 else (WORDS_6_COMMON if length == 6 else WORDS_5_COMMON)
     if not word_pool:
-        await context.bot.send_message(chat_id=chat_id, text=f"<b>⚠️ Error: No common words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<b>⚠️ Error: No common words found for {length}-letter mode! Check your JSON files.</b>", parse_mode="HTML")
         return
 
     target = random.choice(list(word_pool))
     
     try:
-        msg = await context.bot.send_message(chat_id=chat_id, text=f"<b>Game started! Guess the {length}-letter word!</b>", parse_mode="HTML")
+        msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"<b>Game started! Guess the {length}-letter word!</b>",
+            parse_mode="HTML"
+        )
         
+        # Save new game state to DB
         game_data = {
             "chat_id": chat_id,
             "target": target,
             "length": length,
+            "guesses": [],
             "max_attempts": 30,
-            "guesses": [], 
             "message_id": msg.message_id
         }
         await game_collection.insert_one(game_data)
         
+        # Fire and forget log sending
         async def send_log():
             try:
                 chat_name = chat.title if chat.title else "Group"
-                log_text = f"🎮 <b>New WordSeek Started!</b>\n<b>Group:</b> {chat_name}\n<b>Target Word:</b> <code>{target}</code>"
+                chat_link = f"https://t.me/{chat.username}" if chat.username else f"ID: {chat.id}"
+                log_text = f"🎮 <b>New WordSeek Game Started!</b>\n<b>Group:</b> {chat_name}\n<b>Link/ID:</b> {chat_link}\n<b>Target Word:</b> <code>{target}</code>"
                 await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_text, parse_mode="HTML", disable_web_page_preview=True)
             except Exception: pass
         asyncio.create_task(send_log())
@@ -164,20 +198,27 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         LOGGER.error(f"Error starting game: {e}")
 
 async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_chat: return
+    if not update.effective_chat:
+        return
     chat_id = update.effective_chat.id
-    
-    active_game = await game_collection.find_one({"chat_id": chat_id})
-    if not active_game:
-        await context.bot.send_message(chat_id=chat_id, text="<b><blockquote>ℹ️ No active wordseek running.</blockquote></b>", parse_mode="HTML")
+    if not WORDSEEK_ENABLED.get(chat_id, True):
         return
 
-    target = active_game["target"]
-    await game_collection.delete_one({"chat_id": chat_id})
-    await context.bot.send_message(chat_id=chat_id, text=f"<b><blockquote>🛑 Game ended.\nThe word was: {target.lower()}</blockquote></b>", parse_mode="HTML")
+    active_game = await game_collection.find_one({"chat_id": chat_id})
+    if active_game:
+        target = active_game["target"]
+        await game_collection.delete_one({"chat_id": chat_id})
+        await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was:{target.lower()}</blockquote></b>", parse_mode="HTML")
+    else:
+        await update.message.reply_text("<b><blockquote>ℹ️ No active wordseek running.</blockquote></b>", parse_mode="HTML")
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_chat: return
+    if not update.effective_chat:
+        return
+    chat_id = update.effective_chat.id
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        return
+        
     help_text = (
         "<b>▸ How to Play WordSeek</b>\n\n"
         "1. Start a game using /new, /new4, /new5, or /new6\n"
@@ -194,30 +235,20 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>Commands:</b>\n"
         "• /end → End current game\n"
         "• /toggledelete → Toggle auto-delete hints\n"
-        "• /togglewordseek → Enable/Disable bot in chat"
+        "• /togglewordseek → Enable/Disable bot in chat\n"
+        "• /helpword → Show this help menu"
     )
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=help_text, parse_mode="HTML")
+    await update.message.reply_text(help_text, parse_mode="HTML")
 
-async def update_user_gold_task(user_id, first_name, username, points, inc_field, chat_id, now_ist):
+# --- FAST BACKGROUND HELPER FUNCTIONS ---
+async def background_delete(context, chat_id, message_id):
     try:
-        today_str = now_ist.strftime("%Y-%m-%d")
-        week_str = now_ist.strftime("%Y-W%V")
-        month_str = now_ist.strftime("%Y-%m")
-        year_str = now_ist.strftime("%Y")
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
 
-        inc_dict = {
-            inc_field: points,
-            f"{today_str}_{inc_field}": points,
-            f"{week_str}_{inc_field}": points,
-            f"{month_str}_{inc_field}": points,
-            f"{year_str}_{inc_field}": points,
-            f"{chat_id}_{inc_field}": points,
-            f"{chat_id}_{today_str}_{inc_field}": points,
-            f"{chat_id}_{week_str}_{inc_field}": points,
-            f"{chat_id}_{month_str}_{inc_field}": points,
-            f"{chat_id}_{year_str}_{inc_field}": points
-        }
-        
+async def background_db_update(user_id, first_name, username, inc_dict):
+    try:
         await user_collection.update_one(
             {"id": user_id},
             {"$inc": inc_dict, "$setOnInsert": {"first_name": first_name, "username": username}},
@@ -226,97 +257,123 @@ async def update_user_gold_task(user_id, first_name, username, points, inc_field
     except Exception as db_err:
         LOGGER.error(f"Database error while updating gold: {db_err}")
 
-async def safe_delete_message(context, chat_id, message_id):
-    try: await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-    except Exception: pass
-
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.text or not update.effective_chat: return
+    if not update.message or not update.message.text or not update.effective_chat:
+        return
+
     chat_id = update.effective_chat.id
-    if not WORDSEEK_ENABLED.get(chat_id, True): return
+    if not WORDSEEK_ENABLED.get(chat_id, True):
+        return
 
     game = await game_collection.find_one({"chat_id": chat_id})
-    if not game: return
+    if not game:
+        return
 
     original_text = update.message.text.strip()
     text = original_text.upper()
     length = game["length"]
 
-    if len(text) != length or not text.isalpha(): return
+    if len(text) != length or not text.isalpha():
+        return
 
     valid_list = VALID_WORDS_4 if length == 4 else (VALID_WORDS_6 if length == 6 else VALID_WORDS_5)
     
     if text not in valid_list:
+        # Background Error Msg
         asyncio.create_task(context.bot.send_message(chat_id=chat_id, text=f"{original_text.lower()} is not a valid word.", parse_mode="HTML"))
         return
 
-    guessed_words = [g[1] for g in game.get("guesses", [])]
-    if text in guessed_words:
+    # Superfast Duplicate Check
+    if text in (g[1] for g in game["guesses"]):
+        # Background Error Msg
         asyncio.create_task(context.bot.send_message(chat_id=chat_id, text="Someone has already guessed your word. Please try another one!", parse_mode="HTML"))
         return
 
     target = game["target"]
     feedback = get_wordle_hints(text, target)
 
-    # ⚡ Superfast Atomic Database Update
+    # Fast Atomic Update in DB
     updated_game = await game_collection.find_one_and_update(
         {"chat_id": chat_id},
         {"$push": {"guesses": [feedback, text]}},
         return_document=ReturnDocument.AFTER
     )
-    
-    attempts = len(updated_game["guesses"])
+
+    attempt_num = len(updated_game["guesses"])
+    board_lines = [f"<b>{length}-letter mode · {attempt_num}/{updated_game['max_attempts']}</b>\n"]
+    for fb, guess_word in updated_game["guesses"]:
+        styled_word = to_bold_sans_serif(guess_word)
+        board_lines.append(f"{fb} {styled_word}")
+
+    board_text = "\n".join(board_lines)
     won = (text == target)
-    lost = (attempts >= updated_game["max_attempts"] and not won)
-    
-    # Text Generation ekdum pehle jaisa
-    if won:
-        points_earned = updated_game["max_attempts"] - attempts + 1
-        suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
-        # Sirf win ka message, grid nahi!
-        msg_text = f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()}\nAdded {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
-    elif lost:
-        # Sirf loose ka message, grid nahi!
-        msg_text = f"<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>"
-    else:
-        # Continue game ka grid message
-        board_lines = [f"<b>{length}-letter mode · {attempts}/{updated_game['max_attempts']}</b>\n"]
-        for fb, guess_word in updated_game["guesses"]:
-            board_lines.append(f"{fb} {to_bold_sans_serif(guess_word)}")
-        msg_text = "\n".join(board_lines)
+    lost = (attempt_num >= updated_game["max_attempts"] and not won)
+    old_message_id = updated_game.get("message_id")
+    should_delete = DELETE_SETTINGS.get(chat_id, False)
 
     try:
-        # ⚡ Send immediately bina kisi blocking or reply tag ke!
-        new_msg = await context.bot.send_message(chat_id=chat_id, text=msg_text, parse_mode="HTML")
-        
-        # ⚡ Baki sab kuch Background Task mein
-        async def background_cleanup():
-            should_delete = DELETE_SETTINGS.get(chat_id, False)
-            old_message_id = updated_game.get("message_id")
+        if not won and not lost:
+            # Bina tag kiye sidha send
+            msg = await context.bot.send_message(chat_id=chat_id, text=board_text, parse_mode="HTML")
             
-            if won or lost:
-                await game_collection.delete_one({"chat_id": chat_id})
-                if won:
-                    user = update.effective_user
-                    inc_field = "gold" if length == 5 else f"gold_{length}"
-                    now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
-                    await update_user_gold_task(user.id, user.first_name, user.username, points_earned, inc_field, chat_id, now_ist)
-                    
-                    try: await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
-                    except Exception: pass
-            else:
-                await game_collection.update_one({"chat_id": chat_id}, {"$set": {"message_id": new_msg.message_id}})
-                
+            # Message ID DB me update background me hoga
+            asyncio.create_task(game_collection.update_one({"chat_id": chat_id}, {"$set": {"message_id": msg.message_id}}))
+            
             if should_delete and old_message_id:
-                await safe_delete_message(context, chat_id, old_message_id)
+                asyncio.create_task(background_delete(context, chat_id, old_message_id))
+            
+        elif won:
+            points_earned = updated_game["max_attempts"] - attempt_num + 1
+            
+            # DB clean up fast background me
+            asyncio.create_task(game_collection.delete_one({"chat_id": chat_id}))
+            
+            user = update.effective_user
+            now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+            today_str = now_ist.strftime("%Y-%m-%d")
+            week_str = now_ist.strftime("%Y-W%V")
+            month_str = now_ist.strftime("%Y-%m")
+            year_str = now_ist.strftime("%Y")
 
-        # Start the background tasks
-        asyncio.create_task(background_cleanup())
+            inc_field = "gold" if length == 5 else f"gold_{length}"
+            
+            inc_dict = {
+                inc_field: points_earned, f"{today_str}_{inc_field}": points_earned,
+                f"{week_str}_{inc_field}": points_earned, f"{month_str}_{inc_field}": points_earned,
+                f"{year_str}_{inc_field}": points_earned, f"{chat_id}_{inc_field}": points_earned,
+                f"{chat_id}_{today_str}_{inc_field}": points_earned, f"{chat_id}_{week_str}_{inc_field}": points_earned,
+                f"{chat_id}_{month_str}_{inc_field}": points_earned, f"{chat_id}_{year_str}_{inc_field}": points_earned
+            }
+            
+            # Fire DB update in Background
+            asyncio.create_task(background_db_update(user.id, user.first_name, user.username, inc_dict))
+            
+            if should_delete and old_message_id:
+                asyncio.create_task(background_delete(context, chat_id, old_message_id))
+            
+            suggested_cmd = f"/new{length}" if length in [4, 6] else "/new"
+            win_msg = f"<b><blockquote>Congrats! You guessed it correctly.\nCorrect Word: {target.lower()}\nAdded {points_earned} to the leaderboard.</blockquote>\nStart with {suggested_cmd}</b>"
+            
+            # Sirf YAHAN reply aayega (Jeetne pe tag karega)
+            await update.message.reply_text(win_msg, parse_mode="HTML", reply_to_message_id=update.message.message_id)
+            
+            async def set_reaction_safe():
+                try: await context.bot.set_message_reaction(chat_id=chat_id, message_id=update.message.message_id, reaction=[ReactionTypeEmoji(random.choice(REACTION_EMOJIS))])
+                except Exception as reaction_error: LOGGER.error(f"Reaction fail ho gaya: {reaction_error}")
+            asyncio.create_task(set_reaction_safe())
+            
+        elif lost:
+            asyncio.create_task(game_collection.delete_one({"chat_id": chat_id}))
+            if should_delete and old_message_id:
+                asyncio.create_task(background_delete(context, chat_id, old_message_id))
+            
+            # Lose hone par bina tag kiye sidha message
+            await context.bot.send_message(chat_id=chat_id, text=f"<b>Game Over! Correct Word:</b>\n<blockquote>{target.lower()}</blockquote>", parse_mode="HTML")
 
     except Exception as e:
         LOGGER.error(f"Error handling guess: {e}")
 
-# Registering Handlers
+# Registering Game Handlers Only
 application.add_handler(CommandHandler(["new", "new4", "new5", "new6"], start_game_handler))
 application.add_handler(CommandHandler("toggledelete", toggle_delete_handler))
 application.add_handler(CommandHandler("togglewordseek", toggle_wordseek_handler))
