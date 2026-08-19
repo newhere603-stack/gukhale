@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
+from telegram.error import BadRequest
 from shivu import application, db, user_collection
 
 # --- Databases ---
@@ -15,13 +16,12 @@ except ImportError:
 
 try:
     auction_collection = db['auctions']
-    mp_config = db['mp_config'] # Naya database collection settings store karne ke liye
+    mp_config = db['mp_config'] 
 except ImportError:
     pass
 
 OWNER_ID = 7657218453
 
-# Ab humne keys ko sirf lowercase text mein rakha hai taaki exact match ki problem na aaye
 DEFAULT_PRICES = {
     "common": 1000, "rare": 3200, "medium": 2900, 
     "legendary": 5000, "celestial": 70000, "spicy": 59000, 
@@ -76,15 +76,14 @@ def extract_rarity_name(r_str: str) -> str:
             break
     return text_part.strip() if text_part else r_str.strip()
 
-def format_rarity(r: str) -> str:
-    r_str = str(r)
+def get_rarity_emoji_and_name(r_str: str):
+    r_str = str(r_str)
     name_part = extract_rarity_name(r_str)
-    name_part_lower = name_part.lower()
+    name_lower = name_part.lower()
     
-    if name_part_lower in PREMIUM_RARITIES:
-        return f"{PREMIUM_RARITIES[name_part_lower]} <b>{to_small_caps(name_part)}</b>"
-    
-    return f"<b>{to_small_caps(r_str)}</b>"
+    # Agar emoji mil gaya to wo use karega varna default star emoji
+    emoji = PREMIUM_RARITIES.get(name_lower, '<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji>')
+    return emoji, name_part
 
 def get_price(char):
     if 'mp_price' in char and char['mp_price'] is not None:
@@ -164,19 +163,17 @@ async def load_user_deals(user_id):
     mp_data = user.get('mp_data', {})
     
     if mp_data.get('day') != current_day or not mp_data.get('chars'):
-        # Check enabled/disabled rarities
         config = await mp_config.find_one({'_id': 'settings'})
         disabled_rarities = config.get('disabled_rarities', []) if config else []
         
         base_query = {'auction_exclusive': {'$ne': True}}
         if disabled_rarities:
-            # Regex to exclude disabled rarities safely
             pattern = "|".join([re.escape(r) for r in disabled_rarities])
             base_query['rarity'] = {'$not': {'$regex': pattern, '$options': 'i'}}
             
         total_chars = await collection.count_documents(base_query)
         if total_chars < 2: 
-            return None # Not enough chars matching the allowed rarities
+            return None 
             
         indices = random.sample(range(total_chars), 2)
         char1 = await collection.find_one(base_query, skip=indices[0])
@@ -218,14 +215,16 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     char = chars[index]
     user_id = user['id'] 
     
+    r_emoji, r_name = get_rarity_emoji_and_name(char.get('rarity', 'Unknown'))
     status_text = f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('SOLD')}" if char.get('is_sold') else f"<tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> {bold_sc('AVAILABLE')}"
 
+    # Star hata kar Rarity Fix ki hai yaha
     caption = f"""<tg-emoji emoji-id="5278702045883292456">🛍</tg-emoji> {bold_sc(f'DAILY DEALS ({index+1}/2)')}
 
 <tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(str(char.get('name', 'Unknown')).upper())}
 <tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(str(char.get('anime', 'Unknown')).upper())}
 <tg-emoji emoji-id="6332443074769196273">🆔</tg-emoji> {bold_sc('ID:')} {bold_sc(str(char.get('id', 'N/A')))}
-<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> {bold_sc('RARITY:')} {format_rarity(char.get('rarity', 'Unknown'))}
+{r_emoji} {bold_sc('RARITY:')} {bold_sc(r_name)}
 <tg-emoji emoji-id="5472030678633684592">💸</tg-emoji> {bold_sc('ORIGINAL:')} {bold_sc(f"{char['mp_orig']:,}")}
 <tg-emoji emoji-id="5240228673738527951">🏷</tg-emoji> {bold_sc('SALE PRICE:')} {bold_sc(f"{char['mp_sale']:,}")}
 <tg-emoji emoji-id="6093521568875420685">🛍</tg-emoji> {bold_sc('DISCOUNT:')} {bold_sc(f"{char['mp_disc']}%")}
@@ -243,8 +242,7 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     ]
     reply_markup = InlineKeyboardMarkup(buttons)
     img_url = char.get('img_url')
-
-    # Video or Photo check
+    
     is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
     media_class = InputMediaVideo if is_video else InputMediaPhoto
 
@@ -252,10 +250,19 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
         try:
             if update_obj.message.photo or update_obj.message.video or update_obj.message.animation:
                 if img_url:
-                    await update_obj.edit_message_media(
-                        media=media_class(media=img_url, caption=caption, parse_mode='HTML'), 
-                        reply_markup=reply_markup
-                    )
+                    try:
+                        await update_obj.edit_message_media(
+                            media=media_class(media=img_url, caption=caption, parse_mode='HTML'), 
+                            reply_markup=reply_markup
+                        )
+                    except BadRequest as e:
+                        if "video" in str(e).lower() or "animation" in str(e).lower():
+                            await update_obj.edit_message_media(
+                                media=InputMediaVideo(media=img_url, caption=caption, parse_mode='HTML'), 
+                                reply_markup=reply_markup
+                            )
+                        else:
+                            raise e
                 else:
                     await update_obj.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
             else:
@@ -264,10 +271,19 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
             logging.error(f"UI Edit Error in MP: {e}")
     else:
         if img_url:
-            if is_video:
-                await update_obj.message.reply_video(video=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
-            else:
-                await update_obj.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+            try:
+                if is_video:
+                    await update_obj.message.reply_video(video=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                else:
+                    await update_obj.message.reply_photo(photo=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+            except BadRequest as e:
+                if "video" in str(e).lower() or "animation" in str(e).lower():
+                    try:
+                        await update_obj.message.reply_video(video=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    except BadRequest:
+                        await update_obj.message.reply_animation(animation=img_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                else:
+                    raise e
         else:
             await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
 
@@ -297,11 +313,14 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     else:
         top_3_text += f"<tg-emoji emoji-id=\"6093837944756379538\">👻</tg-emoji> {bold_sc('No bids placed yet!')}\n"
 
+    r_emoji, r_name = get_rarity_emoji_and_name(active_auc['rarity'])
+
+    # Auction UI me bhi Rarity Emoji fix kar diya hai
     caption = f"""<tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji> 𝗟𝗜𝗩𝗘 𝗔𝗨𝗖𝗧𝗜𝗢𝗡 <tg-emoji emoji-id="6093447592358714412">▶️</tg-emoji>
 
 <tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(active_auc['char_name'])}
 <tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
-<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> {bold_sc('RARITY:')} {format_rarity(active_auc['rarity'])}{top_3_text}"""
+{r_emoji} {bold_sc('RARITY:')} {bold_sc(r_name)}{top_3_text}"""
 
     buttons = [
         [
@@ -325,10 +344,19 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     try:
         if query.message.photo or query.message.video or query.message.animation:
             if img_url:
-                await query.edit_message_media(
-                    media=media_class(media=img_url, caption=caption, parse_mode='HTML'), 
-                    reply_markup=reply_markup
-                )
+                try:
+                    await query.edit_message_media(
+                        media=media_class(media=img_url, caption=caption, parse_mode='HTML'), 
+                        reply_markup=reply_markup
+                    )
+                except BadRequest as e:
+                    if "video" in str(e).lower() or "animation" in str(e).lower():
+                        await query.edit_message_media(
+                            media=InputMediaVideo(media=img_url, caption=caption, parse_mode='HTML'), 
+                            reply_markup=reply_markup
+                        )
+                    else:
+                        raise e
             else:
                 await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         else:
@@ -378,8 +406,8 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 increment = int(parts[3])
                 current_proposed = int(parts[4])
                 new_proposed = current_proposed + increment
+                await query.answer() # FAST SWITCH: Turant loading band karne ke liye
                 await render_auction_ui(query, active_auc, user_id, new_proposed)
-                await query.answer()
                 return
 
             if data.startswith("auc_conf_"):
@@ -444,8 +472,9 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
             
             if data.startswith("mp_nav_"):
                 index = int(parts[3])
+                await query.answer() # FAST SWITCH: Page change karte hi instant click feel hoga
                 await render_mp_message(query, user, index, is_edit=True)
-                await query.answer()
+                return
 
             elif data.startswith("mp_buy_"):
                 index = int(parts[3])
@@ -468,14 +497,16 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 )
                 await query.answer(to_small_caps("✅ Transaction successful!"), show_alert=True)
                 await render_mp_message(query, user, index, is_edit=True)
+                return
 
             elif data.startswith("mp_auc_"):
                 active_auc = await auction_collection.find_one({'status': 'active'})
                 if not active_auc:
                     await query.answer(to_small_caps("There is no active auction right now!"), show_alert=True)
                     return
+                await query.answer() 
                 await render_auction_ui(query, active_auc, user_id)
-                await query.answer()
+                return
 
             elif data.startswith("mp_ref_"):
                 if user.get('balance', 0) < 30000:
@@ -483,12 +514,14 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     return
                 await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -30000}, '$set': {'mp_data.day': "FORCE_REFRESH"}})
                 new_user = await load_user_deals(user_id)
-                await render_mp_message(query, new_user, 0, is_edit=True)
                 await query.answer(to_small_caps("Deals Refreshed!"), show_alert=False)
+                await render_mp_message(query, new_user, 0, is_edit=True)
+                return
 
             elif data.startswith("mp_back_"):
+                await query.answer() # FAST SWITCH
                 await render_mp_message(query, user, 0, is_edit=True)
-                await query.answer()
+                return
 
     except Exception as e:
         logging.error(f"Error in MP Callbacks: {e}")
@@ -545,13 +578,18 @@ async def start_auction(update: Update, context: CallbackContext):
     )
     
     img_url = char.get('img_url')
-    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
     
     if img_url:
-        if is_video:
-            await update.message.reply_video(video=img_url, caption=msg, parse_mode='HTML')
-        else:
+        try:
             await update.message.reply_photo(photo=img_url, caption=msg, parse_mode='HTML')
+        except BadRequest as e:
+            if "video" in str(e).lower() or "animation" in str(e).lower():
+                try:
+                    await update.message.reply_video(video=img_url, caption=msg, parse_mode='HTML')
+                except BadRequest:
+                    await update.message.reply_animation(animation=img_url, caption=msg, parse_mode='HTML')
+            else:
+                raise e
     else:
         await update.message.reply_text(msg, parse_mode='HTML')
 
