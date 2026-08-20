@@ -1,4 +1,5 @@
 import asyncio
+import html
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus, ChatType, ParseMode
 from telegram.error import BadRequest, TelegramError
@@ -211,7 +212,7 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     return "<b>sᴜᴅᴏ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
 
 
-# 🔥 FIX: SUPERFAST DUAL DATABASE UPSERT (5000 Coins logic integrated)
+# 🔥 FIX: SUPERFAST DUAL DATABASE UPSERT (5000 Coins + bot_started logic)
 async def _ensure_user(user_id, first_name, username):
     try:
         # 1. Update Character DB (Harem)
@@ -242,16 +243,17 @@ async def _ensure_user(user_id, first_name, username):
             upsert=True
         )
 
-        # 2. Update Economy DB (🔥 ADDING 5000 COINS FOR NEW USERS HERE)
+        # 2. Update Economy DB (🔥 FIX: Added 'bot_started': True yahan par)
         eco_result = await eco_collection.update_one(
             {"id": user_id},
             {
                 "$set": {
                     "first_name": first_name,
-                    "username": username
+                    "username": username,
+                    "bot_started": True  # <--- YE MISSING THA! Iski wajah se /bal fail ho raha tha
                 },
                 "$setOnInsert": {
-                    "balance": 5000,  # 🔥 First time join karne pe 5000 coins!
+                    "balance": 5000,
                     "tokens": 0
                 }
             },
@@ -440,7 +442,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception:
             pass
-
 
 application.add_handler(CommandHandler("start", start, block=False))
 application.add_handler(
