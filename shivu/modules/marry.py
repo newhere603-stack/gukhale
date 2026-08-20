@@ -2,9 +2,10 @@ import asyncio
 import random
 import time
 import re
+from html import escape
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import BadRequest
+from telegram.error import TelegramError
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from shivu import application, user_collection, collection, LOGGER
 
@@ -88,7 +89,7 @@ PROPOSE_REJECT_TEXTS = [
     "<b>sʜᴇ ᴛᴏᴏᴋ ʏᴏᴜʀ ᴄᴏɪɴs, ᴀᴛᴇ ʏᴏᴜʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' 🍟</b>",
     "<b>sʜᴇ sᴀɪᴅ ʏᴏᴜ ᴀʀᴇ ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ʏᴏᴜ ᴏɴ ʀᴇᴀᴅ!</b>",
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ. 🎬</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! 🚓💨</b>",
+    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏps! 🚓💨</b>",
     "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
 ]
 
@@ -126,7 +127,6 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
 
 async def get_unique_char(user_id: int, rarity_pattern: str = None):
     try:
-        # User ka document check karenge, agar nahi hai toh create kar denge taaki error na aaye
         user = await user_collection.find_one({"id": user_id})
         if not user:
             await user_collection.update_one(
@@ -136,48 +136,53 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
             )
             user = {}
 
+        # User ke paas jo characters hain unki IDs collect karo (String & Int dono format mein)
         raw_owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
-        owned = []
+        owned_set = set()
         for oid in raw_owned:
-            owned.append(oid)
-            try:
-                owned.append(int(oid))
-            except Exception:
-                pass
-            try:
-                owned.append(str(oid))
-            except Exception:
-                pass
-        
-        and_conditions = [
-            {"id": {"$nin": owned}},
-            {"auction_exclusive": {"$ne": True}}
-        ]
-        
-        if DISABLED_RARITIES:
-            banned_str = "|".join(re.escape(r) for r in DISABLED_RARITIES)
-            and_conditions.append({"rarity": {"$not": {"$regex": banned_str, "$options": "i"}}})
+            if oid is not None:
+                owned_set.add(str(oid))
+                try:
+                    owned_set.add(int(oid))
+                except ValueError:
+                    pass
 
-        if rarity_pattern:
-            and_conditions.append({"rarity": {"$regex": rarity_pattern, "$options": "i"}})
-            
-        match_query = {"$and": and_conditions}
-            
-        pipeline = [
-            {"$match": match_query},
-            {"$sample": {"size": 1}},
-        ]
-        result = await collection.aggregate(pipeline).to_list(length=1)
+        # Global database se saare valid characters uthao
+        all_chars = await collection.find({"auction_exclusive": {"$ne": True}}).to_list(length=None)
         
-        # 🔥 Ultra-Safe Fallback: Agar strict unique query fail ho, toh kisi bhi available character ko utha lo taaki refund na ho
-        if not result:
-            fallback_pipeline = [
-                {"$match": {"auction_exclusive": {"$ne": True}}},
-                {"$sample": {"size": 1}}
-            ]
-            result = await collection.aggregate(fallback_pipeline).to_list(length=1)
+        available_chars = []
+        for char in all_chars:
+            c_id = char.get("id")
+            
+            # Check rarity restriction if disabled
+            rarity_str = char.get("rarity", "").lower()
+            skip_rarity = False
+            for disabled in DISABLED_RARITIES:
+                if disabled in rarity_str:
+                    skip_rarity = True
+                    break
+            if skip_rarity:
+                continue
 
-        return result[0] if result else None
+            # Check if already owned (Type-safe check)
+            if c_id not in owned_set and str(c_id) not in owned_set:
+                try:
+                    if int(c_id) not in owned_set:
+                        available_chars.append(char)
+                        continue
+                except (ValueError, TypeError):
+                    pass
+                if c_id not in owned_set:
+                    available_chars.append(char)
+
+        # Fallback: Agar unique characters khatam ho gaye hain, toh koi bhi non-exclusive character de do taaki refund na ho
+        if not available_chars and all_chars:
+            available_chars = [c for c in all_chars if not any(d in c.get("rarity", "").lower() for d in DISABLED_RARITIES)]
+
+        if not available_chars:
+            return None
+
+        return random.choice(available_chars)
     except Exception as e:
         LOGGER.error(f"get_unique_char failed for {user_id}: {e}")
         return None
@@ -361,6 +366,7 @@ async def propose(update: Update, context: CallbackContext):
     
     if not char:
         await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
+        # 🔥 FIX: Cooldown reset mention poori tarah hata diya gaya hai
         return await context.bot.send_message(
             chat_id=chat_id,
             text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ꜰᴏʀ ʏᴏᴜ.</b>",
