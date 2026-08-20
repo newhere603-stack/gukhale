@@ -80,17 +80,14 @@ def get_rarity_emoji_and_name(r_str: str):
     r_str = str(r_str)
     name_part = extract_rarity_name(r_str)
     name_lower = name_part.lower()
-    
     emoji = PREMIUM_RARITIES.get(name_lower, '<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji>')
     return emoji, name_part
 
 def get_price(char):
     if 'mp_price' in char and char['mp_price'] is not None:
         return char['mp_price']
-        
     r_str = str(char.get('rarity', 'Unknown'))
     name_part = extract_rarity_name(r_str).lower()
-    
     return DEFAULT_PRICES.get(name_part, 50000)
 
 def get_current_mp_day():
@@ -100,7 +97,6 @@ def get_current_mp_day():
         return (now - timedelta(days=1)).strftime('%Y-%m-%d')
     return now.strftime('%Y-%m-%d')
 
-# -- Media Helper --
 def get_media_info(char_doc):
     if char_doc.get('cached_photo_id'):
         return char_doc['cached_photo_id'], InputMediaPhoto, 'photo'
@@ -113,12 +109,11 @@ def get_media_info(char_doc):
     is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
     return img_url, (InputMediaVideo if is_video else InputMediaPhoto), 'url'
 
-# --- Set Price Command (Owner Only) ---
+# --- Set Price & Toggle Command (Owner Only) ---
 async def set_mp_price(update: Update, context: CallbackContext):
     try:
         if update.effective_user.id != OWNER_ID:
             return 
-        
         if len(context.args) != 2:
             msg = "Usage: /setprice [char_id] [price]"
             await update.message.reply_text(f"<blockquote>{bold_sc(msg)}</blockquote>", parse_mode='HTML')
@@ -131,28 +126,24 @@ async def set_mp_price(update: Update, context: CallbackContext):
             
         if result.modified_count > 0 or result.matched_count > 0:
             await update.message.reply_text(bold_sc(f"Price set to {price:,}."), parse_mode='HTML')
-    except Exception as e:
+    except Exception:
         pass
 
-# --- Toggle Rarity Command (Owner Only) ---
 async def toggle_rarity(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
         return
-        
     if not context.args:
         msg = "Usage: /togglerarity [rarity_name]\nExample: /togglerarity common"
         await update.message.reply_text(f"<blockquote>{bold_sc(msg)}</blockquote>", parse_mode='HTML')
         return
         
     rarity = " ".join(context.args).lower()
-    
     config = await mp_config.find_one({'_id': 'settings'})
     if not config:
         config = {'_id': 'settings', 'disabled_rarities': []}
         await mp_config.insert_one(config)
         
     disabled = config.get('disabled_rarities', [])
-    
     if rarity in disabled:
         disabled.remove(rarity)
         status = "ENABLED"
@@ -164,9 +155,10 @@ async def toggle_rarity(update: Update, context: CallbackContext):
     await update.message.reply_text(bold_sc(f"Rarity '{rarity}' has been {status} in Marketplace."), parse_mode='HTML')
 
 
-# --- Deals Loader ---
+# --- SUPER FAST DEALS LOADER ---
 async def load_user_deals(user_id):
-    user = await user_collection.find_one({'id': user_id})
+    # 🔥 PROJECTION: Harem load nahi karenge, sirf required IDs lenge
+    user = await user_collection.find_one({'id': user_id}, {'id': 1, 'mp_data': 1})
     if not user: return None
         
     current_day = get_current_mp_day()
@@ -181,32 +173,46 @@ async def load_user_deals(user_id):
             pattern = "|".join([re.escape(r) for r in disabled_rarities])
             base_query['rarity'] = {'$not': {'$regex': pattern, '$options': 'i'}}
             
-        total_chars = await collection.count_documents(base_query)
-        if total_chars < 2: 
+        # 🔥 ULTRA FAST AGGREGATION ($sample) instead of count() & skip()
+        pipeline = [{"$match": base_query}, {"$sample": {"size": 2}}]
+        random_chars = await collection.aggregate(pipeline).to_list(length=2)
+        
+        if len(random_chars) < 2: 
             return None 
-            
-        indices = random.sample(range(total_chars), 2)
-        char1 = await collection.find_one(base_query, skip=indices[0])
-        char2 = await collection.find_one(base_query, skip=indices[1])
         
         formatted_chars = []
-        for c in [char1, char2]:
-            if not c: continue
+        for c in random_chars:
             orig = get_price(c)
             disc = random.randint(2, 15)
             sale = int(orig - (orig * (disc / 100)))
-            formatted_chars.append({'id': c.get('id'), 'mp_orig': orig, 'mp_disc': disc, 'mp_sale': sale, 'is_sold': False})
+            formatted_chars.append({
+                'id': str(c.get('id')), 
+                'mp_orig': orig, 
+                'mp_disc': disc, 
+                'mp_sale': sale, 
+                'is_sold': False
+            })
             
         mp_data = {'day': current_day, 'chars': formatted_chars}
+        # Update user doc efficiently
         await user_collection.update_one({'id': user_id}, {'$set': {'mp_data': mp_data}})
         user['mp_data'] = mp_data
 
+    # 🔥 SINGLE BULK QUERY ($in) instead of loop queries
+    search_ids = []
+    for item in user['mp_data']['chars']:
+        cid = str(item.get('id'))
+        search_ids.append(cid)
+        if cid.isdigit(): search_ids.append(int(cid))
+        
+    db_chars = await collection.find({'id': {'$in': search_ids}}).to_list(length=2)
+    db_char_map = {str(c['id']): c for c in db_chars}
+
     updated_chars = []
     for item in user['mp_data']['chars']:
-        char_id = item.get('id')
-        query = {'$or': [{'id': char_id}, {'id': str(char_id)}]} if str(char_id).isdigit() else {'id': char_id}
-        db_char = await collection.find_one(query)
-        if db_char:
+        cid = str(item.get('id'))
+        if cid in db_char_map:
+            db_char = db_char_map[cid]
             orig = get_price(db_char)
             db_char['mp_orig'] = orig
             db_char['mp_disc'] = item.get('mp_disc', 10)
@@ -293,9 +299,9 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
             if "message is not modified" in str(e).lower():
                 msg = update_obj.message
             else:
-                logging.error(f"UI Edit Error in MP: {e}")
-        except Exception as e:
-            logging.error(f"UI Edit Error in MP: {e}")
+                pass
+        except Exception:
+            pass
     else:
         if media_source:
             try:
@@ -350,7 +356,6 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
             medal = medals[i]
             clean_name = str(b['name']).replace('<', '&lt;').replace('>', '&gt;')
             mention_link = f"<b><a href='tg://user?id={b['id']}'>{clean_name}</a></b>"
-            
             bid_amount = b['bid']
             top_3_text += f"{medal} {mention_link}: {bold_sc(f'{bid_amount:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
     else:
@@ -409,9 +414,9 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
         if "message is not modified" in str(e).lower():
             msg = query.message
         else:
-            logging.error(f"UI Edit Error in Auction: {e}")
-    except Exception as e:
-        logging.error(f"UI Edit Error in Auction: {e}")
+            pass
+    except Exception:
+        pass
         
     if msg and media_type == 'url' and img_url:
         update_data = {}
@@ -478,7 +483,8 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await render_auction_ui(query, active_auc, user_id, active_auc['highest_bid'] + 1000)
                     return
                 
-                eco_user = await eco_collection.find_one({'id': clicker_id})
+                # 🔥 PROJECTION: Faster coin fetch
+                eco_user = await eco_collection.find_one({'id': clicker_id}, {'balance': 1})
                 if not eco_user or eco_user.get('balance', 0) < proposed:
                     await query.answer(to_small_caps(f"Low balance! You need {proposed:,} 💸"), show_alert=True)
                     return
@@ -554,7 +560,8 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 
                 eco_user = await eco_collection.find_one_and_update(
                     {'id': user_id, 'balance': {'$gte': char['mp_sale']}},
-                    {'$inc': {'balance': -char['mp_sale']}}
+                    {'$inc': {'balance': -char['mp_sale']}},
+                    projection={'balance': 1} # 🔥 FAST PROJECTION
                 )
                 
                 if not eco_user:
@@ -566,6 +573,13 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 clean_char = {k: v for k, v in char.items() if k not in ['mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
                 
                 await user_collection.update_one({'id': user_id}, {'$push': {'characters': clean_char}})
+                
+                # Instant Cache Update for /check
+                try:
+                    from shivu.modules.check import clear_char_cache
+                    clear_char_cache(str(char.get('id')))
+                except ImportError:
+                    pass
                 
                 await query.answer(to_small_caps("✅ Transaction successful!"), show_alert=True)
                 await render_mp_message(query, user, index, is_edit=True)
@@ -583,7 +597,8 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
             elif data.startswith("mp_ref_"):
                 eco_user = await eco_collection.find_one_and_update(
                     {'id': user_id, 'balance': {'$gte': 30000}},
-                    {'$inc': {'balance': -30000}}
+                    {'$inc': {'balance': -30000}},
+                    projection={'balance': 1}
                 )
                 if not eco_user:
                     await query.answer(to_small_caps("Not enough coins!"), show_alert=True)
@@ -600,8 +615,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 await render_mp_message(query, user, 0, is_edit=True)
                 return
 
-    except Exception as e:
-        logging.error(f"Error in MP Callbacks: {e}")
+    except Exception:
         await query.answer(to_small_caps("An error occurred."), show_alert=False)
 
 
@@ -628,7 +642,7 @@ async def start_auction(update: Update, context: CallbackContext):
         await update.message.reply_text(bold_sc("Character ID not found in database!"), parse_mode='HTML')
         return
         
-    active_auc = await auction_collection.find_one({'status': 'active'})
+    active_auc = await auction_collection.find_one({'status': 'active'}, {'status': 1})
     if active_auc:
         await update.message.reply_text(bold_sc("An auction is already active! End it first using /endauction."), parse_mode='HTML')
         return
@@ -722,7 +736,8 @@ async def end_auction(update: Update, context: CallbackContext):
     
     eco_user = await eco_collection.find_one_and_update(
         {'id': bidder_id, 'balance': {'$gte': winning_bid}},
-        {'$inc': {'balance': -winning_bid}}
+        {'$inc': {'balance': -winning_bid}},
+        projection={'balance': 1}
     )
     
     char_query = {'$or': [{'id': active_auc['char_id']}, {'id': str(active_auc['char_id'])}, {'id': int(active_auc['char_id']) if str(active_auc['char_id']).isdigit() else active_auc['char_id']}]}
