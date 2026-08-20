@@ -69,7 +69,7 @@ group_settings_cache = {}
 chat_frequency_cache = {} 
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
+first_correct_guesses, spawn_messages, spawn_message_links = {}, {}
 currently_spawning = {}
 spawn_times = {}  
 grabbed_spawns = set()  
@@ -96,6 +96,7 @@ async def check_and_handle_flood(update: Update) -> bool:
             return True  # User is blocked, ignore their actions
         else:
             del blocked_users[user_id]  # Block time over, unblock
+            user_message_times.pop(user_id, None)  # Reset flood counter
             
     # Record message timestamp
     user_message_times.setdefault(user_id, []).append(now)
@@ -118,14 +119,19 @@ async def check_and_handle_flood(update: Update) -> bool:
 async def setup_database_indexes():
     """Bot start hote hi database indexing kar dega taaki fast response mile"""
     try:
-        await collection.create_index("id")
-        await user_collection.create_index("id", unique=True)
-        await user_collection.create_index("characters.id")
-        await eco_collection.create_index("id", unique=True)
-        await group_user_totals_collection.create_index([("user_id", 1), ("group_id", 1)])
+        # 🔥 FIX: Add unique=True, background=True to silence logs error and keep bot fast
+        await collection.create_index("id", background=True)
+        await user_collection.create_index("id", unique=True, background=True)
+        await user_collection.create_index("characters.id", background=True)
+        await eco_collection.create_index("id", unique=True, background=True)
+        await group_user_totals_collection.create_index([("user_id", 1), ("group_id", 1)], background=True)
         LOGGER.info("⚡ Database Indexes Verified/Created Successfully!")
     except Exception as e:
-        LOGGER.error(f"Index creation failed: {e}")
+        # Avoid crashing or big logs on existing index error (Code 86)
+        if "IndexKeySpecsConflict" not in str(e):
+            LOGGER.error(f"Index creation failed: {e}")
+        else:
+            LOGGER.info("⚡ Existing database indexes verified successfully.")
 
 async def get_cached_characters():
     global _cached_characters, _last_cache_time
@@ -172,7 +178,7 @@ async def load_rarity_status():
         saved = {}
     for key in RARITIES:
         rarity_status_cache[key] = saved.get(key, True)
-    LOGGER.info(f"Rarity status loaded: {rarity_status_cache}")
+    LOGGER.info(f"Rarity status loaded")
 
 
 async def set_rarity_status(key, enabled):
@@ -490,7 +496,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
                     {'id': user_id},
                     {
                         '$set': user_fields,
-                        '$setOnInsert': {'balance': 0, 'tokens': 0}
+                        '$setOnInsert': {'balance': 0, 'tokens': 0, 'bot_started': False}
                     },
                     upsert=True
                 )
