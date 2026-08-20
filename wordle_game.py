@@ -257,7 +257,6 @@ async def background_db_update(user_id, first_name, username, inc_dict):
     except Exception as db_err:
         LOGGER.error(f"Database error while updating gold: {db_err}")
 
-# Fix for Motor Future object error in asyncio.create_task()
 async def background_update_msg_id(chat_id, msg_id):
     try:
         await game_collection.update_one({"chat_id": chat_id}, {"$set": {"message_id": msg_id}})
@@ -330,7 +329,7 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Bina tag kiye sidha send
             msg = await context.bot.send_message(chat_id=chat_id, text=board_text, parse_mode="HTML")
             
-            # Future issue fixed: Ab ye properly background coroutine use kar raha hai
+            # Use Future to update MSG ID in background properly
             asyncio.create_task(background_update_msg_id(chat_id, msg.message_id))
             
             if should_delete and old_message_id:
@@ -339,7 +338,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif won:
             points_earned = updated_game["max_attempts"] - attempt_num + 1
             
-            # Future issue fixed
             asyncio.create_task(background_delete_game(chat_id))
             
             user = update.effective_user
@@ -377,7 +375,6 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             asyncio.create_task(set_reaction_safe())
             
         elif lost:
-            # Future issue fixed
             asyncio.create_task(background_delete_game(chat_id))
             
             if should_delete and old_message_id:
@@ -389,10 +386,10 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         LOGGER.error(f"Error handling guess: {e}")
 
-# Registering Game Handlers Only
-application.add_handler(CommandHandler(["new", "new4", "new5", "new6"], start_game_handler))
-application.add_handler(CommandHandler("toggledelete", toggle_delete_handler))
-application.add_handler(CommandHandler("togglewordseek", toggle_wordseek_handler))
-application.add_handler(CommandHandler("end", end_game_handler))
-application.add_handler(CommandHandler("helpword", help_handler))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_guess))
+# 🔥 FIX: Sabme block=False daal diya hai jisse lag zero ho jayega.
+application.add_handler(CommandHandler(["new", "new4", "new5", "new6"], start_game_handler, block=False))
+application.add_handler(CommandHandler("toggledelete", toggle_delete_handler, block=False))
+application.add_handler(CommandHandler("togglewordseek", toggle_wordseek_handler, block=False))
+application.add_handler(CommandHandler("end", end_game_handler, block=False))
+application.add_handler(CommandHandler("helpword", help_handler, block=False))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_guess, block=False))
