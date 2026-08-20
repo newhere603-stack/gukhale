@@ -10,6 +10,9 @@ from telegram.error import BadRequest
 from shivu import application, OWNER_ID, user_collection, top_global_groups_collection, group_user_totals_collection
 from shivu import sudo_users as SUDO_USERS
 
+# 🔥 NAYA IMPORT: Economy data nikalne ke liye
+from shivu.Database.db import eco_collection
+
 def sc(t):
     return t.translate(str.maketrans(
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -34,7 +37,7 @@ async def get_cached_data(key, fetch_function):
 
 # ---------- Smart Database & Field Handlers ----------
 async def get_user_document(user_id):
-    """Fetches user document matching both integer and string formats"""
+    """Fetches user document matching both integer and string formats (Character DB)"""
     try:
         uid_int = int(user_id)
     except (ValueError, TypeError):
@@ -182,9 +185,9 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
     ])
     await send_or_edit(update, context, text, kb, edit)
 
-# ---------- Top by balance ----------
+# ---------- Top by balance (🔥 FIX: economy DB) ----------
 async def fetch_top_balance():
-    data = await user_collection.find(
+    data = await eco_collection.find(
         {}, 
         {"id": 1, "user_id": 1, "_id": 1, "first_name": 1, "balance": 1, "coins": 1, "wallet": 1, "money": 1, "gold": 1, "bal": 1}
     ).to_list(length=None)
@@ -211,9 +214,9 @@ async def top_balance(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗖𝗢𝗜𝗡 𝗛𝗢𝗟𝗗𝗘𝗥𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_bal"), edit)
 
-# ---------- Top by tokens ----------
+# ---------- Top by tokens (🔥 FIX: economy DB) ----------
 async def fetch_top_tokens():
-    data = await user_collection.find(
+    data = await eco_collection.find(
         {}, 
         {"id": 1, "user_id": 1, "_id": 1, "first_name": 1, "tokens": 1, "token": 1, "gems": 1}
     ).to_list(length=None)
@@ -240,7 +243,7 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗧𝗢𝗞𝗘𝗡 𝗛𝗢𝗟𝗗𝗘𝗥", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
 
-# ---------- Top by characters ----------
+# ---------- Top by characters (Harem DB) ----------
 async def fetch_top_characters():
     return await user_collection.aggregate([
         {"$match": {"characters": {"$exists": True, "$type": "array"}}},
@@ -283,12 +286,14 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗥𝗢𝗨𝗣𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
 
-# ---------- My Profile ----------
+# ---------- My Profile (🔥 FIX: Merged Dual DB Data) ----------
 async def fetch_total_collectors():
     return await user_collection.count_documents({"characters": {"$exists": True, "$type": "array"}})
 
 async def my_profile(update: Update, context: CallbackContext, edit=False):
     user_id = update.effective_user.id
+    
+    # Harem DB for characters
     user = await get_user_document(user_id)
 
     if not user:
@@ -300,10 +305,15 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         )
         return await send_or_edit(update, context, text, back_close_buttons("lb_profile"), edit)
 
+    # Economy DB for balance & tokens
+    eco_user = await eco_collection.find_one({'id': user_id})
+
     characters = user.get('characters', [])
     char_count = len(characters)
-    balance = extract_balance(user)
-    tokens = extract_tokens(user)
+    
+    # Extract from eco_collection now
+    balance = extract_balance(eco_user) if eco_user else 0
+    tokens = extract_tokens(eco_user) if eco_user else 0
 
     total_collectors = await get_cached_data("total_collectors", fetch_total_collectors)
     
@@ -323,7 +333,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     text = (
         f"<tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji> 𝗨𝗦𝗘𝗥 𝗣𝗥𝗢𝗙𝗜𝗟𝗘 <tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<tg-emoji emoji-id=\"5217822164362739968\">👑</tg-emoji> <b>{sc('nane')} :</b> {link}\n"
+        f"<tg-emoji emoji-id=\"5217822164362739968\">👑</tg-emoji> <b>{sc('name')} :</b> {link}\n"
         f"<tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> <b>{sc('id')} :</b> <code>{user_id}</code>\n"
         f"<tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji> <b>{sc('badge')} :</b> <b>{badge}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -393,7 +403,8 @@ async def export_users(update: Update, context: CallbackContext):
     if not is_sudo(update.effective_user.id):
         return await update.message.reply_text(f"<b>{sc('unauthorized.')}</b>", parse_mode='HTML')
 
-    users = await user_collection.find({}, {"characters": 0}).to_list(None)
+    # Economy se fetch karenge taaki export file me real balance export ho
+    users = await eco_collection.find({}).to_list(None)
     lines = [f"[{u.get('id') or u.get('user_id')}] {u.get('first_name')} | @{u.get('username')} | Bal: {extract_balance(u)}"
               for u in users]
     content = f"USER EXPORT — {datetime.now()}\nTotal: {len(users):,}\n{'='*50}\n\n" + "\n".join(lines)
@@ -458,7 +469,7 @@ async def cb(update: Update, context: CallbackContext):
     if handler:
         await handler(update, context, edit=True)
 
-# ---------- Handlers ----------
+# ---------- Handlers (🔥 FIX: Added block=False to CallbackQueryHandler) ----------
 application.add_handler(CommandHandler(['tops', 'top'], tops_menu, block=False))
 application.add_handler(CommandHandler('balancetop', top_balance, block=False))
 application.add_handler(CommandHandler('chartop', top_characters, block=False))
@@ -467,4 +478,4 @@ application.add_handler(CommandHandler(['sprofile', 'rank'], my_profile, block=F
 application.add_handler(CommandHandler('stats', stats, block=False))
 application.add_handler(CommandHandler('list', export_users, block=False))
 application.add_handler(CommandHandler('groups', export_groups, block=False))
-application.add_handler(CallbackQueryHandler(cb, pattern="^lb_"))
+application.add_handler(CallbackQueryHandler(cb, pattern="^lb_", block=False))
