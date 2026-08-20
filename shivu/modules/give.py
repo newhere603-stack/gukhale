@@ -5,9 +5,14 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 import html
 
-# 🔥 FIX: shivu se 'collection' hata kar direct sahi database table set ki hai
 from shivu import db, user_collection, application
 from shivu.modules.database.sudo import is_user_sudo
+
+# 🔥 FIX: check module se clear_char_cache import kiya taaki /give ke baad cache turant clear ho jaye
+try:
+    from shivu.modules.check import clear_char_cache
+except ImportError:
+    def clear_char_cache(cid): pass
 
 # Asli characters wali collection yahan explicitly set kar di hai
 collection = db['anime_characters_lol']
@@ -17,7 +22,6 @@ LOG_GROUP_ID = -1003893927065
 OWNER_ID = 7657218453  
 # ---------------------
 
-# --- RARITY MAP WITH PREMIUM EMOJIS ---
 RARITY_MAP = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
     "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
@@ -47,13 +51,10 @@ def to_small_caps(text: str) -> str:
 def get_rarity_display(rarity_raw: str) -> str:
     if not rarity_raw:
         return f"<b>{to_small_caps('Unknown')}</b>"
-        
     raw_str = str(rarity_raw).lower().strip()
-    
     for key, (_, premium_emoji, display_name) in RARITY_MAP.items():
         if key in raw_str or display_name.lower() in raw_str:
             return f"{premium_emoji} <b>{to_small_caps(display_name)}</b>"
-            
     return f"<b>{to_small_caps(str(rarity_raw))}</b>"
 
 @dataclass
@@ -64,7 +65,6 @@ class CharacterGiftResult:
     char_id: str
 
 async def send_character_media(msg, media_url: str, caption: str):
-    """Photo aur Video / GIF automatic handle karta hai"""
     url_lower = media_url.lower()
     if url_lower.endswith(('.mp4', '.webm', '.mov', '.mkv')):
         await msg.reply_video(video=media_url, caption=caption, parse_mode=ParseMode.HTML)
@@ -77,7 +77,6 @@ async def send_character_media(msg, media_url: str, caption: str):
             await msg.reply_video(video=media_url, caption=caption, parse_mode=ParseMode.HTML)
 
 async def give_character(receiver_id: int, character_id: str) -> CharacterGiftResult:
-    # 🔥 FIX: String aur Integer dono formats check karenge type mismatch rokne ke liye
     search_ids = [str(character_id)]
     if str(character_id).isdigit():
         search_ids.append(int(character_id))
@@ -90,6 +89,9 @@ async def give_character(receiver_id: int, character_id: str) -> CharacterGiftRe
         {'id': receiver_id},
         {'$push': {'characters': character}}
     )
+    
+    # 🔥 Instant Cache Invalidation: Jaise hi character mile, cache clear karo
+    clear_char_cache(str(character['id']))
     
     char_name = html.escape(character['name'])
     small_name = to_small_caps(char_name)
@@ -109,7 +111,6 @@ async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     user_id = msg.from_user.id
     
-    # --- OWNER & SUDO CHECK (SILENT FAIL) ---
     if user_id != OWNER_ID and not await is_user_sudo(user_id):
         return
     
@@ -132,11 +133,8 @@ async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         receiver_id = msg.reply_to_message.from_user.id
         
         result = await give_character(receiver_id, character_id)
-        
-        # Auto Photo/Video Handler
         await send_character_media(msg, result.img_url, result.caption)
         
-        # --- LOG TO GROUP ---
         executor_name = html.escape(to_small_caps(msg.from_user.first_name))
         receiver_name = html.escape(to_small_caps(msg.reply_to_message.from_user.first_name))
         
@@ -161,5 +159,4 @@ async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
-# Registration
 application.add_handler(CommandHandler("give", give_cmd, block=False))
