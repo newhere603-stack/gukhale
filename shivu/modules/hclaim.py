@@ -10,9 +10,12 @@ from telegram.constants import ParseMode
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 🔥 NAYA IMPORT: Economy DB aur Character DB ko alag-alag import kiya
-from shivu import application, user_collection, collection
+# 🔥 FIX: shivu se db aur user_collection import kiya, aur collection ko sahi table par set kiya
+from shivu import application, user_collection, db
 from shivu.Database.db import eco_collection
+
+# Asli characters wali collection yahan explicitly set kar di hai
+collection = db['anime_characters_lol']
 
 LOG_GROUP_ID = -1003893927065
 
@@ -78,23 +81,18 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         logger.error(f"Log error: {e}")
 
-# --- FIX: Database time ko accurately handle karna 4 AM reset ke liye ---
 def can_claim_today(last_claim_utc) -> bool:
     if not last_claim_utc:
         return True
     
-    # MongoDB saves as naive UTC, usme properly UTC timezone attach karna
     if last_claim_utc.tzinfo is None:
         last_claim_utc = last_claim_utc.replace(tzinfo=timezone.utc)
     
-    # User ka last claim time accurately IST mein convert karna
     last_claim_ist = last_claim_utc.astimezone(IST)
     now_ist = datetime.now(IST)
     
-    # Aaj ki subah 4 baje ka exact time nikalna
     today_4am = now_ist.replace(hour=4, minute=0, second=0, microsecond=0)
     
-    # Agar current time 4 AM se pehle hai, toh reset time kal subah 4 baje ka manna jayega
     if now_ist < today_4am:
         reset_threshold = today_4am - timedelta(days=1)
     else:
@@ -113,10 +111,8 @@ async def swaifu(update: Update, context: CallbackContext):
         raw_first_name = update.effective_user.first_name or "User"
         safe_first_name = html.escape(to_small_caps(raw_first_name))
         
-        # Ab properly UTC time ko databse mein save karenge taaki PyMongo usko galat na samjhe
         now_utc = datetime.now(timezone.utc)
         
-        # 🔥 FIX: Swaifu character collection (user_collection) se data check karega
         user_data = await user_collection.find_one({'id': user_id})
         
         if user_data and 'last_swaifu_claim' in user_data:
@@ -159,7 +155,6 @@ async def swaifu(update: Update, context: CallbackContext):
 
         img_url = character.get('img_url', '')
 
-        # Yahan par now_utc save ho raha hai Harem Database me
         await user_collection.update_one(
             {'id': user_id},
             {
@@ -207,7 +202,6 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         raw_first_name = update.effective_user.first_name or "User"
         now_utc = datetime.now(timezone.utc)
 
-        # 🔥 FIX: Coins claim check from eco_collection
         user_data = await eco_collection.find_one({'id': user_id})
         
         if user_data and 'last_coin_claim' in user_data:
@@ -219,7 +213,6 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 
         coins_won = random.randint(1000, 10000)
 
-        # 🔥 FIX: Coins added securely to eco_collection
         await eco_collection.update_one(
             {'id': user_id},
             {
@@ -428,7 +421,6 @@ async def tic_callback(update: Update, context: CallbackContext):
 
         index = int(query.data.split("_")[2])
         
-        # 🔥 FIX: Race condition preventer for Tic-Tac-Toe
         if game['board'][index] != " ":
             await query.answer(to_small_caps("This box is already filled!"), show_alert=True)
             return
@@ -499,7 +491,6 @@ async def tic_callback(update: Update, context: CallbackContext):
 active_mines_games = {}
 
 def get_mines_multiplier(found_cash: int, mines: int, total: int = 25) -> float:
-    """Calculate dynamic multiplier based on cash tiles found and total mines chosen."""
     if found_cash == 0:
         return 1.00
     
@@ -566,7 +557,6 @@ async def start_mines(update: Update, context: CallbackContext):
             await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('Mines count must be between 3 and 10!')}</b>", parse_mode=ParseMode.HTML)
             return
 
-    # 🔥 FIX: Atomic Bet Deduction (Prevents negative balance exploit)
     eco_user = await eco_collection.find_one_and_update(
         {'id': user_id, 'balance': {'$gte': bet}},
         {'$inc': {'balance': -bet}},
@@ -577,7 +567,6 @@ async def start_mines(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b>{to_small_caps('You do not have enough coins!')}</b>", parse_mode=ParseMode.HTML)
         return
 
-    # Fill Board According to Mines Count
     board = ['mine'] * mines_count + ['safe'] * (25 - mines_count)
     random.shuffle(board)
 
@@ -648,7 +637,6 @@ async def mines_callback(update: Update, context: CallbackContext):
         return
 
     if data == "mines_cashout":
-        # 🔥 FIX: Double-cashout race condition block
         game['status'] = 'cashed_out'
         
         mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -675,7 +663,6 @@ async def mines_callback(update: Update, context: CallbackContext):
     if data.startswith("mines_click_"):
         idx = int(data.split("_")[2])
         
-        # 🔥 FIX: Prevent double click on same tile
         if game['revealed'][idx]:
             await query.answer("Already clicked!", show_alert=False)
             return
@@ -687,7 +674,7 @@ async def mines_callback(update: Update, context: CallbackContext):
             text = (
                 f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {to_small_caps('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
                 f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Lost Bet')}:</b> {game['bet']} coins\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_cast('Found before boom')}:</b> {game['found']}\n\n"
                 f"<b>{to_small_caps('Final Board')}:</b>"
             )
             try:
@@ -704,7 +691,6 @@ async def mines_callback(update: Update, context: CallbackContext):
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
             win_amount = int(game['bet'] * mult)
             
-            # Check for perfect game (found all safe spots)
             if game['found'] == (25 - game['mines_count']):
                 game['status'] = 'cashed_out'
                 await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
@@ -712,7 +698,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                 text = (
                     f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {to_small_caps('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
-                    f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
+                    f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final MultiLayer')}:</b> {mult}x\n"
                     f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
                     f"<b>{to_small_caps('Final Board')}:</b>"
                 )
@@ -726,8 +712,8 @@ async def mines_callback(update: Update, context: CallbackContext):
 
             text = (
                 f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {to_small_caps('Mines Game Active!')}</b>\n\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {game['bet']}\n"
-                f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{to_small_caps('Mines')}:</b> {game['mines_count']}\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {game['balance'] if 'balance' in game else game['bet']}\n"
+                f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> {to_small_caps('Mines')}: {game['mines_count']}\n"
                 f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found')}:</b> {game['found']}\n"
                 f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
                 f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
@@ -739,9 +725,8 @@ async def mines_callback(update: Update, context: CallbackContext):
             await query.answer("Safe! 💸")
 
 # ==========================================
-# HANDLER REGISTRATION (Added block=False)
+# Acts Handler Registration
 # ==========================================
-
 application.add_handler(CommandHandler("swaifu", swaifu, block=False))
 application.add_handler(CommandHandler("claim", daily_claim_coins, block=False))
 application.add_handler(CommandHandler("tic", start_tic, block=False))
