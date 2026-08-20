@@ -8,7 +8,7 @@ from telegram.error import BadRequest
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from shivu import application, user_collection, collection, LOGGER
 
-# 🔥 NAYA IMPORT: Dual DB architecture ke liye Economy collection
+# Dual DB architecture ke liye Economy collection
 from shivu.Database.db import eco_collection
 
 # ---------------- CUSTOM RARITIES ----------------
@@ -58,7 +58,6 @@ REJECT_IMAGES = [
     "https://files.catbox.moe/8ezqu8.jpg"
 ]
 
-# --- TEXT VARIATIONS ---
 PROPOSE_START_TEXTS = [
     "<b>💫 ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ... 💍</b>",
     "<b>✨ ғɪɴᴀʟʟʏ ᴛʜᴇ ᴛɪᴍᴇ ʜᴀs ᴄᴏᴍᴇ ✨</b>",
@@ -78,7 +77,7 @@ PROPOSING_LOADING_TEXTS = [
 DICE_REJECT_TEXTS = [
     "<b>ᴛʜᴇ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏsᴀʟ ᴡᴀs ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ sʜᴇ ʀᴀɴ ᴀᴡᴀʏ!</b>",
     "<b>sʜᴇ sᴀɪᴅ 'ᴇᴡᴡ, ɴᴏ!' ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ ᴇᴠᴇʀʏᴡʜᴇʀᴇ!</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀɴᴅ ᴡᴀʟᴋᴇᴅ ᴀᴡᴀʏ! 😂</b>",
+    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀɴᴅ wᴀʟᴋᴇᴅ ᴀᴡᴀʏ! 😂</b>",
     "<b>sʜᴇ sᴀɪᴅ sʜᴇ ᴏɴʟʏ sᴇᴇs ʏᴏᴜ ᴀs ᴀ ʙʀᴏᴛʜᴇʀ! 🫂</b>",
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ ɪs ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.</b>"
 ]
@@ -94,14 +93,13 @@ PROPOSE_REJECT_TEXTS = [
 ]
 
 cooldowns = {"dice": {}, "propose": {}}
-
 DISABLED_RARITIES = {"premium", "cosmic", "mythic"}
 
 def fix_motor_loop():
     try:
         client = user_collection.database.client
         client.get_io_loop = asyncio.get_running_loop
-    except Exception as e:
+    except Exception:
         pass
 
 def is_authorized(user_id: int) -> bool:
@@ -128,8 +126,28 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
 
 async def get_unique_char(user_id: int, rarity_pattern: str = None):
     try:
-        user = await user_collection.find_one({"id": user_id}) or {}
-        owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
+        # User ka document check karenge, agar nahi hai toh create kar denge taaki error na aaye
+        user = await user_collection.find_one({"id": user_id})
+        if not user:
+            await user_collection.update_one(
+                {"id": user_id},
+                {"$setOnInsert": {"characters": [], "balance": 0}},
+                upsert=True
+            )
+            user = {}
+
+        raw_owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
+        owned = []
+        for oid in raw_owned:
+            owned.append(oid)
+            try:
+                owned.append(int(oid))
+            except Exception:
+                pass
+            try:
+                owned.append(str(oid))
+            except Exception:
+                pass
         
         and_conditions = [
             {"id": {"$nin": owned}},
@@ -150,6 +168,15 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
             {"$sample": {"size": 1}},
         ]
         result = await collection.aggregate(pipeline).to_list(length=1)
+        
+        # 🔥 Ultra-Safe Fallback: Agar strict unique query fail ho, toh kisi bhi available character ko utha lo taaki refund na ho
+        if not result:
+            fallback_pipeline = [
+                {"$match": {"auction_exclusive": {"$ne": True}}},
+                {"$sample": {"size": 1}}
+            ]
+            result = await collection.aggregate(fallback_pipeline).to_list(length=1)
+
         return result[0] if result else None
     except Exception as e:
         LOGGER.error(f"get_unique_char failed for {user_id}: {e}")
@@ -278,7 +305,6 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    # 🔥 FIX: Balance check ab Economy DB se hoga
     user_data = await eco_collection.find_one({"id": user.id})
     if not user_data or user_data.get("balance", 0) < PROPOSAL_COST:
         return await context.bot.send_message(
@@ -297,7 +323,6 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    # 🔥 FIX: Deduct coins from Economy DB
     await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
     set_cooldown(user.id, "propose")
 
@@ -335,12 +360,10 @@ async def propose(update: Update, context: CallbackContext):
     char = await get_unique_char(user.id, None)
     
     if not char:
-        # 🔥 FIX: Refund coins to Economy DB
         await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
-        # 🔥 FIX: Cooldown reset text aur code se pop hata diya taaki cooldown continue rahe
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ.</b>",
+            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ꜰᴏʀ ʏᴏᴜ.</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
@@ -365,7 +388,7 @@ async def propose_callback(update: Update, context: CallbackContext):
     if query.data == "propose_checksub":
         user = query.from_user
         if not await is_user_joined(context, user.id):
-            return await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜ𝐩 ʏᴇᴛ!", show_alert=True)
+            return await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
         
         await query.answer("✅ ᴠᴇʀɪғɪᴇᴅ! ʏᴏᴜ ᴄᴀɴ ɴᴏᴡ ᴘʀᴏᴘᴏsᴇ.", show_alert=False)
         try:
