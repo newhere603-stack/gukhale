@@ -6,12 +6,15 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, TypeHandler
 from shivu import application, db
 
+# 🔥 NAYA IMPORT: Dual Database Sync Ke Liye
+from shivu.Database.db import eco_collection
+
 # --- CONFIGURATION ---
 LOG_GROUP_ID = -1003893927065
 OWNER_ID = 7657218453
 
 # --- DATABASE COLLECTIONS ---
-user_collection = db['user_collection_lmaoooo']
+user_collection = db['user_collection_lmaoooo'] # Character Harem DB
 market_collection = db['market_collection'] 
 bot_settings_collection = db['bot_settings'] 
 
@@ -34,12 +37,12 @@ async def send_market_log(context: CallbackContext, action: str, details: str):
     except Exception as e:
         print(f"Failed to send log to group: {e}")
 
-# --- HELPER: GET DAILY LIMIT INFO ---
+# --- HELPER: GET DAILY LIMIT INFO (🔥 FIX: Linked to Economy DB) ---
 async def get_token_limit_info(user_id):
     settings = await bot_settings_collection.find_one({'_id': 'pmarket_settings'})
     global_limit = settings.get('daily_token_limit', 70) if settings else 70
 
-    user = await user_collection.find_one({'id': user_id})
+    user = await eco_collection.find_one({'id': user_id})
     if not user:
         return global_limit, 0, ""
 
@@ -400,8 +403,9 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
     elif action == "pm_buy":
         market_id = parts[1]
-        item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
+        # Checking to get price and char details securely without deleting yet
+        item = await market_collection.find_one({'_id': ObjectId(market_id)})
         if not item:
             await query.answer("ᴛᴏᴏ ʟᴀᴛᴇ! ᴛʜɪs ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ ʙᴏᴜɢʜᴛ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.", show_alert=True)
             return
@@ -414,21 +418,33 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await query.answer("ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴜʏ ʏᴏᴜʀ ᴏᴡɴ ᴄʜᴀʀᴀᴄᴛᴇʀ!", show_alert=True)
             return
 
-        buyer = await user_collection.find_one({'id': user_id})
-        buyer_balance = buyer.get('balance', 0) if buyer else 0
+        # 🔥 FIX 1: Atomically Deduct Balance from Buyer (Economy DB)
+        eco_buyer = await eco_collection.find_one_and_update(
+            {'id': user_id, 'balance': {'$gte': price}},
+            {'$inc': {'balance': -price}}
+        )
 
-        if buyer_balance < price:
+        if not eco_buyer:
             await query.answer(f"ɪɴsᴜғғɪᴄɪᴇɴᴛ ғᴜɴᴅs! ʏᴏᴜ ɴᴇᴇᴅ 💸 {price:,} ʙᴀʟᴀɴᴄᴇ.", show_alert=True)
             return
 
-        await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -price}, '$push': {'characters': char}})
-        await user_collection.update_one({'id': seller_id}, {'$inc': {'balance': price}})
-        await market_collection.delete_one({'_id': ObjectId(market_id)})
+        # 🔥 FIX 2: Atomic Delete of Market Item (Prevents race condition double buys)
+        deleted_item = await market_collection.find_one_and_delete({'_id': ObjectId(market_id)})
+        
+        if not deleted_item:
+            # Pese Refund kardo, koi aur le gaya
+            await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': price}})
+            await query.answer("ᴛᴏᴏ ʟᴀᴛᴇ! ᴛʜɪs ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ ʙᴏᴜɢʜᴛ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.", show_alert=True)
+            return
+
+        # Success - Push character to Harem DB and Pay Seller to Economy DB
+        await user_collection.update_one({'id': user_id}, {'$push': {'characters': char}})
+        await eco_collection.update_one({'id': seller_id}, {'$inc': {'balance': price}})
 
         # Log with user mentions
-        seller = await user_collection.find_one({'id': seller_id})
+        seller = await eco_collection.find_one({'id': seller_id})
         
-        buyer_name = buyer.get('first_name', 'Unknown') if buyer else update.effective_user.first_name
+        buyer_name = eco_buyer.get('first_name', 'Unknown')
         seller_name = seller.get('first_name', 'Unknown') if seller else 'Unknown'
         
         buyer_mention = f"<a href='tg://user?id={user_id}'>{html.escape(buyer_name)}</a>"
@@ -475,6 +491,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await query.answer("⚠️ ᴛʜɪs ɪᴛᴇᴍ ɪs ɴᴏ ʟᴏɴɢᴇʀ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ.", show_alert=True)
         else:
             char = item['character']
+            # Put character back into Harem DB
             await user_collection.update_one({'id': user_id}, {'$push': {'characters': char}})
             await market_collection.delete_one({'_id': ObjectId(market_id)})
             
@@ -511,10 +528,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         exc_type = parts[1]  # "t2c" or "c2t"
         amount = int(parts[2]) 
         
-        user = await user_collection.find_one({'id': user_id})
-        tokens = user.get('tokens', 0) if user else 0
-        coins = user.get('balance', 0) if user else 0
-        
         # Limit check before final processing
         global_limit, used_today, today_str = await get_token_limit_info(user_id)
         if user_id != OWNER_ID:
@@ -528,40 +541,48 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         user_name = update.effective_user.first_name
         user_mention = f"<a href='tg://user?id={user_id}'>{html.escape(user_name)}</a>"
 
-        # Update Query Setup
+        # 🔥 FIX: Atomic Transaction in Economy DB for Exchange
         if exc_type == "t2c":
-            if tokens < amount:
-                await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
-                return
             coins_to_add = amount * 2500
             
-            await user_collection.update_one({'id': user_id}, {'$inc': {'tokens': -amount, 'balance': coins_to_add}})
-            msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{coins_to_add:,}</code> ᴄᴏɪɴs!</b>"
+            eco_user = await eco_collection.find_one_and_update(
+                {'id': user_id, 'tokens': {'$gte': amount}},
+                {'$inc': {'tokens': -amount, 'balance': coins_to_add}}
+            )
             
+            if not eco_user:
+                await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴛᴏᴋᴇɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
+                return
+                
+            msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ ᴇxᴄʜᴀɴɢᴇᴅ <code>{amount}</code> ᴛᴏᴋᴇɴs ғᴏʀ <code>{coins_to_add:,}</code> ᴄᴏɪɴs!</b>"
             log_action = "🔄 TOKENS TO COINS"
             log_details = f"👤 <b>Usᴇʀ:</b> {user_mention}\n📉 <b>Sᴏʟᴅ:</b> {amount} ᴛᴏᴋᴇɴs\n📈 <b>Rᴇᴄᴇɪᴠᴇᴅ:</b> {coins_to_add:,} ᴄᴏɪɴs"
 
         elif exc_type == "c2t":
             coins_to_deduct = amount * 2500
-            if coins < coins_to_deduct:
+            
+            eco_user = await eco_collection.find_one_and_update(
+                {'id': user_id, 'balance': {'$gte': coins_to_deduct}},
+                {'$inc': {'balance': -coins_to_deduct, 'tokens': amount}}
+            )
+            
+            if not eco_user:
                 await query.answer("⚠️ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs ᴀɴʏᴍᴏʀᴇ!", show_alert=True)
                 return
             
-            await user_collection.update_one({'id': user_id}, {'$inc': {'balance': -coins_to_deduct, 'tokens': amount}})
             msg = f"<b>✅ Sᴜᴄᴄᴇssғᴜʟʟʏ sᴘᴇɴᴛ <code>{coins_to_deduct:,}</code> ᴄᴏɪɴs ᴛᴏ ʙᴜʏ <code>{amount}</code> ᴛᴏᴋᴇɴs!</b>"
-            
             log_action = "🔄 COINS TO TOKENS"
             log_details = f"👤 <b>Usᴇʀ:</b> {user_mention}\n📉 <b>Sᴘᴇɴᴛ:</b> {coins_to_deduct:,} ᴄᴏɪɴs\n📈 <b>Rᴇᴄᴇɪᴠᴇᴅ:</b> {amount} ᴛᴏᴋᴇɴs"
 
-        # Increment user's daily limit (Except owner)
+        # Increment user's daily limit in Economy DB
         if user_id != OWNER_ID:
-            user_fresh = await user_collection.find_one({'id': user_id})
+            user_fresh = await eco_collection.find_one({'id': user_id})
             last_date = user_fresh.get('last_token_exchange_date', '')
             
             if last_date != today_str:
-                await user_collection.update_one({'id': user_id}, {'$set': {'daily_token_limit_used': amount, 'last_token_exchange_date': today_str}})
+                await eco_collection.update_one({'id': user_id}, {'$set': {'daily_token_limit_used': amount, 'last_token_exchange_date': today_str}})
             else:
-                await user_collection.update_one({'id': user_id}, {'$inc': {'daily_token_limit_used': amount}})
+                await eco_collection.update_one({'id': user_id}, {'$inc': {'daily_token_limit_used': amount}})
 
         await send_market_log(context, log_action, log_details)
         await update_menu(query, msg, kb)
@@ -597,6 +618,7 @@ async def ask_character_id(update: Update, context: CallbackContext):
     if expected_owner and user_id != expected_owner: return WAITING_FOR_CHARACTER_ID
 
     char_id = update.message.text.strip()
+    # Characters exist in Harem DB
     user_data = await user_collection.find_one({'id': user_id})
     if not user_data or 'characters' not in user_data:
         await update.message.reply_text("<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
@@ -644,6 +666,7 @@ async def ask_price(update: Update, context: CallbackContext):
     live_char = await get_live_character_doc(char_id_val)
     final_character = live_char if live_char else character
 
+    # Character is taken out from Harem DB and put into Market
     await user_collection.update_one({'id': user_id}, {'$pull': {'characters': {'id': char_id_val}}})
     await market_collection.insert_one({'seller_id': user_id, 'price': price, 'character': final_character})
 
@@ -684,7 +707,8 @@ async def exchange_start_t2c(update: Update, context: CallbackContext):
     context.user_data['exc_owner_id'] = owner_id
     context.user_data['exc_type'] = 't2c'
     
-    user = await user_collection.find_one({'id': owner_id})
+    # Read from Economy DB
+    user = await eco_collection.find_one({'id': owner_id})
     tokens = user.get('tokens', 0) if user else 0
 
     await query.message.reply_text(
@@ -711,7 +735,8 @@ async def exchange_start_c2t(update: Update, context: CallbackContext):
     context.user_data['exc_owner_id'] = owner_id
     context.user_data['exc_type'] = 'c2t'
     
-    user = await user_collection.find_one({'id': owner_id})
+    # Read from Economy DB
+    user = await eco_collection.find_one({'id': owner_id})
     coins = user.get('balance', 0) if user else 0
 
     await query.message.reply_text(
@@ -751,7 +776,7 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
             )
             return WAITING_FOR_EXCHANGE_AMOUNT
 
-    user = await user_collection.find_one({'id': user_id})
+    user = await eco_collection.find_one({'id': user_id})
     tokens = user.get('tokens', 0) if user else 0
     coins = user.get('balance', 0) if user else 0
     
@@ -845,8 +870,9 @@ exchange_conv = ConversationHandler(
 application.add_handler(sell_conv, group=-1)
 application.add_handler(exchange_conv, group=-2)
 
-application.add_handler(CommandHandler(["pmarket", "shop"], pmarket_command), group=0)
-application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd), group=0)
-application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd), group=0)
-application.add_handler(CommandHandler("forcedelist", force_delist_cmd), group=0) # NEW COMMAND REGISTERED HERE
-application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):'), group=0)
+# 🔥 FIX: Added block=False to all individual handlers
+application.add_handler(CommandHandler(["pmarket", "shop"], pmarket_command, block=False), group=0)
+application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd, block=False), group=0)
+application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd, block=False), group=0)
+application.add_handler(CommandHandler("forcedelist", force_delist_cmd, block=False), group=0)
+application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):', block=False), group=0)
