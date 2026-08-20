@@ -36,29 +36,33 @@ application = Application.builder().token(TOKEN).build()
 shivuu = Client("Shivu", api_id, api_hash, bot_token=TOKEN)
 
 # ==========================================
-# 1. ECONOMY DATABASE CLIENT (Config mongo_url)
+# 1. MAIN DATABASE (Harem, Economy, Settings - via config.py mongo_url)
 # ==========================================
 eco_client = AsyncIOMotorClient(mongo_url)
 eco_db = eco_client['Character_catcher']
-eco_collection = eco_db['economy_users'] # Coins aur Tokens ke liye dedicated
 
 # ==========================================
-# 2. CHARACTER / HAREM DATABASE CLIENT (teamdaxx123 cluster - Waifus Safe Hain)
+# 2. GLOBAL CHARACTER DATABASE (teamdaxx123 cluster)
 # ==========================================
 CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://teamdaxx123:teamdaxx123@cluster0.ysbpgcp.mongodb.net/?retryWrites=true&w=majority")
 chara_client = AsyncIOMotorClient(CHARA_MONGO_URI)
 chara_db = chara_client['GRABBING_YOUR_WAIFU']
 
 # --- COLLECTIONS MAPPING ---
-db = eco_db # Default reference for general tables
+db = eco_db 
+
+# 🔥 FIX: Harem aur player data wapas Main DB me set kar diya
+user_collection = eco_db["user_collection_lmaoooo"] 
+
+# 🔥 FIX: Global Characters wali collection teamdaxx123 se aayegi
+collection = chara_db['users'] 
+
+# Economy aur baki sab kuch Main DB me rahega
+eco_collection = eco_db['economy_users'] 
+
 set_on_data = eco_db['set_on_data']
 refeer_collection = eco_db['refeer_collection']
 set_off_data = eco_db['set_off_data']
-
-# 🔥 Characters aur Harem purane secure cluster par rahenge
-collection = chara_db['anime_characters_lol'] 
-user_collection = chara_db["user_collection_lmaoooo"] 
-
 safari_cooldown_collection = eco_db["safari_cooldown"]
 safari_users_collection = eco_db["safari_users_collection"]
 sudo_users_collection = eco_db["sudos"]
