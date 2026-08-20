@@ -1,7 +1,13 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, ContextTypes
-from shivu import application, user_collection, LOGGER, BOT_USERNAME
+
+# Yahan humne user_collection hata diya
+from shivu import application, LOGGER, BOT_USERNAME
+
+# 🔥 NAYA IMPORT: Ab ye config wale naye economy database se connect hoga
+# Agar db.py 'shivu/Database/db.py' mein hai toh import aisa rahega:
+from shivu.Database.db import eco_collection as user_collection 
 
 
 async def get_or_init_user(uid: int):
