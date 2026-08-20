@@ -6,6 +6,7 @@ import tempfile
 import re
 import asyncio
 import shlex
+import traceback
 from datetime import datetime
 from pyrogram import filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -259,6 +260,14 @@ async def run_code(language, code):
         except Exception as e:
             return f"Execution Error: {str(e)}"
 
+# 🔥 FIX: Safer async executor with proper scope access
+async def aexec(code, message):
+    exec(
+        "async def __aexec(message):\n"
+        + "".join(f"\n    {l}" for l in code.split("\n"))
+    )
+    return await locals()["__aexec"](message)
+
 
 @app.on_message(filters.command(["sh", "cmd", "terminal", "term", "$"], prefixes=["#", "+", "@", '"', "-", ";", "!", "'", "/"]) | filters.regex(r"^(sh|cmd|terminal|term)\s+"))
 async def execute_terminal_command(_, message):
@@ -269,7 +278,8 @@ async def execute_terminal_command(_, message):
     
     text = message.text.strip()
     
-    text = re.sub(r'@\w+', '', text).strip()
+    # Strip bot tags if used in groups
+    text = re.sub(r'@[a-zA-Z0-9_]+bot\b', '', text, flags=re.IGNORECASE).strip()
     
     if text.startswith(('#', '+', '@', '"', '-', ';', '!', "'", '/')):
         parts = text[1:].strip().split(None, 1)
@@ -301,11 +311,6 @@ async def execute_terminal_command(_, message):
         await message.reply_text(final_output)
 
 
-async def aexec(code, message):
-    exec(f"async def __aexec(message): " + "".join(f"\n {l}" for l in code.split("\n")))
-    return await locals()["__aexec"](message)
-
-
 @app.on_message(filters.command(["eval", "run", "exec", "py", "python"], prefixes=["#", "+", "@", '"', "-", ";", "!", "'", "/"]) | filters.regex(r"^(eval|run|exec|py|python)\s+"))
 async def evals(_, message):
     user_id = message.from_user.id
@@ -315,7 +320,8 @@ async def evals(_, message):
     
     text = message.text.strip()
     
-    text = re.sub(r'@\w+', '', text).strip()
+    # Strip bot tags
+    text = re.sub(r'@[a-zA-Z0-9_]+bot\b', '', text, flags=re.IGNORECASE).strip()
     
     if text.startswith(('#', '+', '@', '"', '-', ';', '!', "'", '/')):
         parts = text[1:].strip().split(None, 1)
@@ -362,7 +368,10 @@ async def evals(_, message):
             await aexec(to_eval, message)
             stdout = redirected_output.getvalue()
         except Exception as e:
-            stdout = f"Exception occurred: {e}"
+            # Get traceback info for clearer errors
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            formatted_lines = traceback.format_exc().splitlines()
+            stdout = "Exception occurred:\n" + "\n".join(formatted_lines[-3:])
         finally:
             sys.stdout = old_stdout
         
@@ -375,4 +384,4 @@ async def evals(_, message):
                 final_output = f"```python\n{stdout.strip()}\n```"
                 await message.reply_text(final_output)
         else:
-            await message.reply_text("```\nNo output\n```")
+            await message.reply_text("```\nNo output (Code executed successfully)\n```")
