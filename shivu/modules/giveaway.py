@@ -6,7 +6,9 @@ from telegram.helpers import mention_html
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from shivu import application, user_collection
+# 🔥 NAYA IMPORT: Score aur points naye economy database se fetch karne ke liye
+from shivu import application
+from shivu.Database.db import eco_collection as user_collection
 
 LOGGER = logging.getLogger(__name__)
 
@@ -243,4 +245,6 @@ async def ws_callback_router(update: Update, context: CallbackContext):
 
 # Handlers registration
 application.add_handler(CommandHandler(["wordseektop", "wstop", "leaderboard"], wordseek_leaderboard, block=False))
-application.add_handler(CallbackQueryHandler(ws_callback_router, pattern="^ws_"))
+
+# 🔥 FIX: Isme block=False missing tha jisse button dabane pe bot hang ho sakta tha
+application.add_handler(CallbackQueryHandler(ws_callback_router, pattern="^ws_", block=False))
