@@ -7,10 +7,13 @@ from html import escape
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
-from shivu import application, user_collection, collection, LOGGER
 
-# Dual DB architecture ke liye Economy collection
+# 🔥 FIX: db aur sahi collections import ki hain
+from shivu import application, user_collection, db, LOGGER
 from shivu.Database.db import eco_collection
+
+# Asli characters wali collection yahan set ki hai
+collection = db['anime_characters_lol']
 
 # ---------------- CUSTOM RARITIES ----------------
 RARITIES = {
@@ -90,7 +93,7 @@ PROPOSE_REJECT_TEXTS = [
     "<b>sʜᴇ sᴀɪᴅ ʏᴏᴜ ᴀʀᴇ ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ʏᴏᴜ ᴏɴ ʀᴇᴀᴅ!</b>",
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ. 🎬</b>",
     "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏps! 🚓💨</b>",
-    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
+    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴْد ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
 ]
 
 cooldowns = {"dice": {}, "propose": {}}
@@ -136,7 +139,6 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
             )
             user = {}
 
-        # User ke paas jo characters hain unki IDs collect karo (String & Int dono format mein)
         raw_owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
         owned_set = set()
         for oid in raw_owned:
@@ -147,14 +149,13 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
                 except ValueError:
                     pass
 
-        # Global database se saare valid characters uthao
+        # Ab ye sahi 'anime_characters_lol' collection se data uthayega
         all_chars = await collection.find({"auction_exclusive": {"$ne": True}}).to_list(length=None)
         
         available_chars = []
         for char in all_chars:
             c_id = char.get("id")
             
-            # Check rarity restriction if disabled
             rarity_str = char.get("rarity", "").lower()
             skip_rarity = False
             for disabled in DISABLED_RARITIES:
@@ -164,7 +165,6 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
             if skip_rarity:
                 continue
 
-            # Check if already owned (Type-safe check)
             if c_id not in owned_set and str(c_id) not in owned_set:
                 try:
                     if int(c_id) not in owned_set:
@@ -175,7 +175,6 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
                 if c_id not in owned_set:
                     available_chars.append(char)
 
-        # Fallback: Agar unique characters khatam ho gaye hain, toh koi bhi non-exclusive character de do taaki refund na ho
         if not available_chars and all_chars:
             available_chars = [c for c in all_chars if not any(d in c.get("rarity", "").lower() for d in DISABLED_RARITIES)]
 
@@ -282,7 +281,7 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
     display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
-    caption = f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b>\n<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n<b>💎 ʀᴀʀɪᴛʏ: {display_rarity}</b>"
+    caption = f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏns!</b>\n<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n<b>💎 ʀᴀʀɪᴛʏ: {display_rarity}</b>"
     
     await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
     await send_win_log(context, user, char, "dice")
@@ -366,7 +365,6 @@ async def propose(update: Update, context: CallbackContext):
     
     if not char:
         await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
-        # 🔥 FIX: Cooldown reset mention poori tarah hata diya gaya hai
         return await context.bot.send_message(
             chat_id=chat_id,
             text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ꜰᴏʀ ʏᴏᴜ.</b>",
