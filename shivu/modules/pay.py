@@ -3,7 +3,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
-from shivu import application, user_collection
+
+# 🔥 YAHAN CHANGE KIYA HAI: Naye economy database ko user_collection ki tarah import kiya hai
+from shivu import application
+from shivu.Database.db import eco_collection as user_collection
 
 LOG_GROUP_ID = -1003893927065
 
