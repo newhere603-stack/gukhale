@@ -11,8 +11,7 @@ from shivu import application, db, user_collection
 # 🔥 Economy database se connect karne ke liye
 from shivu.Database.db import eco_collection
 
-# 🔥 FIX: Yahan 'shivu' se galat collection aane ki waja se characters nahi mil rahe the. 
-# Ab ise direct sahi anime database collection par fix kar diya hai!
+# 🔥 Sahi anime database collection
 collection = db['anime_characters_lol'] 
 
 try:
@@ -223,7 +222,6 @@ async def load_user_deals(user_id):
 async def render_mp_message(update_obj, user, index, is_edit=False):
     chars = user.get('mp_data', {}).get('chars', [])
     
-    # 🔥 FIX: Crash prevention agar chars list khali ho
     if not chars:
         text = f"<b><tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('marketplace is currently empty!')}</b>"
         if is_edit:
@@ -736,7 +734,7 @@ async def end_auction(update: Update, context: CallbackContext):
         
         header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION ENDED!')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n{bold_sc('WINNER: ')}"
         footer = f"\n{bold_sc('WINNING BID:')} {bold_sc(f'{winning_bid:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
-v        msg = f"{header}{winner_mention}{footer}"
+        msg = f"{header}{winner_mention}{footer}"
         
         await update.message.reply_text(msg, parse_mode='HTML')
     else:
