@@ -7,6 +7,9 @@ from telegram.ext import CommandHandler, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bson import ObjectId
 
+# 🔥 NAYA IMPORT: Dual Database Sync ke liye
+from shivu.Database.db import eco_db, chara_db
+
 LOGGER = logging.getLogger(__name__)
 
 BACKUP_DIR = "backups"
@@ -14,6 +17,27 @@ os.makedirs(BACKUP_DIR, exist_ok=True)
 
 OWNER_ID = 7657218453
 scheduler = None
+
+# Dual Database map taaki bot ko pata chale konsa table kis database me hai
+DB_MAP = {
+    'anime_characters_lol': chara_db,
+    'user_collection_lmaoooo': chara_db,
+    'user_totals_lmaoooo': eco_db,
+    'group_user_totalsssssss': eco_db,
+    'top_global_groups': eco_db,
+    'safari_users_collection': eco_db,
+    'safari_cooldown': eco_db,
+    'sudos': eco_db,  # Fixed from sudo_users_collection to original name
+    'global_ban_users_collection': eco_db,
+    'total_pm_users': eco_db,
+    'Banned_Groups': eco_db,
+    'Banned_Users': eco_db,
+    'registered_users': eco_db,
+    'set_on_data': eco_db,
+    'set_off_data': eco_db,
+    'refeer_collection': eco_db,
+    'economy_users': eco_db  # Added economy users
+}
 
 def convert_objectid(obj):
     if isinstance(obj, ObjectId):
@@ -26,22 +50,12 @@ def convert_objectid(obj):
 
 async def create_backup():
     try:
-        from shivu import db
-
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_data = {}
 
-        collections = [
-            'anime_characters_lol', 'user_collection_lmaoooo', 'user_totals_lmaoooo',
-            'group_user_totalsssssss', 'top_global_groups', 'safari_users_collection',
-            'safari_cooldown', 'sudo_users_collection', 'global_ban_users_collection',
-            'total_pm_users', 'Banned_Groups', 'Banned_Users', 'registered_users',
-            'set_on_data', 'set_off_data', 'refeer_collection'
-        ]
-
-        for col_name in collections:
+        for col_name, db_target in DB_MAP.items():
             try:
-                collection = db[col_name]
+                collection = db_target[col_name]
                 documents = await collection.find({}).to_list(length=None)
                 backup_data[col_name] = [convert_objectid(doc) for doc in documents]
             except Exception as e:
@@ -52,7 +66,7 @@ async def create_backup():
             json.dump(backup_data, f, indent=2, ensure_ascii=False, default=str)
 
         file_size = os.path.getsize(backup_file) / (1024 * 1024)
-        cleanup_old_backups(24)
+        cleanup_old_backups(24) # Din me 24 ghante ke backups rakhega bas
 
         return backup_file, file_size
     except Exception as e:
@@ -70,8 +84,6 @@ def cleanup_old_backups(keep=24):
 
 async def restore_backup(backup_file):
     try:
-        from shivu import db
-
         with open(backup_file, 'r', encoding='utf-8') as f:
             backup_data = json.load(f)
 
@@ -79,11 +91,17 @@ async def restore_backup(backup_file):
 
         for collection_name, documents in backup_data.items():
             try:
-                collection = db[collection_name]
+                # Find which database this table belongs to
+                db_target = DB_MAP.get(collection_name, eco_db)
+                collection = db_target[collection_name]
+                
                 if documents:
                     for doc in documents:
                         if '_id' in doc:
-                            del doc['_id']
+                            del doc['_id'] # Prevent duplicate ID crash
+                    
+                    # 🔥 Safe restore: delete old data first, then insert new
+                    await collection.delete_many({})
                     await collection.insert_many(documents)
                     restored_collections.append(f"{collection_name} ({len(documents)} docs)")
             except Exception as e:
@@ -102,12 +120,12 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("You don't have permission.")
         return
 
-    msg = await update.message.reply_text("Creating backup...")
+    msg = await update.message.reply_text("Creating Database Backup (Dual-DB)...")
     backup_file, file_size = await create_backup()
 
     if backup_file:
         await msg.edit_text(
-            f"Backup Created\n\n"
+            f"✅ Backup Created\n\n"
             f"File: {os.path.basename(backup_file)}\n"
             f"Size: {file_size:.2f} MB\n"
             f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -132,20 +150,20 @@ async def restore_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             backup_file = os.path.join(BACKUP_DIR, update.message.reply_to_message.document.file_name)
             await file.download_to_drive(backup_file)
 
-            await msg.edit_text("Restoring database...")
+            await msg.edit_text("Restoring Dual-Database...")
             success, restored = await restore_backup(backup_file)
 
             if success:
-                await msg.edit_text("Restore Completed\n\n" + "\n".join(restored))
+                await msg.edit_text("✅ Restore Completed Successfully!\n\n" + "\n".join(restored))
             else:
-                await msg.edit_text("Restore failed.")
+                await msg.edit_text("❌ Restore failed.")
         except Exception as e:
             await msg.edit_text(f"Error: {e}")
     else:
         backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.startswith('backup_')], reverse=True)
         if backups:
             backup_list = "\n".join(backups[:10])
-            await update.message.reply_text(f"Available Backups:\n\n{backup_list}\n\nReply to a file with /restore")
+            await update.message.reply_text(f"Available Backups on VPS:\n\n{backup_list}\n\nReply to a JSON backup file with /restore")
         else:
             await update.message.reply_text("No backups found.")
 
@@ -166,7 +184,7 @@ async def list_backups_command(update: Update, context: ContextTypes.DEFAULT_TYP
             backup_info.append(f"{backup} ({size:.2f} MB)")
 
         await update.message.reply_text(
-            f"Backups: {len(backups)} total\n"
+            f"Backups on VPS: {len(backups)} total\n"
             f"Total Size: {total_size:.2f} MB\n\n" + "\n".join(backup_info)
         )
     else:
@@ -177,7 +195,7 @@ async def test_backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Owner only.")
         return
 
-    await update.message.reply_text("Testing backup...")
+    await update.message.reply_text("Testing Hourly Backup Event...")
     await hourly_backup_job(context.application)
     await update.message.reply_text("Test completed.")
 
@@ -193,7 +211,7 @@ async def hourly_backup_job(application):
                         document=f,
                         filename=os.path.basename(backup_file),
                         caption=(
-                            f"Hourly Backup\n\n"
+                            f"✅ Hourly Auto-Backup (Dual DB)\n\n"
                             f"Size: {file_size:.2f} MB\n"
                             f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                         )
@@ -202,12 +220,12 @@ async def hourly_backup_job(application):
                 LOGGER.error(f"Failed to send backup: {e}")
                 await application.bot.send_message(
                     chat_id=OWNER_ID,
-                    text=f"Backup created but send failed: {e}"
+                    text=f"Hourly Backup created on VPS but Telegram send failed: {e}"
                 )
         else:
             await application.bot.send_message(
                 chat_id=OWNER_ID,
-                text=f"Backup failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                text=f"Hourly Backup failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )
     except Exception as e:
         LOGGER.error(f"Backup job error: {e}")
@@ -230,7 +248,7 @@ def setup_backup_handlers(application):
     )
     scheduler.start()
 
-    LOGGER.info("Backup system initialized")
+    LOGGER.info("Dual-DB Backup system initialized")
 
 # In main bot file:
 # from shivu.modules.backup import setup_backup_handlers
