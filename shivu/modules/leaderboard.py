@@ -265,7 +265,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     link = update.effective_user.mention_html()
 
     text = (
-        f"<tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji> 𝗨𝗦𝗘𝗥 𝗣𝗥𝗢𝗙𝗜𝗟𝗘 <tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji>\n"
+        f"<tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji> 𝗦𝗣𝗔𝗖𝗜𝗔𝗟 𝗣𝗥𝗢𝗙𝗜𝗟𝗘 <tg-emoji emoji-id=\"6093601953483334318\">✨</tg-emoji>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<tg-emoji emoji-id=\"5217822164362739968\">👑</tg-emoji> <b>{sc('name')} :</b> {link}\n"
         f"<tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> <b>{sc('id')} :</b> <code>{user_id}</code>\n"
@@ -274,7 +274,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> <b>{sc('collection stats')}</b>\n"
         f"├ <b>{sc('rank')} :</b> <b>#{rank:,}</b> / <b>{total_collectors:,}</b>\n"
         f"├ <b>{sc('cards')} :</b> <b>{char_count:,}</b> <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji>\n"
-        f"└ <b>{sc('progress')} :</b> [<code>{progress_bar}</code>] <b>{completion_pct}%</b>\n\n"
+        f"└ <b>{sc('progress')} :</b> <code>{progress_bar}</code> <b>{completion_pct}%</b>\n\n"
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> <b>{sc('vault & wallet')}</b>\n"
         f"├ <b>{sc('balance')} :</b> <b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {balance:,}</b>\n"
         f"└ <b>{sc('tokens')} :</b> <b><tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {tokens:,}</b>\n"
