@@ -3,6 +3,9 @@ from telegram import Update
 from telegram.ext import CallbackContext, CommandHandler
 from shivu import application, sudo_users_collection
 
+# 🔥 FIX: In-memory sudo list import kiya taaki bot restart na karna pade
+from shivu import sudo_users
+
 # Aapki Master Owner ID
 OWNER_ID = 7657218453
 
@@ -56,6 +59,7 @@ async def addsudo_cmd(update: Update, context: CallbackContext):
         err_text = f"<b>{to_small_caps('REPLY TO A USER MESSAGE OR GIVE USER ID TO ADD THEM AS SUDO.')}\n{to_small_caps('EXAMPLE: /ADDSUDO 12345678')}</b>"
         return await msg.reply_text(err_text, parse_mode="HTML")
 
+    # DB Update
     await sudo_users_collection.update_one(
         {"id": target_id},
         {
@@ -68,6 +72,12 @@ async def addsudo_cmd(update: Update, context: CallbackContext):
         },
         upsert=True,
     )
+
+    # 🔥 FIX: Live memory update (Bot ko restart nahi karna padega)
+    if target_id not in sudo_users:
+        sudo_users.append(target_id)
+    if str(target_id) not in sudo_users:
+        sudo_users.append(str(target_id))
 
     success_text = f"<b>{to_small_caps('ADDED')} <a href='tg://user?id={target_id}'>{to_small_caps(target_name)}</a> {to_small_caps('AS SUDO USER.')}</b>"
     await msg.reply_html(success_text)
@@ -99,6 +109,12 @@ async def removesudo_cmd(update: Update, context: CallbackContext):
     deleted_res = await sudo_users_collection.delete_one({"id": target_id})
 
     if deleted_res.deleted_count > 0:
+        # 🔥 FIX: Remove from live memory
+        if target_id in sudo_users:
+            sudo_users.remove(target_id)
+        if str(target_id) in sudo_users:
+            sudo_users.remove(str(target_id))
+
         res_text = f"<b>{to_small_caps('REMOVED USER')} <code>{target_id}</code> {to_small_caps('FROM SUDO LIST.')}</b>"
         await msg.reply_html(res_text)
     else:
@@ -131,7 +147,8 @@ async def sudolist_cmd(update: Update, context: CallbackContext):
     await msg.reply_html(f"<b>{header}</b>\n\n<b>{text}</b>")
 
 
-application.add_handler(CommandHandler("addsudo", addsudo_cmd))
-application.add_handler(CommandHandler("removesudo", removesudo_cmd))
-application.add_handler(CommandHandler("sudoremove", removesudo_cmd))
-application.add_handler(CommandHandler("sudolist", sudolist_cmd))
+# 🔥 FIX: Added block=False to all handlers to prevent blocking
+application.add_handler(CommandHandler("addsudo", addsudo_cmd, block=False))
+application.add_handler(CommandHandler("removesudo", removesudo_cmd, block=False))
+application.add_handler(CommandHandler("sudoremove", removesudo_cmd, block=False))
+application.add_handler(CommandHandler("sudolist", sudolist_cmd, block=False))
