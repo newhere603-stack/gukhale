@@ -2,69 +2,70 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 
-# 🔥 Sahi path se Config ko import kiya taaki Heroku par "ModuleNotFoundError" na aaye
 from shivu.config import Development as Config
 
 LOGGER = logging.getLogger(__name__)
 
 # ==========================================
-# 1. CHARACTER DATABASE (Purana Wala - Characters Safe Hain)
+# 1. CHARACTER DATABASE (Super-Charged)
 # ==========================================
 CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://teamdaxx123:teamdaxx123@cluster0.ysbpgcp.mongodb.net/?retryWrites=true&w=majority")
 DB_NAME = os.getenv("DB_NAME", "GRABBING_YOUR_WAIFU")
 COLLECTION_NAME = "users"
 
-# 🔥 High-Performance Client Setup
+# 🔥 High-Performance Client Setup (Max Pool & Fast Timeouts)
 chara_client = AsyncIOMotorClient(
     CHARA_MONGO_URI,
-    maxPoolSize=50,
-    minPoolSize=10,
-    serverSelectionTimeoutMS=5000,
-    connectTimeoutMS=10000
+    maxPoolSize=200,          # Massive concurrent traffic handle karne ke liye
+    minPoolSize=20,           # Connections hamesha warm rahenge
+    serverSelectionTimeoutMS=3000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=5000,
+    waitQueueTimeoutMS=3000
 )
 
 chara_db = chara_client[DB_NAME]
-collection = chara_db[COLLECTION_NAME] # Ise 'collection' hi rakha hai taaki baaki codes break na hon
+collection = chara_db[COLLECTION_NAME]
 
 # ==========================================
-# 2. ECONOMY DATABASE (Naya Wala - config.py se)
+# 2. ECONOMY DATABASE (Super-Charged)
 # ==========================================
 ECO_MONGO_URI = Config.mongo_url
 
 eco_client = AsyncIOMotorClient(
     ECO_MONGO_URI,
-    maxPoolSize=50,
-    minPoolSize=10,
-    serverSelectionTimeoutMS=5000,
-    connectTimeoutMS=10000
+    maxPoolSize=200,
+    minPoolSize=20,
+    serverSelectionTimeoutMS=3000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=5000,
+    waitQueueTimeoutMS=3000
 )
 
 eco_db = eco_client["Waifu_Economy"]
-eco_collection = eco_db["economy_users"] # Ye collection sirf coins/tokens ke liye use hoga
+eco_collection = eco_db["economy_users"]
 
 
 async def init_db_indexes():
-    """Bot start hote hi dono database ke index bana dega taaki search lightning fast ho."""
+    """Bot start hote hi lightning-fast indexes create kar dega."""
     try:
-        # Character DB index with background=True to prevent conflicts
         await collection.create_index("user_id", unique=True, background=True)
-        # Economy DB index
+        await collection.create_index("id", background=True)  # Quick ID lookups ke liye
         await eco_collection.create_index("id", unique=True, background=True)
-        LOGGER.info("⚡ Both Database Indexes for 'user_id' & 'id' created/verified successfully.")
+        LOGGER.info("⚡ Super-charged Database Indexes created/verified successfully.")
     except Exception as e:
-        # Agar index pehle se bana hai toh ignore karega taaki logs clean rahein
         if "IndexKeySpecsConflict" in str(e):
             LOGGER.info("⚡ Database indexes already verified (conflict ignored safely).")
         else:
             LOGGER.error(f"Failed to create index: {e}")
 
-# --- Fast Async Database Functions (For Characters) ---
-async def get_user_data(user_id):
-    """Lightning-fast user lookup for characters."""
-    return await collection.find_one({"user_id": user_id})
+# --- Lightning-Fast Async Database Functions ---
+async def get_user_data(user_id, projection=None):
+    """Optimized user lookup with optional projection for blazing fast speed."""
+    return await collection.find_one({"user_id": user_id}, projection=projection)
 
 async def save_user_data(user_id, user_data):
-    """Optimized atomic upsert operation for characters."""
+    """Optimized atomic upsert operation."""
     await collection.update_one(
         {"user_id": user_id}, 
         {"$set": user_data}, 
