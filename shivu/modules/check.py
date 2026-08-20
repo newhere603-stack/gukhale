@@ -8,7 +8,11 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
-from shivu import application, collection, user_collection
+# 🔥 FIX: shivu se 'collection' ki jagah 'db' import kiya taaki sahi database table mile
+from shivu import application, db, user_collection
+
+# Asli anime characters wali collection yahan explicitly set kar di hai
+collection = db['anime_characters_lol']
 
 char_cache = TTLCache(maxsize=2000, ttl=600)
 anime_cache = TTLCache(maxsize=1000, ttl=900)
@@ -95,7 +99,7 @@ async def get_char(cid: str) -> Optional[Char]:
     if cid in char_cache:
         return char_cache[cid]
     
-    # 🔥 FIX: String aur Integer dono formats prepare karenge type mismatch rokne ke liye
+    # 🔥 FIX: String aur Integer dono formats check karenge type mismatch rokne ke liye
     search_ids = [str(cid)]
     if str(cid).isdigit():
         search_ids.append(int(cid))
@@ -123,7 +127,6 @@ async def global_count(cid: str) -> int:
     if key in user_cache:
         return user_cache[key]
     try:
-        # Check both string and int in user harem collection
         search_ids = [str(cid)]
         if str(cid).isdigit():
             search_ids.append(int(cid))
@@ -336,7 +339,7 @@ async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT
     await q.edit_message_caption(
         caption=owners_caption(char, owners, page, gcount),
         reply_markup=pagination_kb(cid, page, total_pages, back=True),
-.        parse_mode=ParseMode.HTML
+        parse_mode=ParseMode.HTML
     )
 
 
