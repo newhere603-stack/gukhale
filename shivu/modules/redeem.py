@@ -14,6 +14,9 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 from shivu import collection, user_collection, application, db
 from shivu.modules.database.sudo import is_user_sudo
 
+# 🔥 NAYA IMPORT: Economy data nikalne ke liye
+from shivu.Database.db import eco_collection
+
 LOG_GROUP_ID = -1003893927065
 OWNER_ID = 7657218453
 CODE_TTL_DAYS = 30
@@ -293,6 +296,7 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await msg.reply_text("❌ Invalid code. Not found.", parse_mode=ParseMode.HTML)
         return
 
+    # Atomic lock claim
     result = await codes_collection.update_one(
         {'code': code, 'claimed_by': {'$ne': user_id}, '$expr': {'$lt': [{'$size': '$claimed_by'}, '$quantity']}},
         {'$push': {'claimed_by': user_id}, '$set': {'last_claimed_at': datetime.now(IST)}}
@@ -311,9 +315,11 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     try:
+        # 🔥 FIX: Dual DB Integration for proper sync
         if code_info['type'] == 'currency':
             amount = float(code_info['amount'])
-            await user_collection.update_one({'id': user_id}, {'$inc': {'balance': amount}}, upsert=True)
+            # Economy DB mein coins dalenge
+            await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': amount}, '$set': {'first_name': user_name}}, upsert=True)
             fa = fmt_amount(amount)
             await msg.reply_text(
                 f"🎉 <b>Successfully Redeemed!</b>\n\n💸 <b>Received:</b> {fa} Coins\n"
@@ -324,7 +330,8 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             
         elif code_info['type'] == 'tokens':
             amount = float(code_info['amount'])
-            await user_collection.update_one({'id': user_id}, {'$inc': {'tokens': amount}}, upsert=True)
+            # Economy DB mein tokens dalenge
+            await eco_collection.update_one({'id': user_id}, {'$inc': {'tokens': amount}, '$set': {'first_name': user_name}}, upsert=True)
             fa = fmt_amount(amount)
             await msg.reply_text(
                 f"🎉 <b>Successfully Redeemed!</b>\n\n"
@@ -335,7 +342,8 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         elif code_info['type'] == 'character':
             w = code_info['waifu_data']
-            await user_collection.update_one({'id': user_id}, {'$addToSet': {'characters': w}}, upsert=True)
+            # Harem DB mein characters dalenge
+            await user_collection.update_one({'id': user_id}, {'$addToSet': {'characters': w}, '$set': {'first_name': user_name}}, upsert=True)
             char_name = html.escape(w['name'])
             caption = CHAR_CAPTION.format(
                 name=char_name,
