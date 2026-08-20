@@ -13,6 +13,9 @@ from shivu import (
     user_collection,
 )
 
+# 🔥 NAYA IMPORT: Economy DB mein 5000 coins add karne ke liye
+from shivu.Database.db import eco_collection
+
 # File ID ki jagah temporary direct video URL daal kar check karo
 START_VIDEO = "https://gxtusqitetsemwjdtvvq.supabase.co/storage/v1/object/public/photos/1785999431478-sm4ln0.mp4"
 
@@ -208,10 +211,11 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     return "<b>sᴜᴅᴏ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
 
 
-# 🔥 SUPERFAST DATABASE UPSERT 
+# 🔥 FIX: SUPERFAST DUAL DATABASE UPSERT (5000 Coins logic integrated)
 async def _ensure_user(user_id, first_name, username):
     try:
-        result = await user_collection.update_one(
+        # 1. Update Character DB (Harem)
+        char_result = await user_collection.update_one(
             {"id": user_id},
             {
                 "$set": {
@@ -220,7 +224,6 @@ async def _ensure_user(user_id, first_name, username):
                     "bot_started": True
                 },
                 "$setOnInsert": {
-                    "balance": 5000,
                     "characters": [],
                     "pass_data": {
                         "tier": "free",
@@ -238,7 +241,25 @@ async def _ensure_user(user_id, first_name, username):
             },
             upsert=True
         )
-        return result.upserted_id is not None 
+
+        # 2. Update Economy DB (🔥 ADDING 5000 COINS FOR NEW USERS HERE)
+        eco_result = await eco_collection.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "first_name": first_name,
+                    "username": username
+                },
+                "$setOnInsert": {
+                    "balance": 5000,  # 🔥 First time join karne pe 5000 coins!
+                    "tokens": 0
+                }
+            },
+            upsert=True
+        )
+        
+        # User is considered new if they were inserted in either database
+        return (char_result.upserted_id is not None) or (eco_result.upserted_id is not None)
     except Exception as e:
         LOGGER.error(f"Error in _ensure_user DB query: {e}")
         return False
@@ -283,6 +304,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         is_new = await _ensure_user(user_id, first_name, username)
+
+        # Welcome Message for New Users
+        if is_new:
+            try:
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"🎉 <b>ᴡᴇʟᴄᴏᴍᴇ {html.escape(first_name)}!</b>\n\n<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>5000 ᴄᴏɪɴs</b> ʜᴀᴠᴇ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ᴀs ᴀ sᴛᴀʀᴛᴇʀ ʙᴏɴᴜs!",
+                    parse_mode=ParseMode.HTML
+                )
+            except Exception:
+                pass
 
         if hasattr(context.application, "create_task"):
             context.application.create_task(
@@ -336,7 +368,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True
                 )
                 return
-            await _ensure_user(user_id, first_name, username)
+                
+            is_new = await _ensure_user(user_id, first_name, username)
+            
+            # Welcome Message for New Users via Callback
+            if is_new:
+                try:
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text=f"🎉 <b>ᴡᴇʟᴄᴏᴍᴇ {html.escape(first_name)}!</b>\n\n<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>5000 ᴄᴏɪɴs</b> ʜᴀᴠᴇ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ᴀs ᴀ sᴛᴀʀᴛᴇʀ ʙᴏɴᴜs!",
+                        parse_mode=ParseMode.HTML
+                    )
+                except Exception:
+                    pass
+            
             try:
                 await query.message.delete()
             except Exception:
