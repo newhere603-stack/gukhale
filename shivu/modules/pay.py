@@ -4,9 +4,9 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 
-# 🔥 YAHAN CHANGE KIYA HAI: Naye economy database ko user_collection ki tarah import kiya hai
 from shivu import application
-from shivu.Database.db import eco_collection as user_collection
+# 🔥 FIX: Direct eco_collection import kiya, bina alias ke
+from shivu.Database.db import eco_collection 
 
 LOG_GROUP_ID = -1003893927065
 
@@ -14,7 +14,6 @@ LOG_GROUP_ID = -1003893927065
 IST = timezone(timedelta(hours=5, minutes=30))
 
 def create_log_message(title: str, data: Dict[str, Any]) -> str:
-    """Beautiful bold and small-caps log designer."""
     timestamp = datetime.now(IST).strftime("%I:%M %p • %d/%m/%y")
     base = f"<b>{title}</b>\n\n"
     
@@ -26,9 +25,7 @@ def create_log_message(title: str, data: Dict[str, Any]) -> str:
     base += f"\n<b>⌚ ᴛɪᴍᴇ :</b> <b>{timestamp}</b>"
     return base
 
-
 async def send_log(context: CallbackContext, text: str):
-    """Background task mein log bhejega taaki user command speed affect na ho."""
     try:
         await context.bot.send_message(
             chat_id=LOG_GROUP_ID,
@@ -39,11 +36,9 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         print(f"Log Error: {e}")
 
-
 # ==========================================
 # 1. COINS PAYMENT LOGIC (/pay)
 # ==========================================
-
 async def pay_cmd(update: Update, context: CallbackContext):
     sender = update.effective_user
     if not update.message or not update.message.reply_to_message:
@@ -56,7 +51,7 @@ async def pay_cmd(update: Update, context: CallbackContext):
     if amount <= 0 or receiver.id == sender.id or receiver.is_bot:
         return await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ.</b>", parse_mode="HTML")
 
-    s = await user_collection.find_one({'id': sender.id}, projection={'balance': 1})
+    s = await eco_collection.find_one({'id': sender.id}, projection={'balance': 1})
     if not s or int(s.get('balance', 0)) < amount:
         return await update.message.reply_text("<b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴄᴏɪɴꜱ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode="HTML")
 
@@ -68,7 +63,6 @@ async def pay_cmd(update: Update, context: CallbackContext):
         f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
-
 
 async def pay_coins_callback(update: Update, context: CallbackContext):
     q = update.callback_query
@@ -86,8 +80,7 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
     receiver_id = int(data_parts[3])
     amount = int(data_parts[4])
 
-    # Atomic fast deduction
-    res = await user_collection.find_one_and_update(
+    res = await eco_collection.find_one_and_update(
         {'id': sender_id, 'balance': {'$gte': amount}},
         {'$inc': {'balance': -amount}}
     )
@@ -95,8 +88,7 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
         await q.edit_message_text("<b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴄᴏɪɴꜱ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode="HTML")
         return await q.answer()
 
-    # Credit receiver instantly
-    await user_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
+    await eco_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
 
     await q.edit_message_text(
         f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ.</b>",
@@ -104,7 +96,6 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
     )
     await q.answer()
 
-    # Background non-blocking logging
     async def process_log():
         try:
             sender_user = await context.bot.get_chat(sender_id)
@@ -114,7 +105,6 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
             receiver_name = receiver_user.first_name
         except Exception:
             sender_name = "User"
-            receiver_mention = f"<code>{receiver_id}</code>"
             receiver_name = "User"
 
         log_data = {
@@ -128,11 +118,9 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
 
     asyncio.create_task(process_log())
 
-
 # ==========================================
 # 2. TOKENS PAYMENT LOGIC (/tpay)
 # ==========================================
-
 async def tpay_cmd(update: Update, context: CallbackContext):
     sender = update.effective_user
     if not update.message or not update.message.reply_to_message:
@@ -145,7 +133,7 @@ async def tpay_cmd(update: Update, context: CallbackContext):
     if amount <= 0 or receiver.id == sender.id or receiver.is_bot:
         return await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴛʀᴀɴꜱᴀᴄᴛɪᴏɴ.</b>", parse_mode="HTML")
 
-    s = await user_collection.find_one({'id': sender.id}, projection={'tokens': 1})
+    s = await eco_collection.find_one({'id': sender.id}, projection={'tokens': 1})
     if not s or int(s.get('tokens', 0)) < amount:
         return await update.message.reply_text("<b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴛᴏᴋᴇɴꜱ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode="HTML")
 
@@ -157,7 +145,6 @@ async def tpay_cmd(update: Update, context: CallbackContext):
         f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
-
 
 async def pay_tokens_callback(update: Update, context: CallbackContext):
     q = update.callback_query
@@ -175,8 +162,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
     receiver_id = int(data_parts[3])
     amount = int(data_parts[4])
 
-    # Atomic fast deduction
-    res = await user_collection.find_one_and_update(
+    res = await eco_collection.find_one_and_update(
         {'id': sender_id, 'tokens': {'$gte': amount}},
         {'$inc': {'tokens': -amount}}
     )
@@ -184,8 +170,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         await q.edit_message_text("<b>ɪɴꜱᴜꜰꜰɪᴄɪᴇɴᴛ ᴛᴏᴋᴇɴꜱ ʙᴀʟᴀɴᴄᴇ.</b>", parse_mode="HTML")
         return await q.answer()
 
-    # Credit receiver instantly
-    await user_collection.update_one({'id': receiver_id}, {'$inc': {'tokens': amount}}, upsert=True)
+    await eco_collection.update_one({'id': receiver_id}, {'$inc': {'tokens': amount}}, upsert=True)
 
     await q.edit_message_text(
         f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜﾙ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ.</b>",
@@ -193,17 +178,14 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
     )
     await q.answer()
 
-    # Background non-blocking logging
     async def process_tlog():
         try:
             sender_user = await context.bot.get_chat(sender_id)
             sender_name = sender_user.first_name
             receiver_user = await context.bot.get_chat(receiver_id)
-            receiver_mention = receiver_user.mention_html()
             receiver_name = receiver_user.first_name
         except Exception:
             sender_name = "User"
-            receiver_mention = f"<code>{receiver_id}</code>"
             receiver_name = "User"
 
         log_data = {
@@ -218,10 +200,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
     asyncio.create_task(process_tlog())
 
 
-# Handlers Registration with block=False for concurrency
 application.add_handler(CommandHandler("pay", pay_cmd, block=False))
 application.add_handler(CommandHandler("tpay", tpay_cmd, block=False))
 application.add_handler(CallbackQueryHandler(pay_coins_callback, pattern="^py_", block=False))
 application.add_handler(CallbackQueryHandler(pay_tokens_callback, pattern="^pt_", block=False))
-
-LOGGER.info("✓ Pay & TPay module loaded successfully (Ultra-Fast & Optimized)")
