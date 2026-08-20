@@ -1,8 +1,11 @@
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
-# Main database 'collection' ko bhi import kiya gaya hai
+# Main database collections ko import kiya gaya hai
 from shivu import application, user_collection, db, collection
+
+# 🔥 NAYA IMPORT: Economy operations ke liye eco_collection
+from shivu.Database.db import eco_collection
 
 OWNER_ID = 7657218453
 SUDO_USERS = [7657218453]
@@ -64,16 +67,13 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
             await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ ᴏʀ ᴀᴍᴏᴜɴᴛ.</b>", parse_mode='HTML')
             return
             
-        # Check if user exists
-        user = await user_collection.find_one({'id': target_id})
-        if not user:
-            await update.message.reply_text("<b>ᴜsᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ.</b>", parse_mode='HTML')
-            return
-
+        # 🔥 FIX: Currency operations ab strictly eco_collection par hongi
+        eco_user = await eco_collection.find_one({'id': target_id})
+        
         # Fetch Name if not from reply
         if update.message.reply_to_message is None:
-            if 'first_name' in user:
-                target_name = user['first_name']
+            if eco_user and 'first_name' in eco_user:
+                target_name = eco_user['first_name']
             else:
                 try:
                     chat = await context.bot.get_chat(target_id)
@@ -83,17 +83,25 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
 
         mention = f'<a href="tg://user?id={target_id}">{target_name}</a>'
 
-        # Update currency
+        # Update currency with Auto-Upsert (Agar user DB me nahi hai toh create kar dega)
         if is_add:
-            await user_collection.update_one({'id': target_id}, {'$inc': {field: amount}})
+            await eco_collection.update_one(
+                {'id': target_id}, 
+                {'$inc': {field: amount}, '$setOnInsert': {'first_name': target_name}}, 
+                upsert=True
+            )
         else:
-            current = user.get(field, 0)
+            current = eco_user.get(field, 0) if eco_user else 0
             new_balance = max(0, current - amount)
-            await user_collection.update_one({'id': target_id}, {'$set': {field: new_balance}})
+            await eco_collection.update_one(
+                {'id': target_id}, 
+                {'$set': {field: new_balance}, '$setOnInsert': {'first_name': target_name}}, 
+                upsert=True
+            )
             
         # Fetch updated balance
-        user = await user_collection.find_one({'id': target_id})
-        new_balance = user.get(field, 0)
+        eco_user_updated = await eco_collection.find_one({'id': target_id})
+        new_balance = eco_user_updated.get(field, 0)
         
         action = "ᴀᴅᴅᴇᴅ ᴛᴏ" if is_add else "ʀᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ"
         
@@ -147,6 +155,7 @@ async def destroy_cmd(update: Update, context: CallbackContext):
             await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ.</b>", parse_mode='HTML')
             return
 
+        # Destroy command Harem (user_collection) par hi chalegi
         user = await user_collection.find_one({'id': target_id})
         if not user:
             await update.message.reply_text("<b>ᴜsᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ.</b>", parse_mode='HTML')
@@ -202,6 +211,7 @@ async def fixrarity_cmd(update: Update, context: CallbackContext):
         current_rarity = global_char.get('rarity', 'Unknown')
         current_name = global_char.get('name', 'Unknown')
 
+        # Harem DB mein rarities fix karega
         users_cursor = user_collection.find({"characters.id": {"$in": search_ids}})
         affected_count = 0
         
