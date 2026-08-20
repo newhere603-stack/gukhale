@@ -453,7 +453,7 @@ class ModeHandler:
         action = parts[1]
         owner_id_str = parts[2]
         
-        user_id = await verify_owner(query, owner_id_str, "⚠️ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ ʜᴍᴏᴅᴇ ᴜsɪɴɢ /hmode !")
+        user_id = await verify_owner(query, owner_id_str, "ʙᴀᴋᴀ! ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ ʜᴍᴏᴅᴇ ᴜsɪɴɢ /hmode !")
         if user_id is None:
             return
 
