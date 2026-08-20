@@ -536,7 +536,7 @@ class UnfavHandler:
         elif action == 'harem_unfav_no':
             await query.edit_message_caption(caption="<b>ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.</b>", parse_mode='HTML')
 
-async def verify_owner(query, user_id_str: str, error_msg: str = "ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ!") -> Optional[int]:
+async def verify_owner(query, user_id_str: str, error_msg: str = "ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ʙᴀᴋᴀ!") -> Optional[int]:
     try:
         owner_id = int(user_id_str)
     except ValueError:
