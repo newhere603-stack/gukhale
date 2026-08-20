@@ -29,7 +29,7 @@ from telegram.error import BadRequest
 from shivu import db, shivuu, application, LOGGER, user_totals_collection
 from shivu.modules import ALL_MODULES
 
-# 🔥 NAYA IMPORT: Economy DB sync ke liye
+# 🔥 Economy DB sync ke liye
 from shivu.Database.db import eco_collection
 
 OWNER_ID = 7657218453
@@ -69,7 +69,10 @@ group_settings_cache = {}
 chat_frequency_cache = {} 
 locks, message_counts = {}, {}
 sent_characters, last_characters = {}, {}
-first_correct_guesses, spawn_messages, spawn_message_links = {}, {}
+
+# 🔥 FIX: 3 variables ke liye 3 dictionaries assign kar di hain
+first_correct_guesses, spawn_messages, spawn_message_links = {}, {}, {}
+
 currently_spawning = {}
 spawn_times = {}  
 grabbed_spawns = set()  
@@ -77,12 +80,11 @@ grabbed_spawns = set()
 _cached_characters = []
 _last_cache_time = 0
 
-# --- 🔥 Anti-Spam variables ---
+# --- Anti-Spam variables ---
 user_message_times = {}
 blocked_users = {}
 
 async def check_and_handle_flood(update: Update) -> bool:
-    """Check karta hai agar user flood kar raha hai to block karega 10 mins ke liye"""
     user = update.effective_user
     if not user:
         return False
@@ -90,22 +92,18 @@ async def check_and_handle_flood(update: Update) -> bool:
     user_id = user.id
     now = time.time()
     
-    # Check if user is already blocked
     if user_id in blocked_users:
         if now < blocked_users[user_id]:
-            return True  # User is blocked, ignore their actions
+            return True 
         else:
-            del blocked_users[user_id]  # Block time over, unblock
-            user_message_times.pop(user_id, None)  # Reset flood counter
+            del blocked_users[user_id]  
+            user_message_times.pop(user_id, None)  
             
-    # Record message timestamp
     user_message_times.setdefault(user_id, []).append(now)
-    # Keep only timestamps from the last 4 seconds
     user_message_times[user_id] = [t for t in user_message_times[user_id] if now - t < 4]
     
-    # Threshold: Agar 4 seconds mein 7 messages bhej diye, to spam hai
     if len(user_message_times[user_id]) >= 7:
-        blocked_users[user_id] = now + 600  # 10 minutes (600 seconds) block
+        blocked_users[user_id] = now + 600  
         safe_name = escape(user.first_name)
         msg = f'<b><tg-emoji emoji-id="5420323339723881652">⚠️</tg-emoji> {safe_name} ɪs ғʟᴏᴏᴅɪɴɢ: ʙʟᴏᴄᴋᴇᴅ ғᴏʀ 𝟷𝟶 ᴍɪɴᴜᴛᴇs ғᴏʀ ᴜsɪɴɢ ᴛʜᴇ ʙᴏᴛ.</b>'
         try:
@@ -117,9 +115,7 @@ async def check_and_handle_flood(update: Update) -> bool:
     return False
 
 async def setup_database_indexes():
-    """Bot start hote hi database indexing kar dega taaki fast response mile"""
     try:
-        # 🔥 FIX: Add unique=True, background=True to silence logs error and keep bot fast
         await collection.create_index("id", background=True)
         await user_collection.create_index("id", unique=True, background=True)
         await user_collection.create_index("characters.id", background=True)
@@ -127,7 +123,6 @@ async def setup_database_indexes():
         await group_user_totals_collection.create_index([("user_id", 1), ("group_id", 1)], background=True)
         LOGGER.info("⚡ Database Indexes Verified/Created Successfully!")
     except Exception as e:
-        # Avoid crashing or big logs on existing index error (Code 86)
         if "IndexKeySpecsConflict" not in str(e):
             LOGGER.error(f"Index creation failed: {e}")
         else:
@@ -178,7 +173,7 @@ async def load_rarity_status():
         saved = {}
     for key in RARITIES:
         rarity_status_cache[key] = saved.get(key, True)
-    LOGGER.info(f"Rarity status loaded")
+    LOGGER.info("Rarity status loaded")
 
 
 async def set_rarity_status(key, enabled):
@@ -476,7 +471,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 except Exception:
                     pass
 
-                # 🔥 FIX: Dual DB Sync for Grabs (Character goes to user_collection, profile updates safely)
                 user = await user_collection.find_one({'id': user_id})
                 if user:
                     changed = {k: v for k, v in user_fields.items() if user.get(k) != v}
@@ -491,7 +485,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                         'bot_started': False
                     })
 
-                # 🔥 Ensure user exists in Economy DB as well when they grab a character
                 await eco_collection.update_one(
                     {'id': user_id},
                     {
@@ -604,7 +597,7 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
         f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
         f"{display_rarity} <b>ʀᴀʀɪᴛʏ:</b>\n"
         f"<b><tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
-        "<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
+        "<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜs𝙚 /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
     )
     await update.message.reply_html(text)
 
