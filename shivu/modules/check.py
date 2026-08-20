@@ -75,7 +75,7 @@ class Char:
 
     @classmethod
     def from_dict(cls, d: Dict) -> 'Char':
-        return cls(d.get('id', '??'), d.get('name', 'Unknown'), d.get('anime', 'Unknown'),
+        return cls(str(d.get('id', '??')), d.get('name', 'Unknown'), d.get('anime', 'Unknown'),
                     d.get('rarity', '🟢 Common'), d.get('img_url', ''), d.get('is_video', False),
                     d.get('price', 0))
 
@@ -94,10 +94,17 @@ def rarity_parts(rarity) -> Tuple[str, str]:
 async def get_char(cid: str) -> Optional[Char]:
     if cid in char_cache:
         return char_cache[cid]
-    d = await collection.find_one({'id': cid})
+    
+    # 🔥 FIX: String aur Integer dono formats prepare karenge type mismatch rokne ke liye
+    search_ids = [str(cid)]
+    if str(cid).isdigit():
+        search_ids.append(int(cid))
+
+    d = await collection.find_one({'id': {'$in': search_ids}})
     if d:
-        char_cache[cid] = Char.from_dict(d)
-        return char_cache[cid]
+        char_obj = Char.from_dict(d)
+        char_cache[cid] = char_obj
+        return char_obj
     return None
 
 
@@ -116,7 +123,11 @@ async def global_count(cid: str) -> int:
     if key in user_cache:
         return user_cache[key]
     try:
-        n = await user_collection.count_documents({'characters.id': cid})
+        # Check both string and int in user harem collection
+        search_ids = [str(cid)]
+        if str(cid).isdigit():
+            search_ids.append(int(cid))
+        n = await user_collection.count_documents({'characters.id': {'$in': search_ids}})
     except Exception:
         n = 0
     user_cache[key] = n
@@ -127,12 +138,18 @@ async def get_owners(cid: str) -> List[Dict]:
     key = f"o_{cid}"
     if key in user_cache:
         return user_cache[key]
+    
+    search_ids = [str(cid)]
+    if str(cid).isdigit():
+        search_ids.append(int(cid))
+
     users = await user_collection.find(
-        {'characters.id': cid}, {'_id': 0, 'id': 1, 'first_name': 1, 'username': 1, 'characters': 1}
+        {'characters.id': {'$in': search_ids}}, {'_id': 0, 'id': 1, 'first_name': 1, 'username': 1, 'characters': 1}
     ).to_list(length=None)
+    
     owners = []
     for u in users:
-        cnt = sum(1 for c in u.get('characters', []) if c.get('id') == cid)
+        cnt = sum(1 for c in u.get('characters', []) if str(c.get('id')) in [str(x) for x in search_ids])
         if cnt:
             owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
                             'username': u.get('username'), 'count': cnt})
@@ -141,16 +158,13 @@ async def get_owners(cid: str) -> List[Dict]:
     return owners
 
 
-# --- ✨ CACHE CLEAR FUNCTION FOR INSTANT UPDATES ✨ ---
 def clear_char_cache(cid: str) -> None:
-    """Calling this function instantly clears the cache and triggers an immediate update."""
     owner_key = f"o_{cid}"
     count_key = f"c_{cid}"
     if owner_key in user_cache:
         del user_cache[owner_key]
     if count_key in user_cache:
         del user_cache[count_key]
-# ---------------------------------------------------
 
 
 def process_search(chars: List[Dict]) -> Dict:
@@ -166,7 +180,6 @@ def process_search(chars: List[Dict]) -> Dict:
     return {'names': names, 'data': data, 'rarities': rarities, 'unique': len(names), 'total': len(chars)}
 
 
-# --- ✨ COOL CARD INFO DESIGN ---
 def card_caption(char: Char, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     return (
@@ -181,9 +194,7 @@ def card_caption(char: Char, gcount: int) -> str:
     )
 
 
-# --- 🏆 OWNERS LIST DESIGN ---
 def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> str:
-    emoji, text = rarity_parts(char.rarity)
     start, end = page * USERS_PER_PAGE, page * USERS_PER_PAGE + USERS_PER_PAGE
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
@@ -198,7 +209,6 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
             3: '<tg-emoji emoji-id="5453902265922376865">🥉</tg-emoji>'
         }.get(i, f"<b>{i}.</b>")
         
-        # --- THE ONLY CHANGE IS HERE: Removed to_small_caps() around the user's name ---
         link = f"<b><a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a></b>"
         lines.append(f"{medal} {link} - <b>x{o['count']}</b>")
         
@@ -240,7 +250,6 @@ def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, i
     return "\n".join(lines), total_pages
 
 
-# --- ✨ FIXED SEND MEDIA ---
 async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
     try:
         kwargs = {'caption': caption, 'parse_mode': ParseMode.HTML}
@@ -262,7 +271,6 @@ async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
         )
 
 
-# --- ✨ SECURE FILE ID EXTRACTOR ---
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.id != 7657218453:
         return 
@@ -313,7 +321,6 @@ async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
-# --- 🔄 CALLBACK HANDLERS FOR OWNERS BUTTON ---
 async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
@@ -329,7 +336,7 @@ async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT
     await q.edit_message_caption(
         caption=owners_caption(char, owners, page, gcount),
         reply_markup=pagination_kb(cid, page, total_pages, back=True),
-        parse_mode=ParseMode.HTML
+.        parse_mode=ParseMode.HTML
     )
 
 
@@ -351,7 +358,6 @@ async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
-# --- ✨ REGISTERING HANDLERS ---
 application.add_handler(CommandHandler("check", check_character, block=False))
 application.add_handler(CommandHandler("anime", find_anime, block=False))
 application.add_handler(CommandHandler("getid", get_file_id, block=False))
