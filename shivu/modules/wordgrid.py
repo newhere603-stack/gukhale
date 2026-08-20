@@ -239,7 +239,17 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = chat.id
     if chat_id in active_games:
-        await update.message.reply_text("<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>A WordGrid game is already running! Use /stopgame or /endgrid to end it.</b>", parse_mode="HTML")
+        game_data = active_games[chat_id]
+        reply_markup = None
+        if game_data.get("msg_id"):
+            link = get_msg_link(chat, game_data["msg_id"])
+            reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
+            
+        await update.message.reply_text(
+            "<tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> <b>A WordGrid game is already running! Use /stopgame or /endgrid to end it.</b>",
+            parse_mode="HTML",
+            reply_markup=reply_markup
+        )
         return
 
     cmd = update.message.text.split('@')[0].lower()
