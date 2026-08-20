@@ -24,7 +24,7 @@ def is_sudo(user_id):
 
 # ---------- Superfast Cache System (Optimized for Live Economy) ----------
 LB_CACHE = {}
-CACHE_TTL = 30  # 🔥 FIX: 5 min se ghata kar 30 seconds kar diya taaki NO DATA stuck na ho
+CACHE_TTL = 5  # 🔥 FIX: 5 min se ghata kar 5 seconds kar diya taaki NO DATA stuck na ho
 
 async def get_cached_data(key, fetch_function):
     now = time.time()
@@ -184,12 +184,13 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗧𝗢𝗞𝗘𝗡 𝗛𝗢𝗟𝗗𝗘𝗥", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
 
-# ---------- Top by characters ----------
+# ---------- Top by characters (🔥 FIX: Ultra Robust MongoDB Aggregation) ----------
 async def fetch_top_characters():
     return await user_collection.aggregate([
-        {"$match": {"characters.0": {"$exists": True}}},
+        {"$match": {"characters": {"$exists": True, "$type": "array", "$not": {"$size": 0}}}},
         {"$project": {"user_id": {"$ifNull": ["$id", "$user_id"]}, "first_name": 1, "count": {"$size": "$characters"}}},
-        {"$sort": {"count": -1}}, {"$limit": 10}
+        {"$sort": {"count": -1}}, 
+        {"$limit": 10}
     ]).to_list(10)
 
 async def top_characters(update: Update, context: CallbackContext, edit=False):
@@ -222,9 +223,9 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗥𝗢𝗨𝗣𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
 
-# ---------- My Profile (🔥 FIX: Dual DB Merge) ----------
+# ---------- My Profile (🔥 FIX: Dual DB Merge & Ranking fix) ----------
 async def fetch_total_collectors():
-    return await user_collection.count_documents({"characters.0": {"$exists": True}})
+    return await user_collection.count_documents({"characters": {"$exists": True, "$type": "array", "$not": {"$size": 0}}})
 
 async def my_profile(update: Update, context: CallbackContext, edit=False):
     user_id = update.effective_user.id
@@ -302,7 +303,7 @@ async def stats(update: Update, context: CallbackContext, edit=False):
     collectors = await get_cached_data("total_collectors", fetch_total_collectors)
 
     total_chars_result = await user_collection.aggregate([
-        {"$match": {"characters.0": {"$exists": True}}},
+        {"$match": {"characters": {"$exists": True, "$type": "array", "$not": {"$size": 0}}}},
         {"$project": {"count": {"$size": "$characters"}}},
         {"$group": {"_id": None, "total": {"$sum": "$count"}}}
     ]).to_list(1)
