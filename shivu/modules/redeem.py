@@ -11,8 +11,12 @@ from telegram.error import TelegramError
 from telegram.ext import CommandHandler, ContextTypes
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
-from shivu import collection, user_collection, application, db
+# 🔥 FIX: shivu se 'collection' hata kar 'db' import kiya aur sahi collection set ki
+from shivu import user_collection, application, db
 from shivu.modules.database.sudo import is_user_sudo
+
+# Asli characters wali collection yahan explicitly set kar di hai
+collection = db['anime_characters_lol']
 
 # 🔥 NAYA IMPORT: Economy data nikalne ke liye
 from shivu.Database.db import eco_collection
@@ -232,6 +236,7 @@ async def waifu_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if len(context.args) < 2:
         await msg.reply_text("Usage: <code>/sgen [Character_ID] [Quantity]</code>", parse_mode=ParseMode.HTML)
         return
+    
     char_id = norm_id(context.args[0])
     try:
         quantity = int(context.args[1])
@@ -241,7 +246,12 @@ async def waifu_gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await msg.reply_text("❌ Quantity must be a positive number.", parse_mode=ParseMode.HTML)
         return
 
-    waifu = await collection.find_one({'id': char_id})
+    # 🔥 FIX: Type-safe lookup for character ID (String & Integer support)
+    search_ids = [str(char_id)]
+    if str(char_id).isdigit():
+        search_ids.append(int(char_id))
+
+    waifu = await collection.find_one({'id': {'$in': search_ids}})
     if not waifu:
         await msg.reply_text(f"❌ Character ID <code>{html.escape(char_id)}</code> not found.", parse_mode=ParseMode.HTML)
         return
@@ -315,10 +325,8 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     try:
-        # 🔥 FIX: Dual DB Integration for proper sync
         if code_info['type'] == 'currency':
             amount = float(code_info['amount'])
-            # Economy DB mein coins dalenge
             await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': amount}, '$set': {'first_name': user_name}}, upsert=True)
             fa = fmt_amount(amount)
             await msg.reply_text(
@@ -330,7 +338,6 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             
         elif code_info['type'] == 'tokens':
             amount = float(code_info['amount'])
-            # Economy DB mein tokens dalenge
             await eco_collection.update_one({'id': user_id}, {'$inc': {'tokens': amount}, '$set': {'first_name': user_name}}, upsert=True)
             fa = fmt_amount(amount)
             await msg.reply_text(
@@ -342,7 +349,6 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         elif code_info['type'] == 'character':
             w = code_info['waifu_data']
-            # Harem DB mein characters dalenge
             await user_collection.update_one({'id': user_id}, {'$addToSet': {'characters': w}, '$set': {'first_name': user_name}}, upsert=True)
             char_name = html.escape(w['name'])
             caption = CHAR_CAPTION.format(
@@ -380,7 +386,7 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "ɪᴅ": f"<code>{user_id}</code>",
         "ᴄᴏᴅᴇ": f"<code>{code}</code>",
         "ʀᴇᴡᴀʀᴅ": log_detail,
-        "ᴄʟᴀɪᴍส": f"<b>{total_claims}/{max_claims}</b>"
+        "ᴄʟᴀɪᴍs": f"<b>{total_claims}/{max_claims}</b>"
     }
     await send_log(context, create_log_message("˹ ʀᴇᴅᴇᴇᴍ sᴜᴄᴄᴇssғᴜʟ ˼ 🎉", log_data))
 
