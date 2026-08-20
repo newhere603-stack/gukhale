@@ -1,20 +1,18 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, ContextTypes
+from pymongo import ReturnDocument  # 🔥 FIX: Accurate ReturnDocument import kiya
 
-# Yahan humne user_collection hata diya
 from shivu import application, LOGGER, BOT_USERNAME
 
-# 🔥 NAYA IMPORT: Ab ye config wale naye economy database se connect hoga
-# Agar db.py 'shivu/Database/db.py' mein hai toh import aisa rahega:
-from shivu.Database.db import eco_collection as user_collection 
+# 🔥 Direct economy collection use kar rahe hain
+from shivu.Database.db import eco_collection 
 
 
 async def get_or_init_user(uid: int):
     """User ko database se ek hi query mein fetch ya initialize karega (Super Fast & Atomic)."""
     try:
-        # find_one_and_update ek hi round-trip mein document fetch ya upsert kar deta hai
-        user = await user_collection.find_one_and_update(
+        user = await eco_collection.find_one_and_update(
             {"id": uid},
             {
                 "$setOnInsert": {
@@ -25,7 +23,7 @@ async def get_or_init_user(uid: int):
                 }
             },
             upsert=True,
-            return_document=True  # Updated/Inserted document turant return karega
+            return_document=ReturnDocument.AFTER  # 🔥 FIX: Safely return the updated document
         )
         return user
     except Exception as e:
@@ -43,7 +41,8 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = await get_or_init_user(uid)
         
-        if not user.get("bot_started", True):
+        # Check if user has explicitly started the bot
+        if user and not user.get("bot_started", True):
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("sᴛᴀʀᴛ ʙᴏᴛ", url=f"https://t.me/{BOT_USERNAME}?start=True")]
             ])
@@ -54,7 +53,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        balance = user.get("balance", 0)
+        balance = user.get("balance", 0) if user else 0
 
         await update.message.reply_text(
             f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji> <b>ʙᴀʟᴀɴᴄᴇ: <code>{balance:,}</code></b>',
@@ -81,7 +80,8 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = await get_or_init_user(uid)
         
-        if not user.get("bot_started", True):
+        # Check if user has explicitly started the bot
+        if user and not user.get("bot_started", True):
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("sᴛᴀʀᴛ ʙᴏᴛ", url=f"https://t.me/{BOT_USERNAME}?start=True")]
             ])
@@ -92,7 +92,7 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        tokens = user.get("tokens", 0)
+        tokens = user.get("tokens", 0) if user else 0
 
         await update.message.reply_text(
             f'<tg-emoji emoji-id="6332379101231323246">💠</tg-emoji> <b>ᴛᴏᴋᴇɴs: <code>{tokens:,}</code></b>',
