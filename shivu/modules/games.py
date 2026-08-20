@@ -12,8 +12,9 @@ from pymongo import ReturnDocument  # <-- New Import for Atomic Updates
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext
 
-# Main Shivu Bot Imports
-from shivu import application, user_collection
+# 🔥 YAHAN CHANGE KIYA HAI: Naye economy database se connect kiya hai
+from shivu import application
+from shivu.Database.db import eco_collection as user_collection
 
 
 @dataclass(frozen=True)
@@ -675,17 +676,17 @@ async def games_callback(update: Update, context: CallbackContext):
 
 
 # --- HANDLERS REGISTRATION ---
-
-application.add_handler(CommandHandler("sbet", sbet))
-application.add_handler(CommandHandler("roll", roll_cmd))
-application.add_handler(CommandHandler("gamble", gamble))
-application.add_handler(CommandHandler("basket", basket))
-application.add_handler(CommandHandler("dart", dart))
-application.add_handler(CommandHandler("stour", stour))
-application.add_handler(CommandHandler("riddle", riddle))
-application.add_handler(CommandHandler("games", games_menu))
-application.add_handler(CommandHandler("gamestats", game_stats))
+# 🔥 Fast concurrent processing ke liye block=False add kar diya hai
+application.add_handler(CommandHandler("sbet", sbet, block=False))
+application.add_handler(CommandHandler("roll", roll_cmd, block=False))
+application.add_handler(CommandHandler("gamble", gamble, block=False))
+application.add_handler(CommandHandler("basket", basket, block=False))
+application.add_handler(CommandHandler("dart", dart, block=False))
+application.add_handler(CommandHandler("stour", stour, block=False))
+application.add_handler(CommandHandler("riddle", riddle, block=False))
+application.add_handler(CommandHandler("games", games_menu, block=False))
+application.add_handler(CommandHandler("gamestats", game_stats, block=False))
 
 # group=1 ensures riddle answer handler gets precedence
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer), group=1)
-application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:"))
+application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:", block=False))
