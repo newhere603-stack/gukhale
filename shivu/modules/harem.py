@@ -265,7 +265,7 @@ class HaremHandler:
 
         return UserCollection(
             user_id=user_id, characters=characters, favorite=favorite,
-            filter_mode=user.get('smode', 'default')
+            filter_mode=user.get('hmode', 'default')
         )
 
     async def update_live_data(self, characters: List[Character]):
@@ -309,7 +309,6 @@ class HaremHandler:
             f"✨ ʜᴀʀᴇᴍ ({total_chars})", switch_inline_query_current_chat=f"collection.{user_id}"
         )]]
 
-        # Fix: Buttons sirf tab dikhenge jab page 1 se zyada honge
         if total_pages > 1:
             nav = []
             if page > 0:
@@ -321,7 +320,6 @@ class HaremHandler:
             if nav:
                 keyboard.append(nav)
 
-            # Fix: 2x button sirf tab aayega jab 2 se zyada page ho
             if total_pages > 2:
                 if step == 1:
                     keyboard.append([InlineKeyboardButton("⭆ 2x", callback_data=f"harem_2x:{page}:{user_id}:2")])
@@ -349,7 +347,7 @@ class HaremHandler:
         if not display_order:
             await message.reply_text(
                 f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ᴛʜɪs ᴍᴏᴅᴇ: {rarity_premium_display(collection.filter_mode) if collection.filter_mode in RARITIES else collection.filter_mode}</b>\n"
-                f"<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /smode</b>",
+                f"<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /hmode</b>",
                 parse_mode='HTML'
             )
             return
@@ -382,7 +380,6 @@ class HaremHandler:
                 await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
                 return
             except TelegramError as e:
-                # Fix: Catching not modified error jisse multiple message nahi banenge
                 if "not modified" in str(e).lower():
                     return
                 LOGGER.warning(f"ᴇᴅɪᴛ ғᴀɪʟᴇᴅ, ʀᴇsᴇɴᴅɪɴɢ: {e}")
@@ -393,7 +390,6 @@ class HaremHandler:
             try:
                 await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
             except TelegramError as e:
-                # Fix: Yaha bhi error ignore kiya jayega
                 if "not modified" in str(e).lower():
                     return
                 LOGGER.warning(f"ᴇᴅɪᴛ ᴛᴇxᴛ ғᴀɪʟᴇᴅ: {e}")
@@ -410,50 +406,60 @@ class ModeHandler:
 
     async def _current_mode(self, user_id: int) -> str:
         user = await self.user_db.find_one({'id': user_id})
-        return user.get('smode', 'default') if user else 'default'
+        return user.get('hmode', 'default') if user else 'default'
 
-    def _keyboard(self, current: str) -> InlineKeyboardMarkup:
+    def _keyboard(self, current: str, user_id: int) -> InlineKeyboardMarkup:
         def label(key, text):
             return f"{text} ✓" if key == current else text
 
         rarity_label = label("rarity", "ʀᴀʀɪᴛʏ") if current in RARITIES else "ʀᴀʀɪᴛʏ"
         rows = [
-            [InlineKeyboardButton(label("default", "ᴅᴇғᴀᴜʟᴛ"), callback_data="harem_mode_default"),
-             InlineKeyboardButton(rarity_label, callback_data="harem_mode_rarity")],
-            [InlineKeyboardButton(label("latest", "ʟᴀᴛᴇsᴛ"), callback_data="harem_mode_latest"),
-             InlineKeyboardButton(label("animes", "ᴀɴɪᴍᴇs"), callback_data="harem_mode_animes")],
-            [InlineKeyboardButton(label("waifus", "ᴡᴀɪғᴜs"), callback_data="harem_mode_waifus"),
-             InlineKeyboardButton("⤬", callback_data="harem_mode_close")],
+            [InlineKeyboardButton(label("default", "ᴅᴇғᴀᴜʟᴛ"), callback_data=f"harem_mode:default:{user_id}"),
+             InlineKeyboardButton(rarity_label, callback_data=f"harem_mode:rarity:{user_id}")],
+            [InlineKeyboardButton(label("latest", "ʟᴀᴛᴇsᴛ"), callback_data=f"harem_mode:latest:{user_id}"),
+             InlineKeyboardButton(label("animes", "ᴀɴɪᴍᴇs"), callback_data=f"harem_mode:animes:{user_id}")],
+            [InlineKeyboardButton(label("waifus", "ᴡᴀɪғᴜs"), callback_data=f"harem_mode:waifus:{user_id}"),
+             InlineKeyboardButton("⤬", callback_data=f"harem_mode:close:{user_id}")],
         ]
         return InlineKeyboardMarkup(rows)
 
     async def show_mode_menu(self, update: Update, user_id: int):
-        markup = self._keyboard(await self._current_mode(user_id))
+        markup = self._keyboard(await self._current_mode(user_id), user_id)
         caption = "<b>ᴄʜᴏᴏsᴇ ᴏɴᴇ ᴏғ ᴡᴀʏs ᴛᴏ sᴏʀᴛ ʏᴏᴜʀ ʜᴀʀᴇᴍ</b>"
         if update.callback_query:
             await update.callback_query.edit_message_caption(caption=caption, reply_markup=markup, parse_mode='HTML')
         else:
             await update.message.reply_photo(self.IMG, caption=caption, reply_markup=markup, parse_mode='HTML')
 
-    async def show_rarity_menu(self, query):
-        buttons = [InlineKeyboardButton(db_emoji, callback_data=f"harem_mode_{key}") for key, (db_emoji, _, _) in RARITIES.items()]
-        keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data="harem_mode_back")]]
+    async def show_rarity_menu(self, query, user_id: int):
+        buttons = [InlineKeyboardButton(db_emoji, callback_data=f"harem_mode:{key}:{user_id}") for key, (db_emoji, _, _) in RARITIES.items()]
+        keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")]]
         await query.edit_message_caption(
             caption="<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ ʏᴏᴜʀ ʜᴀʀᴇᴍ</b>",
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
         )
 
     async def set_mode(self, user_id: int, mode: str):
-        await self.user_db.update_one({'id': user_id}, {'$set': {'smode': mode}}, upsert=True)
+        await self.user_db.update_one({'id': user_id}, {'$set': {'hmode': mode}}, upsert=True)
 
     async def handle_mode_callback(self, update: Update, context: CallbackContext):
         query = update.callback_query
-        user_id = query.from_user.id
-        action = query.data.replace("harem_mode_", "")
+        
+        parts = query.data.split(':')
+        if len(parts) < 3:
+            await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ", show_alert=True)
+            return
+            
+        action = parts[1]
+        owner_id_str = parts[2]
+        
+        user_id = await verify_owner(query, owner_id_str, "⚠️ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ ʜᴍᴏᴅᴇ ᴜsɪɴɢ /hmode !")
+        if user_id is None:
+            return
 
         if action == "rarity":
             await query.answer()
-            return await self.show_rarity_menu(query)
+            return await self.show_rarity_menu(query, user_id)
 
         if action == "back":
             await query.answer()
@@ -530,14 +536,14 @@ class UnfavHandler:
         elif action == 'harem_unfav_no':
             await query.edit_message_caption(caption="<b>ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.</b>", parse_mode='HTML')
 
-async def verify_owner(query, user_id_str: str) -> Optional[int]:
+async def verify_owner(query, user_id_str: str, error_msg: str = "ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ!") -> Optional[int]:
     try:
         owner_id = int(user_id_str)
     except ValueError:
         await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ!", show_alert=True)
         return None
     if query.from_user.id != owner_id:
-        await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ!", show_alert=True)
+        await query.answer(error_msg, show_alert=True)
         return None
     return owner_id
 
@@ -569,11 +575,11 @@ async def harem_page_callback(update: Update, context: CallbackContext):
         LOGGER.error(f"Error in harem_page_callback: {e}", exc_info=True)
         await query.answer("ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴘᴀɢᴇ", show_alert=True)
 
-async def smode_command(update: Update, context: CallbackContext):
+async def hmode_command(update: Update, context: CallbackContext):
     try:
         await mode_handler.show_mode_menu(update, update.effective_user.id)
     except TelegramError as e:
-        LOGGER.error(f"Error in smode_command: {e}", exc_info=True)
+        LOGGER.error(f"Error in hmode_command: {e}", exc_info=True)
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴍᴏᴅᴇ ᴍᴇɴᴜ.</b>", parse_mode='HTML')
 
 async def mode_callback(update: Update, context: CallbackContext):
@@ -626,10 +632,10 @@ async def harem_close_callback(update: Update, context: CallbackContext):
     await query.message.delete()
 
 application.add_handler(CommandHandler(["harem", "collection"], harem_command, block=False))
-application.add_handler(CommandHandler("smode", smode_command, block=False))
+application.add_handler(CommandHandler("hmode", hmode_command, block=False))
 application.add_handler(CommandHandler("unfav", unfav_command, block=False))
 application.add_handler(CallbackQueryHandler(harem_page_callback, pattern='^harem_page:', block=False))
-application.add_handler(CallbackQueryHandler(mode_callback, pattern='^harem_mode_', block=False))
+application.add_handler(CallbackQueryHandler(mode_callback, pattern='^harem_mode:', block=False))
 application.add_handler(CallbackQueryHandler(unfav_callback, pattern="^harem_unfav_", block=False))
 application.add_handler(CallbackQueryHandler(harem_2x_callback, pattern='^harem_2x:', block=False))
 application.add_handler(CallbackQueryHandler(harem_close_callback, pattern='^harem_close:', block=False))
