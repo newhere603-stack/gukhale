@@ -5,7 +5,7 @@ import io
 import logging
 import html
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
@@ -678,16 +678,16 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
         pass
 
 # --- REGISTER HANDLERS ---
-application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid", "grid_easy", "grid_hard"], start_game))
-application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game))
-application.add_handler(CommandHandler(["gridtop", "topgrid"], leaderboard_handler))
-application.add_handler(CommandHandler(["helpgrid", "gridsettings"], settings_cmd))
+application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid", "grid_easy", "grid_hard"], start_game, block=False))
+application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game, block=False))
+application.add_handler(CommandHandler(["gridtop", "topgrid"], leaderboard_handler, block=False))
+application.add_handler(CommandHandler(["helpgrid", "gridsettings"], settings_cmd, block=False))
 
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses), group=5)
-application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="^refresh_grid$"))
-application.add_handler(CallbackQueryHandler(grid_leaderboard_callback, pattern="^wg_top_"))
-application.add_handler(CallbackQueryHandler(vote_stop_callback, pattern="^wg_vote_stop$"))
-application.add_handler(CallbackQueryHandler(settings_callback, pattern="^wg_|ignore"))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses, block=False), group=5)
+application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="^refresh_grid$", block=False))
+application.add_handler(CallbackQueryHandler(grid_leaderboard_callback, pattern="^wg_top_", block=False))
+application.add_handler(CallbackQueryHandler(vote_stop_callback, pattern="^wg_vote_stop$", block=False))
+application.add_handler(CallbackQueryHandler(settings_callback, pattern="^wg_|ignore", block=False))
 
 __mod_name__ = "WordGrid"
 __help__ = """
