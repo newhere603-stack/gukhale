@@ -1,7 +1,11 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
-from shivu import LOGGER
-from config import Config  # Config file import kar li nayi DB ke liye
+import logging
+
+# 🔥 FIX: Sahi path se Config ko import kiya taaki Heroku par "ModuleNotFoundError" na aaye
+from shivu.config import Development as Config
+
+LOGGER = logging.getLogger(__name__)
 
 # ==========================================
 # 1. CHARACTER DATABASE (Purana Wala - Characters Safe Hain)
