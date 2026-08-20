@@ -196,7 +196,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
             1: '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>', 
             2: '<tg-emoji emoji-id="5447203607294265305">🥈</tg-emoji>', 
             3: '<tg-emoji emoji-id="5453902265922376865">🥉</tg-emoji>'
-        }.get(i, f"<code>{i}.</code>")
+        }.get(i, f"<b>{i}.</b>")
         
         # --- THE ONLY CHANGE IS HERE: Removed to_small_caps() around the user's name ---
         link = f"<b><a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a></b>"
