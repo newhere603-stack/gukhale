@@ -83,7 +83,7 @@ def get_rank_badge(rank: int) -> str:
     elif rank <= 50: return "⭐ ᴛᴏᴘ 50"
     return "🏅 ᴄᴏʟʟᴇᴄᴛᴏʀ"
 
-def generate_progress_bar(current: int, total: int, length: int = 8) -> str:
+def generate_progress_bar(current: int, total: int, length: int = 5) -> str:
     if total <= 0: return "░" * length
     percentage = min(1.0, current / total)
     filled = int(round(length * percentage))
