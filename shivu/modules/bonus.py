@@ -6,7 +6,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.error import TelegramError
 
-from shivu import application, user_collection
+# 🔥 NAYA IMPORT: Economy database se connect karne ke liye
+from shivu import application
+from shivu.Database.db import eco_collection as user_collection
 
 IST = pytz.timezone('Asia/Kolkata')
 BONUS_IMG_URL = "https://files.catbox.moe/ewtw4l.png"
