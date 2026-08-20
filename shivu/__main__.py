@@ -29,6 +29,9 @@ from telegram.error import BadRequest
 from shivu import db, shivuu, application, LOGGER, user_totals_collection
 from shivu.modules import ALL_MODULES
 
+# 🔥 NAYA IMPORT: Economy DB sync ke liye
+from shivu.Database.db import eco_collection
+
 OWNER_ID = 7657218453
 SUDO_USERS = [7657218453]
 
@@ -118,6 +121,7 @@ async def setup_database_indexes():
         await collection.create_index("id")
         await user_collection.create_index("id", unique=True)
         await user_collection.create_index("characters.id")
+        await eco_collection.create_index("id", unique=True)
         await group_user_totals_collection.create_index([("user_id", 1), ("group_id", 1)])
         LOGGER.info("⚡ Database Indexes Verified/Created Successfully!")
     except Exception as e:
@@ -297,7 +301,6 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     if not update.message and not update.edited_message:
         return
 
-    # 🔥 Spam Protection for normal messages (ignores them for spawn count if flooding)
     if await check_and_handle_flood(update):
         return
 
@@ -377,7 +380,6 @@ async def _bump_counter(coll, query, update_fields, inc_field='count', inc_by=1)
 
 
 async def guess(update: Update, context: CallbackContext) -> None:
-    # 🔥 Spam Protection Check for Grab (blocks grab spammers)
     if await check_and_handle_flood(update):
         return
 
@@ -414,7 +416,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=spawn_message_links[chat_id])]])
             return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
-        # First Correct Guess Lock
         first_correct_guesses[chat_id] = user_id
         
         time_taken_seconds = 0
@@ -469,6 +470,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 except Exception:
                     pass
 
+                # 🔥 FIX: Dual DB Sync for Grabs (Character goes to user_collection, profile updates safely)
                 user = await user_collection.find_one({'id': user_id})
                 if user:
                     changed = {k: v for k, v in user_fields.items() if user.get(k) != v}
@@ -480,9 +482,18 @@ async def guess(update: Update, context: CallbackContext) -> None:
                         'id': user_id, 
                         **user_fields, 
                         'characters': [character],
-                        'balance': 500,
                         'bot_started': False
                     })
+
+                # 🔥 Ensure user exists in Economy DB as well when they grab a character
+                await eco_collection.update_one(
+                    {'id': user_id},
+                    {
+                        '$set': user_fields,
+                        '$setOnInsert': {'balance': 0, 'tokens': 0}
+                    },
+                    upsert=True
+                )
 
                 try:
                     from shivu.modules.inline import user_cache, query_cache
@@ -512,7 +523,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
 
 async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> None:
     if not await is_admin(update, context):
-        return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ!</b>')
+        return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴْد!</b>')
     chat_id = update.effective_chat.id
     if not context.args or context.args[0].lower() not in ('on', 'off'):
         return await update.message.reply_html('<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> /grab_delete [on|off]')
@@ -572,7 +583,7 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
         return  
     chat_id = update.effective_chat.id
     if chat_id not in last_characters:
-        return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
+        return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇْت!</b>')
     c = last_characters[chat_id]
     rarity_str = c.get('rarity', '🟢 Common')
     r_key = get_rarity_key(rarity_str)
