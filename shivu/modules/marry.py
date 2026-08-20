@@ -8,6 +8,9 @@ from telegram.error import BadRequest
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from shivu import application, user_collection, collection, LOGGER
 
+# 🔥 NAYA IMPORT: Dual DB architecture ke liye Economy collection
+from shivu.Database.db import eco_collection
+
 # ---------------- CUSTOM RARITIES ----------------
 RARITIES = {
     "common": ("🟢", "Common"), "rare": ("🟠", "Rare"), "legendary": ("🟡", "Legendary"),
@@ -92,24 +95,17 @@ PROPOSE_REJECT_TEXTS = [
 
 cooldowns = {"dice": {}, "propose": {}}
 
-# DYNAMIC DISABLED RARITIES (Default: premium, cosmic, mythic are OFF)
 DISABLED_RARITIES = {"premium", "cosmic", "mythic"}
 
-
-# ---------------- EVENT LOOP FIX ----------------
 def fix_motor_loop():
-    """Fixes the 'attached to a different loop' RuntimeError by forcing motor to use the current running loop."""
     try:
         client = user_collection.database.client
         client.get_io_loop = asyncio.get_running_loop
     except Exception as e:
         pass
 
-
-# ---------------- HELPERS ----------------
 def is_authorized(user_id: int) -> bool:
     return user_id == OWNER_ID or user_id in SUDO_USERS
-
 
 def check_cooldown(user_id: int, cmd: str, seconds: int) -> tuple[bool, int]:
     last = cooldowns[cmd].get(user_id, 0)
@@ -118,10 +114,8 @@ def check_cooldown(user_id: int, cmd: str, seconds: int) -> tuple[bool, int]:
         return False, left
     return True, 0
 
-
 def set_cooldown(user_id: int, cmd: str):
     cooldowns[cmd][user_id] = time.time()
-
 
 async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
     try:
@@ -132,19 +126,16 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
     except Exception:
         return False
 
-
 async def get_unique_char(user_id: int, rarity_pattern: str = None):
     try:
         user = await user_collection.find_one({"id": user_id}) or {}
         owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
         
-        # 🔥 FIXED: Ensure user doesn't own it AND it is not auction exclusive
         and_conditions = [
             {"id": {"$nin": owned}},
             {"auction_exclusive": {"$ne": True}}
         ]
         
-        # Build dynamic regex for disabled rarities
         if DISABLED_RARITIES:
             banned_str = "|".join(re.escape(r) for r in DISABLED_RARITIES)
             and_conditions.append({"rarity": {"$not": {"$regex": banned_str, "$options": "i"}}})
@@ -164,7 +155,6 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
         LOGGER.error(f"get_unique_char failed for {user_id}: {e}")
         return None
 
-
 async def add_char_to_user(user_id: int, username: str, first_name: str, char: dict) -> bool:
     try:
         await user_collection.update_one(
@@ -178,7 +168,6 @@ async def add_char_to_user(user_id: int, username: str, first_name: str, char: d
         return True
     except Exception:
         return False
-
 
 async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
@@ -195,61 +184,36 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     except Exception:
         pass
 
-
-# ---------------- RARITY CONTROL COMMANDS (OWNER/SUDO ONLY) ----------------
 async def prarity_on(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
-        return  # No reply for unauthorized users
-    
+        return  
     if not context.args:
         return await update.message.reply_text(
-            "<b>ᴜsᴀɢᴇ: /prarity_on &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n"
-            "<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_on ᴘʀᴇᴍɪᴜᴍ</code>", 
+            "<b>ᴜsᴀɢᴇ: /prarity_on &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_on ᴘʀᴇᴍɪᴜᴍ</code>", 
             parse_mode="HTML"
         )
-    
     rarity_name = " ".join(context.args).lower()
-    
     if rarity_name in DISABLED_RARITIES:
         DISABLED_RARITIES.remove(rarity_name)
-        await update.message.reply_text(
-            f"✅ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ ғᴏʀ /marry & /propose.</b>", 
-            parse_mode="HTML"
-        )
+        await update.message.reply_text(f"✅ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(
-            f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", 
-            parse_mode="HTML"
-        )
-
+        await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def prarity_off(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
-        return  # No reply for unauthorized users
-    
+        return  
     if not context.args:
         return await update.message.reply_text(
-            "<b>ᴜsᴀɢᴇ: /prarity_off &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n"
-            "<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_off ᴘʀᴇᴍɪᴜᴍ</code>", 
+            "<b>ᴜsᴀɢᴇ: /prarity_off &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_off ᴘʀᴇᴍɪᴜᴍ</code>", 
             parse_mode="HTML"
         )
-    
     rarity_name = " ".join(context.args).lower()
-    
     if rarity_name not in DISABLED_RARITIES:
         DISABLED_RARITIES.add(rarity_name)
-        await update.message.reply_text(
-            f"❌ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ ғᴏʀ /marry & /propose.</b>", 
-            parse_mode="HTML"
-        )
+        await update.message.reply_text(f"❌ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(
-            f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", 
-            parse_mode="HTML"
-        )
+        await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
-
-# ---------------- /dice, /marry ----------------
 async def dice_marry(update: Update, context: CallbackContext):
     fix_motor_loop() 
     if not update.message or not update.effective_user:
@@ -277,44 +241,20 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     if val not in (1, 2, 5, 6):
         text = random.choice(DICE_REJECT_TEXTS)
-        return await context.bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            parse_mode="HTML",
-            reply_to_message_id=msg_id
-        )
+        return await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
 
     char = await get_unique_char(user.id, None)
-    
     if not char:
         cooldowns["dice"].pop(user.id, None) 
-        return await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>",
-            parse_mode="HTML",
-            reply_to_message_id=msg_id
-        )
+        return await context.bot.send_message(chat_id=chat_id, text=f"<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>", parse_mode="HTML", reply_to_message_id=msg_id)
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
-    
     display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
-    caption = (
-        f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b>\n"
-        f"<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b>💎 ʀᴀʀɪᴛʏ: {display_rarity}</b>"
-    )
+    caption = f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b>\n<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n<b>💎 ʀᴀʀɪᴛʏ: {display_rarity}</b>"
     
-    await context.bot.send_photo(
-        chat_id=chat_id,
-        photo=char["img_url"],
-        caption=caption,
-        parse_mode="HTML",
-        reply_to_message_id=msg_id
-    )
+    await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
     await send_win_log(context, user, char, "dice")
 
-
-# ---------------- /propose ----------------
 async def propose(update: Update, context: CallbackContext):
     fix_motor_loop() 
     if not update.message or not update.effective_user:
@@ -325,7 +265,6 @@ async def propose(update: Update, context: CallbackContext):
     msg_id = update.message.message_id
     plain_name = user.first_name
 
-    # FSub Check
     if not await is_user_joined(context, user.id):
         btn = [
             [InlineKeyboardButton("ᴊᴏɪɴ ᴜᴘᴅᴀᴛᴇ", url=UPDATE_GROUP_URL)],
@@ -339,7 +278,8 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    user_data = await user_collection.find_one({"id": user.id})
+    # 🔥 FIX: Balance check ab Economy DB se hoga
+    user_data = await eco_collection.find_one({"id": user.id})
     if not user_data or user_data.get("balance", 0) < PROPOSAL_COST:
         return await context.bot.send_message(
             chat_id=chat_id,
@@ -357,11 +297,10 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    # Deduct coins & set cooldown
-    await user_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
+    # 🔥 FIX: Deduct coins from Economy DB
+    await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
     set_cooldown(user.id, "propose")
 
-    # Phase 1: Start Message
     msg = await context.bot.send_photo(
         chat_id=chat_id,
         photo=random.choice(PROPOSE_IMAGES),
@@ -371,24 +310,18 @@ async def propose(update: Update, context: CallbackContext):
     )
     await asyncio.sleep(2)
 
-    # Phase 2: Status Update
     try:
-        await msg.edit_caption(
-            caption=random.choice(PROPOSING_LOADING_TEXTS),
-            parse_mode="HTML"
-        )
+        await msg.edit_caption(caption=random.choice(PROPOSING_LOADING_TEXTS), parse_mode="HTML")
     except Exception:
         pass
 
     await asyncio.sleep(2.5)
 
-    # Delete Phase 1 message
     try:
         await msg.delete()
     except Exception:
         pass
 
-    # Phase 3: Result (Rejection)
     if random.random() > PROPOSE_SUCCESS_RATE:
         reject_text = random.choice(PROPOSE_REJECT_TEXTS)
         return await context.bot.send_photo(
@@ -399,21 +332,20 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    # Phase 3: Result (Win)
     char = await get_unique_char(user.id, None)
     
     if not char:
-        await user_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
-        cooldowns["propose"].pop(user.id, None) 
+        # 🔥 FIX: Refund coins to Economy DB
+        await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
+        # 🔥 FIX: Cooldown reset text aur code se pop hata diya taaki cooldown continue rahe
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ. (ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ)</b>",
+            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ғᴏʀ ʏᴏᴜ.</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
-    
     display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
     caption = (
         f"<b>🎉 ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ ʜᴀs ʙᴇᴇɴ ᴀᴄᴄᴇᴘᴛᴇᴅ! 💖</b>\n\n"
@@ -422,17 +354,9 @@ async def propose(update: Update, context: CallbackContext):
         f"<b>🎞 ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
         f"<b>🔖 ɪᴅ: {char.get('id', 'N/A')}</b>"
     )
-    await context.bot.send_photo(
-        chat_id=chat_id,
-        photo=char["img_url"],
-        caption=caption,
-        parse_mode="HTML",
-        reply_to_message_id=msg_id
-    )
+    await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
     await send_win_log(context, user, char, "propose")
 
-
-# ---------------- CALLBACK HANDLER FOR TRY AGAIN ----------------
 async def propose_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     if not query:
@@ -440,34 +364,24 @@ async def propose_callback(update: Update, context: CallbackContext):
 
     if query.data == "propose_checksub":
         user = query.from_user
-        
         if not await is_user_joined(context, user.id):
-            return await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜᴘ ʏᴇᴛ!", show_alert=True)
+            return await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ᴛʜᴇ ᴜᴘᴅᴀᴛᴇ ɢʀᴏᴜ𝐩 ʏᴇᴛ!", show_alert=True)
         
         await query.answer("✅ ᴠᴇʀɪғɪᴇᴅ! ʏᴏᴜ ᴄᴀɴ ɴᴏᴡ ᴘʀᴏᴘᴏsᴇ.", show_alert=False)
-        
         try:
             await query.message.delete()
         except Exception:
             pass
-        
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=f"<b>✨ ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>",
-            parse_mode="HTML"
-        )
+        await context.bot.send_message(chat_id=query.message.chat_id, text=f"<b>✨ ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>", parse_mode="HTML")
 
-
-# ---------------- /cdm (owner/sudo) ----------------
 async def cdm_cmd(update: Update, context: CallbackContext):
     if not update.message or not update.effective_user:
         return
-        
     chat_id = update.effective_chat.id
     msg_id = update.message.message_id
 
     if not is_authorized(update.effective_user.id):
-        return  # No reply for unauthorized users
+        return  
 
     reply = update.message.reply_to_message if update.message else None
     target_id = None
@@ -502,8 +416,6 @@ async def cdm_cmd(update: Update, context: CallbackContext):
         reply_to_message_id=msg_id
     )
 
-
-# ---------------- HANDLERS ----------------
 application.add_handler(CommandHandler(["dice", "marry"], dice_marry, block=False))
 application.add_handler(CommandHandler(["propose"], propose, block=False))
 application.add_handler(CommandHandler(["cdm"], cdm_cmd, block=False))
