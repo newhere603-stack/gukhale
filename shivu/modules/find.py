@@ -8,14 +8,12 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.error import BadRequest
 from shivu import application, db, user_collection
 
-# 🔥 NAYA IMPORT: Economy database se connect karne ke liye
+# 🔥 Economy database se connect karne ke liye
 from shivu.Database.db import eco_collection
 
-# --- Databases ---
-try:
-    from shivu import collection
-except ImportError:
-    collection = db['anime_characters_lol'] 
+# 🔥 FIX: Yahan 'shivu' se galat collection aane ki waja se characters nahi mil rahe the. 
+# Ab ise direct sahi anime database collection par fix kar diya hai!
+collection = db['anime_characters_lol'] 
 
 try:
     auction_collection = db['auctions']
@@ -169,7 +167,6 @@ async def toggle_rarity(update: Update, context: CallbackContext):
 
 # --- Deals Loader ---
 async def load_user_deals(user_id):
-    # Marketplace characters read from user_collection (old DB)
     user = await user_collection.find_one({'id': user_id})
     if not user: return None
         
@@ -224,7 +221,19 @@ async def load_user_deals(user_id):
 
 # --- UIs ---
 async def render_mp_message(update_obj, user, index, is_edit=False):
-    chars = user['mp_data']['chars']
+    chars = user.get('mp_data', {}).get('chars', [])
+    
+    # 🔥 FIX: Crash prevention agar chars list khali ho
+    if not chars:
+        text = f"<b><tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('marketplace is currently empty!')}</b>"
+        if is_edit:
+            try:
+                return await update_obj.edit_message_text(text=text, parse_mode='HTML')
+            except BadRequest:
+                return await update_obj.message.reply_text(text=text, parse_mode='HTML')
+        else:
+            return await update_obj.message.reply_text(text=text, parse_mode='HTML')
+
     if index >= len(chars): index = 0
     char = chars[index]
     user_id = user['id'] 
@@ -471,7 +480,6 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await render_auction_ui(query, active_auc, user_id, active_auc['highest_bid'] + 1000)
                     return
                 
-                # 🔥 FIX: Checking balance from Economy DB securely
                 eco_user = await eco_collection.find_one({'id': clicker_id})
                 if not eco_user or eco_user.get('balance', 0) < proposed:
                     await query.answer(to_small_caps(f"Low balance! You need {proposed:,} 💸"), show_alert=True)
@@ -532,9 +540,12 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
 
             elif data.startswith("mp_buy_"):
                 index = int(parts[3])
-                char = user['mp_data']['chars'][index]
+                chars = user.get('mp_data', {}).get('chars', [])
+                if not chars or index >= len(chars):
+                    await query.answer(to_small_caps("Character not found or expired!"), show_alert=True)
+                    return
+                char = chars[index]
                 
-                # 🔥 FIX: Double-buy race condition block (Atomic UI update)
                 mark_sold = await user_collection.update_one(
                     {'id': user_id, f'mp_data.chars.{index}.is_sold': {'$ne': True}},
                     {'$set': {f'mp_data.chars.{index}.is_sold': True}}
@@ -543,14 +554,12 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await query.answer(to_small_caps("Already purchased or processing!"), show_alert=True)
                     return
                 
-                # 🔥 FIX: Deduct balance from Economy DB securely
                 eco_user = await eco_collection.find_one_and_update(
                     {'id': user_id, 'balance': {'$gte': char['mp_sale']}},
                     {'$inc': {'balance': -char['mp_sale']}}
                 )
                 
                 if not eco_user:
-                    # Balance nahi tha, is_sold ko wapas false kar do
                     await user_collection.update_one({'id': user_id}, {'$set': {f'mp_data.chars.{index}.is_sold': False}})
                     await query.answer(to_small_caps("Low balance!"), show_alert=True)
                     return
@@ -558,7 +567,6 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 char['is_sold'] = True
                 clean_char = {k: v for k, v in char.items() if k not in ['mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
                 
-                # Add character securely to Harem DB
                 await user_collection.update_one({'id': user_id}, {'$push': {'characters': clean_char}})
                 
                 await query.answer(to_small_caps("✅ Transaction successful!"), show_alert=True)
@@ -575,7 +583,6 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 return
 
             elif data.startswith("mp_ref_"):
-                # 🔥 FIX: Economy DB connection
                 eco_user = await eco_collection.find_one_and_update(
                     {'id': user_id, 'balance': {'$gte': 30000}},
                     {'$inc': {'balance': -30000}}
@@ -715,7 +722,6 @@ async def end_auction(update: Update, context: CallbackContext):
     clean_winner_name = str(winner['name']).replace('<', '&lt;').replace('>', '&gt;')
     winner_mention = f"<b><a href='tg://user?id={bidder_id}'>{to_small_caps(clean_winner_name)}</a></b>"
     
-    # 🔥 FIX: Ab ye balance atomic tareeke se Economy DB se minus karega
     eco_user = await eco_collection.find_one_and_update(
         {'id': bidder_id, 'balance': {'$gte': winning_bid}},
         {'$inc': {'balance': -winning_bid}}
@@ -726,16 +732,14 @@ async def end_auction(update: Update, context: CallbackContext):
     
     if eco_user and char:
         clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
-        # Character Harem db me jayega
         await user_collection.update_one({'id': bidder_id}, {'$push': {'characters': clean_char}})
         
         header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION ENDED!')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n{bold_sc('WINNER: ')}"
         footer = f"\n{bold_sc('WINNING BID:')} {bold_sc(f'{winning_bid:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
-        msg = f"{header}{winner_mention}{footer}"
+v        msg = f"{header}{winner_mention}{footer}"
         
         await update.message.reply_text(msg, parse_mode='HTML')
     else:
-        # User ne balance transfer kar diya tha, auction cancel
         header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION ENDED WITH ERROR!')}\n\n"
         msg = f"{header}{winner_mention} {bold_sc('did not have enough coins to pay the bid!')}\n{bold_sc('Auction has been cancelled.')}"
         await update.message.reply_text(msg, parse_mode='HTML')
