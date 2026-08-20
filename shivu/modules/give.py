@@ -5,8 +5,12 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 import html
 
-from shivu import collection, user_collection, application
+# 🔥 FIX: shivu se 'collection' hata kar direct sahi database table set ki hai
+from shivu import db, user_collection, application
 from shivu.modules.database.sudo import is_user_sudo
+
+# Asli characters wali collection yahan explicitly set kar di hai
+collection = db['anime_characters_lol']
 
 # --- CONFIGURATION ---
 LOG_GROUP_ID = -1003893927065 
@@ -73,7 +77,12 @@ async def send_character_media(msg, media_url: str, caption: str):
             await msg.reply_video(video=media_url, caption=caption, parse_mode=ParseMode.HTML)
 
 async def give_character(receiver_id: int, character_id: str) -> CharacterGiftResult:
-    character = await collection.find_one({'id': character_id})
+    # 🔥 FIX: String aur Integer dono formats check karenge type mismatch rokne ke liye
+    search_ids = [str(character_id)]
+    if str(character_id).isdigit():
+        search_ids.append(int(character_id))
+
+    character = await collection.find_one({'id': {'$in': search_ids}})
     if not character:
         raise ValueError("Character ID database mein nahi mila.")
     
@@ -94,7 +103,7 @@ async def give_character(receiver_id: int, character_id: str) -> CharacterGiftRe
         f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> {to_small_caps('ID')}:</b> <code>{character['id']}</code>"
     )
     
-    return CharacterGiftResult(character['img_url'], caption, character['name'], character['id'])
+    return CharacterGiftResult(character['img_url'], caption, character['name'], str(character['id']))
 
 async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
