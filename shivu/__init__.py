@@ -34,22 +34,39 @@ LEAVELOGS = "-1003893927065"
 
 application = Application.builder().token(TOKEN).build()
 shivuu = Client("Shivu", api_id, api_hash, bot_token=TOKEN)
-lol = AsyncIOMotorClient(mongo_url)
 
-db = lol['Character_catcher']
-set_on_data = db['set_on_data']
-refeer_collection = db['refeer_collection']
-set_off_data = db['set_off_data']
-collection = db['anime_characters_lol']
-safari_cooldown_collection = db["safari_cooldown"]
-safari_users_collection = db["safari_users_collection"]
-sudo_users_collection= db["sudos"]
-user_totals_collection = db['user_totals_lmaoooo']
-user_collection = db["user_collection_lmaoooo"]
-global_ban_users_collection = db["global_ban_users_collection"]
-group_user_totals_collection = db['group_user_totalsssssss']
-top_global_groups_collection = db['top_global_groups']
-pm_users = db['total_pm_users']
-banned_groups_collection = db['Banned_Groups']
-BANNED_USERS = db['Banned_Users']
-registered_users = db['registered_users']
+# ==========================================
+# 1. ECONOMY DATABASE CLIENT (Config mongo_url)
+# ==========================================
+eco_client = AsyncIOMotorClient(mongo_url)
+eco_db = eco_client['Character_catcher']
+eco_collection = eco_db['economy_users'] # Coins aur Tokens ke liye dedicated
+
+# ==========================================
+# 2. CHARACTER / HAREM DATABASE CLIENT (teamdaxx123 cluster - Waifus Safe Hain)
+# ==========================================
+CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://teamdaxx123:teamdaxx123@cluster0.ysbpgcp.mongodb.net/?retryWrites=true&w=majority")
+chara_client = AsyncIOMotorClient(CHARA_MONGO_URI)
+chara_db = chara_client['GRABBING_YOUR_WAIFU']
+
+# --- COLLECTIONS MAPPING ---
+db = eco_db # Default reference for general tables
+set_on_data = eco_db['set_on_data']
+refeer_collection = eco_db['refeer_collection']
+set_off_data = eco_db['set_off_data']
+
+# 🔥 Characters aur Harem purane secure cluster par rahenge
+collection = chara_db['anime_characters_lol'] 
+user_collection = chara_db["user_collection_lmaoooo"] 
+
+safari_cooldown_collection = eco_db["safari_cooldown"]
+safari_users_collection = eco_db["safari_users_collection"]
+sudo_users_collection = eco_db["sudos"]
+user_totals_collection = eco_db['user_totals_lmaoooo']
+global_ban_users_collection = eco_db["global_ban_users_collection"]
+group_user_totals_collection = eco_db['group_user_totalsssssss']
+top_global_groups_collection = eco_db['top_global_groups']
+pm_users = eco_db['total_pm_users']
+banned_groups_collection = eco_db['Banned_Groups']
+BANNED_USERS = eco_db['Banned_Users']
+registered_users = eco_db['registered_users']
