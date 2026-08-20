@@ -9,7 +9,9 @@ from telegram.ext import CommandHandler, CallbackContext
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from shivu import application, user_collection
+# 🔥 NAYA IMPORT: Economy database se connect karne ke liye
+from shivu import application
+from shivu.Database.db import eco_collection as user_collection
 
 COOLDOWN_SEC = 73
 FEE = 300
@@ -60,9 +62,14 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             )
             return
 
+    # 🔥 FIX: Cooldown turant lock kar diya taaki spam/race-condition bypass na ho
+    user_cooldowns[user_id] = now
+
     try:
         user = await user_collection.find_one({'id': user_id})
         if not user:
+            # Agar DB fail hua toh cooldown wapas hata do taaki user stuck na ho
+            user_cooldowns.pop(user_id, None)
             await update.message.reply_text(
                 "<b>sᴛᴀʀᴛ ᴍᴇ ꜰɪʀsᴛ!</b>",
                 parse_mode=ParseMode.HTML
@@ -70,6 +77,7 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             return
 
         if user.get('balance', 0) < MIN_BALANCE:
+            user_cooldowns.pop(user_id, None)
             await update.message.reply_text(
                 f"<b>ʏᴏᴜ ɴᴇᴇᴅ ᴀᴛ ʟᴇᴀsᴛ {MIN_BALANCE} ᴄᴏɪɴs ᴛᴏ ᴇxᴘʟᴏʀᴇ!</b>",
                 parse_mode=ParseMode.HTML
@@ -79,11 +87,12 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         reward = random.randint(MIN_REWARD, MAX_REWARD)
         net_reward = reward - FEE
 
+        # Single atomic update for balance
         await user_collection.update_one(
             {'id': user_id},
             {'$inc': {'balance': net_reward}}
         )
-        user_cooldowns[user_id] = now
+        
         action = random.choice(EXPLORE_ACTIONS)
 
         # Using correct emoji-id attribute for Telegram custom emojis
@@ -94,6 +103,8 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
         )
 
     except Exception as e:
+        # Error aane par bhi cooldown lock hata do
+        user_cooldowns.pop(user_id, None)
         logger.error(f"Explore error: {e}")
         await update.message.reply_text(
             f"<b>ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>",
