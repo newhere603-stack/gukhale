@@ -367,8 +367,8 @@ async def crem_cmd(update: Update, context: CallbackContext):
 application.add_handler(TypeHandler(Update, ban_interceptor), group=-10)
 
 # Handlers registration
-application.add_handler(CommandHandler(['ban'], ban_user, block=False))
-application.add_handler(CommandHandler(['unban'], unban_user, block=False))
+application.add_handler(CommandHandler(['gban'], ban_user, block=False))
+application.add_handler(CommandHandler(['gunban'], unban_user, block=False))
 application.add_handler(CommandHandler(['destroy'], destroy_cmd, block=False))
 application.add_handler(CommandHandler(['setded'], setded_cmd, block=False))
 application.add_handler(CommandHandler(['tadd'], tadd_cmd, block=False))
