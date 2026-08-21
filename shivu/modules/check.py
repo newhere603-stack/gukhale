@@ -12,6 +12,14 @@ from shivu import application, db, user_collection
 
 collection = db['anime_characters_lol']
 
+# --- OWNER OR SUDO CHECK ---
+OWNER_ID = 7657218453
+SUDO_USERS = [7657218453]
+
+def is_authorized(user_id):
+    return user_id == OWNER_ID or user_id in SUDO_USERS
+# ---------------------------
+
 char_cache = TTLCache(maxsize=2000, ttl=600)
 anime_cache = TTLCache(maxsize=1000, ttl=900)
 user_cache = TTLCache(maxsize=500, ttl=300)
@@ -286,6 +294,74 @@ async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE
         parse_mode=ParseMode.HTML
     )
 
+# 🔥 FIX RARITY COMMAND HO GAYA ADD 🔥
+async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        requester_id = update.effective_user.id
+        if not is_authorized(requester_id):
+            return 
+
+        if not context.args:
+            await update.message.reply_text(f"<b>⚠️ {to_small_caps('usage:')}</b> <code>/fixrarity [char_id]</code>", parse_mode=ParseMode.HTML)
+            return
+
+        char_id_input = str(context.args[0])
+        
+        search_ids = [char_id_input]
+        if char_id_input.isdigit():
+            search_ids.append(str(int(char_id_input))) 
+            search_ids.append(int(char_id_input))      
+
+        global_char = await collection.find_one({'id': {'$in': search_ids}})
+        
+        if not global_char:
+            await update.message.reply_text(f"<b>❌ {to_small_caps('character id')} <code>{char_id_input}</code> {to_small_caps('not found in database!')}</b>", parse_mode=ParseMode.HTML)
+            return
+
+        current_rarity = global_char.get('rarity', 'Unknown')
+        current_name = global_char.get('name', 'Unknown')
+
+        users_cursor = user_collection.find({"characters.id": {"$in": search_ids}})
+        affected_count = 0
+        
+        async for user in users_cursor:
+            updated_chars = []
+            modified = False
+            for c in user.get('characters', []):
+                if c.get('id') in search_ids:
+                    c['rarity'] = current_rarity
+                    c['name'] = current_name
+                    modified = True
+                updated_chars.append(c)
+            
+            if modified:
+                await user_collection.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"characters": updated_chars}}
+                )
+                affected_count += 1
+                
+        # Cache remove karna zaruri hai takki updated info aaye
+        if char_id_input in char_cache:
+            del char_cache[char_id_input]
+        clear_char_cache(char_id_input)
+
+        success_msg = (
+            f"<b>✅ {to_small_caps('database updated successfully!')}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"<b>🆔 {to_small_caps('char id:')}</b> <code>{char_id_input}</code>\n"
+            f"<b>📝 {to_small_caps('char name:')}</b> <code>{to_small_caps(current_name)}</code>\n"
+            f"<b>✨ {to_small_caps('current rarity:')}</b> <code>{to_small_caps(current_rarity)}</code>\n"
+            f"<b>👥 {to_small_caps('users affected:')}</b> <code>{affected_count}</code> {to_small_caps('players')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━"
+        )
+        await update.message.reply_text(success_msg, parse_mode=ParseMode.HTML)
+
+    except Exception as e:
+        await update.message.reply_text(f"<b>⚠️ {to_small_caps('error:')}</b> <code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+
+
 application.add_handler(CommandHandler("check", check_character, block=False))
+application.add_handler(CommandHandler("fixrarity", fixrarity_cmd, block=False)) # Fixrarity yahan register kar diya gaya hai
 application.add_handler(CallbackQueryHandler(handle_owners_pagination, pattern=r"^owners_", block=False))
 application.add_handler(CallbackQueryHandler(handle_back_load := handle_back_to_card, pattern=r"^back_", block=False))
