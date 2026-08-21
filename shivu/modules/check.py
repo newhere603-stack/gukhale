@@ -60,7 +60,7 @@ def to_small_caps(text: str) -> str:
         'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
         'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
         'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
-        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'x', 'x': 'x', 
+        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', # The 'w': 'x' typo is fixed here
         'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
         'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
         'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 
@@ -76,8 +76,13 @@ def bold_sc(text: str) -> str:
 
 @dataclass
 class Char:
-    id: str; name: str; anime: str; rarity: str; img_url: str
-    is_video: bool = False; price: int = 0
+    id: str
+    name: str
+    anime: str
+    rarity: str
+    img_url: str
+    is_video: bool = False
+    price: int = 0
 
     @classmethod
     def from_dict(cls, d: Dict) -> 'Char':
@@ -279,7 +284,7 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if update.effective_user.id != OWNER_ID:
         return 
 
-    if not update.message.reply_to_message:
+    if not update.message or not update.message.reply_to_message:
         return await update.message.reply_text(f"⚠️ {bold_sc('error: reply to a high-quality photo or video with')} <code>/getid</code>.", parse_mode=ParseMode.HTML)
 
     reply_msg = update.message.reply_to_message
@@ -312,7 +317,6 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         search_ids = [char_id_input]
         if char_id_input.isdigit():
-            search_ids.append(str(int(char_id_input))) 
             search_ids.append(int(char_id_input))      
 
         global_char = await collection.find_one({'id': {'$in': search_ids}})
