@@ -60,7 +60,7 @@ def to_small_caps(text: str) -> str:
         'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
         'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
         'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
-        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 
+        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'x', 'x': 'x', 
         'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
         'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
         'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 
@@ -250,9 +250,10 @@ async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
             reply_markup=kb, parse_mode=ParseMode.HTML
         )
 
+# 🔥 CHECK CHARACTER COMMAND
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/check &lt;id&gt;</code>", parse_mode=ParseMode.HTML)
+        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/check <id></code>", parse_mode=ParseMode.HTML)
     char = await get_char(context.args[0])
     if not char:
         return await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('character not found in database!')}", parse_mode=ParseMode.HTML)
@@ -261,40 +262,42 @@ async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, total_pages, back=False))
 
-async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    q = update.callback_query
-    await q.answer()
-    _, cid, page = q.data.split('_')
-    page = int(page)
-    char = await get_char(cid)
-    owners = await get_owners(cid)
-    if not char:
-        return await q.answer(to_small_caps("character not found"), show_alert=True)
-    gcount = await global_count(cid)
-    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
-    await q.edit_message_caption(
-        caption=owners_caption(char, owners, page, gcount),
-        reply_markup=pagination_kb(cid, page, total_pages, back=True),
-        parse_mode=ParseMode.HTML
-    )
+# 🔥 FIND ANIME COMMAND
+async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/anime <name></code>", parse_mode=ParseMode.HTML)
+    name = ' '.join(context.args)
+    chars = await find_by_anime(name)
+    if not chars:
+        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('no characters found from')} <b><i>{to_small_caps(escape(name))}</i></b>", parse_mode=ParseMode.HTML)
+    r = process_search(chars)
+    text, _ = find_caption(name, r, 0, True)
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    q = update.callback_query
-    await q.answer()
-    cid = q.data.split('_')[1]
-    char = await get_char(cid)
-    if not char:
-        return await q.answer(to_small_caps("character not found"), show_alert=True)
-    gcount = await global_count(cid)
-    owners = await get_owners(cid)
-    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
-    await q.edit_message_caption(
-        caption=card_caption(char, gcount),
-        reply_markup=pagination_kb(cid, 0, total_pages, back=False),
-        parse_mode=ParseMode.HTML
-    )
+# 🔥 GET ID COMMAND (RESTORED)
+async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != OWNER_ID:
+        return 
 
-# 🔥 FIX RARITY COMMAND HO GAYA ADD 🔥
+    if not update.message.reply_to_message:
+        return await update.message.reply_text(f"⚠️ {bold_sc('error: reply to a high-quality photo or video with')} <code>/getid</code>.", parse_mode=ParseMode.HTML)
+
+    reply_msg = update.message.reply_to_message
+    instruction = bold_sc("copy this id and paste it in mongodb as 'img_url'!")
+
+    if reply_msg.photo:
+        file_id = reply_msg.photo[-1].file_id
+        await update.message.reply_text(f"📸 {bold_sc('photo file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
+    elif reply_msg.video:
+        file_id = reply_msg.video.file_id
+        await update.message.reply_text(f"🎥 {bold_sc('video file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
+    elif reply_msg.document:
+        file_id = reply_msg.document.file_id
+        await update.message.reply_text(f"📁 {bold_sc('document file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(f"⚠️ {bold_sc('invalid media: this is not a proper photo or video.')}", parse_mode=ParseMode.HTML)
+
+# 🔥 FIX RARITY COMMAND
 async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         requester_id = update.effective_user.id
@@ -341,7 +344,6 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 affected_count += 1
                 
-        # Cache remove karna zaruri hai takki updated info aaye
         if char_id_input in char_cache:
             del char_cache[char_id_input]
         clear_char_cache(char_id_input)
@@ -360,8 +362,44 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"<b>⚠️ {to_small_caps('error:')}</b> <code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
 
+# 🔥 PAGINATION HANDLERS
+async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+    _, cid, page = q.data.split('_')
+    page = int(page)
+    char = await get_char(cid)
+    owners = await get_owners(cid)
+    if not char:
+        return await q.answer(to_small_caps("character not found"), show_alert=True)
+    gcount = await global_count(cid)
+    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    await q.edit_message_caption(
+        caption=owners_caption(char, owners, page, gcount),
+        reply_markup=pagination_kb(cid, page, total_pages, back=True),
+        parse_mode=ParseMode.HTML
+    )
 
+async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+    cid = q.data.split('_')[1]
+    char = await get_char(cid)
+    if not char:
+        return await q.answer(to_small_caps("character not found"), show_alert=True)
+    gcount = await global_count(cid)
+    owners = await get_owners(cid)
+    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    await q.edit_message_caption(
+        caption=card_caption(char, gcount),
+        reply_markup=pagination_kb(cid, 0, total_pages, back=False),
+        parse_mode=ParseMode.HTML
+    )
+
+# --- HANDLER REGISTRATIONS ---
 application.add_handler(CommandHandler("check", check_character, block=False))
-application.add_handler(CommandHandler("fixrarity", fixrarity_cmd, block=False)) # Fixrarity yahan register kar diya gaya hai
+application.add_handler(CommandHandler("anime", find_anime, block=False))
+application.add_handler(CommandHandler("getid", get_file_id, block=False))
+application.add_handler(CommandHandler("fixrarity", fixrarity_cmd, block=False))
 application.add_handler(CallbackQueryHandler(handle_owners_pagination, pattern=r"^owners_", block=False))
-application.add_handler(CallbackQueryHandler(handle_back_load := handle_back_to_card, pattern=r"^back_", block=False))
+application.add_handler(CallbackQueryHandler(handle_back_to_card, pattern=r"^back_", block=False))
