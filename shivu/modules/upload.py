@@ -20,6 +20,9 @@ from telegram.ext import CommandHandler, ContextTypes
 from telegram.error import TelegramError
 
 from shivu import application, collection, db, CHARA_CHANNEL_ID, SUPPORT_CHAT, sudo_users
+from shivu import application, db, user_collection
+
+collection = db['anime_characters_lol']
 
 # Import characters and uploader_users from shivu safely
 try:
