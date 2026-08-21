@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import CommandHandler, CallbackContext
+from telegram.ext import CommandHandler, CallbackContext, TypeHandler, ApplicationHandlerStop
 
 # Main database collections ko import kiya gaya hai
 from shivu import application, user_collection, db, collection
@@ -14,20 +14,124 @@ def is_authorized(user_id):
     return user_id == OWNER_ID or user_id in SUDO_USERS
 
 bot_settings_collection = db['bot_settings']
+banned_collection = db['banned_users'] # 🔥 BAN SYSTEM KE LIYE NAYA COLLECTION
 
 # Economy Fields
-COIN_FIELD = 'balance'   # /bal ke liye
-TOKEN_FIELD = 'tokens'   # /tbal ke liye
-GOLD_4_FIELD = 'gold_4'  # 4-letter word seek gold
-GOLD_5_FIELD = 'gold'    # 5-letter word seek gold (default 'gold')
-GOLD_6_FIELD = 'gold_6'  # 6-letter word seek gold
+COIN_FIELD = 'balance'   
+TOKEN_FIELD = 'tokens'   
+GOLD_4_FIELD = 'gold_4'  
+GOLD_5_FIELD = 'gold'    
+GOLD_6_FIELD = 'gold_6'  
+
+# --- Global Ban Interceptor (Har update se pehle check karega) ---
+async def ban_interceptor(update: Update, context: CallbackContext):
+    if not update.effective_user:
+        return
+        
+    user_id = update.effective_user.id
+    
+    # Check if user is in banned database
+    is_banned = await banned_collection.find_one({'user_id': user_id})
+    if is_banned:
+        # Agar banned user text msg bhejta hai to reply karega
+        if update.message:
+            await update.message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ʙᴀᴋᴀ! 🚫</b>", parse_mode='HTML')
+        # Bot ki aage ki saari processing rok dega (kuch aur use nahi kar payega)
+        raise ApplicationHandlerStop()
+
+
+# --- /ban <user_id> OR Reply ---
+async def ban_user(update: Update, context: CallbackContext):
+    try:
+        requester_id = update.effective_user.id
+        if not is_authorized(requester_id):
+            return 
+
+        text = update.message.text or update.message.caption
+        parts = text.split()
+        args = parts[1:]
+
+        target_id = None
+
+        if update.message.reply_to_message:
+            target_id = update.message.reply_to_message.from_user.id
+        elif len(args) >= 1:
+            target_id = args[0]
+
+        if not target_id:
+            await update.message.reply_text("<b>ᴜsᴀɢᴇ: /ban ᴜsᴇʀ_ɪᴅ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ</b>", parse_mode='HTML')
+            return
+
+        try:
+            target_id = int(target_id)
+        except ValueError:
+            await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ.</b>", parse_mode='HTML')
+            return
+
+        # Sudo user ya Owner ko ban hone se rokne ke liye
+        if is_authorized(target_id):
+            await update.message.reply_text("<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴀɴ ᴀɴ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴜsᴇʀ! ⚠️</b>", parse_mode='HTML')
+            return
+
+        # Database me add karna
+        await banned_collection.update_one(
+            {'user_id': target_id},
+            {'$set': {'user_id': target_id}},
+            upsert=True
+        )
+
+        await update.message.reply_text(f"<b>ᴜsᴇʀ <code>{target_id}</code> ʜᴀs ʙᴇᴇɴ ʙᴀɴɴᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ! 🛑</b>", parse_mode='HTML')
+
+    except Exception as e:
+        await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
+
+
+# --- /unban <user_id> OR Reply ---
+async def unban_user(update: Update, context: CallbackContext):
+    try:
+        requester_id = update.effective_user.id
+        if not is_authorized(requester_id):
+            return 
+
+        text = update.message.text or update.message.caption
+        parts = text.split()
+        args = parts[1:]
+
+        target_id = None
+
+        if update.message.reply_to_message:
+            target_id = update.message.reply_to_message.from_user.id
+        elif len(args) >= 1:
+            target_id = args[0]
+
+        if not target_id:
+            await update.message.reply_text("<b>ᴜsᴀɢᴇ: /unban ᴜsᴇʀ_ɪᴅ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ</b>", parse_mode='HTML')
+            return
+
+        try:
+            target_id = int(target_id)
+        except ValueError:
+            await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ.</b>", parse_mode='HTML')
+            return
+
+        # Database se remove karna
+        result = await banned_collection.delete_one({'user_id': target_id})
+        
+        if result.deleted_count > 0:
+            await update.message.reply_text(f"<b>ᴜsᴇʀ <code>{target_id}</code> ʜᴀs ʙᴇᴇɴ ᴜɴʙᴀɴɴᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ! ✅</b>", parse_mode='HTML')
+        else:
+            await update.message.reply_text(f"<b>ᴜsᴇʀ <code>{target_id}</code> ɪs ɴᴏᴛ ʙᴀɴɴᴇᴅ.</b>", parse_mode='HTML')
+
+    except Exception as e:
+        await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
+
 
 # --- Helper for adding/removing currency ---
 async def modify_currency(update: Update, context: CallbackContext, field: str, currency_name: str, is_add: bool):
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            return  # Normal users completely ignored
+            return  
             
         text = update.message.text or update.message.caption
         if not text:
@@ -41,7 +145,6 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
         amount = None
         target_name = "ᴜsᴇʀ"
         
-        # Check if replying to a user
         if update.message.reply_to_message:
             target_user = update.message.reply_to_message.from_user
             target_id = target_user.id
@@ -67,10 +170,8 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
             await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ ᴏʀ ᴀᴍᴏᴜɴᴛ.</b>", parse_mode='HTML')
             return
             
-        # 🔥 FIX: Currency operations ab strictly eco_collection par hongi
         eco_user = await eco_collection.find_one({'id': target_id})
         
-        # Fetch Name if not from reply
         if update.message.reply_to_message is None:
             if eco_user and 'first_name' in eco_user:
                 target_name = eco_user['first_name']
@@ -83,7 +184,6 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
 
         mention = f'<a href="tg://user?id={target_id}">{target_name}</a>'
 
-        # Update currency with Auto-Upsert (Agar user DB me nahi hai toh create kar dega)
         if is_add:
             await eco_collection.update_one(
                 {'id': target_id}, 
@@ -99,7 +199,6 @@ async def modify_currency(update: Update, context: CallbackContext, field: str, 
                 upsert=True
             )
             
-        # Fetch updated balance
         eco_user_updated = await eco_collection.find_one({'id': target_id})
         new_balance = eco_user_updated.get(field, 0)
         
@@ -155,7 +254,6 @@ async def destroy_cmd(update: Update, context: CallbackContext):
             await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ.</b>", parse_mode='HTML')
             return
 
-        # Destroy command Harem (user_collection) par hi chalegi
         user = await user_collection.find_one({'id': target_id})
         if not user:
             await update.message.reply_text("<b>ᴜsᴇʀ ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ.</b>", parse_mode='HTML')
@@ -180,7 +278,7 @@ async def destroy_cmd(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
 
 
-# --- /fixrarity <char_id> (ADVANCED DYNAMIC UPDATE & ID FIX) ---
+# --- /fixrarity <char_id> ---
 async def fixrarity_cmd(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
@@ -211,7 +309,6 @@ async def fixrarity_cmd(update: Update, context: CallbackContext):
         current_rarity = global_char.get('rarity', 'Unknown')
         current_name = global_char.get('name', 'Unknown')
 
-        # Harem DB mein rarities fix karega
         users_cursor = user_collection.find({"characters.id": {"$in": search_ids}})
         affected_count = 0
         
@@ -289,21 +386,18 @@ async def tadd_cmd(update: Update, context: CallbackContext):
 async def cadd_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, COIN_FIELD, 'coins', True)
 
-# 4-Letter Gold Add/Rem
 async def g4add_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, GOLD_4_FIELD, 'gold_4', True)
 
 async def g4rem_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, GOLD_4_FIELD, 'gold_4', False)
 
-# 5-Letter Gold Add/Rem (Default /gadd aur /grem)
 async def gadd_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, GOLD_5_FIELD, 'gold_5', True)
 
 async def grem_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, GOLD_5_FIELD, 'gold_5', False)
 
-# 6-Letter Gold Add/Rem
 async def g6add_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, GOLD_6_FIELD, 'gold_6', True)
 
@@ -317,7 +411,12 @@ async def crem_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, COIN_FIELD, 'coins', False)
 
 
+# 🔥 BAN INTERCEPTOR KO SBSE PEHLE ADD KARNA (Group -1) TAAKI WO SABSE PEHLE CHECK HO
+application.add_handler(TypeHandler(Update, ban_interceptor), group=-10)
+
 # Handlers registration
+application.add_handler(CommandHandler(['ban'], ban_user, block=False))
+application.add_handler(CommandHandler(['unban'], unban_user, block=False))
 application.add_handler(CommandHandler(['destroy'], destroy_cmd, block=False))
 application.add_handler(CommandHandler(['setded'], setded_cmd, block=False))
 application.add_handler(CommandHandler(['tadd'], tadd_cmd, block=False))
