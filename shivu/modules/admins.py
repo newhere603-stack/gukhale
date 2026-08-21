@@ -30,13 +30,20 @@ async def ban_interceptor(update: Update, context: CallbackContext):
         
     user_id = update.effective_user.id
     
+    # Sudo users ko kabhi block nahi karna hai
+    if is_authorized(user_id):
+        return
+
     # Check if user is in banned database
     is_banned = await banned_collection.find_one({'user_id': user_id})
     if is_banned:
-        # Agar banned user text msg bhejta hai to reply karega
-        if update.message:
+        # Agar banned user text msg bhejta hai to reply karega (spam rokne ke liye text check)
+        if update.message and update.message.text:
             await update.message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ʙᴀᴋᴀ! 🚫</b>", parse_mode='HTML')
-        # Bot ki aage ki saari processing rok dega (kuch aur use nahi kar payega)
+        elif update.callback_query:
+            await update.callback_query.answer("ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ʙᴀᴋᴀ! 🚫", show_alert=True)
+            
+        # Bot ki aage ki saari processing rok dega
         raise ApplicationHandlerStop()
 
 
@@ -71,6 +78,17 @@ async def ban_user(update: Update, context: CallbackContext):
         # Sudo user ya Owner ko ban hone se rokne ke liye
         if is_authorized(target_id):
             await update.message.reply_text("<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴀɴ ᴀɴ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ ᴜsᴇʀ! ⚠️</b>", parse_mode='HTML')
+            return
+            
+        # Khud bot ko ban hone se rokne ke liye
+        if context.bot.id == target_id:
+            await update.message.reply_text("<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴀɴ ᴛʜᴇ ʙᴏᴛ! 🤖</b>", parse_mode='HTML')
+            return
+
+        # Check if already banned
+        already_banned = await banned_collection.find_one({'user_id': target_id})
+        if already_banned:
+            await update.message.reply_text(f"<b>ᴜsᴇʀ <code>{target_id}</code> ɪs ᴀʟʀᴇᴀᴅʏ ʙᴀɴɴᴇᴅ! ⚠️</b>", parse_mode='HTML')
             return
 
         # Database me add karna
@@ -120,7 +138,7 @@ async def unban_user(update: Update, context: CallbackContext):
         if result.deleted_count > 0:
             await update.message.reply_text(f"<b>ᴜsᴇʀ <code>{target_id}</code> ʜᴀs ʙᴇᴇɴ ᴜɴʙᴀɴɴᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ! ✅</b>", parse_mode='HTML')
         else:
-            await update.message.reply_text(f"<b>ᴜsᴇʀ <code>{target_id}</code> ɪs ɴᴏᴛ ʙᴀɴɴᴇᴅ.</b>", parse_mode='HTML')
+            await update.message.reply_text(f"<b>ᴜsᴇʀ <code>{target_id}</code> ɪs ɴᴏᴛ ʙᴀɴɴᴇᴅ. ⚠️</b>", parse_mode='HTML')
 
     except Exception as e:
         await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
@@ -278,72 +296,6 @@ async def destroy_cmd(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
 
 
-# --- /fixrarity <char_id> ---
-async def fixrarity_cmd(update: Update, context: CallbackContext):
-    try:
-        requester_id = update.effective_user.id
-        if not is_authorized(requester_id):
-            return 
-
-        text = update.message.text or update.message.caption
-        parts = text.split()
-        args = parts[1:]
-
-        if len(args) < 1:
-            await update.message.reply_text("<b>⚠️ ᴜsᴀɢᴇ:</b> <code>/fixrarity [ᴄʜᴀʀ_ɪᴅ]</code>", parse_mode='HTML')
-            return
-
-        char_id_input = str(args[0])
-        
-        search_ids = [char_id_input]
-        if char_id_input.isdigit():
-            search_ids.append(str(int(char_id_input))) 
-            search_ids.append(int(char_id_input))      
-
-        global_char = await collection.find_one({'id': {'$in': search_ids}})
-        
-        if not global_char:
-            await update.message.reply_text(f"<b>❌ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ <code>{char_id_input}</code> ᴍᴀɪɴ ᴅᴀᴛᴀʙᴀsᴇ ᴍᴇ ɴᴀʜɪ ᴍɪʟᴀ!</b>", parse_mode='HTML')
-            return
-
-        current_rarity = global_char.get('rarity', 'Unknown')
-        current_name = global_char.get('name', 'Unknown')
-
-        users_cursor = user_collection.find({"characters.id": {"$in": search_ids}})
-        affected_count = 0
-        
-        async for user in users_cursor:
-            updated_chars = []
-            modified = False
-            for c in user.get('characters', []):
-                if c.get('id') in search_ids:
-                    c['rarity'] = current_rarity
-                    c['name'] = current_name
-                    modified = True
-                updated_chars.append(c)
-            
-            if modified:
-                await user_collection.update_one(
-                    {"_id": user["_id"]},
-                    {"$set": {"characters": updated_chars}}
-                )
-                affected_count += 1
-
-        success_msg = (
-            f"<b>✅ ᴅᴀᴛᴀʙᴀsᴇ ᴜᴘᴅᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>🆔 ᴄʜᴀʀ ɪᴅ:</b> <code>{char_id_input}</code>\n"
-            f"<b>📝 ᴄʜᴀʀ ɴᴀᴍᴇ:</b> <code>{current_name}</code>\n"
-            f"<b>✨ ᴄᴜʀʀᴇɴᴛ ʀᴀʀɪᴛʏ:</b> <code>{current_rarity}</code>\n"
-            f"<b>👥 ᴜsᴇʀs ᴀғғᴇᴄᴛᴇᴅ:</b> <code>{affected_count}</code> ᴘʟᴀʏᴇʀs\n"
-            f"━━━━━━━━━━━━━━━━━━━━"
-        )
-        await update.message.reply_text(success_msg, parse_mode='HTML')
-
-    except Exception as e:
-        await update.message.reply_text(f"<b>⚠️ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>", parse_mode='HTML')
-
-
 # --- /setded <percentage> ---
 async def setded_cmd(update: Update, context: CallbackContext):
     try:
@@ -411,7 +363,7 @@ async def crem_cmd(update: Update, context: CallbackContext):
     await modify_currency(update, context, COIN_FIELD, 'coins', False)
 
 
-# 🔥 BAN INTERCEPTOR KO SBSE PEHLE ADD KARNA (Group -1) TAAKI WO SABSE PEHLE CHECK HO
+# 🔥 BAN INTERCEPTOR KO SBSE PEHLE ADD KARNA (Group -10) TAAKI WO SABSE PEHLE CHECK HO
 application.add_handler(TypeHandler(Update, ban_interceptor), group=-10)
 
 # Handlers registration
@@ -429,4 +381,3 @@ application.add_handler(CommandHandler(['crem'], crem_cmd, block=False))
 application.add_handler(CommandHandler(['grem'], grem_cmd, block=False))
 application.add_handler(CommandHandler(['g4rem'], g4rem_cmd, block=False))
 application.add_handler(CommandHandler(['g6rem'], g6rem_cmd, block=False))
-application.add_handler(CommandHandler(['fixrarity'], fixrarity_cmd, block=False))
