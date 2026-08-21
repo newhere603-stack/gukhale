@@ -37,17 +37,17 @@ async def ban_interceptor(update: Update, context: CallbackContext):
     # Check if user is in banned database
     is_banned = await banned_collection.find_one({'user_id': user_id})
     if is_banned:
-        # Agar banned user text msg bhejta hai to reply karega (spam rokne ke liye text check)
-        if update.message and update.message.text:
-            await update.message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ʙᴀᴋᴀ! 🚫</b>", parse_mode='HTML')
+        # 🔥 FIX: Ab sirf tabhi reply aayega jab user '/' (command) lagakar kuch bheje
+        if update.message and update.message.text and update.message.text.startswith('/'):
+            await update.message.reply_text("<b>ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ʙᴀᴋᴀ!</b>", parse_mode='HTML')
         elif update.callback_query:
-            await update.callback_query.answer("ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ʙᴀᴋᴀ! 🚫", show_alert=True)
+            await update.callback_query.answer("ʏᴏᴜ ᴀʀᴇ ʙᴀɴɴᴇᴅ ʙᴀᴋᴀ!", show_alert=True)
             
         # Bot ki aage ki saari processing rok dega
         raise ApplicationHandlerStop()
 
 
-# --- /ban <user_id> OR Reply ---
+# --- /gban <user_id> OR Reply ---
 async def ban_user(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
@@ -66,7 +66,7 @@ async def ban_user(update: Update, context: CallbackContext):
             target_id = args[0]
 
         if not target_id:
-            await update.message.reply_text("<b>ᴜsᴀɢᴇ: /ban ᴜsᴇʀ_ɪᴅ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ᴜsᴀɢᴇ: /gban ᴜsᴇʀ_ɪᴅ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ</b>", parse_mode='HTML')
             return
 
         try:
@@ -104,7 +104,7 @@ async def ban_user(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b>ᴇʀʀᴏʀ: {str(e)}</b>", parse_mode='HTML')
 
 
-# --- /unban <user_id> OR Reply ---
+# --- /gunban <user_id> OR Reply ---
 async def unban_user(update: Update, context: CallbackContext):
     try:
         requester_id = update.effective_user.id
@@ -123,7 +123,7 @@ async def unban_user(update: Update, context: CallbackContext):
             target_id = args[0]
 
         if not target_id:
-            await update.message.reply_text("<b>ᴜsᴀɢᴇ: /unban ᴜsᴇʀ_ɪᴅ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ</b>", parse_mode='HTML')
+            await update.message.reply_text("<b>ᴜsᴀɢᴇ: /gunban ᴜsᴇʀ_ɪᴅ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴀ ᴜsᴇʀ</b>", parse_mode='HTML')
             return
 
         try:
