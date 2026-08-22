@@ -3,8 +3,12 @@ from html import escape
 from datetime import datetime
 from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
-# Main collection bhi import ki gayi hai updated rarity dikhane ke liye
 from shivu import application, user_collection, collection
+
+# ⚠️ IMPORTANT: Yahan apni check wali file se clear_char_cache ko zaroor import karna ⚠️
+# Jaise agar tumhara check ka code 'check_cmd.py' mein hai, to aise import karo:
+# from check_cmd import clear_char_cache
+# (Agar dono codes ek hi file mein hain, to is import ki jarurat nahi hai)
 
 # Configuration
 OWNER_ID = 7657218453
@@ -87,6 +91,14 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
             )
             
             if result.modified_count > 0:
+                # 🔥 CACHE CLEAR FOR ALL DELETED CHARACTERS 🔥
+                try:
+                    for char in characters:
+                        cid = str(char.get('id'))
+                        clear_char_cache(cid)
+                except Exception as cache_err:
+                    print(f"Mass cache clear error: {cache_err}")
+
                 success_msg = (
                     f"<b>✅ ᴀʟʟ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴘᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -152,6 +164,12 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
         )
         
         if result.modified_count > 0:
+            # 🔥 SINGLE CACHE CLEAR ADDED HERE 🔥
+            try:
+                clear_char_cache(str(action_arg))
+            except Exception as cache_err:
+                print(f"Cache clear error: {cache_err}")
+
             success_msg = (
                 f"<b>✅ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ!</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━\n"
