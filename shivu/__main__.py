@@ -400,7 +400,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
         if not active_spawn:
             # 🔥 Fix: Koi turant wapas attempt karega grab hone ke baad to already grabbed aayega 15 seconds tak
             if chat_id in last_grabbed and time.time() - last_grabbed[chat_id] < 15:
-                return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ by sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
+                return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
             return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
 
         # Restart survivability: Check if it's too old
@@ -529,7 +529,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
 
 async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> None:
     if not await is_admin(update, context):
-        return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴْد!</b>')
+        return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ!</b>')
     chat_id = update.effective_chat.id
     if not context.args or context.args[0].lower() not in ('on', 'off'):
         return await update.message.reply_html('<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> /grab_delete [on|off]')
@@ -592,7 +592,7 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
     # DB se current spawn get karna
     active_spawn = await spawns_collection.find_one({'chat_id': chat_id})
     if not active_spawn:
-        return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇْت!</b>')
+        return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
         
     c = active_spawn['character']
     rarity_str = c.get('rarity', '🟢 Common')
