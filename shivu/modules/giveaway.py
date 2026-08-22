@@ -15,10 +15,6 @@ LOGGER = logging.getLogger(__name__)
 # Temporary state tracking for filters (chat_id -> state dict)
 LEADERBOARD_STATES = {}
 
-# --- 🔥 Superfast Cache System ---
-WS_LB_CACHE = {}
-CACHE_TTL = 300  # 5 minutes tak result memory me save rahega
-
 def get_user_state(chat_id):
     if chat_id not in LEADERBOARD_STATES:
         LEADERBOARD_STATES[chat_id] = {
@@ -135,17 +131,8 @@ def get_wordseek_keyboard(state):
         ]
     ])
 
-async def get_cached_wordseek_lb(chat_id, scope_f, time_f, letter_f, target_keys):
-    if scope_f == "global":
-        cache_key = f"ws_global_{time_f}_{letter_f}"
-    else:
-        cache_key = f"ws_chat_{chat_id}_{time_f}_{letter_f}"
-        
-    now = time.time()
-    if cache_key in WS_LB_CACHE and now - WS_LB_CACHE[cache_key]['time'] < CACHE_TTL:
-        return WS_LB_CACHE[cache_key]['data']
-
-    # 🔥 FIX: Fast fetching directly from eco_collection 
+async def get_wordseek_lb(chat_id, scope_f, time_f, letter_f, target_keys):
+    # 🔥 FIX: Direct database fetch for instant real-time updates (Removed Cache System)
     query_filter = {"$or": [{k: {"$exists": True}} for k in target_keys]}
     projection = {"id": 1, "user_id": 1, "_id": 1, "first_name": 1}
     for k in target_keys:
@@ -160,7 +147,6 @@ async def get_cached_wordseek_lb(chat_id, scope_f, time_f, letter_f, target_keys
             user_scores.append((u, gold))
 
     sorted_data = sorted(user_scores, key=lambda x: x[1], reverse=True)[:20]
-    WS_LB_CACHE[cache_key] = {'time': now, 'data': sorted_data}
     return sorted_data
 
 async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=False):
@@ -172,7 +158,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
     scope_f = state["scope"]
 
     target_keys = get_target_keys(letter_f, time_f, scope_f, chat_id)
-    sorted_data = await get_cached_wordseek_lb(chat_id, scope_f, time_f, letter_f, target_keys)
+    sorted_data = await get_wordseek_lb(chat_id, scope_f, time_f, letter_f, target_keys)
 
     if not sorted_data:
         text = (
@@ -210,6 +196,7 @@ async def ws_callback_router(update: Update, context: CallbackContext):
     elif data == "ws_scope_chat": state["scope"] = "chat"
     elif data.startswith("ws_time_"): state["time"] = data.replace("ws_time_", "")
     elif data.startswith("ws_let_"): state["letters"] = data.replace("ws_let_", "")
+    # ws_refresh directly fallthrough karega or naya data fetch karega
     elif data == "ws_refresh": pass 
 
     await wordseek_leaderboard(update, context, edit=True)
