@@ -445,7 +445,7 @@ async def cdm_cmd(update: Update, context: CallbackContext):
 
 application.add_handler(CommandHandler(["dice", "marry"], dice_marry, block=False))
 application.add_handler(CommandHandler(["propose"], propose, block=False))
-application.add_handler(CommandHandler(["cdm"], cdm_cmd, block=False))
+application.add_handler(CommandHandler(["cool"], cdm_cmd, block=False))
 application.add_handler(CommandHandler(["prarity_on"], prarity_on, block=False))
 application.add_handler(CommandHandler(["prarity_off"], prarity_off, block=False))
 application.add_handler(CallbackQueryHandler(propose_callback, pattern=r"^propose_checksub$", block=False))
