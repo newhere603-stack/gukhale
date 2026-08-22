@@ -23,11 +23,11 @@ mines_collection = db['mines_games']
 LOG_GROUP_ID = -1003893927065
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# Anti-spam & Race condition locks
+# Anti-spam & Fast Queue locks
 active_claims = set()
 play_again_cooldowns = {} 
-processing_mines = set()
-processing_tic = set()
+mines_locks = {}
+tic_locks = {}
 
 RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
@@ -373,15 +373,14 @@ async def tic_callback(update: Update, context: CallbackContext):
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
     
-    if key in processing_tic:
-        await query.answer() # Silent lock (koi processing text nahi dikhega)
-        return
-    processing_tic.add(key)
-    
-    try:
+    # Queue system lock for Tic-Tac-Toe
+    if key not in tic_locks:
+        tic_locks[key] = asyncio.Lock()
+        
+    async with tic_locks[key]:
         game = await tic_collection.find_one({'key': key})
         if not game:
-            await query.answer(to_small_caps("This game session has expired!"), show_alert=True)
+            await query.answer(to_small_caps("This game session has expired!"), show_alert=False)
             return
 
         if data == "tic_join":
@@ -456,7 +455,8 @@ async def tic_callback(update: Update, context: CallbackContext):
                     )
 
                 replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{to_small_caps('Play Again')} ⟳", callback_data="tic_play_again")]])
-                await tic_collection.delete_one({'key': key}) 
+                await tic_collection.delete_one({'key': key})
+                tic_locks.pop(key, None) # Clear lock 
                 await query.message.edit_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
                 return
 
@@ -475,8 +475,6 @@ async def tic_callback(update: Update, context: CallbackContext):
             game_data.pop('_id', None)
             await tic_collection.update_one({'key': key}, {'$set': game_data})
             await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
-    finally:
-        processing_tic.discard(key)
 
 
 # ==========================================
@@ -594,16 +592,16 @@ async def mines_callback(update: Update, context: CallbackContext):
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
     
-    if key in processing_mines:
-        await query.answer() # Silent lock - bina text wala fast ignore
-        return
-    processing_mines.add(key)
-    
-    try:
+    # Queue system lock for Mines
+    if key not in mines_locks:
+        mines_locks[key] = asyncio.Lock()
+        
+    async with mines_locks[key]:
         game = await mines_collection.find_one({'key': key})
         
         if not game:
-            await query.answer(to_small_caps("This game session has expired!"), show_alert=True)
+            # Agar bomb fatne ke baad queue wale clicks aate hain toh unhe chup-chap clear kar dega bina popup ke
+            await query.answer("Game Ended!", show_alert=False) 
             return
             
         if user_id != game['user_id']:
@@ -634,13 +632,15 @@ async def mines_callback(update: Update, context: CallbackContext):
                 logger.error(f"Error updating cashout board: {e}")
                 
             await mines_collection.delete_one({'key': key}) 
-            await query.answer(f"Cashed out {win_amount} coins! 💸", show_alert=True)
+            mines_locks.pop(key, None) # Clear lock
+            
+            await query.answer(f"Cashed out {win_amount} coins! 💸", show_alert=False) # Cash out pe koi popup alert nahi aayega
             return
 
         if data.startswith("mines_click_"):
             idx = int(data.split("_")[2])
             if game['revealed'][idx]:
-                await query.answer() # Button fast register
+                await query.answer("Already clicked!", show_alert=False)
                 return
 
             if game['board'][idx] == 'mine':
@@ -659,11 +659,14 @@ async def mines_callback(update: Update, context: CallbackContext):
                     logger.error(f"Error updating busted board: {e}")
                     
                 await mines_collection.delete_one({'key': key}) 
-                await query.answer("BOOM! You lost the bet. 💥", show_alert=True) # Boom ka alert rahega
+                mines_locks.pop(key, None) # Clear lock
+                
+                await query.answer("BOOM! You lost the bet. 💥", show_alert=True) 
                 return
                 
             else:
-                await query.answer() # 'Safe! 💸' hata diya, ab ye instant chup-chap proceed karega
+                await query.answer("Safe! 💸", show_alert=False) # Safe wala notification wapas lag gaya (bina popup ke)
+                
                 game['revealed'][idx] = True
                 game['found'] += 1
                 mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -686,6 +689,8 @@ async def mines_callback(update: Update, context: CallbackContext):
                         logger.error(f"Error updating perfect game board: {e}")
                         
                     await mines_collection.delete_one({'key': key}) 
+                    mines_locks.pop(key, None) # Clear lock
+                    
                     await query.answer(f"Incredible! You found all the money! {win_amount} 💸", show_alert=True)
                     return
 
@@ -705,8 +710,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                     await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
                 except Exception as e:
                      logger.error(f"Error updating active game board: {e}")
-    finally:
-        processing_mines.discard(key)
 
 
 # ==========================================
