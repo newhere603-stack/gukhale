@@ -654,8 +654,9 @@ async def mines_callback(update: Update, context: CallbackContext):
         
         try:
             await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error updating cashout board: {e}")
+            
         del active_mines_games[key]
         await query.answer(f"Cashed out {win_amount} coins! 💸")
         return
@@ -671,16 +672,18 @@ async def mines_callback(update: Update, context: CallbackContext):
             game['status'] = 'busted'
             game['revealed'][idx] = True
             
+            # 🔥 FIX: 'to_small_cast' typo error that was breaking the board update silently
             text = (
                 f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {to_small_caps('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
                 f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Lost Bet')}:</b> {game['bet']} coins\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_cast('Found before boom')}:</b> {game['found']}\n\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
                 f"<b>{to_small_caps('Final Board')}:</b>"
             )
             try:
                 await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error updating busted board: {e}")
+                
             del active_mines_games[key]
             await query.answer("BOOM! You lost the bet. 💥")
             return
@@ -695,24 +698,26 @@ async def mines_callback(update: Update, context: CallbackContext):
                 game['status'] = 'cashed_out'
                 await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
                 
+                # 🔥 FIX: 'MultiLayer' to 'Multiplier' typo fix
                 text = (
                     f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {to_small_caps('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
-                    f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final MultiLayer')}:</b> {mult}x\n"
+                    f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
                     f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
                     f"<b>{to_small_caps('Final Board')}:</b>"
                 )
                 try:
                     await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error updating perfect game board: {e}")
+                    
                 del active_mines_games[key]
                 await query.answer("Incredible! You found all the money! 💸")
                 return
 
             text = (
                 f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {to_small_caps('Mines Game Active!')}</b>\n\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {game['balance'] if 'balance' in game else game['bet']}\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {game.get('bet', 0)}\n"
                 f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> {to_small_caps('Mines')}: {game['mines_count']}\n"
                 f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found')}:</b> {game['found']}\n"
                 f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
@@ -720,8 +725,9 @@ async def mines_callback(update: Update, context: CallbackContext):
             )
             try:
                 await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
-            except Exception:
-                pass
+            except Exception as e:
+                 logger.error(f"Error updating active game board: {e}")
+                 
             await query.answer("Safe! 💸")
 
 # ==========================================
