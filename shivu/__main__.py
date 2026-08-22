@@ -407,7 +407,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
         spawn_time = active_spawn.get('spawn_time', 0)
         if time.time() - spawn_time > DESPAWN_TIME:
             await spawns_collection.delete_one({'chat_id': chat_id})
-            return await update.message.reply_html('<b><tg-emoji emoji-id="5413704112220949842">⏰</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ! (ᴇxᴘɪʀᴇᴅ)</b>')
+            return await update.message.reply_html('''<b><tg-emoji emoji-id="5413704112220949842">⏰</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ! (ᴇxᴘɪʀᴇᴅ)</b>''')
 
         guess_text = ' '.join(context.args).lower() if context.args else ''
         if not guess_text:
