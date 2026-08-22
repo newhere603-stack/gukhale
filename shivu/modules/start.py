@@ -215,8 +215,17 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
 # 🔥 FIX: SUPERFAST DUAL DATABASE UPSERT (5000 Coins + bot_started logic)
 async def _ensure_user(user_id, first_name, username):
     try:
+        # Check if user already exists and if they have started the bot before
+        char_doc = await user_collection.find_one({"id": user_id})
+        is_new_char = not char_doc or not char_doc.get("bot_started")
+        
+        eco_doc = await eco_collection.find_one({"id": user_id})
+        is_new_eco = not eco_doc or not eco_doc.get("bot_started")
+
+        is_new_user = is_new_char or is_new_eco
+
         # 1. Update Character DB (Harem)
-        char_result = await user_collection.update_one(
+        await user_collection.update_one(
             {"id": user_id},
             {
                 "$set": {
@@ -243,25 +252,35 @@ async def _ensure_user(user_id, first_name, username):
             upsert=True
         )
 
-        # 2. Update Economy DB (🔥 FIX: Added 'bot_started': True yahan par)
-        eco_result = await eco_collection.update_one(
-            {"id": user_id},
-            {
-                "$set": {
-                    "first_name": first_name,
-                    "username": username,
-                    "bot_started": True  # <--- YE MISSING THA! Iski wajah se /bal fail ho raha tha
+        # 2. Update Economy DB (🔥 FIX: Used $inc for 5000 coins to ensure they get it even if doc already existed via middleware)
+        if is_new_user:
+            await eco_collection.update_one(
+                {"id": user_id},
+                {
+                    "$set": {
+                        "first_name": first_name,
+                        "username": username,
+                        "bot_started": True
+                    },
+                    "$inc": {"balance": 5000},  # Directly adds 5000 coins!
+                    "$setOnInsert": {"tokens": 0}
                 },
-                "$setOnInsert": {
-                    "balance": 5000,
-                    "tokens": 0
-                }
-            },
-            upsert=True
-        )
+                upsert=True
+            )
+        else:
+            await eco_collection.update_one(
+                {"id": user_id},
+                {
+                    "$set": {
+                        "first_name": first_name,
+                        "username": username,
+                        "bot_started": True
+                    }
+                },
+                upsert=True
+            )
         
-        # User is considered new if they were inserted in either database
-        return (char_result.upserted_id is not None) or (eco_result.upserted_id is not None)
+        return is_new_user
     except Exception as e:
         LOGGER.error(f"Error in _ensure_user DB query: {e}")
         return False
