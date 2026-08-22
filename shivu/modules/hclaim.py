@@ -23,8 +23,11 @@ mines_collection = db['mines_games']
 LOG_GROUP_ID = -1003893927065
 IST = timezone(timedelta(hours=5, minutes=30))
 
+# Anti-spam & Race condition locks
 active_claims = set()
 play_again_cooldowns = {} 
+processing_mines = set()
+processing_tic = set()
 
 RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"), 
@@ -186,15 +189,13 @@ async def swaifu(update: Update, context: CallbackContext):
             "ᴄʜᴀʀᴀᴄᴛᴇʀ": f"<b>{character.get('name', 'Unknown')}</b>",
             "ʀᴀʀɪᴛʏ": f"<b>{character.get('rarity', 'Common')}</b>"
         }
-        # Run log in background to speed up response
         asyncio.create_task(send_log(context, create_log_message("˹ sᴡᴀɪꜰᴜ ᴄʟᴀɪᴍᴇᴅ ˼ <tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji>", log_data)))
 
     except Exception as e:
         logger.error(f"Swaifu Error: {e}", exc_info=True)
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('An error occurred! Try again later.')}</b>", parse_mode=ParseMode.HTML)
     finally:
-        if user_id in active_claims:
-            active_claims.remove(user_id)
+        active_claims.discard(user_id)
 
 
 async def daily_claim_coins(update: Update, context: CallbackContext):
@@ -240,15 +241,13 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
             "ɪᴅ": f"<code>{user_id}</code>",
             "ʀᴇᴡᴀʀᴅ": f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {coins_won:,} ᴄᴏɪɴs</b>"
         }
-        # Run log in background
         asyncio.create_task(send_log(context, create_log_message("˹ ᴅᴀɪʟʏ ᴄʟᴀɪᴍ sᴜᴄᴄᴇssғᴜʟ ˼ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>", log_data)))
 
     except Exception as e:
         logger.error(f"Claim Error: {e}", exc_info=True)
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {to_small_caps('An error occurred! Try again later.')}</b>", parse_mode=ParseMode.HTML)
     finally:
-        if user_id in active_claims:
-            active_claims.remove(user_id)
+        active_claims.discard(user_id)
 
 
 # ==========================================
@@ -338,7 +337,7 @@ async def tic_callback(update: Update, context: CallbackContext):
                 await query.answer(to_small_caps(f"Please wait {remaining} seconds before playing again!"), show_alert=True)
                 return
         
-        await query.answer(to_small_caps("New game started below!")) # Fast response
+        await query.answer(to_small_caps("New game started below!")) 
         play_again_cooldowns[user_id] = now
         safe_name = html.escape(query.from_user.first_name or "User")
 
@@ -373,99 +372,111 @@ async def tic_callback(update: Update, context: CallbackContext):
         return
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
-    game = await tic_collection.find_one({'key': key})
-
-    if not game:
-        await query.answer(to_small_caps("This game session has expired!"), show_alert=True)
+    
+    if key in processing_tic:
+        await query.answer() # Silent lock (koi processing text nahi dikhega)
         return
-
-    if data == "tic_join":
-        if user_id == game['player_1_id']:
-            await query.answer(to_small_caps("You cannot join your own game as Player 2!"), show_alert=True)
-            return
-        if game['status'] != 'waiting':
-            await query.answer(to_small_caps("The game has already started!"), show_alert=True)
-            return
-
-        await query.answer(to_small_caps("✅ You have joined the game!")) # Fast response
-        game['player_2_id'] = user_id
-        game['player_2_name'] = html.escape(query.from_user.first_name or "User")
-        game['status'] = 'playing'
-
-        text = (
-            f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-            f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
-            f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
-            f"{PREMIUM_TURN} <b>Turn: {game['player_1_name']} ({PREMIUM_O})</b>"
-        )
-        await tic_collection.update_one({'key': key}, {'$set': game})
-        await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
-        return
-
-    if data.startswith("tic_move_"):
-        if game['status'] != 'playing':
-            await query.answer(to_small_caps("The game is already over!"), show_alert=True)
-            return
-        if user_id not in [game['player_1_id'], game['player_2_id']]:
-            await query.answer(to_small_caps("You are not a player in this game!"), show_alert=True)
-            return
-        if user_id != game['turn']:
-            await query.answer(to_small_caps("⏳ It is not your turn yet! Please wait."), show_alert=True)
+    processing_tic.add(key)
+    
+    try:
+        game = await tic_collection.find_one({'key': key})
+        if not game:
+            await query.answer(to_small_caps("This game session has expired!"), show_alert=True)
             return
 
-        index = int(data.split("_")[2])
-        if game['board'][index] != " ":
-            await query.answer(to_small_caps("This box is already filled!"), show_alert=True)
+        if data == "tic_join":
+            if user_id == game['player_1_id']:
+                await query.answer(to_small_caps("You cannot join your own game as Player 2!"), show_alert=True)
+                return
+            if game['status'] != 'waiting':
+                await query.answer(to_small_caps("The game has already started!"), show_alert=True)
+                return
+
+            await query.answer(to_small_caps("✅ You have joined the game!")) 
+            game['player_2_id'] = user_id
+            game['player_2_name'] = html.escape(query.from_user.first_name or "User")
+            game['status'] = 'playing'
+
+            text = (
+                f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+                f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
+                f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
+                f"{PREMIUM_TURN} <b>Turn: {game['player_1_name']} ({PREMIUM_O})</b>"
+            )
+            game_data = game.copy()
+            game_data.pop('_id', None)
+            await tic_collection.update_one({'key': key}, {'$set': game_data})
+            await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
             return
 
-        await query.answer() # Button fast register
-        
-        symbol = game['player_1_sym'] if user_id == game['player_1_id'] else game['player_2_sym']
-        game['board'][index] = symbol
-        winner = check_win(game['board'])
-        
-        if winner:
-            game['status'] = 'finished'
-            if winner == "Draw":
-                text = (
-                    f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-                    f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
-                    f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
-                    f"{PREMIUM_DRAW} <b>{to_small_caps('Game Draw! Well played both.')}</b>"
-                )
-            else:
-                if winner == game['player_1_sym']:
-                    win_name, lose_name = game['player_1_name'], game['player_2_name']
-                    win_sym, lose_sym = PREMIUM_O, PREMIUM_X
+        if data.startswith("tic_move_"):
+            if game['status'] != 'playing':
+                await query.answer(to_small_caps("The game is already over!"), show_alert=True)
+                return
+            if user_id not in [game['player_1_id'], game['player_2_id']]:
+                await query.answer(to_small_caps("You are not a player in this game!"), show_alert=True)
+                return
+            if user_id != game['turn']:
+                await query.answer(to_small_caps("⏳ It is not your turn yet! Please wait."), show_alert=True)
+                return
+
+            index = int(data.split("_")[2])
+            if game['board'][index] != " ":
+                await query.answer(to_small_caps("This box is already filled!"), show_alert=True)
+                return
+
+            await query.answer() 
+            
+            symbol = game['player_1_sym'] if user_id == game['player_1_id'] else game['player_2_sym']
+            game['board'][index] = symbol
+            winner = check_win(game['board'])
+            
+            if winner:
+                game['status'] = 'finished'
+                if winner == "Draw":
+                    text = (
+                        f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+                        f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
+                        f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
+                        f"{PREMIUM_DRAW} <b>{to_small_caps('Game Draw! Well played both.')}</b>"
+                    )
                 else:
-                    win_name, lose_name = game['player_2_name'], game['player_1_name']
-                    win_sym, lose_sym = PREMIUM_X, PREMIUM_O
+                    if winner == game['player_1_sym']:
+                        win_name, lose_name = game['player_1_name'], game['player_2_name']
+                        win_sym, lose_sym = PREMIUM_O, PREMIUM_X
+                    else:
+                        win_name, lose_name = game['player_2_name'], game['player_1_name']
+                        win_sym, lose_sym = PREMIUM_X, PREMIUM_O
 
-                text = (
-                    f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-                    f"{win_sym} <b>{win_name}</b> {PREMIUM_WIN}\n"
-                    f"{lose_sym} <b>{lose_name}</b> {PREMIUM_CRY}\n\n"
-                    f"{PREMIUM_WIN} <b>{to_small_caps('Winner')}: {win_name}</b>"
-                )
+                    text = (
+                        f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+                        f"{win_sym} <b>{win_name}</b> {PREMIUM_WIN}\n"
+                        f"{lose_sym} <b>{lose_name}</b> {PREMIUM_CRY}\n\n"
+                        f"{PREMIUM_WIN} <b>{to_small_caps('Winner')}: {win_name}</b>"
+                    )
 
-            replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{to_small_caps('Play Again')} ⟳", callback_data="tic_play_again")]])
-            await tic_collection.delete_one({'key': key}) 
-            await query.message.edit_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
-            return
+                replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{to_small_caps('Play Again')} ⟳", callback_data="tic_play_again")]])
+                await tic_collection.delete_one({'key': key}) 
+                await query.message.edit_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
+                return
 
-        if user_id == game['player_1_id']:
-            game['turn'], next_turn_name, next_symbol = game['player_2_id'], game['player_2_name'], PREMIUM_X
-        else:
-            game['turn'], next_turn_name, next_symbol = game['player_1_id'], game['player_1_name'], PREMIUM_O
+            if user_id == game['player_1_id']:
+                game['turn'], next_turn_name, next_symbol = game['player_2_id'], game['player_2_name'], PREMIUM_X
+            else:
+                game['turn'], next_turn_name, next_symbol = game['player_1_id'], game['player_1_name'], PREMIUM_O
 
-        text = (
-            f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-            f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
-            f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
-            f"{PREMIUM_TURN} <b>Turn: {next_turn_name} ({next_symbol})</b>"
-        )
-        await tic_collection.update_one({'key': key}, {'$set': game})
-        await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+            text = (
+                f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
+                f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
+                f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
+                f"{PREMIUM_TURN} <b>Turn: {next_turn_name} ({next_symbol})</b>"
+            )
+            game_data = game.copy()
+            game_data.pop('_id', None)
+            await tic_collection.update_one({'key': key}, {'$set': game_data})
+            await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+    finally:
+        processing_tic.discard(key)
 
 
 # ==========================================
@@ -582,108 +593,120 @@ async def mines_callback(update: Update, context: CallbackContext):
         return
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
-    game = await mines_collection.find_one({'key': key})
     
-    if not game:
-        await query.answer(to_small_caps("This game session has expired!"), show_alert=True)
+    if key in processing_mines:
+        await query.answer() # Silent lock - bina text wala fast ignore
         return
+    processing_mines.add(key)
+    
+    try:
+        game = await mines_collection.find_one({'key': key})
         
-    if user_id != game['user_id']:
-        await query.answer(to_small_caps("You cannot play someone else's game!"), show_alert=True)
-        return
-    if game['status'] != 'playing':
-        await query.answer(to_small_caps("This game is already over!"), show_alert=True)
-        return
-
-    if data == "mines_cashout":
-        mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
-        win_amount = int(game['bet'] * mult)
-        
-        await query.answer(f"Cashed out {win_amount} coins! 💸") # Fast response
-        game['status'] = 'cashed_out'
-        
-        await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
-        text = (
-            f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {to_small_caps('Cashed Out!')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n\n"
-            f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
-            f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
-            f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
-            f"<b>{to_small_caps('Final Board')}:</b>"
-        )
-        
-        try:
-            await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-        except Exception as e:
-            logger.error(f"Error updating cashout board: {e}")
-            
-        await mines_collection.delete_one({'key': key}) 
-        return
-
-    if data.startswith("mines_click_"):
-        idx = int(data.split("_")[2])
-        if game['revealed'][idx]:
-            await query.answer("Already clicked!", show_alert=False)
-            return
-
-        if game['board'][idx] == 'mine':
-            await query.answer("BOOM! You lost the bet. 💥") # Fast Answer
-            game['status'] = 'busted'
-            game['revealed'][idx] = True
-            
-            text = (
-                f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {to_small_caps('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Lost Bet')}:</b> {game['bet']} coins\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
-                f"<b>{to_small_caps('Final Board')}:</b>"
-            )
-            try:
-                await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-            except Exception as e:
-                logger.error(f"Error updating busted board: {e}")
-                
-            await mines_collection.delete_one({'key': key}) 
+        if not game:
+            await query.answer(to_small_caps("This game session has expired!"), show_alert=True)
             return
             
-        else:
-            await query.answer("Safe! 💸") # Fast Answer
-            game['revealed'][idx] = True
-            game['found'] += 1
+        if user_id != game['user_id']:
+            await query.answer(to_small_caps("You cannot play someone else's game!"), show_alert=True)
+            return
+        if game['status'] != 'playing':
+            await query.answer(to_small_caps("This game is already over!"), show_alert=True)
+            return
+
+        if data == "mines_cashout":
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
             win_amount = int(game['bet'] * mult)
             
-            if game['found'] == (25 - game['mines_count']):
-                game['status'] = 'cashed_out'
-                await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
+            game['status'] = 'cashed_out'
+            await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
+            
+            text = (
+                f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {to_small_caps('Cashed Out!')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
+                f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
+                f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
+                f"<b>{to_small_caps('Final Board')}:</b>"
+            )
+            
+            try:
+                await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+            except Exception as e:
+                logger.error(f"Error updating cashout board: {e}")
+                
+            await mines_collection.delete_one({'key': key}) 
+            await query.answer(f"Cashed out {win_amount} coins! 💸", show_alert=True)
+            return
+
+        if data.startswith("mines_click_"):
+            idx = int(data.split("_")[2])
+            if game['revealed'][idx]:
+                await query.answer() # Button fast register
+                return
+
+            if game['board'][idx] == 'mine':
+                game['status'] = 'busted'
+                game['revealed'][idx] = True
                 
                 text = (
-                    f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {to_small_caps('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
-                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
-                    f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
-                    f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
+                    f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {to_small_caps('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Lost Bet')}:</b> {game['bet']} coins\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
                     f"<b>{to_small_caps('Final Board')}:</b>"
                 )
                 try:
                     await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
                 except Exception as e:
-                    logger.error(f"Error updating perfect game board: {e}")
+                    logger.error(f"Error updating busted board: {e}")
                     
                 await mines_collection.delete_one({'key': key}) 
+                await query.answer("BOOM! You lost the bet. 💥", show_alert=True) # Boom ka alert rahega
                 return
+                
+            else:
+                await query.answer() # 'Safe! 💸' hata diya, ab ye instant chup-chap proceed karega
+                game['revealed'][idx] = True
+                game['found'] += 1
+                mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
+                win_amount = int(game['bet'] * mult)
+                
+                if game['found'] == (25 - game['mines_count']):
+                    game['status'] = 'cashed_out'
+                    await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
+                    
+                    text = (
+                        f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {to_small_caps('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
+                        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Original Bet')}:</b> {game['bet']}\n"
+                        f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{to_small_caps('Final Multiplier')}:</b> {mult}x\n"
+                        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
+                        f"<b>{to_small_caps('Final Board')}:</b>"
+                    )
+                    try:
+                        await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                    except Exception as e:
+                        logger.error(f"Error updating perfect game board: {e}")
+                        
+                    await mines_collection.delete_one({'key': key}) 
+                    await query.answer(f"Incredible! You found all the money! {win_amount} 💸", show_alert=True)
+                    return
 
-            text = (
-                f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {to_small_caps('Mines Game Active!')}</b>\n\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {game.get('bet', 0)}\n"
-                f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> {to_small_caps('Mines')}: {game['mines_count']}\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found')}:</b> {game['found']}\n"
-                f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
-                f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
-            )
-            
-            await mines_collection.update_one({'key': key}, {'$set': game}) 
-            try:
-                await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
-            except Exception as e:
-                 logger.error(f"Error updating active game board: {e}")
+                text = (
+                    f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {to_small_caps('Mines Game Active!')}</b>\n\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Bet')}:</b> {game.get('bet', 0)}\n"
+                    f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> {to_small_caps('Mines')}: {game['mines_count']}\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found')}:</b> {game['found']}\n"
+                    f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{to_small_caps('Multiplier')}:</b> {mult}x\n\n"
+                    f"<b>{to_small_caps('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
+                )
+                
+                game_data = game.copy()
+                game_data.pop('_id', None)
+                await mines_collection.update_one({'key': key}, {'$set': game_data}) 
+                try:
+                    await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
+                except Exception as e:
+                     logger.error(f"Error updating active game board: {e}")
+    finally:
+        processing_mines.discard(key)
 
 
 # ==========================================
