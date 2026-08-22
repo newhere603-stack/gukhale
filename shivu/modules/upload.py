@@ -5,6 +5,7 @@ import os
 import asyncio
 import hashlib
 import logging
+from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional, Dict, List, Any
@@ -363,7 +364,6 @@ class TelegramUploader:
             fp.name = character.media_file.filename
             message = await TelegramUploader._send_media_bytes(fp, character.media_file.media_type, caption, context)
         else:
-            # ✅ YAHAN PE SMART FIX LAGA HAI - AB YE KHUD DETECT KAREGA
             try:
                 message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
             except TelegramError as e:
@@ -371,7 +371,7 @@ class TelegramUploader:
                 
                 if "video as photo" in error_msg:
                     character.media_file.media_type = MediaType.VIDEO
-                    caption = character.get_caption(is_update) # Caption change hoke '🎥 Video' aayega
+                    caption = character.get_caption(is_update)
                     message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
                     
                 elif "photo as video" in error_msg:
@@ -457,7 +457,6 @@ class CharacterFactory:
             return None
 
         char_id = await SequenceGenerator.get_next_id('character_id')
-        from datetime import datetime
         timestamp = datetime.utcnow().isoformat()
 
         return Character(
@@ -530,8 +529,13 @@ class CharacterUploadHandler:
             return
 
         await TelegramUploader.upload_character(character, context)
+        
+        size_str = f"{media_file.size / (1024 * 1024):.2f} MB" if media_file.size > 0 else "Unknown"
         await processing_msg.edit_text(
-            f'<b>✅ Character uploaded successfully!\n🆔 ID: {character.character_id}\n📁 Type: {character.media_file.media_type.value.title()}</b>',
+            f'<b>✅ Character uploaded successfully!\n'
+            f'🆔 ID: {character.character_id}\n'
+            f'📁 Type: {character.media_file.media_type.value.title()}\n'
+            f'⚖️ Size: {size_str}</b>',
             parse_mode='HTML'
         )
 
@@ -574,8 +578,13 @@ class CharacterUploadHandler:
             return
 
         await TelegramUploader.upload_character(character, context)
+        
+        size_str = f"{media_file.size / (1024 * 1024):.2f} MB" if media_file.size > 0 else "Unknown"
         await processing_msg.edit_text(
-            f'<b>✅ Character uploaded successfully!\n🆔 ID: {character.character_id}\n📁 Type: {character.media_file.media_type.value.title()}</b>',
+            f'<b>✅ Character uploaded successfully!\n'
+            f'🆔 ID: {character.character_id}\n'
+            f'📁 Type: {character.media_file.media_type.value.title()}\n'
+            f'⚖️ Size: {size_str}</b>',
             parse_mode='HTML'
         )
 
@@ -619,7 +628,10 @@ class CharacterDeletionHandler:
         char_id = context.args[0]
         processing_msg = await update.message.reply_text(f'<b>⏳ Deleting character {char_id}...</b>', parse_mode='HTML')
 
-        character = await collection.find_one_and_delete({'id': char_id})
+        # Fix to correctly match both string and int types of ID
+        char_id_str = str(char_id)
+        query = {'$or': [{'id': char_id_str}, {'id': int(char_id_str) if char_id_str.isdigit() else char_id_str}]}
+        character = await collection.find_one_and_delete(query)
         
         # Remove from Cache instantly
         if characters is not None and character:
@@ -664,11 +676,15 @@ class CharacterUpdateHandler:
             await update.message.reply_text('<b>Invalid field! Valid: name, anime, rarity, media</b>', parse_mode='HTML')
             return
 
-        character_data = await collection.find_one({'id': char_id})
+        # Fetch using robust query to avoid type mismatch
+        query = {'$or': [{'id': char_id}, {'id': int(char_id) if char_id.isdigit() else char_id}]}
+        character_data = await collection.find_one(query)
+        
         if not character_data:
             await update.message.reply_text(f'<b>Character {char_id} not found.</b>', parse_mode='HTML')
             return
-
+            
+        actual_id = character_data['id']
         processing_msg = await update.message.reply_text(f'<b>⏳ Updating {field}...</b>', parse_mode='HTML')
 
         try:
@@ -744,15 +760,20 @@ class CharacterUpdateHandler:
                         return
                     update_data[field] = rarity.display_name
 
-            from datetime import datetime
             update_data['updated_at'] = datetime.utcnow().isoformat()
 
-            await collection.find_one_and_update({'id': char_id}, {'$set': update_data})
+            # Fix: Update document and fetch fresh data to sync with cache
+            updated_char = await collection.find_one_and_update(
+                {'id': actual_id}, 
+                {'$set': update_data},
+                return_document=ReturnDocument.AFTER
+            )
             
-            if characters is not None:
-                for c in characters:
+            # 100% Foolproof Cache Update
+            if characters is not None and updated_char:
+                for i, c in enumerate(characters):
                     if str(c.get('id')) == str(char_id):
-                        c.update(update_data)
+                        characters[i] = updated_char
                         break
 
             await processing_msg.edit_text(f'<b>✅ Character {char_id} updated successfully!</b>', parse_mode='HTML')
