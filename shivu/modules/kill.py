@@ -16,7 +16,7 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
         return
     
     target_id = None
-    action_arg = None  # Ye check karega ki specific ID hai ya '-all'
+    action_arg = None  
     first_name = "Unknown"
 
     # Agar message par reply kiya gaya hai
@@ -31,7 +31,8 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
                 parse_mode='HTML'
             )
             return
-        action_arg = context.args[0]
+        # .strip() add kiya taaki agar extra space ho toh ignore ho jaye
+        action_arg = context.args[0].strip()
         
     else:
         # Bina reply ke command dene par (User ID + Char ID / -all)
@@ -50,7 +51,7 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
             await update.message.reply_text("<b>❌ ɪɴᴠᴀʟɪᴅ ᴜsᴇʀ ɪᴅ!</b>", parse_mode='HTML')
             return
         
-        action_arg = context.args[1]
+        action_arg = context.args[1].strip()
 
     try:
         # Database se user fetch karna
@@ -116,28 +117,35 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
         # ----------------------------------------------------
         # ACTION 2: REMOVE SPECIFIC CHARACTER BY ID
         # ----------------------------------------------------
-        target_char = next((c for c in characters if str(c.get('id')) == str(action_arg)), None)
         
-        if not target_char:
+        # Exact index find karenge taaki sirf ek hi copy remove ho
+        target_index = -1
+        for i, c in enumerate(characters):
+            if str(c.get('id')) == str(action_arg):
+                target_index = i
+                break
+                
+        if target_index == -1:
             await update.message.reply_text(
                 f"<b>❌ ᴄʜᴀʀᴀᴄᴛᴇʀ (ɪᴅ: {action_arg}) ɴᴏᴛ ғᴏᴜɴᴅ ɪɴ ᴜsᴇʀ's ᴄᴏʟʟᴇᴄᴛɪᴏɴ!</b>",
                 parse_mode='HTML'
             )
             return
+            
+        # Sirf us ek instance ko safe tareeqe se pop karna 
+        removed_char = characters.pop(target_index)
         
-        # Yahan main collection se data fetch kar rahe hain taaki original Rarity mil sake
+        # Main collection se data fetch kar rahe hain taaki original Rarity mil sake
         global_char = await collection.find_one({'id': str(action_arg)})
         
         if global_char:
-            char_name = global_char.get('name', target_char.get('name', 'Unknown'))
-            char_rarity = global_char.get('rarity', target_char.get('rarity', 'N/A'))
+            char_name = global_char.get('name', removed_char.get('name', 'Unknown'))
+            char_rarity = global_char.get('rarity', removed_char.get('rarity', 'N/A'))
         else:
-            char_name = target_char.get('name', 'Unknown')
-            char_rarity = target_char.get('rarity', 'N/A')
+            char_name = removed_char.get('name', 'Unknown')
+            char_rarity = removed_char.get('rarity', 'N/A')
 
-        # Sirf ek instance remove karna (duplicate prevent)
-        characters.remove(target_char)
-        
+        # Database ko updated array se overwrite kar do
         result = await user_collection.update_one(
             {'id': target_id},
             {'$set': {'characters': characters}}
