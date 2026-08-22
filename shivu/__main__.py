@@ -274,7 +274,7 @@ async def despawn_character(chat_id, message_id, character, context):
             f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
             f"{r_display_emoji}<b> ʀᴀʀɪᴛʏ: {r_name}</b>\n"
-            f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>ᴀɴɪᴍᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n\n"
+            f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>sᴏᴜʀᴄᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n\n"
             f"<tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
@@ -454,7 +454,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
             f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji></b>\n\n"
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> 𝗡𝗔𝗠𝗘:<b> {escape(character.get('name', 'Unknown'))}</b>\n"
             f"{r_display_emoji} 𝗥𝗔𝗥𝗜𝗧𝗬:<b> {r_name}</b>\n"
-            f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> 𝗔𝗡𝗜𝗠𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
+            f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> 𝗦𝗢𝗨𝗥𝗖𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
             f"<tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {formatted_time}</code>"
         )
         
