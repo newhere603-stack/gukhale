@@ -2,6 +2,7 @@ import asyncio
 from html import escape
 from datetime import datetime
 from telegram import Update
+from kill import clear_char_cache
 from telegram.ext import CommandHandler, CallbackContext
 from shivu import application, user_collection, collection
 
