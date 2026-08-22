@@ -71,6 +71,7 @@ group_settings_cache = {}
 chat_frequency_cache = {} 
 locks, message_counts = {}, {}
 sent_characters = {}
+last_grabbed = {} # 🔥 Cache to track recent grabs so bot can tell "already grabbed" instead of "not spawned"
 
 # 🔥 Purane Memory dicts nikal diye (spawn_times, last_characters) - Ab sab seedha MongoDB mein jayega.
 currently_spawning = {}
@@ -82,7 +83,7 @@ _last_cache_time = 0
 user_message_times = {}
 blocked_users = {}
 
-async def check_and_handle_flood(update: Update) -> bool:
+async def check_and_handle_flood(update: Update, context: CallbackContext) -> bool:
     user = update.effective_user
     if not user:
         return False
@@ -103,9 +104,11 @@ async def check_and_handle_flood(update: Update) -> bool:
     if len(user_message_times[user_id]) >= 7:
         blocked_users[user_id] = now + 600  
         safe_name = escape(user.first_name)
-        msg = f'<b><tg-emoji emoji-id="5420323339723881652">⚠️</tg-emoji> {safe_name} ɪs ғʟᴏᴏᴅɪɴɢ: ʙʟᴏᴄᴋᴇᴅ ғᴏʀ 𝟷𝟶 ᴍɪɴᴜᴛᴇs ғᴏʀ ᴜsɪɴɢ ᴛʜᴇ ʙᴏᴛ.</b>'
+        mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
+        msg = f'<b><tg-emoji emoji-id="5420323339723881652">⚠️</tg-emoji> {mention} ɪs ғʟᴏᴏᴅɪɴɢ: ʙʟᴏᴄᴋᴇᴅ ғᴏʀ 𝟷𝟶 ᴍɪɴᴜᴛᴇs ғᴏʀ ᴜsɪɴɢ ᴛʜᴇ ʙᴏᴛ.</b>'
         try:
-            await update.message.reply_html(msg)
+            # 🔥 No reply_html, seedha send_message group mein without replying
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode='HTML')
         except Exception:
             pass
         return True
@@ -298,7 +301,7 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     if not update.message and not update.edited_message:
         return
 
-    if await check_and_handle_flood(update):
+    if await check_and_handle_flood(update, context):
         return
 
     chat_id = str(update.effective_chat.id)
@@ -384,7 +387,7 @@ async def _bump_counter(coll, query, update_fields, inc_field='count', inc_by=1)
 
 
 async def guess(update: Update, context: CallbackContext) -> None:
-    if await check_and_handle_flood(update):
+    if await check_and_handle_flood(update, context):
         return
 
     chat_id = update.effective_chat.id
@@ -395,6 +398,9 @@ async def guess(update: Update, context: CallbackContext) -> None:
         active_spawn = await spawns_collection.find_one({'chat_id': chat_id})
         
         if not active_spawn:
+            # 🔥 Fix: Koi turant wapas attempt karega grab hone ke baad to already grabbed aayega 15 seconds tak
+            if chat_id in last_grabbed and time.time() - last_grabbed[chat_id] < 15:
+                return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ by sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
             return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
 
         # Restart survivability: Check if it's too old
@@ -426,7 +432,9 @@ async def guess(update: Update, context: CallbackContext) -> None:
         # IF CORRECT: Atomic Delete (First person to delete wins it, race condition resolved)
         grabbed = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': active_spawn['message_id']})
         if not grabbed:
-            return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ by sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
+            return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>.\nʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
+
+        last_grabbed[chat_id] = time.time()  # 🔥 Track successful grab time to avoid race conditions msg
 
         time_taken_seconds = round(time.time() - spawn_time)
         formatted_time = format_time_taken(time_taken_seconds)
