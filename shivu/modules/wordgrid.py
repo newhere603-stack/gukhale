@@ -415,7 +415,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
         try:
             # FASTEST REPLY SYSTEM
-            await message.reply_text(f"<tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji> <b>+{points} points for {mention}!\n\n<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
+            await message.reply_text(f"<tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji> <b>+{points} ᴘᴏɪɴᴛs ꜰᴏʀ {mention}!\n\n<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> ʏᴏᴜ ꜰᴏᴜɴᴅ {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         except Exception:
             pass
         
@@ -464,7 +464,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
             medals = ["<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>", "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>", "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>", "🏅", "🏅"] 
             for idx, data in enumerate(sorted_scores):
                 medal = medals[idx] if idx < len(medals) else "🏅"
-                summary += f"{medal} <b>{data['mention']}</b> +<b><code>{data['score']} points</code></b>\n"
+                summary += f"{medal} <b>{data['mention']}</b> <b>+{data['score']}</b> <tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji>\n"
             
             summary += "\n<b>Thanks for playing! Start another game by /playgrid.</b>"
             blockquote_summary = f"<blockquote>{summary}</blockquote>"
@@ -642,12 +642,22 @@ async def fetch_grid_leaderboard(chat_id, state):
             for i, user in enumerate(top_users):
                 uid = user.get('id', user.get('_id'))
                 first_name = user.get('first_name', '')
+                username = user.get('username', '')
+                
+                # Agar first_name empty hai toh username ya 'Unknown' use karega
                 if not first_name or first_name.strip() == '':
-                    first_name = user.get('username', 'Unknown')
+                    first_name = username if username else 'Unknown'
                 name = html.escape(first_name)
                 
-                # Tag ka link yaha se hata diya hai, ab silent mention rahega
-                user_mention = name 
+                # Smart Silent Mention Fix
+                # Jinka username hai unko web link se tag karega (Taki blue dikhe par ping na jaye)
+                if username and username != 'Unknown':
+                    user_mention = f"<a href='https://t.me/{username}'>{name}</a>"
+                # Jinka username nahi hai sirf unko hi ID se tag karega
+                elif uid:
+                    user_mention = f"<a href='tg://user?id={uid}'>{name}</a>"
+                else:
+                    user_mention = name
                 
                 points = user.get(sort_key, 0)
                 msg += f"<b>{i + 1}.</b> <b>{user_mention}</b> - <b>{points:,}</b> <tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji>\n"
