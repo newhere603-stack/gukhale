@@ -603,10 +603,10 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
         
     text = (
         "<b><tg-emoji emoji-id=\"5359441070201513074\">🎭</tg-emoji> ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
-        f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ:</b> {escape(c.get('name', 'Unknown'))}\n"
-        f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
-        f"{r_display_emoji} <b>ʀᴀʀɪᴛʏ: {r_name}</b>\n"
-        f"<b><tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
+        f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ:</b><code> {escape(c.get('name', 'Unknown'))} </code>\n"
+        f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b><code> {escape(c.get('anime', 'Unknown'))} </code>\n"
+        f"{r_display_emoji} <b>ʀᴀʀɪᴛʏ:</b><code> {r_name} </code>\n"
+        f"<b><tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> ɪᴅ:</b><code> {escape(str(c.get('id', 'Unknown')))} </code>\n\n"
         "<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
     )
     await update.message.reply_html(text)
