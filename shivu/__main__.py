@@ -605,7 +605,7 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
         "<b><tg-emoji emoji-id=\"5359441070201513074\">🎭</tg-emoji> ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
         f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ:</b> {escape(c.get('name', 'Unknown'))}\n"
         f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
-        f"{display_rarity} <b>ʀᴀʀɪᴛʏ:</b>\n"
+        f"{display_rarity} <b>ʀᴀʀɪᴛʏ: {r_name}</b>\n"
         f"<b><tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
         "<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
     )
