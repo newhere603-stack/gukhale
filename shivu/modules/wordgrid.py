@@ -415,7 +415,7 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
         try:
             # FASTEST REPLY SYSTEM
-            await message.reply_text(f"<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> <b>+{points} points for {mention}! You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
+            await message.reply_text(f"<tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji> <b>+{points} points for {mention}!\n\n<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> You found {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         except Exception:
             pass
         
@@ -645,9 +645,12 @@ async def fetch_grid_leaderboard(chat_id, state):
                 if not first_name or first_name.strip() == '':
                     first_name = user.get('username', 'Unknown')
                 name = html.escape(first_name)
-                user_mention = f"<a href='tg://user?id={uid}'>{name}</a>" if uid else name
+                
+                # Tag ka link yaha se hata diya hai, ab silent mention rahega
+                user_mention = name 
+                
                 points = user.get(sort_key, 0)
-                msg += f"<b>{i + 1}.</b> <b>{user_mention}</b> - <code>{points:,}</code> <b>pts</b>\n"
+                msg += f"<b>{i + 1}.</b> <b>{user_mention}</b> - <b>{points:,}</b> <tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji>\n"
         return msg
     except Exception as e:
         return "<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>"
