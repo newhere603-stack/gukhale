@@ -41,7 +41,6 @@ group_user_totals_collection = db['group_user_totalsssssss']
 top_global_groups_collection = db['top_global_groups']
 rarity_status_collection = db['rarity_status_settings']
 group_settings_collection = db['group_settings_db']
-# 🔥 Naya Collection: Spawns ko yaad rakhne ke liye taaki restart pe memory loss na ho
 spawns_collection = db['active_spawns_db']
 
 MESSAGE_FREQUENCY = 70
@@ -71,9 +70,11 @@ group_settings_cache = {}
 chat_frequency_cache = {} 
 locks, message_counts = {}, {}
 sent_characters = {}
-last_grabbed = {} # 🔥 Cache to track recent grabs so bot can tell "already grabbed" instead of "not spawned"
 
-# 🔥 Purane Memory dicts nikal diye (spawn_times, last_characters) - Ab sab seedha MongoDB mein jayega.
+last_grabbed = {} # 🔥 Cache to track recent grabs
+grab_locks = {} # 🔥 Race conditions block karne wala naya lock
+active_spawns_cache = {} # 🔥 Super fast 0ms Memory cache takki har baar database na padhna pade
+
 currently_spawning = {}
 
 _cached_characters = []
@@ -107,7 +108,6 @@ async def check_and_handle_flood(update: Update, context: CallbackContext) -> bo
         mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
         msg = f'<b><tg-emoji emoji-id="5420323339723881652">⚠️</tg-emoji> {mention} ɪs ғʟᴏᴏᴅɪɴɢ: ʙʟᴏᴄᴋᴇᴅ ғᴏʀ 𝟷𝟶 ᴍɪɴᴜᴛᴇs ғᴏʀ ᴜsɪɴɢ ᴛʜᴇ ʙᴏᴛ.</b>'
         try:
-            # 🔥 No reply_html, seedha send_message group mein without replying
             await context.bot.send_message(chat_id=update.effective_chat.id, text=msg, parse_mode='HTML')
         except Exception:
             pass
@@ -144,7 +144,6 @@ for module_name in ALL_MODULES:
     except Exception:
         LOGGER.exception(f"Failed loading module {module_name}")
 
-
 def get_rarity_key(rarity_str):
     if not isinstance(rarity_str, str):
         return None
@@ -156,7 +155,6 @@ def get_rarity_key(rarity_str):
             return key
     return None
 
-
 def format_time_taken(seconds):
     if seconds < 60:
         return f"{seconds}s"
@@ -165,7 +163,6 @@ def format_time_taken(seconds):
     if secs == 0:
         return f"{mins}m"
     return f"{mins}m {secs}s"
-
 
 async def load_rarity_status():
     try:
@@ -177,13 +174,11 @@ async def load_rarity_status():
         rarity_status_cache[key] = saved.get(key, True)
     LOGGER.info("Rarity status loaded")
 
-
 async def set_rarity_status(key, enabled):
     rarity_status_cache[key] = enabled
     await rarity_status_collection.update_one(
         {'_id': 'settings'}, {'$set': {f'status.{key}': enabled}}, upsert=True
     )
-
 
 async def get_group_setting(chat_id, setting_name, default=False):
     if chat_id not in group_settings_cache:
@@ -193,7 +188,6 @@ async def get_group_setting(chat_id, setting_name, default=False):
         else:
             group_settings_cache[chat_id] = {}
     return group_settings_cache[chat_id].get(setting_name, default)
-
 
 async def set_group_setting(chat_id, setting_name, value):
     if chat_id not in group_settings_cache:
@@ -205,10 +199,8 @@ async def set_group_setting(chat_id, setting_name, value):
         upsert=True
     )
 
-
 def is_authorized(user_id):
     return user_id == OWNER_ID or user_id in SUDO_USERS
-
 
 async def is_admin(update: Update, context: CallbackContext) -> bool:
     user_id = update.effective_user.id
@@ -219,7 +211,6 @@ async def is_admin(update: Update, context: CallbackContext) -> bool:
         return True
     member = await context.bot.get_chat_member(chat.id, user_id)
     return member.status in ('administrator', 'creator')
-
 
 async def is_character_allowed(character, chat_id=None):
     if character.get('removed', False) or character.get('auction_exclusive', False):
@@ -237,7 +228,6 @@ async def is_character_allowed(character, chat_id=None):
         
     return True
 
-
 async def _send_media(context, chat_id, character, caption):
     if character.get('is_video', False):
         return await context.bot.send_video(chat_id=chat_id, video=character.get('img_url'),
@@ -246,16 +236,15 @@ async def _send_media(context, chat_id, character, caption):
     return await context.bot.send_photo(chat_id=chat_id, photo=character.get('img_url'),
                                          caption=caption, parse_mode='HTML')
 
-
 async def despawn_character(chat_id, message_id, character, context):
     await asyncio.sleep(DESPAWN_TIME)
     try:
-        # DB check agar time hone par bhi spawn ungrabbed pada hai
         active_spawn = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': message_id})
         
-        # Agar koi grab kar chuka hoga (ya new overwrite ho gaya hoga) to active_spawn None aayega
         if not active_spawn:
             return
+
+        active_spawns_cache.pop(chat_id, None) # 🔥 Clear from cache on despawn
 
         should_delete = await get_group_setting(chat_id, 'grab_delete', False)
         if should_delete:
@@ -294,7 +283,6 @@ async def despawn_character(chat_id, message_id, character, context):
     finally:
         currently_spawning.pop(str(chat_id), None)
 
-
 async def message_counter(update: Update, context: CallbackContext) -> None:
     if update.effective_chat.type not in ('group', 'supergroup'):
         return
@@ -325,7 +313,6 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
             asyncio.create_task(send_image(update, context))
-
 
 async def send_image(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
@@ -358,7 +345,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
             else f"https://t.me/c/{chat_id_str.replace('-100', '')}/{spawn_msg.message_id}"
         )
         
-        # 🔥 Pura Data Database me set kar diya
         spawn_data = {
             'chat_id': chat_id,
             'character': character,
@@ -366,6 +352,9 @@ async def send_image(update: Update, context: CallbackContext) -> None:
             'spawn_time': time.time(),
             'message_link': spawn_message_link
         }
+        
+        # 🔥 Add to fast memory cache & DB both
+        active_spawns_cache[chat_id] = spawn_data
         await spawns_collection.update_one({'chat_id': chat_id}, {'$set': spawn_data}, upsert=True)
 
         asyncio.create_task(despawn_character(chat_id, spawn_msg.message_id, character, context))
@@ -374,7 +363,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         LOGGER.error(f"Send Image Error: {e}")
     finally:
         currently_spawning[chat_id_str] = False
-
 
 async def _bump_counter(coll, query, update_fields, inc_field='count', inc_by=1):
     doc = await coll.find_one(query)
@@ -385,7 +373,6 @@ async def _bump_counter(coll, query, update_fields, inc_field='count', inc_by=1)
     else:
         await coll.insert_one({**query, **update_fields, inc_field: inc_by})
 
-
 async def guess(update: Update, context: CallbackContext) -> None:
     if await check_and_handle_flood(update, context):
         return
@@ -393,139 +380,152 @@ async def guess(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    try:
-        # Check active spawn from DB
-        active_spawn = await spawns_collection.find_one({'chat_id': chat_id})
-        
-        if not active_spawn:
-            # 🔥 Fix: Koi turant wapas attempt karega grab hone ke baad to already grabbed aayega 15 seconds tak
-            if chat_id in last_grabbed and time.time() - last_grabbed[chat_id] < 15:
-                return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
-            return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
-
-        # Restart survivability: Check if it's too old
-        spawn_time = active_spawn.get('spawn_time', 0)
-        if time.time() - spawn_time > DESPAWN_TIME:
-            await spawns_collection.delete_one({'chat_id': chat_id})
-            return await update.message.reply_html('''<b><tg-emoji emoji-id="5413704112220949842">⏰</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ! (ᴇxᴘɪʀᴇᴅ)</b>''')
-
-        guess_text = ' '.join(context.args).lower() if context.args else ''
-        if not guess_text:
-            return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ɴᴀᴍᴇ!</b>')
-        if "()" in guess_text or "&" in guess_text:
-            return await update.message.reply_html("<b>ɴᴀʜʜ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴛʜɪs ᴛʏᴘᴇs ᴏғ ᴡᴏʀᴅs...<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>")
-
-        character = active_spawn['character']
-        char_name = character.get('name', '').lower()
-        name_parts = char_name.split()
-        
-        is_correct = (
-            sorted(name_parts) == sorted(guess_text.split())
-            or guess_text in name_parts
-            or guess_text == char_name
-        )
-
-        if not is_correct:
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=active_spawn['message_link'])]])
-            return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
-
-        # IF CORRECT: Atomic Delete (First person to delete wins it, race condition resolved)
-        grabbed = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': active_spawn['message_id']})
-        if not grabbed:
-            return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>.\nʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
-
-        last_grabbed[chat_id] = time.time()  # 🔥 Track successful grab time to avoid race conditions msg
-
-        time_taken_seconds = round(time.time() - spawn_time)
-        formatted_time = format_time_taken(time_taken_seconds)
+    # 🔥 Har group ke liye naya lock banayega
+    grab_locks.setdefault(chat_id, asyncio.Lock())
+    
+    # 🔥 Jo first grab karega wo lock le lega aur successfully msg send hone ke baad hi dusre pe move hoga
+    async with grab_locks[chat_id]:
+        try:
+            # 🔥 RAM/Memory se seedha check karega bina DB time delay lagaye
+            active_spawn = active_spawns_cache.get(chat_id)
             
-        eu = update.effective_user
-        user_fields = {'first_name': eu.first_name}
-        if eu.username:
-            user_fields['username'] = eu.username
+            if not active_spawn:
+                active_spawn = await spawns_collection.find_one({'chat_id': chat_id})
+                if active_spawn:
+                    active_spawns_cache[chat_id] = active_spawn
 
-        rarity_str = character.get('rarity', '🟢 Common')
-        r_key = get_rarity_key(rarity_str)
-        
-        if r_key and r_key in RARITIES:
-            _, r_display_emoji, r_name = RARITIES[r_key]
-            r_name = escape(r_name)
-        else:
-            db_emoji, r_name = (rarity_str.split(' ', 1) + [''])[:2] if isinstance(rarity_str, str) and ' ' in rarity_str else (rarity_str, '')
-            r_display_emoji = escape(db_emoji)
-            r_name = escape(r_name)
+            if not active_spawn:
+                if chat_id in last_grabbed and time.time() - last_grabbed[chat_id] < 15:
+                    return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>. ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
+                return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
 
-        mention = f'<a href="tg://user?id={user_id}">{escape(eu.first_name)}</a>'
+            spawn_time = active_spawn.get('spawn_time', 0)
+            if time.time() - spawn_time > DESPAWN_TIME:
+                active_spawns_cache.pop(chat_id, None)
+                await spawns_collection.delete_one({'chat_id': chat_id})
+                return await update.message.reply_html('''<b><tg-emoji emoji-id="5413704112220949842">⏰</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ! (ᴇxᴘɪʀᴇᴅ)</b>''')
 
-        success_message = (
-            f"<tg-emoji emoji-id=\"6068790301076493707\">✅</tg-emoji> <b>{mention}, ᴄᴏɴɢʀᴀᴛs <tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji></b>\n"
-            f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji></b>\n\n"
-            f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> 𝗡𝗔𝗠𝗘:<b> {escape(character.get('name', 'Unknown'))}</b>\n"
-            f"{r_display_emoji} 𝗥𝗔𝗥𝗜𝗧𝗬:<b> {r_name}</b>\n"
-            f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> 𝗦𝗢𝗨𝗥𝗖𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
-            f"<tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {formatted_time}</code>"
-        )
-        
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
-        
-        await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
+            guess_text = ' '.join(context.args).lower() if context.args else ''
+            if not guess_text:
+                return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ɴᴀᴍᴇ!</b>')
+            if "()" in guess_text or "&" in guess_text:
+                return await update.message.reply_html("<b>ɴᴀʜʜ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴛʜɪs ᴛʏᴘᴇs ᴏғ ᴡᴏʀᴅs...<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>")
 
-        async def process_background_tasks(spawn_msg_id):
-            try:
+            character = active_spawn['character']
+            char_name = character.get('name', '').lower()
+            name_parts = char_name.split()
+            
+            is_correct = (
+                sorted(name_parts) == sorted(guess_text.split())
+                or guess_text in name_parts
+                or guess_text == char_name
+            )
+
+            if not is_correct:
+                kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=active_spawn['message_link'])]])
+                return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
+
+            # 🔥 Sab kuch theek hai, cache memory se uda do INSTANTLY
+            active_spawns_cache.pop(chat_id, None)
+
+            # Atomic Delete
+            grabbed = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': active_spawn['message_id']})
+            if not grabbed:
+                return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>.\nʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
+
+            last_grabbed[chat_id] = time.time()  
+
+            time_taken_seconds = round(time.time() - spawn_time)
+            formatted_time = format_time_taken(time_taken_seconds)
+                
+            eu = update.effective_user
+            user_fields = {'first_name': eu.first_name}
+            if eu.username:
+                user_fields['username'] = eu.username
+
+            rarity_str = character.get('rarity', '🟢 Common')
+            r_key = get_rarity_key(rarity_str)
+            
+            if r_key and r_key in RARITIES:
+                _, r_display_emoji, r_name = RARITIES[r_key]
+                r_name = escape(r_name)
+            else:
+                db_emoji, r_name = (rarity_str.split(' ', 1) + [''])[:2] if isinstance(rarity_str, str) and ' ' in rarity_str else (rarity_str, '')
+                r_display_emoji = escape(db_emoji)
+                r_name = escape(r_name)
+
+            mention = f'<a href="tg://user?id={user_id}">{escape(eu.first_name)}</a>'
+
+            success_message = (
+                f"<tg-emoji emoji-id=\"6068790301076493707\">✅</tg-emoji> <b>{mention}, ᴄᴏɴɢʀᴀᴛs <tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji></b>\n"
+                f"<b>ʏᴏᴜ ɢᴏᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ <tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji></b>\n\n"
+                f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> 𝗡𝗔𝗠𝗘:<b> {escape(character.get('name', 'Unknown'))}</b>\n"
+                f"{r_display_emoji} 𝗥𝗔𝗥𝗜𝗧𝗬:<b> {r_name}</b>\n"
+                f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> 𝗦𝗢𝗨𝗥𝗖𝗘:<b> {escape(character.get('anime', 'Unknown'))}</b>\n\n"
+                f"<tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {formatted_time}</code>"
+            )
+            
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
+            
+            # 🔥 Lock ke andar message successfully send ho gaya pehle
+            await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
+
+            # 🔥 Heavy DB task ko Background worker me dal ke lock jaldi chhor dega
+            async def process_background_tasks(spawn_msg_id):
                 try:
-                    reactions = ["🔥", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️", "🤩", "🐳"]
-                    await update.message.set_reaction(reaction=random.choice(reactions))
-                except Exception:
-                    pass
-
-                user = await user_collection.find_one({'id': user_id})
-                if user:
-                    changed = {k: v for k, v in user_fields.items() if user.get(k) != v}
-                    if changed:
-                        await user_collection.update_one({'id': user_id}, {'$set': changed})
-                    await user_collection.update_one({'id': user_id}, {'$push': {'characters': character}})
-                else:
-                    await user_collection.insert_one({
-                        'id': user_id, 
-                        **user_fields, 
-                        'characters': [character],
-                        'bot_started': False
-                    })
-
-                await eco_collection.update_one(
-                    {'id': user_id},
-                    {
-                        '$set': user_fields,
-                        '$setOnInsert': {'balance': 0, 'tokens': 0, 'bot_started': False}
-                    },
-                    upsert=True
-                )
-
-                try:
-                    from shivu.modules.inline import user_cache, query_cache
-                    user_cache.pop(f"u{user_id}", None)
-                    query_cache.clear()
-                except Exception:
-                    pass
-
-                should_delete = await get_group_setting(chat_id, 'grab_delete', False)
-                if should_delete and spawn_msg_id:
                     try:
-                        await context.bot.delete_message(chat_id=chat_id, message_id=spawn_msg_id)
-                    except BadRequest:
+                        reactions = ["🔥", "🍓", "❤️", "🎉", "😍", "🥰", "⚡", "🏆", "👏", "❤️‍🔥", "🍾", "💯", "💘", "👌", "🕊️", "🤩", "🐳"]
+                        await update.message.set_reaction(reaction=random.choice(reactions))
+                    except Exception:
                         pass
 
-                await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
-                await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
+                    user = await user_collection.find_one({'id': user_id})
+                    if user:
+                        changed = {k: v for k, v in user_fields.items() if user.get(k) != v}
+                        if changed:
+                            await user_collection.update_one({'id': user_id}, {'$set': changed})
+                        await user_collection.update_one({'id': user_id}, {'$push': {'characters': character}})
+                    else:
+                        await user_collection.insert_one({
+                            'id': user_id, 
+                            **user_fields, 
+                            'characters': [character],
+                            'bot_started': False
+                        })
 
-            except Exception as e:
-                LOGGER.error(f"Error in background grab process: {e}")
+                    await eco_collection.update_one(
+                        {'id': user_id},
+                        {
+                            '$set': user_fields,
+                            '$setOnInsert': {'balance': 0, 'tokens': 0, 'bot_started': False}
+                        },
+                        upsert=True
+                    )
 
-        asyncio.create_task(process_background_tasks(active_spawn['message_id']))
+                    try:
+                        from shivu.modules.inline import user_cache, query_cache
+                        user_cache.pop(f"u{user_id}", None)
+                        query_cache.clear()
+                    except Exception:
+                        pass
 
-    except Exception as e:
-        LOGGER.error(f"Guess Error: {e}")
+                    should_delete = await get_group_setting(chat_id, 'grab_delete', False)
+                    if should_delete and spawn_msg_id:
+                        try:
+                            await context.bot.delete_message(chat_id=chat_id, message_id=spawn_msg_id)
+                        except BadRequest:
+                            pass
 
+                    await _bump_counter(group_user_totals_collection, {'user_id': user_id, 'group_id': chat_id}, user_fields)
+                    await _bump_counter(top_global_groups_collection, {'group_id': chat_id}, {'group_name': update.effective_chat.title})
+
+                except Exception as e:
+                    LOGGER.error(f"Error in background grab process: {e}")
+
+            asyncio.create_task(process_background_tasks(active_spawn['message_id']))
+
+        except Exception as e:
+            LOGGER.error(f"Guess Error: {e}")
 
 async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> None:
     if not await is_admin(update, context):
@@ -538,7 +538,6 @@ async def toggle_grab_delete_cmd(update: Update, context: CallbackContext) -> No
     state = "<b>ᴇɴᴀʙʟᴇᴅ (sᴘᴀᴡɴɪɴɢ ᴍsɢ ᴡɪʟʟ ᴅᴇʟᴇᴛᴇ ᴏɴ ɢʀᴀʙ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (sᴘᴀᴡɴɪɴɢ ᴍsɢ ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
     await update.message.reply_html(f'<b><tg-emoji emoji-id="6307567066572396133\">⚙</tg-emoji> ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ɢʀᴀʙ ɪs ɴᴏᴡ:</b> {state}')
 
-
 async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> None:
     if not await is_admin(update, context):
         return await update.message.reply_html('<b>ᴏɴʟʏ ᴀᴅᴍɪɴs ᴄᴀɴ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ!</b>')
@@ -550,7 +549,6 @@ async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> No
     state = "<b>ᴇɴᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡɪʟʟ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
     await update.message.reply_html(f'<b><tg-emoji emoji-id="6307567066572396133\">⚙</tg-emoji> ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ᴍɪss ɪs ɴᴏᴡ:</b> {state}')
 
-
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
     lines = ["<b><tg-emoji emoji-id=\"5256131095094652290\">🎯</tg-emoji> ʀᴀʀɪᴛʏ sᴘᴀᴡɴ sᴛᴀᴛᴜs</b>\n"]
     for key, (_, display_emoji, name) in RARITIES.items():
@@ -558,7 +556,6 @@ async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
         lines.append(f"{display_emoji} <b>{escape(name)}</b> (<code>{key}</code>) — {state}")
     lines.append("\n<b>ᴜsᴇ /rarity_on <key> ᴏʀ /rarity_off <key> ᴛᴏ ᴄʜᴀɴɢᴇ.</b>")
     await update.message.reply_html("\n".join(lines))
-
 
 async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: bool) -> None:
     if not is_authorized(update.effective_user.id):
@@ -575,22 +572,22 @@ async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: b
     icon = "<tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji>" if enable else "<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji>"
     await update.message.reply_html(f'<b>{icon} {display_emoji} {escape(name)} ʀᴀʀɪᴛʏ ɪs ɴᴏᴡ {state}.</b>')
 
-
 async def rarity_on_cmd(update, context):
     await _rarity_toggle_cmd(update, context, True)
 
-
 async def rarity_off_cmd(update, context):
     await _rarity_toggle_cmd(update, context, False)
-
 
 async def name_cmd(update: Update, context: CallbackContext) -> None:
     if not is_authorized(update.effective_user.id):
         return  
     chat_id = update.effective_chat.id
     
-    # DB se current spawn get karna
-    active_spawn = await spawns_collection.find_one({'chat_id': chat_id})
+    # 🔥 DB ki jagah cache se pick karega for faster reply
+    active_spawn = active_spawns_cache.get(chat_id)
+    if not active_spawn:
+        active_spawn = await spawns_collection.find_one({'chat_id': chat_id})
+        
     if not active_spawn:
         return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
         
@@ -610,10 +607,9 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
         f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {escape(c.get('anime', 'Unknown'))}\n"
         f"{display_rarity} <b>ʀᴀʀɪᴛʏ:</b>\n"
         f"<b><tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> ɪᴅ:</b> {escape(str(c.get('id', 'Unknown')))}\n\n"
-        "<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜs𝙚 /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
+        "<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
     )
     await update.message.reply_html(text)
-
 
 async def main():
     try:
@@ -663,7 +659,6 @@ async def main():
                 await coro()
             except Exception:
                 pass
-
 
 if __name__ == "__main__":
     try:
