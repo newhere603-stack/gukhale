@@ -27,10 +27,22 @@ LOG_GROUP_ID = -1003893927065
 
 DB_LOADED = False
 
+# SUPERFAST OPTIMIZATION: Font Cache System 🚀
+_FONT_CACHE = {}
+# SUPERFAST OPTIMIZATION: Leaderboard Cache System 🚀
+LB_CACHE = {}
+LB_CACHE_TTL = 10  # Seconds
+
 async def ensure_db_loaded():
     global DB_LOADED
     if not DB_LOADED:
         try:
+            # 🚀 Create Index for Lightning Fast Leaderboard queries
+            try:
+                await user_collection.create_index([("grid_points", -1)], background=True)
+            except Exception:
+                pass
+
             async for game in grid_games_col.find({}):
                 active_games[game['_id']] = game['game_data']
                 
@@ -43,11 +55,13 @@ async def ensure_db_loaded():
             LOGGER.error(f"Error loading WordGrid state from DB: {e}")
 
 # ==========================================
-# 🚀 ZERO-LAG OFFLINE FONT LOADER (NO INTERNET NEEDED)
+# 🚀 ZERO-LAG CACHED FONT LOADER
 # ==========================================
 def get_bold_font(size):
-    # Internet link hata diya hai. Ab ye direct VPS/Heroku ke inbuilt fonts use karega.
-    # Isse 404 lag aane ka chance 0% ho gaya hai.
+    # Agar font pehle se RAM mein hai toh wahi se instant return kar do
+    if size in _FONT_CACHE:
+        return _FONT_CACHE[size]
+        
     font_paths = [
         "Roboto-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -59,12 +73,16 @@ def get_bold_font(size):
     for path in font_paths:
         if os.path.exists(path):
             try:
-                return ImageFont.truetype(path, size)
+                font = ImageFont.truetype(path, size)
+                _FONT_CACHE[size] = font  # Cache it for next time
+                return font
             except:
                 pass
                 
-    # Agar VPS me koi font nahi mili toh direct basic font use karega (Instant load)
-    return ImageFont.load_default()
+    # Fallback to default and cache it
+    font = ImageFont.load_default()
+    _FONT_CACHE[size] = font
+    return font
 
 def get_chat_settings(chat_id):
     if chat_id not in chat_settings:
@@ -182,7 +200,6 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
             x0, y0 = c * cell_size, r * cell_size
             letter = grid[r][c]
             
-            # Agar default font chota hai to center me manage karega
             try:
                 bbox = font.getbbox(letter)
                 w = bbox[2] - bbox[0]
@@ -190,7 +207,6 @@ def create_grid_image(grid, placed_words, found_words, chat_id):
                 text_x = x0 + (cell_size - w) / 2 - bbox[0]
                 text_y = y0 + (cell_size - h) / 2 - bbox[1]
             except AttributeError:
-                # Fallback for older PIL versions with load_default()
                 w, h = font.getsize(letter)
                 text_x = x0 + (cell_size - w) / 2
                 text_y = y0 + (cell_size - h) / 2
@@ -414,7 +430,6 @@ async def handle_guesses(update: Update, context: ContextTypes.DEFAULT_TYPE):
         link = get_msg_link(chat, game["msg_id"])
         btn_go = InlineKeyboardMarkup([[InlineKeyboardButton("ɢᴏ ᴛᴏ ɢʀɪᴅ ⤻", url=link)]])
         try:
-            # FASTEST REPLY SYSTEM
             await message.reply_text(f"<tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji> <b>+{points} ᴘᴏɪɴᴛs ꜰᴏʀ {mention}!\n\n<tg-emoji emoji-id=\"5465626908165163181\">✅</tg-emoji> ʏᴏᴜ ꜰᴏᴜɴᴅ {guess}.</b>", parse_mode="HTML", reply_markup=btn_go)
         except Exception:
             pass
@@ -629,13 +644,21 @@ async def fetch_grid_leaderboard(chat_id, state):
     time_f = state["time"]
     sort_key = get_wg_target_key(time_f, scope, chat_id)
     
+    # 🚀 SUPERFAST OPTIMIZATION: Check Memory Cache first!
+    cache_key = f"{chat_id}_{scope}_{time_f}"
+    now_ts = datetime.utcnow().timestamp()
+    if cache_key in LB_CACHE:
+        cached_msg, timestamp = LB_CACHE[cache_key]
+        if now_ts - timestamp < LB_CACHE_TTL:
+            return cached_msg
+            
     try:
         cursor = user_collection.find({sort_key: {"$gt": 0}}).sort(sort_key, -1).limit(10)
         top_users = await cursor.to_list(length=10)
         
         title_scope = "GLOBAL" if scope == "global" else "THIS CHAT"
         time_title = "" if time_f == "all" else f" ({time_f.upper()})"
-        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WORDGRID LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji><b>WORDGRID LEADERBOARD</b><tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
         
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
@@ -645,13 +668,11 @@ async def fetch_grid_leaderboard(chat_id, state):
                 first_name = user.get('first_name', '')
                 username = user.get('username', '')
                 
-                # Agar first_name empty hai toh username ya 'Unknown' use karega
                 if not first_name or first_name.strip() == '':
                     first_name = username if username else 'Unknown'
                 name = html.escape(first_name)
                 
-                # FIX: Sirf ID se link kiya hai, koi t.me link nahi. 
-                # Jisse link preview wala bada sa popup box bilkul nahi aayega or profile open ho jayegi.
+                # Silent profile link (No tag notification & no box preview due to photo format)
                 if uid:
                     user_mention = f"<a href='tg://user?id={uid}'>{name}</a>"
                 else:
@@ -659,6 +680,9 @@ async def fetch_grid_leaderboard(chat_id, state):
                 
                 points = user.get(sort_key, 0)
                 msg += f"<b>{i + 1}.</b> <b>{user_mention}</b> - <b>{points:,}</b> <tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji>\n"
+        
+        # Save to memory cache so next clicks are instant
+        LB_CACHE[cache_key] = (msg, now_ts)
         return msg
     except Exception as e:
         return "<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> Error fetching leaderboard.</b>"
@@ -669,7 +693,7 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     msg = await fetch_grid_leaderboard(chat_id, state)
     keyboard = get_grid_top_keyboard(state)
     
-    # Leaderboard message ko as a photo bhejne ke liye update kiya hai
+    # Send as photo (This inherently fixes any web link preview boxes!)
     await update.message.reply_photo(
         photo=LEADERBOARD_IMG,
         caption=msg,
@@ -692,7 +716,7 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     keyboard = get_grid_top_keyboard(state)
     
     try:
-        # Jab button press hoga to message ka media aur caption dono update hoga (taaki purani image na hate)
+        # Edit media directly for instant button clicks
         await query.edit_message_media(
             media=InputMediaPhoto(media=LEADERBOARD_IMG, caption=msg, parse_mode="HTML"),
             reply_markup=keyboard
