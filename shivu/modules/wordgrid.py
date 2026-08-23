@@ -586,6 +586,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- LEADERBOARD LOGIC ---
 WG_LEADERBOARD_STATES = {}
+LEADERBOARD_IMG = "https://files.catbox.moe/5t41mo.jpg"
 
 def get_wg_user_state(chat_id):
     if chat_id not in WG_LEADERBOARD_STATES:
@@ -649,12 +650,9 @@ async def fetch_grid_leaderboard(chat_id, state):
                     first_name = username if username else 'Unknown'
                 name = html.escape(first_name)
                 
-                # Smart Silent Mention Fix
-                # Jinka username hai unko web link se tag karega (Taki blue dikhe par ping na jaye)
-                if username and username != 'Unknown':
-                    user_mention = f"<a href='https://t.me/{username}'>{name}</a>"
-                # Jinka username nahi hai sirf unko hi ID se tag karega
-                elif uid:
+                # FIX: Sirf ID se link kiya hai, koi t.me link nahi. 
+                # Jisse link preview wala bada sa popup box bilkul nahi aayega or profile open ho jayegi.
+                if uid:
                     user_mention = f"<a href='tg://user?id={uid}'>{name}</a>"
                 else:
                     user_mention = name
@@ -670,7 +668,14 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     state = get_wg_user_state(chat_id)
     msg = await fetch_grid_leaderboard(chat_id, state)
     keyboard = get_grid_top_keyboard(state)
-    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=keyboard)
+    
+    # Leaderboard message ko as a photo bhejne ke liye update kiya hai
+    await update.message.reply_photo(
+        photo=LEADERBOARD_IMG,
+        caption=msg,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
 
 async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -685,8 +690,13 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     msg = await fetch_grid_leaderboard(chat_id, state)
     keyboard = get_grid_top_keyboard(state)
+    
     try:
-        await query.edit_message_text(msg, parse_mode="HTML", reply_markup=keyboard)
+        # Jab button press hoga to message ka media aur caption dono update hoga (taaki purani image na hate)
+        await query.edit_message_media(
+            media=InputMediaPhoto(media=LEADERBOARD_IMG, caption=msg, parse_mode="HTML"),
+            reply_markup=keyboard
+        )
     except Exception:
         pass
 
