@@ -173,7 +173,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
     await eco_collection.update_one({'id': receiver_id}, {'$inc': {'tokens': amount}}, upsert=True)
 
     await q.edit_message_text(
-        f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜﾙ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ.</b>",
+        f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ.</b>",
         parse_mode="HTML"
     )
     await q.answer()
