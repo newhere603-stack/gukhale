@@ -580,6 +580,27 @@ async def start_mines(update: Update, context: CallbackContext):
     game['key'] = key
     await mines_collection.insert_one(game)
 
+    # --- MINES GAME LOG TRIGGER (BACKGROUND TASK) ---
+    chat_title = update.effective_chat.title if update.effective_chat.title else "ᴘʀɪᴠᴀᴛᴇ ᴄʜᴀᴛ"
+    
+    # 5x5 board layout bananana logs ke liye
+    board_grid = ""
+    for i in range(0, 25, 5):
+        row = board[i:i+5]
+        board_grid += " ".join(["💣" if x == 'mine' else "💸" for x in row]) + "\n"
+        
+    log_data = {
+        "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{game['user_name']}</a></b>",
+        "ɪᴅ": f"<code>{user_id}</code>",
+        "ᴄʜᴀᴛ": f"<b>{html.escape(chat_title)}</b>",
+        "ᴄʜᴀᴛ ɪᴅ": f"<code>{update.effective_chat.id}</code>",
+        "ʙᴇᴛ": f"<b>{bet} ᴄᴏɪɴs</b>",
+        "ᴍɪɴᴇs": f"<b>{mines_count}</b>",
+        "ʙᴏᴀʀᴅ ʟᴀʏᴏᴜᴛ": f"\n{board_grid}"
+    }
+    
+    asyncio.create_task(send_log(context, create_log_message("˹ ᴍɪɴᴇs ɢᴀᴍᴇ ʟᴀʏᴏᴜᴛ ˼ 💣", log_data)))
+
 
 async def mines_callback(update: Update, context: CallbackContext):
     query = update.callback_query
