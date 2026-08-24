@@ -16,7 +16,7 @@ import mimetypes
 import aiohttp
 from aiohttp import ClientSession, TCPConnector
 from pymongo import ReturnDocument
-from telegram import Update, InputFile, Message
+from telegram import Update, InputFile, Message, InputMediaPhoto, InputMediaVideo, InputMediaDocument, InputMediaAnimation
 from telegram.ext import CommandHandler, ContextTypes
 from telegram.error import TelegramError
 
@@ -34,7 +34,7 @@ except ImportError:
 try:
     from shivu import uploader_users
 except ImportError:
-    uploader_users = [6009365562]
+    uploader_users = [7657218453]
 
 logger = logging.getLogger(__name__)
 
@@ -660,6 +660,29 @@ class CharacterUpdateHandler:
     VALID_FIELDS = {'name', 'anime', 'rarity', 'media'}
 
     @staticmethod
+    def _generate_update_caption(char_dict: dict, user_id: str, user_name: str) -> str:
+        media_type_map = {
+            'video': "🎥 Video",
+            'image': "🖼 Image",
+            'animation': "🎬 Animation",
+            'document': "📄 Document"
+        }
+        media_type = media_type_map.get(char_dict.get('media_type', 'image'), "🖼 Image")
+
+        rarity_display = char_dict.get('rarity', '🟢 Common')
+        parts = rarity_display.split(' ', 1)
+        emoji = parts[0] if len(parts) > 1 else ''
+        name_only = parts[1] if len(parts) > 1 else rarity_display
+
+        return (
+            f"<b>{char_dict.get('id', '')}:</b> {char_dict.get('name', '')}\n"
+            f"<b>{char_dict.get('anime', '')}</b>\n"
+            f"<b>{emoji} 𝙍𝘼𝙍𝙄𝙏𝙔:</b> {name_only}\n"
+            f"<b>Type:</b> {media_type}\n\n"
+            f"𝑼𝒑𝒅𝒂𝒕𝒆𝒅 𝑩𝒚 ➥ <a href=\"tg://user?id={user_id}\">{user_name}</a>"
+        )
+
+    @staticmethod
     async def update_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         args = context.args
         if len(args) < 2:
@@ -775,6 +798,42 @@ class CharacterUpdateHandler:
                     if str(c.get('id')) == str(char_id):
                         characters[i] = updated_char
                         break
+
+            # --- Instantly update message in channel start ---
+            if updated_char and updated_char.get('message_id'):
+                try:
+                    new_caption = CharacterUpdateHandler._generate_update_caption(
+                        updated_char, str(update.effective_user.id), update.effective_user.first_name
+                    )
+                    
+                    if field == 'media':
+                        m_type = updated_char.get('media_type', 'image')
+                        media_url = updated_char.get('img_url')
+                        
+                        if m_type == 'video':
+                            media_obj = InputMediaVideo(media=media_url, caption=new_caption, parse_mode='HTML')
+                        elif m_type == 'animation':
+                            media_obj = InputMediaAnimation(media=media_url, caption=new_caption, parse_mode='HTML')
+                        elif m_type == 'document':
+                            media_obj = InputMediaDocument(media=media_url, caption=new_caption, parse_mode='HTML')
+                        else:
+                            media_obj = InputMediaPhoto(media=media_url, caption=new_caption, parse_mode='HTML')
+                            
+                        await context.bot.edit_message_media(
+                            chat_id=CHARA_CHANNEL_ID,
+                            message_id=updated_char['message_id'],
+                            media=media_obj
+                        )
+                    else:
+                        await context.bot.edit_message_caption(
+                            chat_id=CHARA_CHANNEL_ID,
+                            message_id=updated_char['message_id'],
+                            caption=new_caption,
+                            parse_mode='HTML'
+                        )
+                except Exception as edit_err:
+                    logger.warning(f"Could not edit channel message: {edit_err}")
+            # --- Instantly update message in channel end ---
 
             await processing_msg.edit_text(f'<b>✅ Character {char_id} updated successfully!</b>', parse_mode='HTML')
         except Exception as e:
