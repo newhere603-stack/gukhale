@@ -12,7 +12,6 @@ OWNER_ID = 7657218453
 IST = timezone(timedelta(hours=5, minutes=30))
 
 def create_log_message(title: str, data: Dict[str, Any]) -> str:
-    """Beautiful bold and small-caps log designer."""
     timestamp = datetime.now(IST).strftime("%I:%M %p • %d/%m/%y")
     base = f"<b>{title}</b>\n\n"
     
@@ -48,7 +47,7 @@ async def track_bot_start(user_id: int, first_name: str, username: str, is_new: 
         try:
             total_users = await user_collection.count_documents({})
         except:
-            total_users = "N/A"
+            total_users = "ɴ/ᴀ"
             
         status = f"<b>ɴᴇᴡ ᴜsᴇʀ #{total_users}</b>" if is_new else "<b>ʀᴇᴛᴜʀɴɪɴɢ ᴜsᴇʀ</b>"
         
@@ -80,7 +79,7 @@ async def log_admin_action(action_name: str, admin_name: str, admin_id: int, det
         LOGGER.error(f"Admin log error: {e}")
 
 
-# --- 3. GROUP JOIN AND LEAVE LOGS (Direct Service Message Handler) ---
+# --- 3. GROUP JOIN AND LEAVE LOGS ---
 async def track_group_membership(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         message = update.message
@@ -94,35 +93,31 @@ async def track_group_membership(update: Update, context: ContextTypes.DEFAULT_T
             chat = message.chat
             added_by = message.from_user
             
-            added_by_name = added_by.first_name if added_by.first_name else "User"
+            added_by_name = added_by.first_name if added_by.first_name else "ᴜsᴇʀ"
             added_by_mention = f"<b><a href='tg://user?id={added_by.id}'>{added_by_name}</a></b>" if added_by else "<b>ᴜɴᴋɴᴏᴡɴ</b>"
             
-            # Fetch member count
             try:
                 count = await context.bot.get_chat_member_count(chat.id)
                 member_count = f"<b>{count}</b>"
             except Exception as e:
                 LOGGER.error(f"Member Count Error: {e}")
-                member_count = "<b>N/A</b>"
+                member_count = "<b>ɴ/ᴀ</b>"
 
-            # Generate permanent invite link
             invite_link = ""
             try:
                 invite_link = await context.bot.export_chat_invite_link(chat.id)
             except Exception:
-                # Agar admin nahi hai par group public hai to username wala link lagado
                 if chat.username:
                     invite_link = f"https://t.me/{chat.username}"
                 else:
                     invite_link = "No Admin Rights"
 
-            # Setup Chat Title with Link
             if invite_link.startswith("http"):
                 chat_name = f"<b><a href='{invite_link}'>{chat.title}</a></b>"
-                link_status = f"<b><a href='{invite_link}'>Click Here</a></b>"
+                link_status = f"<b><a href='{invite_link}'>ᴄʟɪᴄᴋ ʜᴇʀᴇ</a></b>"
             else:
                 chat_name = f"<b>{chat.title}</b>"
-                link_status = "<b>Bot Need Admin Rights ⚠️</b>"
+                link_status = "<b>ʙᴏᴛ ɴᴇᴇᴅs ᴀᴅᴍɪɴ ʀɪɢʜᴛs ⚠️</b>"
 
             data = {
                 "ᴄʜᴀᴛ": chat_name,
@@ -140,17 +135,15 @@ async def track_group_membership(update: Update, context: ContextTypes.DEFAULT_T
             chat = message.chat
             removed_by = message.from_user
             
-            removed_by_name = removed_by.first_name if removed_by.first_name else "User"
+            removed_by_name = removed_by.first_name if removed_by.first_name else "ᴜsᴇʀ"
             removed_by_mention = f"<b><a href='tg://user?id={removed_by.id}'>{removed_by_name}</a></b>" if removed_by else "<b>ᴜɴᴋɴᴏᴡɴ</b>"
 
-            # Try to fetch members (kicked hone ke baad access deny ho sakta hai, isliye fallback lagaya)
             try:
                 count = await context.bot.get_chat_member_count(chat.id)
                 member_count = f"<b>{count}</b>"
             except:
-                member_count = "<b>N/A (No Access)</b>"
+                member_count = "<b>ɴ/ᴀ (ɴᴏ ᴀᴄᴄᴇss)</b>"
                 
-            # Chat Name par link agar GC public ho
             if chat.username:
                 chat_name = f"<b><a href='https://t.me/{chat.username}'>{chat.title}</a></b>"
             else:
@@ -175,10 +168,10 @@ async def fetch_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Owner ke liye command: /grouplink <chat_id>"""
     user_id = update.effective_user.id
     if user_id != OWNER_ID:
-        return 
+        return # Ignore ordinary users silently
     
     if not context.args:
-        await update.message.reply_text("Bhai, Group ID bhi toh do uske aage.\nExample: `/grouplink -1001234567890`", parse_mode="Markdown")
+        await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ɢʀᴏᴜᴘ ɪᴅ.\nᴇxᴀᴍᴘʟᴇ:</b> <code>/grouplink -1001234567890</code>", parse_mode="HTML")
         return
         
     chat_id = context.args[0]
@@ -186,10 +179,10 @@ async def fetch_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat_id = int(chat_id)
     except ValueError:
-        await update.message.reply_text("ID hamesha numbers mein hoti hai (jaise -100...), theek se check karo.")
+        await update.message.reply_text("<b>ɪɴᴠᴀʟɪᴅ ɪᴅ ғᴏʀᴍᴀᴛ. ɪᴅ ᴍᴜsᴛ ʙᴇ ᴀ ɴᴜᴍʙᴇʀ.</b>", parse_mode="HTML")
         return
 
-    m = await update.message.reply_text("<b>Link nikal raha hu, thoda wait karo...</b>", parse_mode="HTML")
+    m = await update.message.reply_text("<b>ғᴇᴛᴄʜɪɴɢ ʟɪɴᴋ, ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ...</b>", parse_mode="HTML")
     
     try:
         # Export Link
@@ -200,29 +193,29 @@ async def fetch_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             count = await context.bot.get_chat_member_count(chat.id)
             member_count = f"<b>{count}</b>"
         except:
-            member_count = "<b>N/A</b>"
+            member_count = "<b>ɴ/ᴀ</b>"
             
         data = {
             "ᴄʜᴀᴛ": f"<b><a href='{invite_link}'>{chat.title}</a></b>",
             "ɪᴅ": f"<code>{chat.id}</code>",
             "ᴍᴇᴍʙᴇʀs": member_count,
-            "ʟɪɴᴋ": f"<b><a href='{invite_link}'>Join Here</a></b>",
-            "ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ": f"<b><a href='tg://user?id={user_id}'>Owner</a></b>"
+            "ʟɪɴᴋ": f"<b><a href='{invite_link}'>ᴊᴏɪɴ ʜᴇʀᴇ</a></b>",
+            "ʀᴇǫᴜᴇsᴛᴇᴅ ʙʏ": f"<b><a href='tg://user?id={user_id}'>ᴏᴡɴᴇʀ</a></b>"
         }
         
         log = create_log_message("˹ ɢʀᴏᴜᴘ ʟɪɴᴋ ғᴇᴛᴄʜᴇᴅ ˼ 🔗", data)
         await send_log_to_group(log)
         
-        await m.edit_text("<b>Done bhai! Log group mein link bhej diya hai, check karlo waha.</b>", parse_mode="HTML")
+        await m.edit_text("<b>ᴅᴏɴᴇ! sᴜᴄᴄᴇssғᴜʟʟʏ sᴇɴᴛ ᴛʜᴇ ʟɪɴᴋ ᴛᴏ ᴛʜᴇ ʟᴏɢ ɢʀᴏᴜᴘ.</b>", parse_mode="HTML")
         
     except Exception as e:
         error_msg = str(e)
         if "Chat not found" in error_msg:
-            await m.edit_text("Bot uss group mein nahi hai ya ID galat hai.")
+            await m.edit_text("<b>ʙᴏᴛ ɪs ɴᴏᴛ ɪɴ ᴛʜᴀᴛ ɢʀᴏᴜᴘ ᴏʀ ɪɴᴠᴀʟɪᴅ ɪᴅ.</b>", parse_mode="HTML")
         elif "Not enough rights" in error_msg:
-            await m.edit_text("Bhai bot uss group mein admin nahi hai isliye link nahi nikal sakta.")
+            await m.edit_text("<b>ʙᴏᴛ ɪs ɴᴏᴛ ᴀɴ ᴀᴅᴍɪɴ ɪɴ ᴛʜᴀᴛ ɢʀᴏᴜᴘ.</b>", parse_mode="HTML")
         else:
-            await m.edit_text(f"Kuch error aagaya: {error_msg}")
+            await m.edit_text(f"<b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ: {error_msg}</b>", parse_mode="HTML")
 
 
 # Register handlers
