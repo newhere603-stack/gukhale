@@ -14,7 +14,7 @@ from shivu.Database.db import eco_collection
 
 # Asli collections yahan set ki hain
 collection = db['anime_characters_lol']
-bot_settings_collection = db['bot_settings'] # 🔥 NAYA ADD KIYA HAI: Persistent Settings ke liye
+bot_settings_collection = db['bot_settings'] # 🔥 Persistent Settings ke liye
 
 # ---------------- CUSTOM RARITIES ----------------
 RARITIES = {
@@ -36,6 +36,16 @@ def get_rarity_display(rarity_str):
         if rarity_str.lower() == key or emoji == r_emoji or name == r_name.lower():
             return f"{r_emoji} {r_name}"
     
+    return rarity_str
+
+# 🔥 NAYA FIX: Rarity ko sahi se normalize karne wala function (Emoji/Caps sab handle karega)
+def get_base_rarity(rarity_str):
+    if not rarity_str:
+        return "common"
+    rarity_str = str(rarity_str).lower().strip()
+    for key, (emoji, name) in RARITIES.items():
+        if key in rarity_str or name.lower() in rarity_str or emoji in rarity_str:
+            return key
     return rarity_str
 
 # ---------------- CONFIG ----------------
@@ -128,7 +138,7 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
     except Exception:
         return False
 
-# 🔥 YAHAN PE DATABASE WALI LOGIC LAGAI HAI
+# 🔥 YAHAN PE ROBUST DATABASE LOGIC LAGAYI HAI
 async def get_unique_char(user_id: int, rarity_pattern: str = None):
     try:
         user = await user_collection.find_one({"id": user_id})
@@ -150,9 +160,14 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
                 except ValueError:
                     pass
 
-        # Fetch disabled rarities purely from DB
+        # Fetch disabled rarities purely from DB & Normalize them
         settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
-        disabled_rarities = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+        if settings and 'disabled_rarities' in settings:
+            raw_disabled = set(settings['disabled_rarities'])
+        else:
+            raw_disabled = {"premium", "cosmic", "mythic"}
+            
+        normalized_disabled = {get_base_rarity(d) for d in raw_disabled}
 
         all_chars = await collection.find({"auction_exclusive": {"$ne": True}}).to_list(length=None)
         
@@ -160,28 +175,28 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
         for char in all_chars:
             c_id = char.get("id")
             
-            rarity_str = char.get("rarity", "").lower()
-            skip_rarity = False
-            for disabled in disabled_rarities:
-                if disabled in rarity_str:
-                    skip_rarity = True
-                    break
+            # PERFECT RARITY MATCH
+            char_rarity_key = get_base_rarity(char.get("rarity", ""))
             
-            if skip_rarity:
+            if char_rarity_key in normalized_disabled:
                 continue
 
-            if c_id not in owned_set and str(c_id) not in owned_set:
+            # CLEAN OWNERSHIP CHECK
+            is_owned = False
+            if c_id in owned_set or str(c_id) in owned_set:
+                is_owned = True
+            else:
                 try:
-                    if int(c_id) not in owned_set:
-                        available_chars.append(char)
-                        continue
+                    if int(c_id) in owned_set:
+                        is_owned = True
                 except (ValueError, TypeError):
                     pass
-                if c_id not in owned_set:
-                    available_chars.append(char)
+            
+            if not is_owned:
+                available_chars.append(char)
 
         if not available_chars and all_chars:
-            available_chars = [c for c in all_chars if not any(d in c.get("rarity", "").lower() for d in disabled_rarities)]
+            available_chars = [c for c in all_chars if get_base_rarity(c.get("rarity", "")) not in normalized_disabled]
 
         if not available_chars:
             return None
@@ -220,7 +235,7 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     except Exception:
         pass
 
-# 🔥 OFF WALO KO DATABASE MEIN SAVE KAR DIYA
+# 🔥 PERFECTLY SYNCED OFF/ON LOGIC
 async def prarity_on(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
         return  
@@ -229,17 +244,20 @@ async def prarity_on(update: Update, context: CallbackContext):
             "<b>ᴜsᴀɢᴇ: /prarity_on &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_on ᴘʀᴇᴍɪᴜᴍ</code>", 
             parse_mode="HTML"
         )
-    rarity_name = " ".join(context.args).lower()
+    
+    raw_input = " ".join(context.args)
+    base_key = get_base_rarity(raw_input)
     
     settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
-    disabled_rarities = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+    raw_disabled = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+    normalized_disabled = {get_base_rarity(d) for d in raw_disabled}
 
-    if rarity_name in disabled_rarities:
-        disabled_rarities.remove(rarity_name)
-        await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities)}}, upsert=True)
-        await update.message.reply_text(f"✅ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+    if base_key in normalized_disabled:
+        normalized_disabled.remove(base_key)
+        await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
+        await update.message.reply_text(f"✅ <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def prarity_off(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
@@ -249,17 +267,20 @@ async def prarity_off(update: Update, context: CallbackContext):
             "<b>ᴜsᴀɢᴇ: /prarity_off &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_off ᴘʀᴇᴍɪᴜᴍ</code>", 
             parse_mode="HTML"
         )
-    rarity_name = " ".join(context.args).lower()
+        
+    raw_input = " ".join(context.args)
+    base_key = get_base_rarity(raw_input)
     
     settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
-    disabled_rarities = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+    raw_disabled = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+    normalized_disabled = {get_base_rarity(d) for d in raw_disabled}
 
-    if rarity_name not in disabled_rarities:
-        disabled_rarities.add(rarity_name)
-        await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities)}}, upsert=True)
-        await update.message.reply_text(f"❌ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+    if base_key not in normalized_disabled:
+        normalized_disabled.add(base_key)
+        await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
+        await update.message.reply_text(f"❌ <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def dice_marry(update: Update, context: CallbackContext):
     fix_motor_loop() 
