@@ -260,7 +260,14 @@ async def start_buy_menu(update: Update, context: CallbackContext):
 
 async def buy_product_callback(update: Update, context: CallbackContext):
     query = update.callback_query
+    
+    # --- SPAM BLOCKER FOR BUY ---
+    if context.user_data.get('buy_amount_prompt_active'):
+        await query.answer("⚠️ ʏᴏᴜ ᴀʀᴇ ᴀʟʀᴇᴀᴅʏ ɪɴ ᴛʜᴇ ᴘʀᴏᴄᴇss! ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏʀ ᴛʏᴘᴇ /cancel.", show_alert=True)
+        return WAITING_FOR_BUY_AMOUNT
+    
     await query.answer()
+    context.user_data['buy_amount_prompt_active'] = True
 
     text = (
         f"<b>sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏғ ᴛᴏᴋᴇɴs ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙᴜʏ (ᴍɪɴ: 10, ᴍᴀx: 1000).</b>\n\n"
@@ -275,8 +282,8 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     text = update.message.text.strip()
 
-    if not text.isdigit():
-        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
+    # --- SILENT IGNORE FOR NORMAL MESSAGES ---
+    if not text.isdigit() or int(text) <= 0:
         return WAITING_FOR_BUY_AMOUNT
 
     amount = int(text)
@@ -327,7 +334,6 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
     user_name = update.message.from_user.first_name
     
     if not update.message.photo:
-        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ᴘᴀʏᴍᴇɴᴛ sᴄʀᴇᴇɴsʜᴏᴛ (ᴘʜᴏᴛᴏ).</b>", parse_mode='HTML')
         return WAITING_FOR_BUY_SCREENSHOT
 
     photo_id = update.message.photo[-1].file_id
@@ -358,6 +364,7 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
     context.user_data.pop('buy_order_id', None)
     context.user_data.pop('buy_amount', None)
     context.user_data.pop('buy_price', None)
+    context.user_data.pop('buy_amount_prompt_active', None)
     return ConversationHandler.END
 
 async def cancel_buy_callback(update: Update, context: CallbackContext):
@@ -371,6 +378,7 @@ async def cancel_buy_callback(update: Update, context: CallbackContext):
     context.user_data.pop('buy_order_id', None)
     context.user_data.pop('buy_amount', None)
     context.user_data.pop('buy_price', None)
+    context.user_data.pop('buy_amount_prompt_active', None)
     return ConversationHandler.END
 
 async def admin_buy_callback(update: Update, context: CallbackContext):
@@ -693,7 +701,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await send_market_log(context, "🛒 CHARACTER SOLD", log_details)
 
         await query.message.edit_caption(
-            caption=f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs! ʏᴏᴜ sᴜᴄᴄᴇssғᴜʟʟʏ ʙᴏᴜɢʜᴛ {to_small_caps(char.get('name'))} ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}.</b>",
+            caption=f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs! ʏᴏᴜ sᴜᴄssғᴜʟʟʏ ʙᴏᴜɢʜᴛ {to_small_caps(char.get('name'))} ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}.</b>",
             parse_mode='HTML'
         )
 
@@ -819,18 +827,20 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
 # --- CANCEL AND TIMEOUT METHODS ---
 async def cancel_process(update: Update, context: CallbackContext):
-    context.user_data.pop('sell_character', None)
     context.user_data.pop('sell_owner_id', None)
+    context.user_data.pop('sell_character', None)
     context.user_data.pop('exc_owner_id', None)
     context.user_data.pop('exc_type', None)
-    await update.message.reply_text("<b>ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
+    context.user_data.pop('buy_amount_prompt_active', None)
+    await update.message.reply_text("<b>❌ ᴘʀᴏᴄᴇss ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
     return ConversationHandler.END
 
 async def timeout_process(update: Update, context: CallbackContext):
-    context.user_data.pop('sell_character', None)
     context.user_data.pop('sell_owner_id', None)
+    context.user_data.pop('sell_character', None)
     context.user_data.pop('exc_owner_id', None)
     context.user_data.pop('exc_type', None)
+    context.user_data.pop('buy_amount_prompt_active', None)
     
     msg = "<b>⌛ sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ ᴅᴜᴇ ᴛᴏ ɪɴᴀᴄᴛɪᴠɪᴛʏ (60s Timeout). ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ.</b>"
     if update.message:
@@ -849,6 +859,11 @@ async def sell_start(update: Update, context: CallbackContext):
         await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ!", show_alert=True)
         return ConversationHandler.END
         
+    # --- SPAM BLOCKER FOR SELL ---
+    if context.user_data.get('sell_owner_id'):
+        await query.answer("⚠️ ʏᴏᴜ ᴀʀᴇ ᴀʟʀᴇᴀᴅʏ ɪɴ ᴛʜᴇ ᴘʀᴏᴄᴇss! ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ ᴏʀ ᴛʏᴘᴇ /cancel.", show_alert=True)
+        return WAITING_FOR_CHARACTER_ID
+
     await query.answer()
     context.user_data['sell_owner_id'] = owner_id
 
@@ -866,13 +881,15 @@ async def ask_character_id(update: Update, context: CallbackContext):
 
     char_id = update.message.text.strip()
     user_data = await user_collection.find_one({'id': user_id})
+    
+    # --- SILENT IGNORE ---
     if not user_data or 'characters' not in user_data:
-        await update.message.reply_text("<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!</b>", parse_mode='HTML')
         return WAITING_FOR_CHARACTER_ID
 
     character = next((c for c in user_data.get('characters', []) if str(c.get('id')) == str(char_id)), None)
+    
+    # --- SILENT IGNORE ---
     if not character:
-        await update.message.reply_text("<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ᴏᴡɴ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴡɪᴛʜ ᴛʜɪs ɪᴅ!</b> ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ɪᴅ.", parse_mode='HTML')
         return WAITING_FOR_CHARACTER_ID
 
     context.user_data['sell_character'] = character
@@ -891,8 +908,9 @@ async def ask_price(update: Update, context: CallbackContext):
     if expected_owner and user_id != expected_owner: return WAITING_FOR_PRICE
 
     price_text = update.message.text.strip()
+    
+    # --- SILENT IGNORE ---
     if not price_text.isdigit() or int(price_text) <= 0:
-        await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
         return WAITING_FOR_PRICE
 
     price = int(price_text)
@@ -938,7 +956,7 @@ async def ask_price(update: Update, context: CallbackContext):
     context.user_data.pop('sell_owner_id', None)
     
     await update.message.reply_text(
-        f"<b>🎉 {to_small_caps(final_character.get('name'))} ʜᴀs ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!</b>",
+        f"<b>🎉 {to_small_caps(final_character.get('name'))} ʜᴀs ʙᴇᴇɴ sᴜᴄssғᴜʟʟʏ ʟɪsᴛᴇᴅ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ ғᴏʀ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {price:,}!</b>",
         parse_mode='HTML'
     )
     return ConversationHandler.END
@@ -953,6 +971,11 @@ async def exchange_start_t2c(update: Update, context: CallbackContext):
         await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ!", show_alert=True)
         return ConversationHandler.END
         
+    # --- SPAM BLOCKER FOR T2C ---
+    if context.user_data.get('exc_owner_id'):
+        await query.answer("⚠️ ʏᴏᴜ ᴀʀᴇ ᴀʟʀᴇᴀᴅʏ ɪɴ ᴛʜᴇ ᴘʀᴏᴄᴇss! ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏʀ ᴛʏᴘᴇ /cancel.", show_alert=True)
+        return WAITING_FOR_EXCHANGE_AMOUNT
+
     await query.answer()
     context.user_data['exc_owner_id'] = owner_id
     context.user_data['exc_type'] = 't2c'
@@ -979,6 +1002,11 @@ async def exchange_start_c2t(update: Update, context: CallbackContext):
         await query.answer("⚠️ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ɪɴᴛᴇʀᴀᴄᴛ ᴡɪᴛʜ ᴛʜɪs ᴍᴇɴᴜ!", show_alert=True)
         return ConversationHandler.END
         
+    # --- SPAM BLOCKER FOR C2T ---
+    if context.user_data.get('exc_owner_id'):
+        await query.answer("⚠️ ʏᴏᴜ ᴀʀᴇ ᴀʟʀᴇᴀᴅʏ ɪɴ ᴛʜᴇ ᴘʀᴏᴄᴇss! ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏʀ ᴛʏᴘᴇ /cancel.", show_alert=True)
+        return WAITING_FOR_EXCHANGE_AMOUNT
+
     await query.answer()
     context.user_data['exc_owner_id'] = owner_id
     context.user_data['exc_type'] = 'c2t'
@@ -1004,8 +1032,9 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     if expected_owner and user_id != expected_owner: return WAITING_FOR_EXCHANGE_AMOUNT
 
     amount_text = update.message.text.strip()
+    
+    # --- SILENT IGNORE ---
     if not amount_text.isdigit() or int(amount_text) <= 0:
-        await update.message.reply_text("<b>ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ᴘᴏsɪᴛɪᴠᴇ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
         return WAITING_FOR_EXCHANGE_AMOUNT
 
     amount = int(amount_text)
