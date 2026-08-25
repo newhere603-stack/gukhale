@@ -5,6 +5,9 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 import html
 
+# 🔥 NAYA IMPORT: Database transfer karne ke liye AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient
+
 from shivu import db, user_collection, application
 from shivu.modules.database.sudo import is_user_sudo
 
@@ -159,4 +162,45 @@ async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
+# 🔥 YAHAN TERA NAYA TRANSFER DB COMMAND HAI
+async def transfer_db_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Sirf OWNER_ID use kar sakta hai
+    if update.effective_user.id != OWNER_ID:
+        return
+
+    if not context.args:
+        await update.message.reply_text("<b>⚠️ Naya URL nahi diya!</b>\nUsage: <code>/transferdb [NAYA_MONGO_URL]</code>", parse_mode=ParseMode.HTML)
+        return
+
+    new_mongo_url = context.args[0]
+    msg = await update.message.reply_text("⏳ <b>Database transfer started in background...</b>\n<i>Fetching characters from old DB...</i>", parse_mode=ParseMode.HTML)
+
+    try:
+        # Purane characters fetch karo
+        all_chars = await collection.find({}).to_list(length=None)
+        total_chars = len(all_chars)
+
+        if total_chars == 0:
+            await msg.edit_text("❌ <b>Purane database mein koi characters nahi hain!</b>", parse_mode=ParseMode.HTML)
+            return
+
+        await msg.edit_text(f"📦 <b>{total_chars} characters found!</b>\n<i>Connecting to new Database & transferring...</i>", parse_mode=ParseMode.HTML)
+
+        # Naya database connect karo
+        new_client = AsyncIOMotorClient(new_mongo_url)
+        new_db = new_client["GRABBING_YOUR_WAIFU"] # Tumhare database ka naam
+        new_col = new_db["anime_characters_lol"]
+
+        # Pehle naya collection clear karo taaki duplicate ID error na aaye
+        await new_col.delete_many({})
+        
+        # Ek sath sara data naye DB mein daal do!
+        await new_col.insert_many(all_chars)
+
+        await msg.edit_text(f"✅ <b>BINGO! {total_chars} characters successfully naye MongoDB mein transfer ho gaye!</b> 🎉", parse_mode=ParseMode.HTML)
+
+    except Exception as e:
+        await msg.edit_text(f"❌ <b>Transfer Failed:</b> <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+
 application.add_handler(CommandHandler("give", give_cmd, block=False))
+application.add_handler(CommandHandler("transferdb", transfer_db_cmd, block=False))
