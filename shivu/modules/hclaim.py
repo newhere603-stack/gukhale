@@ -19,9 +19,11 @@ collection = db['anime_characters_lol']
 # Database collections games ko hamesha yaad rakhne ke liye
 tic_collection = db['tic_games']
 mines_collection = db['mines_games']
+settings_collection = db['bot_settings'] # Settings collection for rarity toggles
 
 LOG_GROUP_ID = -1003893927065
 IST = timezone(timedelta(hours=5, minutes=30))
+OWNER_ID = 7657218453 # Added Owner ID
 
 # Anti-spam & Fast Queue locks
 active_claims = set()
@@ -106,6 +108,12 @@ def can_claim_today(last_claim_utc) -> bool:
         
     return last_claim_ist < reset_threshold
 
+# Helper function to get allowed rarities from Database
+async def get_allowed_rarities():
+    config = await settings_collection.find_one({'setting': 'swaifu_rarities'})
+    if config and 'allowed' in config:
+        return config['allowed']
+    return ["celestial", "exclusive", "legendary", "sweet", "special edition", "rare", "common"]
 
 # ==========================================
 # SWAIFU & CLAIM HANDLERS
@@ -130,7 +138,7 @@ async def swaifu(update: Update, context: CallbackContext):
                 await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
                 return
 
-        allowed_rarities = ["celestial", "exclusive", "legendary", "sweet", "special edition", "rare", "common"]
+        allowed_rarities = await get_allowed_rarities()
         cursor = collection.find({})
         all_chars = await cursor.to_list(length=None)
 
@@ -317,7 +325,6 @@ async def start_tic(update: Update, context: CallbackContext):
     key = f"{update.effective_chat.id}_{msg.message_id}"
     game['key'] = key
     await tic_collection.insert_one(game)
-
 
 async def tic_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -734,6 +741,47 @@ async def mines_callback(update: Update, context: CallbackContext):
 
 
 # ==========================================
+# ADMIN RARITY TOGGLE HANDLERS
+# ==========================================
+
+async def drarity_on(update: Update, context: CallbackContext):
+    if update.effective_user.id != OWNER_ID:
+        return
+        
+    if not context.args:
+        await update.message.reply_text("<b>⚠️ Usage: /drarity_on [rarity_name]</b>\n<i>Example: /drarity_on common</i>", parse_mode=ParseMode.HTML)
+        return
+        
+    target_rarity = " ".join(context.args).lower()
+    current_allowed = await get_allowed_rarities()
+    
+    if target_rarity not in current_allowed:
+        current_allowed.append(target_rarity)
+        await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': current_allowed}}, upsert=True)
+        await update.message.reply_text(f"<b>✅ Successfully ENABLED '{target_rarity}' in swaifu!</b>", parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(f"<b>⚠️ '{target_rarity}' is already enabled.</b>", parse_mode=ParseMode.HTML)
+
+async def drarity_off(update: Update, context: CallbackContext):
+    if update.effective_user.id != OWNER_ID:
+        return
+        
+    if not context.args:
+        await update.message.reply_text("<b>⚠️ Usage: /drarity_off [rarity_name]</b>\n<i>Example: /drarity_off common</i>", parse_mode=ParseMode.HTML)
+        return
+        
+    target_rarity = " ".join(context.args).lower()
+    current_allowed = await get_allowed_rarities()
+    
+    if target_rarity in current_allowed:
+        current_allowed.remove(target_rarity)
+        await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': current_allowed}}, upsert=True)
+        await update.message.reply_text(f"<b>🚫 Successfully DISABLED '{target_rarity}' in swaifu!</b>", parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(f"<b>⚠️ '{target_rarity}' is already disabled or not in the list.</b>", parse_mode=ParseMode.HTML)
+
+
+# ==========================================
 # Acts Handler Registration
 # ==========================================
 application.add_handler(CommandHandler("swaifu", swaifu, block=False))
@@ -742,3 +790,7 @@ application.add_handler(CommandHandler("tic", start_tic, block=False))
 application.add_handler(CallbackQueryHandler(tic_callback, pattern="^tic_", block=False))
 application.add_handler(CommandHandler("mines", start_mines, block=False))
 application.add_handler(CallbackQueryHandler(mines_callback, pattern="^mines_", block=False))
+
+# Register Admin Handlers
+application.add_handler(CommandHandler("drarity_on", drarity_on, block=False))
+application.add_handler(CommandHandler("drarity_off", drarity_off, block=False))
