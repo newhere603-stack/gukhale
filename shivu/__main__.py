@@ -39,7 +39,7 @@ collection = db['anime_characters_lol']
 user_collection = db['user_collection_lmaoooo']
 group_user_totals_collection = db['group_user_totalsssssss']
 top_global_groups_collection = db['top_global_groups']
-rarity_status_collection = db['rarity_status_settings']
+bot_settings_collection = db['bot_settings'] # 🔥 Persistent Settings ke liye
 group_settings_collection = db['group_settings_db']
 spawns_collection = db['active_spawns_db']
 
@@ -65,15 +65,17 @@ RARITIES = {
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
 }
 
-rarity_status_cache = {}
+# 🔥 NAYA SINGLE UNIFIED CACHE (Sirf OFF hui rarities isme rahengi)
+disabled_rarities_cache = set()
+
 group_settings_cache = {}  
 chat_frequency_cache = {} 
 locks, message_counts = {}, {}
 sent_characters = {}
 
-last_grabbed = {} # 🔥 Cache to track recent grabs
-grab_locks = {} # 🔥 Race conditions block karne wala naya lock
-active_spawns_cache = {} # 🔥 Super fast 0ms Memory cache takki har baar database na padhna pade
+last_grabbed = {} 
+grab_locks = {} 
+active_spawns_cache = {} 
 
 currently_spawning = {}
 
@@ -144,16 +146,24 @@ for module_name in ALL_MODULES:
     except Exception:
         LOGGER.exception(f"Failed loading module {module_name}")
 
-def get_rarity_key(rarity_str):
-    if not isinstance(rarity_str, str):
-        return None
-    rarity_str = rarity_str.strip()
-    db_emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
-    name = name.strip().lower()
+# 🔥 MEGA FIX: Rarity ko detect karne ka foolproof logic
+def get_base_rarity(rarity_str):
+    if not isinstance(rarity_str, str) or not rarity_str:
+        return "common"
+    
+    rarity_str = rarity_str.lower().strip()
+    
+    # Check exact keys or names first for accurate mapping
     for key, (r_db_emoji, _, r_name) in RARITIES.items():
-        if rarity_str.lower() == key or db_emoji == r_db_emoji or name == r_name.lower():
+        if key == rarity_str or r_name.lower() == rarity_str:
             return key
-    return None
+
+    # Check substring if exact match failed (handles emoji+text combinations)
+    for key, (r_db_emoji, _, r_name) in RARITIES.items():
+        if key in rarity_str or r_name.lower() in rarity_str or r_db_emoji in rarity_str:
+            return key
+            
+    return rarity_str
 
 def format_time_taken(seconds):
     if seconds < 60:
@@ -164,21 +174,18 @@ def format_time_taken(seconds):
         return f"{mins}m"
     return f"{mins}m {secs}s"
 
+# 🔥 DATA LOAD KARTE TIME BHI EK HI CACHE MEIN JAYEGA
 async def load_rarity_status():
+    global disabled_rarities_cache
     try:
-        doc = await rarity_status_collection.find_one({'_id': 'settings'})
-        saved = doc.get('status', {}) if doc else {}
+        settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
+        if settings and 'disabled_rarities' in settings:
+            disabled_rarities_cache = set(get_base_rarity(r) for r in settings['disabled_rarities'])
+        else:
+            disabled_rarities_cache = {"premium", "cosmic", "mythic"}
     except Exception:
-        saved = {}
-    for key in RARITIES:
-        rarity_status_cache[key] = saved.get(key, True)
-    LOGGER.info("Rarity status loaded")
-
-async def set_rarity_status(key, enabled):
-    rarity_status_cache[key] = enabled
-    await rarity_status_collection.update_one(
-        {'_id': 'settings'}, {'$set': {f'status.{key}': enabled}}, upsert=True
-    )
+        disabled_rarities_cache = {"premium", "cosmic", "mythic"}
+    LOGGER.info(f"Loaded Disabled Rarities: {disabled_rarities_cache}")
 
 async def get_group_setting(chat_id, setting_name, default=False):
     if chat_id not in group_settings_cache:
@@ -212,17 +219,19 @@ async def is_admin(update: Update, context: CallbackContext) -> bool:
     member = await context.bot.get_chat_member(chat.id, user_id)
     return member.status in ('administrator', 'creator')
 
+# 🔥 PROPER ALLOW LOGIC
 async def is_character_allowed(character, chat_id=None):
     if character.get('removed', False) or character.get('auction_exclusive', False):
         return False
         
     rarity = character.get('rarity', '🟢 Common')
-    emoji = rarity.split(' ')[0] if isinstance(rarity, str) and ' ' in rarity else rarity
-    key = get_rarity_key(rarity)
+    key = get_base_rarity(rarity)
     
-    if key is not None and not rarity_status_cache.get(key, True):
+    # Agar key mili aur wo disabled cache mein hai toh BLOCK karega
+    if key and key in disabled_rarities_cache:
         return False
         
+    emoji = rarity.split(' ')[0] if isinstance(rarity, str) and ' ' in rarity else rarity
     if character.get('is_video', False) and emoji == '🎥':
         return chat_id == AMV_ALLOWED_GROUP_ID
         
@@ -244,7 +253,7 @@ async def despawn_character(chat_id, message_id, character, context):
         if not active_spawn:
             return
 
-        active_spawns_cache.pop(chat_id, None) # 🔥 Clear from cache on despawn
+        active_spawns_cache.pop(chat_id, None) 
 
         should_delete = await get_group_setting(chat_id, 'grab_delete', False)
         if should_delete:
@@ -254,7 +263,7 @@ async def despawn_character(chat_id, message_id, character, context):
                 pass
 
         rarity_str = character.get('rarity', '🟢 Common')
-        r_key = get_rarity_key(rarity_str)
+        r_key = get_base_rarity(rarity_str)
         
         if r_key and r_key in RARITIES:
             _, r_display_emoji, r_name = RARITIES[r_key]
@@ -353,7 +362,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
             'message_link': spawn_message_link
         }
         
-        # 🔥 Add to fast memory cache & DB both
         active_spawns_cache[chat_id] = spawn_data
         await spawns_collection.update_one({'chat_id': chat_id}, {'$set': spawn_data}, upsert=True)
 
@@ -380,13 +388,10 @@ async def guess(update: Update, context: CallbackContext) -> None:
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # 🔥 Har group ke liye naya lock banayega
     grab_locks.setdefault(chat_id, asyncio.Lock())
     
-    # 🔥 Jo first grab karega wo lock le lega aur successfully msg send hone ke baad hi dusre pe move hoga
     async with grab_locks[chat_id]:
         try:
-            # 🔥 RAM/Memory se seedha check karega bina DB time delay lagaye
             active_spawn = active_spawns_cache.get(chat_id)
             
             if not active_spawn:
@@ -425,10 +430,8 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=active_spawn['message_link'])]])
                 return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
-            # 🔥 Sab kuch theek hai, cache memory se uda do INSTANTLY
             active_spawns_cache.pop(chat_id, None)
 
-            # Atomic Delete
             grabbed = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': active_spawn['message_id']})
             if not grabbed:
                 return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>.\nʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
@@ -444,7 +447,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 user_fields['username'] = eu.username
 
             rarity_str = character.get('rarity', '🟢 Common')
-            r_key = get_rarity_key(rarity_str)
+            r_key = get_base_rarity(rarity_str)
             
             if r_key and r_key in RARITIES:
                 _, r_display_emoji, r_name = RARITIES[r_key]
@@ -467,10 +470,8 @@ async def guess(update: Update, context: CallbackContext) -> None:
             
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
             
-            # 🔥 Lock ke andar message successfully send ho gaya pehle
             await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
 
-            # 🔥 Heavy DB task ko Background worker me dal ke lock jaldi chhor dega
             async def process_background_tasks(spawn_msg_id):
                 try:
                     try:
@@ -549,28 +550,48 @@ async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> No
     state = "<b>ᴇɴᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡɪʟʟ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
     await update.message.reply_html(f'<b><tg-emoji emoji-id="6307567066572396133\">⚙</tg-emoji> ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ᴍɪss ɪs ɴᴏᴡ:</b> {state}')
 
+# 🔥 FIX: RARITY STATUS AB NAYE WALE DB CACHE SE PADHKE SAHI DIKHAYEGA
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
+    global disabled_rarities_cache
     lines = ["<b><tg-emoji emoji-id=\"5256131095094652290\">🎯</tg-emoji> ʀᴀʀɪᴛʏ sᴘᴀᴡɴ sᴛᴀᴛᴜs</b>\n"]
     for key, (_, display_emoji, name) in RARITIES.items():
-        state = "<tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji> ᴏɴ" if rarity_status_cache.get(key, True) else "<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴏғғ"
+        is_on = key not in disabled_rarities_cache
+        state = "<tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji> ᴏɴ" if is_on else "<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴏғғ"
         lines.append(f"{display_emoji} <b>{escape(name)}</b> (<code>{key}</code>) — {state}")
-    lines.append("\n<b>ᴜsᴇ /rarity_on <key> ᴏʀ /rarity_off <key> ᴛᴏ ᴄʜᴀɴɢᴇ.</b>")
+    lines.append("\n<b>ᴜsᴇ /rarity_on &lt;key&gt; ᴏʀ /rarity_off &lt;key&gt; ᴛᴏ ᴄʜᴀɴɢᴇ.</b>")
     await update.message.reply_html("\n".join(lines))
 
 async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: bool) -> None:
+    global disabled_rarities_cache
     if not is_authorized(update.effective_user.id):
         return  
     if not context.args:
         cmd = "/rarity_on" if enable else "/rarity_off"
         return await update.message.reply_html(f'<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴀɢᴇ:</b> {cmd} &lt;rarity_key&gt;')
-    key = context.args[0].lower()
-    if key not in RARITIES:
-        return await update.message.reply_html(f'<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴜɴᴋɴᴏᴡɴ ʀᴀʀɪᴛʏ ᴋᴇʏ:</b> <code>{escape(key)}</code>')
-    await set_rarity_status(key, enable)
-    _, display_emoji, name = RARITIES[key]
-    state = "ᴇɴᴀʙʟᴇᴅ ᴀɴᴅ ᴄᴀɴ sᴘᴀᴡɴ" if enable else "ᴅɪsᴀʙʟᴇᴅ ᴀɴᴅ ᴡɪʟʟ ɴᴏᴛ sᴘᴀᴡɴ"
-    icon = "<tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji>" if enable else "<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji>"
-    await update.message.reply_html(f'<b>{icon} {display_emoji} {escape(name)} ʀᴀʀɪᴛʏ ɪs ɴᴏᴡ {state}.</b>')
+        
+    raw_input = " ".join(context.args)
+    base_key = get_base_rarity(raw_input)
+
+    # Validation
+    if not base_key or base_key not in RARITIES:
+        return await update.message.reply_html(f'<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴜɴᴋɴᴏᴡɴ ʀᴀʀɪᴛʏ:</b> <code>{escape(raw_input)}</code>')
+
+    _, display_emoji, name = RARITIES[base_key]
+
+    if enable: # rarity_on -> Enable kar de (disabled se hata de)
+        if base_key in disabled_rarities_cache:
+            disabled_rarities_cache.remove(base_key)
+            await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities_cache)}}, upsert=True)
+            await update.message.reply_html(f"✅ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        else:
+            await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+    else: # rarity_off -> Disable kar de (disabled list me daal de)
+        if base_key not in disabled_rarities_cache:
+            disabled_rarities_cache.add(base_key)
+            await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities_cache)}}, upsert=True)
+            await update.message.reply_html(f"❌ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        else:
+            await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def rarity_on_cmd(update, context):
     await _rarity_toggle_cmd(update, context, True)
@@ -583,7 +604,6 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
         return  
     chat_id = update.effective_chat.id
     
-    # 🔥 DB ki jagah cache se pick karega for faster reply
     active_spawn = active_spawns_cache.get(chat_id)
     if not active_spawn:
         active_spawn = await spawns_collection.find_one({'chat_id': chat_id})
@@ -593,7 +613,7 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
         
     c = active_spawn['character']
     rarity_str = c.get('rarity', '🟢 Common')
-    r_key = get_rarity_key(rarity_str)
+    r_key = get_base_rarity(rarity_str)
     
     if r_key and r_key in RARITIES:
         _, r_display_emoji, r_name = RARITIES[r_key]
