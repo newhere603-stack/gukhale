@@ -1,5 +1,6 @@
 import asyncio
 import html
+import uuid
 from datetime import datetime, timedelta
 from bson import ObjectId
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
@@ -72,6 +73,9 @@ async def get_live_character_doc(char_id):
 # --- CONVERSATION STATES ---
 WAITING_FOR_CHARACTER_ID, WAITING_FOR_PRICE = 1, 2
 WAITING_FOR_EXCHANGE_AMOUNT = 3
+WAITING_FOR_BUY_PRODUCT = 4
+WAITING_FOR_BUY_AMOUNT = 5
+WAITING_FOR_BUY_SCREENSHOT = 6
 
 # --- SMALL CAPS CONVERTER HELPERS ---
 SMALL_CAPS_TRANS = str.maketrans(
@@ -114,7 +118,7 @@ async def update_menu(query, text, keyboard):
         await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 # --- PMARKET KEYBOARD GENERATOR HELPER ---
-async def get_pmarket_keyboard(user_id):
+async def get_pmarket_keyboard(user_id, bot_username=""):
     settings = await bot_settings_collection.find_one({'_id': 'pmarket_settings'})
     exchange_enabled = settings.get('exchange_enabled', True) if settings else True
     
@@ -126,6 +130,10 @@ async def get_pmarket_keyboard(user_id):
         InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}"),
         InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")
     ])
+    
+    if bot_username:
+        keyboard.append([InlineKeyboardButton("💳 ʙᴜʏ ᴛᴏᴋᴇɴs", url=f"https://t.me/{bot_username}?start=buy_tokens")])
+        
     return InlineKeyboardMarkup(keyboard)
 
 # ========================
@@ -133,7 +141,8 @@ async def get_pmarket_keyboard(user_id):
 # ========================
 async def pmarket_command(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    keyboard = await get_pmarket_keyboard(user_id)
+    bot_username = context.bot.username
+    keyboard = await get_pmarket_keyboard(user_id, bot_username)
     
     await update.message.reply_text(
         "<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n"
@@ -216,7 +225,195 @@ async def force_delist_cmd(update: Update, context: CallbackContext):
         )
         await send_market_log(context, "📉 FORCE DELISTED", log_details)
         
-    await update.message.reply_html(f"✅ <b>Sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ <code>{count}</code> ʟɪsᴛɪɴɢ(s) ғᴏʀ ᴄʜᴀʀᴀᴄᴛᴇʀ ID <code>{char_id}</code> ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛʜᴇᴍ ᴛᴏ ᴛʜᴇɪʀ ᴏᴡɴᴇʀs.</b>")
+    await update.message.reply_html(f"✅ <b>Sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ <code>{count}</code> ʟɪsᴛɪɴɢ(s) ғᴏʀ ᴄʜᴀʀᴀᴄᴛᴇʀ ID <code>{char_id}</code> ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛᴏ ᴛʜᴇɪʀ ᴏᴡɴᴇʀs.</b>")
+
+
+# ========================
+# BUY TOKENS CONVERSATION
+# ========================
+async def buy_command_group(update: Update, context: CallbackContext):
+    if update.effective_chat.type == "private":
+        await update.message.reply_text("<b>⚠️ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ᴏɴʟʏ ᴡᴏʀᴋs ɪɴ ɢʀᴏᴜᴘs. ᴜsᴇ ᴘᴍᴀʀᴋᴇᴛ ᴍᴇɴᴜ ʜᴇʀᴇ.</b>", parse_mode='HTML')
+        return ConversationHandler.END
+    return await start_buy_menu(update, context)
+
+async def start_buy_menu(update: Update, context: CallbackContext):
+    order_id = uuid.uuid4().hex[:16]
+    context.user_data['buy_order_id'] = order_id
+
+    text = (
+        f"✅ <b>ᴏʀᴅᴇʀ ᴄʀᴇᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b>\n"
+        f"<b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n\n"
+        f"<i>sᴇʟᴇᴄᴛ ᴛʜᴇ ᴘʀᴏᴅᴜᴄᴛ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙᴜʏ:</i>"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("ᴛᴏᴋᴇɴs", callback_data="buy_prod_tokens")],
+        [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data="buy_cancel")]
+    ])
+
+    if update.message:
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
+    elif update.callback_query:
+        await update.callback_query.message.reply_text(text, reply_markup=keyboard, parse_mode='HTML')
+
+    return WAITING_FOR_BUY_PRODUCT
+
+async def buy_product_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+
+    text = (
+        f"sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏғ ᴛᴏᴋᴇɴs ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙᴜʏ (ᴍɪɴ: 10, ᴍᴀx: 1000).\n\n"
+        f"<b>ɴᴏᴛᴇ:</b> ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴀ ᴡʜᴏʟᴇ ɴᴜᴍʙᴇʀ.\n"
+        f"<b>ʀᴀᴛᴇ:</b> 10 ᴛᴏᴋᴇɴs ғᴏʀ 5 ɪɴʀ."
+    )
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data="buy_cancel")]])
+    await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    return WAITING_FOR_BUY_AMOUNT
+
+async def ask_buy_amount(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    text = update.message.text.strip()
+
+    if not text.isdigit():
+        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ ᴇɴᴛᴇʀ ᴀ ᴠᴀʟɪᴅ ɴᴜᴍʙᴇʀ.</b>", parse_mode='HTML')
+        return WAITING_FOR_BUY_AMOUNT
+
+    amount = int(text)
+    if amount < 10 or amount > 1000:
+        await update.message.reply_text("<b>⚠️ ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ʙᴇᴛᴡᴇᴇɴ 10 ᴀɴᴅ 1000 ᴛᴏᴋᴇɴs.</b>", parse_mode='HTML')
+        return WAITING_FOR_BUY_AMOUNT
+
+    today_str = get_ist_now().strftime('%Y-%m-%d')
+    user = await eco_collection.find_one({'id': user_id})
+    daily_used = 0
+    if user and user.get('last_buy_date') == today_str:
+        daily_used = user.get('daily_buy_limit_used', 0)
+
+    if daily_used + amount > 1000:
+        remaining = max(0, 1000 - daily_used)
+        await update.message.reply_text(
+            f"<b>⚠️ ᴅᴀɪʟʏ ʙᴜʏ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ!</b>\n"
+            f"ʏᴏᴜ ᴄᴀɴ ᴏɴʟʏ ʙᴜʏ <code>{remaining}</code> ᴍᴏʀᴇ ᴛᴏᴋᴇɴs ᴛᴏᴅᴀʏ.",
+            parse_mode='HTML'
+        )
+        return WAITING_FOR_BUY_AMOUNT
+
+    price_inr = (amount / 10) * 5
+    order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
+    context.user_data['buy_amount'] = amount
+    context.user_data['buy_price'] = price_inr
+
+    caption = (
+        f"✅ <b>ᴏʀᴅᴇʀ ᴜᴘᴅᴀᴛᴇᴅ!</b>\n"
+        f"<b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n\n"
+        f"<code>{amount}</code> ᴛᴏᴋᴇɴs: <b>{price_inr} ɪɴʀ</b>\n\n"
+        f"<i>ᴘᴀʏ ɪɴʀ ᴛᴏ ᴛʜᴇ ғᴏʟʟᴏᴡɪɴɢ ᴜᴘɪ ᴏʀ ǫʀ ɪɴ ᴛʜᴇ ɪᴍᴀɢᴇ:</i> <code>sasuke72@ptyes</code>\n\n"
+        f"<b>⚠️ ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴛʜᴇ ᴘᴀʏᴍᴇɴᴛ sᴄʀᴇᴇɴsʜᴏᴛ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏɴғɪʀᴍ ʏᴏᴜʀ ᴏʀᴅᴇʀ.</b>"
+    )
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data="buy_cancel")]])
+
+    await context.bot.send_photo(
+        chat_id=update.message.chat_id,
+        photo="https://files.catbox.moe/0qjgih.png",
+        caption=caption,
+        reply_markup=keyboard,
+        parse_mode='HTML'
+    )
+    return WAITING_FOR_BUY_SCREENSHOT
+
+async def receive_buy_screenshot(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    if not update.message.photo:
+        await update.message.reply_text("<b>⚠️ ᴘʟᴇᴀsᴇ sᴇɴᴅ ᴀ ᴠᴀʟɪᴅ ᴘᴀʏᴍᴇɴᴛ sᴄʀᴇᴇɴsʜᴏᴛ (ᴘʜᴏᴛᴏ).</b>", parse_mode='HTML')
+        return WAITING_FOR_BUY_SCREENSHOT
+
+    photo_id = update.message.photo[-1].file_id
+    order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
+    amount = context.user_data.get('buy_amount', 0)
+    price_inr = context.user_data.get('buy_price', 0)
+
+    admin_text = (
+        f"🛒 <b>ɴᴇᴡ ᴛᴏᴋᴇɴ ᴘᴜʀᴄʜᴀsᴇ ʀᴇǫᴜᴇsᴛ</b>\n"
+        f"👤 <b>ᴜsᴇʀ:</b> <a href='tg://user?id={user_id}'>{user_id}</a>\n"
+        f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n"
+        f"🪙 <b>ᴀᴍᴏᴜɴᴛ:</b> {amount} ᴛᴏᴋᴇɴs\n"
+        f"💸 <b>ᴘᴀʏᴀʙʟᴇ:</b> {price_inr} ɪɴʀ\n"
+    )
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ ᴄᴏɴғɪʀᴍ", callback_data=f"buy_admin_conf:{user_id}:{amount}:{order_id}")],
+        [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data=f"buy_admin_canc:{user_id}:{order_id}")]
+    ])
+    await context.bot.send_photo(chat_id=LOG_GROUP_ID, photo=photo_id, caption=admin_text, reply_markup=kb, parse_mode='HTML')
+
+    await update.message.reply_text("✅ <b>ʏᴏᴜʀ ᴘᴀʏᴍᴇɴᴛ sᴄʀᴇᴇɴsʜᴏᴛ ʜᴀs ʙᴇᴇɴ sᴇɴᴛ ᴛᴏ ᴛʜᴇ ᴀᴅᴍɪɴ. ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ ғᴏʀ ᴄᴏɴғɪʀᴍᴀᴛɪᴏɴ. ᴛᴏᴋᴇɴs ᴡɪʟʟ ʙᴇ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ᴡᴀʟʟᴇᴛ sʜᴏʀᴛʟʏ.</b>", parse_mode='HTML')
+
+    context.user_data.pop('buy_order_id', None)
+    context.user_data.pop('buy_amount', None)
+    context.user_data.pop('buy_price', None)
+    return ConversationHandler.END
+
+async def cancel_buy_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    if query.message.photo:
+        await query.message.edit_caption("<b>❌ ᴏʀᴅᴇʀ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
+    else:
+        await query.message.edit_text("<b>❌ ᴏʀᴅᴇʀ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
+        
+    context.user_data.pop('buy_order_id', None)
+    context.user_data.pop('buy_amount', None)
+    context.user_data.pop('buy_price', None)
+    return ConversationHandler.END
+
+async def admin_buy_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    if query.from_user.id != OWNER_ID:
+        await query.answer("⚠️ ᴏɴʟʏ ᴏᴡɴᴇʀ ᴄᴀɴ ᴀᴘᴘʀᴏᴠᴇ ᴛʜɪs!", show_alert=True)
+        return
+
+    data = query.data.split(':')
+    action = data[0]
+    target_user_id = int(data[1])
+    order_id = data[-1]
+
+    if action == "buy_admin_conf":
+        amount = int(data[2])
+        today_str = get_ist_now().strftime('%Y-%m-%d')
+        
+        await eco_collection.update_one(
+            {'id': target_user_id},
+            {'$inc': {'tokens': amount}},
+            upsert=True
+        )
+        
+        user = await eco_collection.find_one({'id': target_user_id})
+        if user and user.get('last_buy_date') == today_str:
+            await eco_collection.update_one({'id': target_user_id}, {'$inc': {'daily_buy_limit_used': amount}})
+        else:
+            await eco_collection.update_one({'id': target_user_id}, {'$set': {'daily_buy_limit_used': amount, 'last_buy_date': today_str}})
+
+        await query.edit_message_caption(caption=f"{query.message.caption}\n\n✅ <b>ᴄᴏɴғɪʀᴍᴇᴅ & ᴛᴏᴋᴇɴs ᴀᴅᴅᴇᴅ</b>", parse_mode='HTML')
+
+        try:
+            await context.bot.send_message(
+                chat_id=target_user_id,
+                text=f"🎉 <b>ᴘᴀʏᴍᴇɴᴛ ᴄᴏɴғɪʀᴍᴇᴅ!</b>\n\n<code>{amount}</code> ᴛᴏᴋᴇɴs ʜᴀᴠᴇ ʙᴇᴇɴ sᴜᴄᴄᴇssғᴜʟʟʏ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ᴡᴀʟʟᴇᴛ. ᴛʜᴀɴᴋ ʏᴏᴜ ғᴏʀ ʏᴏᴜʀ ᴘᴜʀᴄʜᴀsᴇ!\n\n<b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>",
+                parse_mode='HTML'
+            )
+        except Exception:
+            pass
+
+    elif action == "buy_admin_canc":
+        await query.edit_message_caption(caption=f"{query.message.caption}\n\n❌ <b>ʀᴇᴊᴇᴄᴛᴇᴅ ʙʏ ᴀᴅᴍɪɴ</b>", parse_mode='HTML')
+        try:
+            await context.bot.send_message(
+                chat_id=target_user_id,
+                text=f"❌ <b>ʏᴏᴜʀ ᴘᴀʏᴍᴇɴᴛ ғᴏʀ ᴏʀᴅᴇʀ ɪᴅ <code>{order_id}</code> ᴡᴀs ʀᴇᴊᴇᴄᴛᴇᴅ ʙʏ ᴀᴅᴍɪɴ. ᴘʟᴇᴀsᴇ ᴄᴏɴᴛᴀᴄᴛ sᴜᴘᴘᴏʀᴛ ɪғ ᴛʜɪs ᴡᴀs ᴀ ᴍɪsᴛᴀᴋᴇ.</b>",
+                parse_mode='HTML'
+            )
+        except Exception:
+            pass
 
 # ========================
 # BUY & MARKET CALLBACKS
@@ -245,7 +442,8 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await update_menu(query, "<b><tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> ʙᴜʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ</b>\n\n<i>sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ᴠɪᴇᴡ ᴘʀᴏᴅᴜᴄᴛs.</i>", InlineKeyboardMarkup(keyboard))
 
     elif action == "pm_m":
-        keyboard = await get_pmarket_keyboard(user_id)
+        bot_username = context.bot.username
+        keyboard = await get_pmarket_keyboard(user_id, bot_username)
         await update_menu(query, "<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>", keyboard)
 
     # --- EXCHANGE SUB-MENU ---
@@ -645,21 +843,17 @@ async def ask_price(update: Update, context: CallbackContext):
     live_char = await get_live_character_doc(char_id_val)
     final_character = live_char if live_char else character
 
-    # 🔥 FIX: Array se saare duplicates udne se bachane ke liye sirf ek item python me remove kar ke update karenge.
     user_doc = await user_collection.find_one({'id': user_id})
     if user_doc and 'characters' in user_doc:
         chars_list = user_doc['characters']
         
-        # Array me pehla match dhoondho aur usko delete kardo
         for i, c in enumerate(chars_list):
             if str(c.get('id')) == str(char_id_val):
                 del chars_list[i]
                 break
                 
-        # Nayi array database me set kardo (Duplicate 2x, 3x safely bache rahenge)
         await user_collection.update_one({'id': user_id}, {'$set': {'characters': chars_list}})
 
-    # Phir list kardo market pe
     await market_collection.insert_one({'seller_id': user_id, 'price': price, 'character': final_character})
 
     user_name = update.message.from_user.first_name
@@ -811,7 +1005,7 @@ async def timeout_process(update: Update, context: CallbackContext):
     context.user_data.pop('exc_owner_id', None)
     context.user_data.pop('exc_type', None)
     
-    msg = "<b>⌛ sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ ᴅᴜᴇ ᴛᴏ ɪɴᴀᴄᴛɪᴠɪᴛʏ (60s Timeout). ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ ᴠɪᴀ /pmarket.</b>"
+    msg = "<b>⌛ sᴇssɪᴏɴ ᴇxᴘɪʀᴇᴅ ᴅᴜᴇ ᴛᴏ ɪɴᴀᴄᴛɪᴠɪᴛʏ (60s Timeout). ᴘʟᴇᴀsᴇ sᴛᴀʀᴛ ᴀɢᴀɪɴ.</b>"
     if update.message:
         await update.message.reply_text(msg, parse_mode='HTML')
     elif update.callback_query and update.callback_query.message:
@@ -853,11 +1047,43 @@ exchange_conv = ConversationHandler(
     per_chat=True,
 )
 
+buy_conv = ConversationHandler(
+    entry_points=[
+        MessageHandler(filters.Regex(r'^/start buy_tokens$'), start_buy_menu),
+        CommandHandler("buy", buy_command_group)
+    ],
+    states={
+        WAITING_FOR_BUY_PRODUCT: [
+            CallbackQueryHandler(buy_product_callback, pattern='^buy_prod_tokens$'),
+            CallbackQueryHandler(cancel_buy_callback, pattern='^buy_cancel$')
+        ],
+        WAITING_FOR_BUY_AMOUNT: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, ask_buy_amount),
+            CallbackQueryHandler(cancel_buy_callback, pattern='^buy_cancel$')
+        ],
+        WAITING_FOR_BUY_SCREENSHOT: [
+            MessageHandler(filters.PHOTO, receive_buy_screenshot),
+            CallbackQueryHandler(cancel_buy_callback, pattern='^buy_cancel$')
+        ],
+        ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
+    },
+    fallbacks=[CommandHandler("cancel", cancel_process)],
+    conversation_timeout=120,
+    allow_reentry=True,
+    per_user=True,
+    per_chat=True,
+)
+
 application.add_handler(sell_conv, group=-1)
 application.add_handler(exchange_conv, group=-2)
+application.add_handler(buy_conv, group=-3) # New buy tokens handler
 
 application.add_handler(CommandHandler(["pmarket", "shop"], pmarket_command, block=False), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd, block=False), group=0)
 application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd, block=False), group=0)
 application.add_handler(CommandHandler("forcedelist", force_delist_cmd, block=False), group=0)
 application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):', block=False), group=0)
+
+# Global Callback handler admin confirm/cancel 
+application.add_handler(CallbackQueryHandler(admin_buy_callback, pattern='^buy_admin_', block=False), group=0)
+
