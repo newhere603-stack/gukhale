@@ -12,8 +12,9 @@ from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from shivu import application, user_collection, db, LOGGER
 from shivu.Database.db import eco_collection
 
-# Asli characters wali collection yahan set ki hai
+# Asli collections yahan set ki hain
 collection = db['anime_characters_lol']
+bot_settings_collection = db['bot_settings'] # 🔥 NAYA ADD KIYA HAI: Persistent Settings ke liye
 
 # ---------------- CUSTOM RARITIES ----------------
 RARITIES = {
@@ -97,7 +98,6 @@ PROPOSE_REJECT_TEXTS = [
 ]
 
 cooldowns = {"dice": {}, "propose": {}}
-DISABLED_RARITIES = {"premium", "cosmic", "mythic"}
 
 def fix_motor_loop():
     try:
@@ -128,6 +128,7 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
     except Exception:
         return False
 
+# 🔥 YAHAN PE DATABASE WALI LOGIC LAGAI HAI
 async def get_unique_char(user_id: int, rarity_pattern: str = None):
     try:
         user = await user_collection.find_one({"id": user_id})
@@ -149,7 +150,10 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
                 except ValueError:
                     pass
 
-        # Ab ye sahi 'anime_characters_lol' collection se data uthayega
+        # Fetch disabled rarities purely from DB
+        settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
+        disabled_rarities = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+
         all_chars = await collection.find({"auction_exclusive": {"$ne": True}}).to_list(length=None)
         
         available_chars = []
@@ -158,10 +162,11 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
             
             rarity_str = char.get("rarity", "").lower()
             skip_rarity = False
-            for disabled in DISABLED_RARITIES:
+            for disabled in disabled_rarities:
                 if disabled in rarity_str:
                     skip_rarity = True
                     break
+            
             if skip_rarity:
                 continue
 
@@ -176,7 +181,7 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
                     available_chars.append(char)
 
         if not available_chars and all_chars:
-            available_chars = [c for c in all_chars if not any(d in c.get("rarity", "").lower() for d in DISABLED_RARITIES)]
+            available_chars = [c for c in all_chars if not any(d in c.get("rarity", "").lower() for d in disabled_rarities)]
 
         if not available_chars:
             return None
@@ -215,6 +220,7 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     except Exception:
         pass
 
+# 🔥 OFF WALO KO DATABASE MEIN SAVE KAR DIYA
 async def prarity_on(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
         return  
@@ -224,8 +230,13 @@ async def prarity_on(update: Update, context: CallbackContext):
             parse_mode="HTML"
         )
     rarity_name = " ".join(context.args).lower()
-    if rarity_name in DISABLED_RARITIES:
-        DISABLED_RARITIES.remove(rarity_name)
+    
+    settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
+    disabled_rarities = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+
+    if rarity_name in disabled_rarities:
+        disabled_rarities.remove(rarity_name)
+        await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities)}}, upsert=True)
         await update.message.reply_text(f"✅ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
         await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
@@ -239,8 +250,13 @@ async def prarity_off(update: Update, context: CallbackContext):
             parse_mode="HTML"
         )
     rarity_name = " ".join(context.args).lower()
-    if rarity_name not in DISABLED_RARITIES:
-        DISABLED_RARITIES.add(rarity_name)
+    
+    settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
+    disabled_rarities = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+
+    if rarity_name not in disabled_rarities:
+        disabled_rarities.add(rarity_name)
+        await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities)}}, upsert=True)
         await update.message.reply_text(f"❌ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
         await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{rarity_name.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
