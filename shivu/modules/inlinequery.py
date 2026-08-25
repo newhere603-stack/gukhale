@@ -26,13 +26,42 @@ class Rarity:
     name: str
     value: int
 
-RARITY_MAP = {
-    "mythic": ("💎", 1), "cosmic": ("🌌", 2), "celestial": ("🪽", 3),
-    "exclusive": ("💮", 4), "legendary": ("🟡", 5), "premium": ("🔮", 6),
-    "neon": ("⚡", 7), "summer": ("🏝️", 8), "sweet": ("🍭", 9),
-    "special": ("🔵", 10), "valentine": ("💞", 11), "winter": ("❄️", 12),
-    "erotic": ("🥵", 13), "rare": ("🟠", 14), "common": ("🟢", 15)
+# 🔥 UNIFIED RARITY DICTIONARY
+RARITIES = {
+    "mythic": ("💎", "Mythic", 1),
+    "cosmic": ("🌌", "Cosmic", 2),
+    "celestial": ("🪽", "Celestial", 3),
+    "exclusive": ("💮", "Exclusive", 4),
+    "legendary": ("🟡", "Legendary", 5),
+    "premium": ("🔮", "Premium Edition", 6),
+    "neon": ("⚡", "Neon", 7),
+    "summer": ("🏖️", "Summer", 8),
+    "sweet": ("🍭", "Sweet", 9),
+    "special": ("🔵", "Medium", 10),
+    "valentine": ("💞", "Valentine", 11),
+    "winter": ("❄️", "Winter", 12),
+    "erotic": ("🥵", "Spicy", 13),
+    "rare": ("🟠", "Rare", 14),
+    "common": ("🟢", "Common", 15)
 }
+
+# 🔥 POWERFUL RARITY MATCHER
+def get_base_rarity(rarity_str: str) -> str:
+    if not rarity_str or not isinstance(rarity_str, str):
+        return "common"
+    r_lower = rarity_str.lower().strip()
+    
+    # 1. Exact Match Check
+    for key, (_, name, _) in RARITIES.items():
+        if key == r_lower or name.lower() == r_lower:
+            return key
+
+    # 2. Substring Match Check
+    for key, (db_emoji, name, _) in RARITIES.items():
+        if key in r_lower or name.lower() in r_lower or db_emoji in r_lower:
+            return key
+            
+    return "common"
 
 try:
     collection.create_index([('id', ASCENDING)], unique=True, background=True)
@@ -42,10 +71,11 @@ try:
 except Exception: 
     pass
 
-char_cache = TTLCache(maxsize=100000, ttl=3600)
-user_cache = TTLCache(maxsize=60000, ttl=300) 
+# 🔥 Faster Updates: Cache time reduced to 60s
+char_cache = TTLCache(maxsize=100000, ttl=60)
+user_cache = TTLCache(maxsize=60000, ttl=60) 
 query_cache = TTLCache(maxsize=20000, ttl=30) 
-count_cache = TTLCache(maxsize=40000, ttl=2400)
+count_cache = TTLCache(maxsize=40000, ttl=60)
 feedback_cache = TTLCache(maxsize=15000, ttl=4800)
 view_cache = TTLCache(maxsize=8000, ttl=900)
 wishlist_cache = TTLCache(maxsize=8000, ttl=2400)
@@ -58,15 +88,9 @@ def sc(t: str) -> str:
 
 @lru_cache(maxsize=32768)
 def parse_rar(r: str) -> Rarity:
-    if not r or not isinstance(r, str): 
-        return Rarity("🟢", sc("Common"), 15)
-    rl = r.lower()
-    for k, (e, v) in RARITY_MAP.items():
-        if k in rl:
-            n = r.split(' ', 1)[-1] if ' ' in r else k.title()
-            return Rarity(e, sc(n), v)
-    p = r.split(' ', 1)
-    return Rarity(p[0] if p else "🟢", sc(p[1] if len(p) > 1 else "Common"), 15)
+    base_key = get_base_rarity(r)
+    db_emoji, name, val = RARITIES[base_key]
+    return Rarity(db_emoji, sc(name), val)
 
 def trunc(t: str, l: int = 22) -> str: 
     return t[:l-2] + '..' if len(t) > l else t
@@ -102,7 +126,6 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
     except Exception:
         return []
 
-# FIX 1: Search limit badha kar 1000 kar di gayi hai (Fast pagination ke liye)
 async def search_chars(q: str, lim: int = 1000) -> List[Dict]:
     k = cache_key('search', q, lim)
     if k in query_cache: 
@@ -265,12 +288,10 @@ async def inlinequery(update: Update, context) -> None:
         
         all_chars = dedupe(all_chars)
         
-        # FIX 2: 25 characters ki jagah Telegram ki max limit (50) set kardi
         chars = all_chars[off:off+50]
         has_more = len(all_chars) > off + 50
         noff = str(off + 50) if has_more else ""
 
-        # Live Data fetching ab 50 ke hisab se karega
         live_ids = [c.get('id') for c in chars if c.get('id')]
         if live_ids:
             live_docs = await collection.find({'id': {'$in': live_ids}}, {'_id': 0}).to_list(length=50)
