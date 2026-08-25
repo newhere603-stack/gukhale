@@ -346,6 +346,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 safe_track_bot_start(user_id, first_name, username, is_new)
             )
 
+        # 🔥 FIX: Agar deep link (start payload) mein 'buy_tokens' hai toh aage ka start video mat bhejo, yahan se exit lelo.
+        if context.args and context.args[0] == 'buy_tokens':
+            return
+
         caption_text = get_main_caption(user_id, first_name)
 
         await context.bot.send_video(
