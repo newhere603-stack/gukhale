@@ -182,7 +182,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
 
     if not sorted_data:
         text = (
-            "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>Wordseek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+            "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>Wordseek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
             "<i>No data found for this mode! Play some games to rank up!</i>"
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
@@ -200,7 +200,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
     rows_text = "\n".join(rows)
     text = (
         "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
-        "━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
         f"{rows_text}"
     )
     
