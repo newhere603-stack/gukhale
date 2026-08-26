@@ -2,14 +2,9 @@ import asyncio
 from html import escape
 from datetime import datetime
 from telegram import Update
-from kill import clear_char_cache
 from telegram.ext import CommandHandler, CallbackContext
 from shivu import application, user_collection, collection
-
-# ⚠️ IMPORTANT: Yahan apni check wali file se clear_char_cache ko zaroor import karna ⚠️
-# Jaise agar tumhara check ka code 'check_cmd.py' mein hai, to aise import karo:
-# from check_cmd import clear_char_cache
-# (Agar dono codes ek hi file mein hain, to is import ki jarurat nahi hai)
+from kill import clear_char_cache  # ⚠️ Make sure ye sahi se import ho raha ho
 
 # Configuration
 OWNER_ID = 7657218453
@@ -29,6 +24,14 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
         target_id = reply.from_user.id
         first_name = reply.from_user.first_name
         
+        # Bot ke message par reply marne se roko
+        if target_id == context.bot.id:
+            await update.message.reply_text(
+                "<b>❌ Bot ke message par reply mat kar bhai! User ke message par reply kar ya direct ID use kar.</b>", 
+                parse_mode='HTML'
+            )
+            return
+
         if not context.args:
             await update.message.reply_text(
                 "<b>⚠️ ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀɴ ᴀᴄᴛɪᴏɴ!</b>\n"
@@ -36,7 +39,7 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
                 parse_mode='HTML'
             )
             return
-        # .strip() add kiya taaki agar extra space ho toh ignore ho jaye
+        
         action_arg = context.args[0].strip()
         
     else:
@@ -131,10 +134,16 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
         # ACTION 2: REMOVE SPECIFIC CHARACTER BY ID
         # ----------------------------------------------------
         
-        # Exact index find karenge taaki sirf ek hi copy remove ho
         target_index = -1
+        # Input arg ko normalize karo (leading zero hatane ke liye)
+        clean_action_arg = action_arg.lstrip('0') if action_arg.lstrip('0') else '0'
+
         for i, c in enumerate(characters):
-            if str(c.get('id')) == str(action_arg):
+            db_id_str = str(c.get('id')).strip()
+            clean_db_id = db_id_str.lstrip('0') if db_id_str.lstrip('0') else '0'
+            
+            # Check for exact match OR match without leading zeros
+            if db_id_str == action_arg or clean_db_id == clean_action_arg:
                 target_index = i
                 break
                 
@@ -149,7 +158,12 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
         removed_char = characters.pop(target_index)
         
         # Main collection se data fetch kar rahe hain taaki original Rarity mil sake
-        global_char = await collection.find_one({'id': str(action_arg)})
+        # Ab integer aur string dono format check honge!
+        query = {'$or': [{'id': action_arg}, {'id': str(action_arg)}]}
+        if action_arg.isdigit():
+            query['$or'].append({'id': int(action_arg)})
+            
+        global_char = await collection.find_one(query)
         
         if global_char:
             char_name = global_char.get('name', removed_char.get('name', 'Unknown'))
