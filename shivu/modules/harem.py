@@ -1,5 +1,3 @@
-#siya method v3 - Custom Symbols + Small Caps Font
-
 import asyncio
 import random
 import math
@@ -51,14 +49,13 @@ def rarity_premium_display(key: str) -> str:
     _, prem_emoji, name = RARITIES.get(key, RARITIES["common"])
     return f"{prem_emoji} {name}"
 
-def rarity_emoji(display: str) -> str:
-    if not display:
-        return '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>'
-    db_emoji = display.split(' ', 1)[0] if ' ' in display else display
-    for key, (db_e, prem_e, name) in RARITIES.items():
-        if db_emoji == db_e:
+def get_prem_emoji(rarity_text: str) -> str:
+    """Helper to exactly match the current rarity and return correct custom Emoji."""
+    rarity_text = str(rarity_text).lower()
+    for k, (db_e, prem_e, name) in RARITIES.items():
+        if name.lower() in rarity_text or k.lower() in rarity_text or db_e in rarity_text:
             return prem_e
-    return db_emoji
+    return "🟢" # default fallback
 
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
@@ -97,12 +94,13 @@ class DisplayOptions:
     show_rarity_full: bool = False
     compact_mode: bool = False
 
+# 🔥 100% SCREENSHOT MATCHING FORMATTING
 DEFAULT_STYLE = {
-    'header': "<b>{user_mention}'s ʜᴀʀᴇᴍ - ᴘᴀɢᴇ {page}/{total_pages}</b>\n\n",
-    'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime}</b> ({user_count}/{total_count})\n",
-    'separator': "┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈\n",
-    'character': "<b>➥ {id} | {rarity} | {name}{event} x{count}</b>\n",
-    'footer': "\n",
+    'header': "<b>{user_mention}'s Harem</b>\n\n",
+    'anime_header': "<b>↬ {anime} {user_count}/{total_count}</b>\n",
+    'separator': "--------------------\n",
+    'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
+    'footer': "--------------------\n\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
 
@@ -117,10 +115,18 @@ class UserCollection:
         mode = self.filter_mode
         chars = self.characters
         
-        # Rarity Filter
+        # Rarity Filter - EXACT MATCHING TO PREVENT MIX-UPS
         if mode in RARITIES:
+            target_emoji = RARITIES[mode][0]
             target_name = RARITIES[mode][2].lower()
-            return [c for c in chars if target_name in c.rarity.lower()]
+            target_key = mode.lower()
+            
+            filtered = []
+            for c in chars:
+                r_str = str(c.rarity).lower()
+                if target_emoji in c.rarity or target_name in r_str or target_key in r_str:
+                    filtered.append(c)
+            return filtered
             
         # Latest Mode
         if mode == "latest":
@@ -198,11 +204,7 @@ class HaremMessageBuilder:
     def build_message(self, characters: List[Character], anime_counts: Dict[str, int]) -> str:
         user_mention = f'<a href="tg://user?id={self.user_id}">{escape(self.user_name)}</a>'
 
-        message = self.style['header'].format(
-            user_mention=user_mention,
-            page=self.page + 1,
-            total_pages=self.total_pages
-        )
+        message = self.style['header'].format(user_mention=user_mention)
 
         grouped = self.collection.group_by_anime(characters)
         counts = self.collection.count_by_id(self.collection.characters)
@@ -211,6 +213,7 @@ class HaremMessageBuilder:
         for anime, chars in grouped.items():
             user_count = sum(1 for c in self.collection.characters if c.anime == anime)
             
+            # Formatting as requested
             formatted_anime = to_small_caps(escape(anime))
             message += self.style['anime_header'].format(
                 anime=formatted_anime,
@@ -231,14 +234,14 @@ class HaremMessageBuilder:
 
     def _format_character(self, char: Character, count: int) -> str:
         char_id = str(char.id).zfill(3)
-        rarity = rarity_emoji(char.rarity)
+        r_emoji = get_prem_emoji(char.rarity)
         
         formatted_name = to_small_caps(escape(char.name))
         event_str = f" [{char.event_emoji}]" if char.event_emoji else ""
 
         return self.style['character'].format(
             id=char_id,
-            rarity=rarity,
+            rarity=r_emoji,
             name=formatted_name,
             event=event_str,
             count=count
@@ -268,12 +271,18 @@ class HaremHandler:
             filter_mode=user.get('hmode', 'default')
         )
 
-    async def update_live_data(self, characters: List[Character]):
+    async def update_live_data_all(self, characters: List[Character]):
+        """🚀 BULK LIVE UPDATE: Superfast, prevents wrong rarity in filtering."""
         if not characters:
             return
         unique_ids = list({c.id for c in characters})
-        live_cursor = self.collection_db.find({"id": {"$in": unique_ids}})
-        live_docs = await live_cursor.to_list(length=None)
+        
+        # Projection to make query ultra-fast
+        cursor = self.collection_db.find(
+            {"id": {"$in": unique_ids}},
+            {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
+        )
+        live_docs = await cursor.to_list(length=None)
         live_map = {str(doc.get('id')): doc for doc in live_docs}
         
         for c in characters:
@@ -313,18 +322,21 @@ class HaremHandler:
             nav = []
             if page > 0:
                 prev_page = max(0, page - step)
-                nav.append(InlineKeyboardButton("ᴘʀᴇᴠ", callback_data=f"harem_page:{prev_page}:{user_id}:{step}"))
+                nav.append(InlineKeyboardButton("❮", callback_data=f"harem_page:{prev_page}:{user_id}:{step}"))
+                
+            nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="harem_ignore"))
+            
             if page < total_pages - 1:
                 next_page = min(total_pages - 1, page + step)
-                nav.append(InlineKeyboardButton("ɴᴇxᴛ", callback_data=f"harem_page:{next_page}:{user_id}:{step}"))
+                nav.append(InlineKeyboardButton("❯", callback_data=f"harem_page:{next_page}:{user_id}:{step}"))
             if nav:
                 keyboard.append(nav)
 
             if total_pages > 2:
                 if step == 1:
-                    keyboard.append([InlineKeyboardButton("⭆ 2x", callback_data=f"harem_2x:{page}:{user_id}:2")])
+                    keyboard.append([InlineKeyboardButton("⭆ 2x sᴋɪᴘ", callback_data=f"harem_2x:{page}:{user_id}:2")])
                 else:
-                    keyboard.append([InlineKeyboardButton("⭆ 1x", callback_data=f"harem_2x:{page}:{user_id}:1")])
+                    keyboard.append([InlineKeyboardButton("⭆ 1x sᴋɪᴘ", callback_data=f"harem_2x:{page}:{user_id}:1")])
 
         keyboard.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"harem_close:{user_id}")])
         return InlineKeyboardMarkup(keyboard)
@@ -343,6 +355,9 @@ class HaremHandler:
             await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
             return
 
+        # 🔥 UPDATE ALL CHARACTERS IN MEMORY BEFORE FILTERING! (Fixes Rarity Mixups)
+        await self.update_live_data_all(collection.characters)
+
         display_order = collection.get_filtered_characters()
         if not display_order:
             await message.reply_text(
@@ -358,12 +373,7 @@ class HaremHandler:
         start = page * self.CHARACTERS_PER_PAGE
         current = display_order[start:start + self.CHARACTERS_PER_PAGE]
 
-        chars_to_update = list(current)
         display_char = collection.favorite if collection.favorite else (random.choice(display_order) if display_order else None)
-        if display_char:
-            chars_to_update.append(display_char)
-            
-        await self.update_live_data(chars_to_update)
 
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
@@ -630,6 +640,9 @@ async def harem_close_callback(update: Update, context: CallbackContext):
         return
     await query.answer()
     await query.message.delete()
+    
+async def ignore_callback(update: Update, context: CallbackContext):
+    await update.callback_query.answer()
 
 application.add_handler(CommandHandler(["harem", "collection"], harem_command, block=False))
 application.add_handler(CommandHandler("hmode", hmode_command, block=False))
@@ -639,3 +652,4 @@ application.add_handler(CallbackQueryHandler(mode_callback, pattern='^harem_mode
 application.add_handler(CallbackQueryHandler(unfav_callback, pattern="^harem_unfav_", block=False))
 application.add_handler(CallbackQueryHandler(harem_2x_callback, pattern='^harem_2x:', block=False))
 application.add_handler(CallbackQueryHandler(harem_close_callback, pattern='^harem_close:', block=False))
+application.add_handler(CallbackQueryHandler(ignore_callback, pattern='^harem_ignore$', block=False))
