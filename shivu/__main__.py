@@ -4,6 +4,7 @@ import importlib
 import random
 import time  
 from html import escape
+from shivu.modules import kill
 
 # 🔥 Super-Fast Engine Setup (No text/font changes)
 try:
