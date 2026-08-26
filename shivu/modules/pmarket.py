@@ -1,6 +1,7 @@
 import asyncio
 import html
 import uuid
+import re
 from datetime import datetime, timedelta
 from bson import ObjectId
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
@@ -12,6 +13,7 @@ from shivu.Database.db import eco_collection
 
 # --- CONFIGURATION ---
 LOG_GROUP_ID = -1003893927065
+BUY_LOG_GROUP_ID = -1003757326893  # 🔥 NAYA LOG GROUP SIRF BUY TOKENS KE LIYE
 OWNER_ID = 7657218453
 
 # --- DATABASE COLLECTIONS ---
@@ -36,7 +38,24 @@ async def send_market_log(context: CallbackContext, action: str, details: str):
     try:
         await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_msg, parse_mode='HTML')
     except Exception as e:
-        print(f"Failed to send log to group: {e}")
+        pass
+
+# 🔥 HELPER: SEND BUY LOGS TO THE NEW GROUP STEP-BY-STEP
+async def send_buy_log(context: CallbackContext, action: str, user, details: str):
+    ist_now = get_ist_now()
+    user_mention = f"<a href='tg://user?id={user.id}'>{html.escape(user.first_name)}</a> (<code>{user.id}</code>)"
+    log_msg = (
+        f"<b>💳 ʙᴜʏ ᴛᴏᴋᴇɴs ʟᴏɢ | {action}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>Usᴇʀ:</b> {user_mention}\n"
+        f"{details}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🕒 <i>{ist_now.strftime('%Y-%m-%d %I:%M:%S %p')} IST</i>"
+    )
+    try:
+        await context.bot.send_message(chat_id=BUY_LOG_GROUP_ID, text=log_msg, parse_mode='HTML')
+    except Exception as e:
+        pass
 
 # --- HELPER: GET DAILY LIMIT INFO ---
 async def get_token_limit_info(user_id):
@@ -57,17 +76,23 @@ async def get_token_limit_info(user_id):
     return global_limit, used_today, today_str
 
 
-# --- HELPER TO GET LIVE CHARACTER FROM ANY COLLECTION ---
+# --- HELPER TO GET LIVE CHARACTER (PARALLEL & FAST) ---
 async def get_live_character_doc(char_id):
     if char_id is None:
         return None
-    for col_name in ['anime_characters_lol', 'characters', 'collection']:
-        col = db[col_name]
-        doc = await col.find_one({
-            '$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]
-        })
-        if doc:
-            return doc
+    
+    query = {'$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]}
+    
+    tasks = [
+        db['anime_characters_lol'].find_one(query),
+        db['characters'].find_one(query),
+        db['collection'].find_one(query)
+    ]
+    
+    results = await asyncio.gather(*tasks)
+    for res in results:
+        if res:
+            return res
     return None
 
 # --- CONVERSATION STATES ---
@@ -188,7 +213,7 @@ async def set_exchange_limit_cmd(update: Update, context: CallbackContext):
     
     await update.message.reply_html(f"✅ <b>Dᴀɪʟʏ ᴇxᴄʜᴀɴɢᴇ ʟɪᴍɪᴛ ʜᴀs ʙᴇᴇɴ ᴜᴘᴅᴀᴛᴇᴅ ᴛᴏ <code>{new_limit}</code> ᴛᴏᴋᴇɴs!</b>")
 
-# 🌟 NEW OWNER COMMAND TO FORCE DELIST A CHARACTER 🌟
+# 🌟 NEW OWNER COMMAND TO FORCE DELIST A CHARACTER (OPTIMIZED) 🌟
 async def force_delist_cmd(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
         return
@@ -205,15 +230,17 @@ async def force_delist_cmd(update: Update, context: CallbackContext):
     if not listings:
         await update.message.reply_html(f"⚠️ <b>Nᴏ ᴀᴄᴛɪᴠᴇ ʟɪsᴛɪɴɢs ғᴏᴜɴᴅ ғᴏʀ ᴄʜᴀʀᴀᴄᴛᴇʀ ID <code>{char_id}</code> ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ.</b>")
         return
-        
+    
+    tasks = []
+    market_ids = []
     count = 0
+    
     for item in listings:
         seller_id = item['seller_id']
         char = item['character']
-        market_id = item['_id']
+        market_ids.append(item['_id'])
         
-        await user_collection.update_one({'id': seller_id}, {'$push': {'characters': char}})
-        await market_collection.delete_one({'_id': market_id})
+        tasks.append(user_collection.update_one({'id': seller_id}, {'$push': {'characters': char}}))
         count += 1
         
         seller_mention = f"<a href='tg://user?id={seller_id}'>{seller_id}</a>"
@@ -223,7 +250,11 @@ async def force_delist_cmd(update: Update, context: CallbackContext):
             f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {char.get('name')} (<code>{char.get('id')}</code>)\n"
             f"❌ <b>Aᴄᴛɪᴏɴ:</b> Rᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ ʙʏ Bᴏᴛ Oᴡɴᴇʀ."
         )
-        await send_market_log(context, "📉 FORCE DELISTED", log_details)
+        tasks.append(send_market_log(context, "📉 FORCE DELISTED", log_details))
+    
+    # Run all updates & logs parallel
+    await asyncio.gather(*tasks)
+    await market_collection.delete_many({'_id': {'$in': market_ids}})
         
     await update.message.reply_html(f"✅ <b>Sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ <code>{count}</code> ʟɪsᴛɪɴɢ(s) ғᴏʀ ᴄʜᴀʀᴀᴄᴛᴇʀ ID <code>{char_id}</code> ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛᴏ ᴛʜᴇɪʀ ᴏᴡɴᴇʀs.</b>")
 
@@ -240,6 +271,14 @@ async def buy_command_pm(update: Update, context: CallbackContext):
 async def start_buy_menu(update: Update, context: CallbackContext):
     order_id = uuid.uuid4().hex[:16]
     context.user_data['buy_order_id'] = order_id
+
+    # 🔥 LOGGING STEP 1: Process Started
+    await send_buy_log(
+        context, 
+        "🚀 STARTED", 
+        update.effective_user, 
+        f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Iɴɪᴛɪᴀᴛᴇᴅ Bᴜʏ Mᴇɴᴜ"
+    )
 
     text = (
         f"<b>✅ ᴏʀᴅᴇʀ ᴄʀᴇᴀᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!</b>\n"
@@ -268,6 +307,15 @@ async def buy_product_callback(update: Update, context: CallbackContext):
     
     await query.answer()
     context.user_data['buy_amount_prompt_active'] = True
+
+    # 🔥 LOGGING STEP 2: Product Selected
+    order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
+    await send_buy_log(
+        context, 
+        "📦 SELECTED", 
+        query.from_user, 
+        f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Sᴇʟᴇᴄᴛᴇᴅ <b>'Tᴏᴋᴇɴs'</b>"
+    )
 
     text = (
         f"<b>sᴇɴᴅ ᴛʜᴇ ᴀᴍᴏᴜɴᴛ ᴏғ ᴛᴏᴋᴇɴs ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʙᴜʏ (ᴍɪɴ: 10, ᴍᴀx: 1000).</b>\n\n"
@@ -310,6 +358,14 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
     order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
     context.user_data['buy_amount'] = amount
     context.user_data['buy_price'] = price_inr
+
+    # 🔥 LOGGING STEP 3: Amount Entered
+    await send_buy_log(
+        context, 
+        "🪙 AMOUNT ENTERED", 
+        update.message.from_user, 
+        f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n🪙 <b>Aᴍᴏᴜɴᴛ:</b> <code>{amount}</code> ᴛᴏᴋᴇɴs\n💸 <b>Pʀɪᴄᴇ:</b> {price_inr} INR"
+    )
 
     caption = (
         f"<b>✅ ᴏʀᴅᴇʀ ᴜᴘᴅᴀᴛᴇᴅ!</b>\n"
@@ -357,7 +413,9 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
         [InlineKeyboardButton("✅ ᴄᴏɴғɪʀᴍ", callback_data=f"buy_admin_conf:{user_id}:{amount}:{order_id}")],
         [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data=f"buy_admin_canc:{user_id}:{order_id}")]
     ])
-    await context.bot.send_photo(chat_id=LOG_GROUP_ID, photo=photo_id, caption=admin_text, reply_markup=kb, parse_mode='HTML')
+    
+    # 🔥 LOGGING STEP 4: Redirected Screenshot to NAYA LOG GROUP
+    await context.bot.send_photo(chat_id=BUY_LOG_GROUP_ID, photo=photo_id, caption=admin_text, reply_markup=kb, parse_mode='HTML')
 
     await update.message.reply_text("<b>✅ ʏᴏᴜʀ ᴘᴀʏᴍᴇɴᴛ sᴄʀᴇᴇɴsʜᴏᴛ ʜᴀs ʙᴇᴇɴ sᴇɴᴛ ᴛᴏ ᴛʜᴇ ᴀᴅᴍɪɴ. ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ ғᴏʀ ᴄᴏɴғɪʀᴍᴀᴛɪᴏɴ. ᴛᴏᴋᴇɴs ᴡɪʟʟ ʙᴇ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ᴡᴀʟʟᴇᴛ sʜᴏʀᴛʟʏ.</b>", parse_mode='HTML')
 
@@ -375,6 +433,15 @@ async def cancel_buy_callback(update: Update, context: CallbackContext):
     else:
         await query.message.edit_text("<b>❌ ᴏʀᴅᴇʀ ᴄᴀɴᴄᴇʟʟᴇᴅ.</b>", parse_mode='HTML')
         
+    # 🔥 LOGGING STEP 5: User Cancelled
+    order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
+    await send_buy_log(
+        context, 
+        "❌ CANCELLED", 
+        query.from_user, 
+        f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Usᴇʀ ᴄᴀɴᴄᴇʟʟᴇᴅ ᴛʜᴇ ᴘʀᴏᴄᴇss"
+    )
+
     context.user_data.pop('buy_order_id', None)
     context.user_data.pop('buy_amount', None)
     context.user_data.pop('buy_price', None)
@@ -524,6 +591,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         
         await update_menu(query, f"<b>{prem_emoji} {to_small_caps(name)} ᴄʜᴀʀᴀᴄᴛᴇʀs</b>\n\n<i>ʜᴏᴡ ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ sᴏʀᴛ ᴛʜᴇᴍ?</i>", keyboard)
 
+    # 🔥 OPTIMIZED SORTING METHOD 🔥
     elif action == "pm_s":
         rarity_key = parts[1]
         order = parts[2]
@@ -535,28 +603,11 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         if rarity_key == "premium":
             search_terms.extend(["Premium Edition", "Premium"])
 
-        char_ids = []
-        for col_name in ['anime_characters_lol', 'characters', 'collection']:
-            col = db[col_name]
-            matching_chars = await col.find({
-                '$or': [{'rarity': {"$regex": term, "$options": "i"}} for term in search_terms]
-            }).to_list(length=None)
-            
-            for c in matching_chars:
-                cid = c.get('id')
-                if cid is not None:
-                    char_ids.append(cid)
-                    if isinstance(cid, int):
-                        char_ids.append(str(cid))
-                    elif isinstance(cid, str) and cid.isdigit():
-                        char_ids.append(int(cid))
-
-        if not char_ids:
-            await query.answer("ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ ғᴏʀ sᴀʟᴇ ɪɴ ᴛʜɪs ʀᴀʀɪᴛʏ!", show_alert=True)
-            return
-
+        # DB QUERY DIRECTLY ON MARKET_COLLECTION USING REGEX 
+        regex_pattern = "|".join([re.escape(term) for term in search_terms])
+        
         cursor = market_collection.find({
-            'character.id': {'$in': list(set(char_ids))}
+            'character.rarity': {'$regex': regex_pattern, '$options': 'i'}
         }).sort('price', sort_order).limit(10)
         
         market_items = await cursor.to_list(length=10)
@@ -568,11 +619,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         keyboard = []
         for item in market_items:
             char = item['character']
-            char_id = char.get('id')
-            
-            live_char = await get_live_character_doc(char_id)
-            display_char = live_char if live_char else char
-            char_name = display_char.get('name', 'Unknown')
+            char_name = char.get('name', 'Unknown')
             price = item['price']
             market_id = str(item['_id'])
             
@@ -595,16 +642,14 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         char = item['character']
         seller_id = item['seller_id']
         price = item['price']
-        
-        char_id = char.get('id')
         char_name = char.get('name')
+        char_id = char.get('id')
         
         live_char = await get_live_character_doc(char_id)
         if not live_char and char_name:
-            for col_name in ['anime_characters_lol', 'characters', 'collection']:
-                live_char = await db[col_name].find_one({'name': char_name})
-                if live_char:
-                    break
+            tasks = [db[col_name].find_one({'name': char_name}) for col_name in ['anime_characters_lol', 'characters', 'collection']]
+            results = await asyncio.gather(*tasks)
+            live_char = next((r for r in results if r), None)
             
         display_char = live_char if live_char else char
         char_rarity_str = str(display_char.get('rarity', '')).strip()
@@ -643,7 +688,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         await query.message.delete()
         await context.bot.send_photo(
             chat_id=query.message.chat_id,
-            photo=display_char.get('img_url'), 
+            photo=display_char.get('img_url', 'https://files.catbox.moe/0qjgih.png'), 
             caption=caption,
             reply_markup=keyboard,
             parse_mode='HTML'
@@ -681,8 +726,10 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await query.answer("ᴛᴏᴏ ʟᴀᴛᴇ! ᴛʜɪs ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀʟʀᴇᴀᴅʏ ʙᴇᴇɴ ʙᴏᴜɢʜᴛ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.", show_alert=True)
             return
 
-        await user_collection.update_one({'id': user_id}, {'$push': {'characters': char}})
-        await eco_collection.update_one({'id': seller_id}, {'$inc': {'balance': price}})
+        await asyncio.gather(
+            user_collection.update_one({'id': user_id}, {'$push': {'characters': char}}),
+            eco_collection.update_one({'id': seller_id}, {'$inc': {'balance': price}})
+        )
 
         seller = await eco_collection.find_one({'id': seller_id})
         
@@ -709,8 +756,9 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     # SELL (MY LISTINGS) MENU
     # --------------------------
     elif action == "pm_sm":
-        cursor = market_collection.find({'seller_id': user_id})
-        listings = await cursor.to_list(length=None)
+        # Optimizing limit to 50 so that long button list doesnt break API response time
+        cursor = market_collection.find({'seller_id': user_id}).limit(50)
+        listings = await cursor.to_list(length=50)
         
         keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ", callback_data=f"pm_start_s:{user_id}")]]
         
@@ -733,8 +781,10 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await query.answer("⚠️ ᴛʜɪs ɪᴛᴇᴍ ɪs ɴᴏ ʟᴏɴɢᴇʀ ᴏɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ.", show_alert=True)
         else:
             char = item['character']
-            await user_collection.update_one({'id': user_id}, {'$push': {'characters': char}})
-            await market_collection.delete_one({'_id': ObjectId(market_id)})
+            await asyncio.gather(
+                user_collection.update_one({'id': user_id}, {'$push': {'characters': char}}),
+                market_collection.delete_one({'_id': ObjectId(market_id)})
+            )
             
             user_name = update.effective_user.first_name
             seller_mention = f"<a href='tg://user?id={user_id}'>{html.escape(user_name)}</a>"
@@ -746,10 +796,10 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             )
             await send_market_log(context, "📉 CHARACTER DELISTED", log_details)
 
-            await query.answer(f"✅ sᴜᴄᴄᴇssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛᴏ ɪɴᴠᴇɴᴛᴏʀʏ!", show_alert=True)
+            await query.answer(f"✅ sᴜᴄssғᴜʟʟʏ ʀᴇᴍᴏᴠᴇᴅ ᴀɴᴅ ʀᴇᴛᴜʀɴᴇᴅ ᴛᴏ ɪɴᴠᴇɴᴛᴏʀʏ!", show_alert=True)
         
-        cursor = market_collection.find({'seller_id': user_id})
-        listings = await cursor.to_list(length=None)
+        cursor = market_collection.find({'seller_id': user_id}).limit(50)
+        listings = await cursor.to_list(length=50)
         keyboard = [[InlineKeyboardButton("➕ ʟɪsᴛ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ", callback_data=f"pm_start_s:{user_id}")]]
         for item in listings:
             char_name = to_small_caps(item['character'].get('name', 'Unknown'))
