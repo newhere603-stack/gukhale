@@ -394,8 +394,8 @@ async def render_auction_ui(update_obj, active_auc, user_id, add_amount=1000, is
         ],
         [InlineKeyboardButton(to_small_caps("Confirm Bid"), callback_data=f"auc_conf_{user_id}_{add_amount}")],
         [
-            InlineKeyboardButton(to_small_caps("⟲ Marketplace"), callback_data=f"mp_back_{user_id}"),
-            InlineKeyboardButton(to_small_caps("Cancel My Bid ⟳"), callback_data=f"auc_can_{user_id}")
+            InlineKeyboardButton(to_small_caps("⟲ Back"), callback_data=f"mp_back_{user_id}"),
+            InlineKeyboardButton(to_small_caps("Cancel ⟳"), callback_data=f"auc_can_{user_id}")
         ]
     ]
     
