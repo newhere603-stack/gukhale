@@ -20,10 +20,10 @@ def is_authorized(user_id):
     return user_id == OWNER_ID or user_id in SUDO_USERS
 # ---------------------------
 
-# 🔥 Faster Updates: Cache time reduced to 60s
+# 🔥 Faster Updates: Caches tuned for speed
 char_cache = TTLCache(maxsize=2000, ttl=60)
 anime_cache = TTLCache(maxsize=1000, ttl=60)
-user_cache = TTLCache(maxsize=500, ttl=60)
+user_cache = TTLCache(maxsize=2000, ttl=60) # Increased maxsize slightly for caching owners
 
 USERS_PER_PAGE = 10
 
@@ -140,27 +140,43 @@ async def global_count(cid: str) -> int:
     user_cache[key] = n
     return n
 
+# 🔥 MEGA FIX: Aggregation Pipeline for SUPER FAST owner fetching (Replaced slow python parsing)
 async def get_owners(cid: str) -> List[Dict]:
     key = f"o_{cid}"
     if key in user_cache:
         return user_cache[key]
+        
     search_ids = [str(cid)]
     if str(cid).isdigit():
         search_ids.append(int(cid))
-    users = await user_collection.find(
-        {'characters.id': {'$in': search_ids}}, {'_id': 0, 'id': 1, 'first_name': 1, 'username': 1, 'characters': 1}
-    ).to_list(length=None)
-    owners = []
-    for u in users:
-        cnt = sum(1 for c in u.get('characters', []) if str(c.get('id')) in [str(x) for x in search_ids])
-        if cnt:
-            owners.append({'id': u['id'], 'first_name': u.get('first_name', 'Unknown'),
-                            'username': u.get('username'), 'count': cnt})
-    owners.sort(key=lambda x: x['count'], reverse=True)
+        
+    try:
+        pipeline = [
+            {'$match': {'characters.id': {'$in': search_ids}}},
+            {'$project': {
+                '_id': 0,
+                'id': 1,
+                'first_name': 1,
+                'count': {
+                    '$size': {
+                        '$filter': {
+                            'input': '$characters',
+                            'as': 'c',
+                            'cond': {'$in': ['$$c.id', search_ids]}
+                        }
+                    }
+                }
+            }},
+            {'$sort': {'count': -1}},
+            {'$limit': 100}
+        ]
+        owners = await user_collection.aggregate(pipeline).to_list(length=100)
+    except Exception:
+        owners = []
+        
     user_cache[key] = owners
     return owners
 
-# 🔥 Instant Cache Clear Function for Live Updates
 def clear_char_cache(cid: str) -> None:
     owner_key = f"o_{cid}"
     count_key = f"c_{cid}"
@@ -204,7 +220,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
             2: '<tg-emoji emoji-id="5447203607294265305">🥈</tg-emoji>', 
             3: '<tg-emoji emoji-id="5453902265922376865">🥉</tg-emoji>'
         }.get(i, f"<b>{i}.</b>")
-        link = f"<b><a href='tg://user?id={o['id']}'>{escape(o['first_name'])}</a></b>"
+        link = f"<b><a href='tg://user?id={o['id']}'>{escape(o.get('first_name', 'Unknown'))}</a></b>"
         lines.append(f"{medal} {link} - <b>x{o['count']}</b>")
     lines.append(f"\n<tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> {bold_sc(f'page {page+1}/{total_pages}')} • <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> {bold_sc('total:')} <code>{gcount}x</code>")
     return "\n".join(lines)
@@ -219,6 +235,7 @@ def pagination_kb(cid: str, page: int, total: int, back=False) -> InlineKeyboard
             if row: kb.append(row)
         kb.append([InlineKeyboardButton(to_small_caps("⟲ back to info"), callback_data=f"back_{cid}")])
     else:
+        # User jab "owners" dabaayega sirf tab owners load honge!
         kb.append([InlineKeyboardButton(to_small_caps("owners"), callback_data=f"owners_{cid}_0")])
     return InlineKeyboardMarkup(kb)
 
@@ -259,17 +276,18 @@ async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
             reply_markup=kb, parse_mode=ParseMode.HTML
         )
 
-# 🔥 CHECK CHARACTER COMMAND
+# 🔥 CHECK CHARACTER COMMAND (AB OWNERS FETCH NAHI KAREGA = EXTREMELY FAST)
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         return await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/check <id></code>", parse_mode=ParseMode.HTML)
+    
     char = await get_char(context.args[0])
     if not char:
         return await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('character not found in database!')}", parse_mode=ParseMode.HTML)
+    
     gcount = await global_count(char.id)
-    owners = await get_owners(char.id)
-    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
-    await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, total_pages, back=False))
+    # Owners block removed from here! Fast load now!
+    await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, 1, back=False))
 
 # 🔥 FIND ANIME COMMAND
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -368,20 +386,24 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"<b>⚠️ {to_small_caps('error:')}</b> <code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
 
-# 🔥 PAGINATION HANDLERS
+# 🔥 PAGINATION HANDLERS (Owners fetch ab yahan hoga)
 async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
     _, cid, page = q.data.split('_')
     page = int(page)
     char = await get_char(cid)
-    owners = await get_owners(cid)
+    
     if not char:
         return await q.answer(to_small_caps("character not found"), show_alert=True)
+        
+    owners = await get_owners(cid) # Fast aggregation used!
     gcount = await global_count(cid)
+    
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    
     await q.edit_message_caption(
-        caption=owners_caption(char, owners, page, gcount),
+        caption=cmd_owners_caption(char, owners, page, gcount),
         reply_markup=pagination_kb(cid, page, total_pages, back=True),
         parse_mode=ParseMode.HTML
     )
@@ -390,15 +412,17 @@ async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE
     q = update.callback_query
     await q.answer()
     cid = q.data.split('_')[1]
+    
     char = await get_char(cid)
     if not char:
         return await q.answer(to_small_caps("character not found"), show_alert=True)
+        
     gcount = await global_count(cid)
-    owners = await get_owners(cid)
-    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    # Owners block removed from here! Fast load now!
+    
     await q.edit_message_caption(
         caption=card_caption(char, gcount),
-        reply_markup=pagination_kb(cid, 0, total_pages, back=False),
+        reply_markup=pagination_kb(cid, 0, 1, back=False),
         parse_mode=ParseMode.HTML
     )
 
