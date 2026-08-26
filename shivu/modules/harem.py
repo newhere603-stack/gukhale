@@ -112,9 +112,9 @@ class DisplayOptions:
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s Harem</b>\n\n",
     'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
-    'separator': "--------------------------------------------------------\n",
+    'separator': "--------------------------------------------------\n",
     'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
-    'footer': "--------------------------------------------------------\n\n",
+    'footer': "--------------------------------------------------\n\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
 
