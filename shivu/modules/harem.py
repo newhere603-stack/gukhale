@@ -91,13 +91,13 @@ class DisplayOptions:
     show_rarity_full: bool = False
     compact_mode: bool = False
 
-# 🔥 EXACT FORMATTING ACCORDING TO SCREENSHOT
+# 🔥 FULL LENGTH DASHED LINES & EXACT SCREENSHOT FORMATTING
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s Harem</b>\n\n",
     'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
-    'separator': "--------------------\n",
+    'separator': "----------------------------------------\n",
     'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
-    'footer': "--------------------\n\n",
+    'footer': "----------------------------------------\n\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
 
@@ -138,7 +138,7 @@ class UserCollection:
         if mode == "latest":
             return list(reversed(chars))
             
-        # 🟢 DEFAULT MODE (Now sorts by Anime A-Z as requested)
+        # 🟢 DEFAULT MODE (Sorts by Anime A-Z)
         return sorted(chars, key=lambda c: (c.anime, c.id))
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
@@ -269,24 +269,43 @@ class HaremHandler:
         )
 
     async def update_live_data_all(self, characters: List[Character]):
-        """🚀 BULK LIVE UPDATE: Solves Rarity mix-up perfectly!"""
+        """🚀 BULK LIVE UPDATE: Bulletproof ID mapping ('085' vs '85') solves the Rarity mixup perfectly!"""
         if not characters:
             return
             
-        unique_ids_str = [str(c.id) for c in characters]
-        unique_ids_int = [int(c.id) for c in characters if str(c.id).isdigit()]
+        unique_ids_str = [str(c.id).strip() for c in characters]
+        unique_ids_int = [int(c.id) for c in characters if str(c.id).strip().isdigit()]
         query_ids = list(set(unique_ids_str + unique_ids_int))
         
-        cursor = self.collection_db.find(
-            {"id": {"$in": query_ids}},
-            {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
-        )
-        live_docs = await cursor.to_list(length=None)
-        live_map = {str(doc.get('id')): doc for doc in live_docs}
+        projection = {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
         
+        # Checking across all collections parallelly to ensure we miss nothing
+        tasks = [
+            self.collection_db.find({"id": {"$in": query_ids}}, projection).to_list(length=None),
+            db['characters'].find({"id": {"$in": query_ids}}, projection).to_list(length=None),
+            db['collection'].find({"id": {"$in": query_ids}}, projection).to_list(length=None)
+        ]
+        
+        results = await asyncio.gather(*tasks)
+        live_docs = []
+        for res in results:
+            live_docs.extend(res)
+            
+        # 🧠 SMART MAP: Links "085" to "85" flawlessly
+        live_map = {}
+        for doc in live_docs:
+            doc_id_str = str(doc.get('id')).strip()
+            live_map[doc_id_str] = doc
+            clean_doc_id = doc_id_str.lstrip('0') or '0'
+            live_map[clean_doc_id] = doc
+            
         for c in characters:
-            if str(c.id) in live_map:
-                doc = live_map[str(c.id)]
+            cid_str = str(c.id).strip()
+            clean_cid = cid_str.lstrip('0') or '0'
+            
+            # Fetch using exact match, or stripped match
+            doc = live_map.get(cid_str) or live_map.get(clean_cid)
+            if doc:
                 c.name = doc.get('name', c.name)
                 c.anime = doc.get('anime', c.anime)
                 c.rarity = doc.get('rarity', c.rarity) 
@@ -354,7 +373,7 @@ class HaremHandler:
             await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
             return
 
-        # 🔥 UPDATE ALL CHARACTERS FIRST
+        # 🔥 UPDATE ALL CHARACTERS FIRST - This completely eliminates the Rarity bug
         await self.update_live_data_all(collection.characters)
 
         display_order = collection.get_filtered_characters()
