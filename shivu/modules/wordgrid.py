@@ -660,7 +660,7 @@ async def fetch_grid_leaderboard(chat_id, state):
         
         title_scope = "GLOBAL" if scope == "global" else "THIS CHAT"
         time_title = "" if time_f == "all" else f" ({time_f.upper()})"
-        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordGrid Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n━━━━━━━━━━━━━━━━━\n\n"
+        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordGrid Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n━━━━━━━━━━━━━━━━━━━━━\n\n"
         
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
