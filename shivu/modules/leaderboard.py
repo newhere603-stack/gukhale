@@ -87,7 +87,7 @@ def generate_progress_bar(current: int, total: int, length: int = 5) -> str:
     if total <= 0: return "░" * length
     percentage = min(1.0, current / total)
     filled = int(round(length * percentage))
-    return "▬" * filled + "┈" * (length - filled)
+    return "▰" * filled + "▱" * (length - filled)
 
 def format_custom_header(heading: str, rows):
     header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{heading}</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
