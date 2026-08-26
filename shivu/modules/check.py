@@ -402,8 +402,9 @@ async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT
     
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
+    # FIX APPLIED HERE: Replaced cmd_owners_caption with owners_caption
     await q.edit_message_caption(
-        caption=cmd_owners_caption(char, owners, page, gcount),
+        caption=owners_caption(char, owners, page, gcount), 
         reply_markup=pagination_kb(cid, page, total_pages, back=True),
         parse_mode=ParseMode.HTML
     )
