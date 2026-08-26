@@ -7,12 +7,10 @@ from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import BadRequest
 
 from shivu import application
-# 🔥 FIX: Sahi database direct import kiya aur explicit naam diya
 from shivu.Database.db import eco_collection
 
 LOGGER = logging.getLogger(__name__)
 
-# Temporary state tracking for filters (chat_id -> state dict)
 LEADERBOARD_STATES = {}
 
 def get_user_state(chat_id):
@@ -34,7 +32,6 @@ def get_target_keys(letter_filter, time_filter, scope, chat_id):
     else:
         base_keys = ['gold', 'golds', 'wordseek_points', 'score', 'points']
     
-    # IST Time
     now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
     time_prefix = None
     
@@ -68,28 +65,52 @@ def extract_gold(user_doc, target_keys):
                 pass
     return 0
 
+# 🔥 ULTRA-FAST SEND & EDIT HANDLER (Optimized for instant button switches)
 async def send_or_edit(update, context, text, kb, edit):
     photo_url = "https://files.catbox.moe/ewtw4l.png"
+    chat_id = update.effective_chat.id
+    
     if edit:
         q = update.callback_query
-        try: await q.answer()
-        except Exception: pass
+        try: 
+            await q.answer() # Turant loading spinner hatao taaki fast feel ho
+        except Exception: 
+            pass
+        
         try:
-            await q.edit_message_media(
-                media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
-                reply_markup=kb
-            )
+            # Sabse fast method: Kyunki photo same hai, sirf caption aur buttons update honge
+            await q.edit_message_caption(caption=text, parse_mode='HTML', reply_markup=kb)
+            return
         except BadRequest as e:
             if "not modified" in str(e).lower(): return
-            try: await q.message.delete()
-            except Exception: pass
-            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
+            try:
+                # Fallback agar caption edit mein koi issue aaye
+                await q.edit_message_media(
+                    media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
+                    reply_markup=kb
+                )
+            except Exception:
+                try: await q.message.delete()
+                except Exception: pass
+                await context.bot.send_photo(chat_id=chat_id, photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
         except Exception:
-            try: await q.message.delete()
-            except Exception: pass
-            await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
+            try:
+                await q.edit_message_media(
+                    media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
+                    reply_markup=kb
+                )
+            except Exception:
+                try: await q.message.delete()
+                except Exception: pass
+                await context.bot.send_photo(chat_id=chat_id, photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
     else:
-        await update.message.reply_photo(photo=photo_url, caption=text, parse_mode='HTML', reply_markup=kb)
+        # Command run hone par silent mention trick ke sath fast response
+        msg = await update.message.reply_photo(
+            photo=photo_url, 
+            caption="<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>Loading Leaderboard...</b>", 
+            parse_mode='HTML'
+        )
+        await msg.edit_caption(caption=text, parse_mode='HTML', reply_markup=kb)
 
 def get_wordseek_keyboard(state):
     scope = state["scope"]
@@ -132,7 +153,6 @@ def get_wordseek_keyboard(state):
     ])
 
 async def get_wordseek_lb(chat_id, scope_f, time_f, letter_f, target_keys):
-    # 🔥 FIX: Direct database fetch for instant real-time updates (Removed Cache System)
     query_filter = {"$or": [{k: {"$exists": True}} for k in target_keys]}
     projection = {"id": 1, "user_id": 1, "_id": 1, "first_name": 1}
     for k in target_keys:
@@ -162,7 +182,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
 
     if not sorted_data:
         text = (
-            "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordSeek Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+            "<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WORDSEEK LEADERBOARD</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
             "<i>No data found for this mode! Play some games to rank up!</i>"
         )
         return await send_or_edit(update, context, text, get_wordseek_keyboard(state), edit)
@@ -196,7 +216,6 @@ async def ws_callback_router(update: Update, context: CallbackContext):
     elif data == "ws_scope_chat": state["scope"] = "chat"
     elif data.startswith("ws_time_"): state["time"] = data.replace("ws_time_", "")
     elif data.startswith("ws_let_"): state["letters"] = data.replace("ws_let_", "")
-    # ws_refresh directly fallthrough karega or naya data fetch karega
     elif data == "ws_refresh": pass 
 
     await wordseek_leaderboard(update, context, edit=True)
