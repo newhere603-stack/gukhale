@@ -17,12 +17,10 @@ SMALL_CAPS_TRANS = str.maketrans(
 )
 
 def to_small_caps(text: str) -> str:
-    """Converts regular text to Small Caps font matching your style."""
     if not text:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-# Dictionary updated to hold 3 values (Database Emoji, Premium Emoji, Name)
 RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"),
     "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
@@ -50,12 +48,11 @@ def rarity_premium_display(key: str) -> str:
     return f"{prem_emoji} {name}"
 
 def get_prem_emoji(rarity_text: str) -> str:
-    """Helper to exactly match the current rarity and return correct custom Emoji."""
     rarity_text = str(rarity_text).lower()
     for k, (db_e, prem_e, name) in RARITIES.items():
         if name.lower() in rarity_text or k.lower() in rarity_text or db_e in rarity_text:
             return prem_e
-    return "🟢" # default fallback
+    return "🟢" 
 
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
@@ -94,10 +91,10 @@ class DisplayOptions:
     show_rarity_full: bool = False
     compact_mode: bool = False
 
-# 🔥 100% SCREENSHOT MATCHING FORMATTING
+# 🔥 EXACT FORMATTING ACCORDING TO SCREENSHOT
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s Harem</b>\n\n",
-    'anime_header': "<b>↬ {anime} {user_count}/{total_count}</b>\n",
+    'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
     'separator': "--------------------\n",
     'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
     'footer': "--------------------\n\n",
@@ -112,10 +109,20 @@ class UserCollection:
     filter_mode: str = "default"
 
     def get_filtered_characters(self) -> List[Character]:
-        mode = self.filter_mode
+        mode = str(self.filter_mode)
         chars = self.characters
         
-        # Rarity Filter - EXACT MATCHING TO PREVENT MIX-UPS
+        # 🟢 ANIME MENU SELECTION FILTER
+        if mode.startswith("anime:"):
+            target_anime = mode.split(":", 1)[1]
+            return sorted([c for c in chars if c.anime == target_anime], key=lambda c: c.id)
+
+        # 🟢 WAIFU/CHARACTER MENU SELECTION FILTER
+        if mode.startswith("char:"):
+            target_char_id = mode.split(":", 1)[1]
+            return [c for c in chars if str(c.id) == target_char_id]
+
+        # 🟢 RARITY FILTER
         if mode in RARITIES:
             target_emoji = RARITIES[mode][0]
             target_name = RARITIES[mode][2].lower()
@@ -126,22 +133,13 @@ class UserCollection:
                 r_str = str(c.rarity).lower()
                 if target_emoji in c.rarity or target_name in r_str or target_key in r_str:
                     filtered.append(c)
-            return filtered
+            return sorted(filtered, key=lambda c: (c.anime, c.id))
             
-        # Latest Mode
         if mode == "latest":
             return list(reversed(chars))
             
-        # Animes Mode
-        if mode == "animes":
-            return sorted(chars, key=lambda c: (c.anime, c.id))
-            
-        # Waifus Mode
-        if mode == "waifus":
-            return [c for c in chars if c.gender and c.gender.lower() in ['female', 'f', 'girl']]
-            
-        # Default Mode
-        return chars
+        # 🟢 DEFAULT MODE (Now sorts by Anime A-Z as requested)
+        return sorted(chars, key=lambda c: (c.anime, c.id))
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
         counts: Dict[str, int] = {}
@@ -213,7 +211,6 @@ class HaremMessageBuilder:
         for anime, chars in grouped.items():
             user_count = sum(1 for c in self.collection.characters if c.anime == anime)
             
-            # Formatting as requested
             formatted_anime = to_small_caps(escape(anime))
             message += self.style['anime_header'].format(
                 anime=formatted_anime,
@@ -272,22 +269,24 @@ class HaremHandler:
         )
 
     async def update_live_data_all(self, characters: List[Character]):
-        """🚀 BULK LIVE UPDATE: Superfast, prevents wrong rarity in filtering."""
+        """🚀 BULK LIVE UPDATE: Solves Rarity mix-up perfectly!"""
         if not characters:
             return
-        unique_ids = list({c.id for c in characters})
+            
+        unique_ids_str = [str(c.id) for c in characters]
+        unique_ids_int = [int(c.id) for c in characters if str(c.id).isdigit()]
+        query_ids = list(set(unique_ids_str + unique_ids_int))
         
-        # Projection to make query ultra-fast
         cursor = self.collection_db.find(
-            {"id": {"$in": unique_ids}},
+            {"id": {"$in": query_ids}},
             {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
         )
         live_docs = await cursor.to_list(length=None)
         live_map = {str(doc.get('id')): doc for doc in live_docs}
         
         for c in characters:
-            if c.id in live_map:
-                doc = live_map[c.id]
+            if str(c.id) in live_map:
+                doc = live_map[str(c.id)]
                 c.name = doc.get('name', c.name)
                 c.anime = doc.get('anime', c.anime)
                 c.rarity = doc.get('rarity', c.rarity) 
@@ -355,13 +354,13 @@ class HaremHandler:
             await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
             return
 
-        # 🔥 UPDATE ALL CHARACTERS IN MEMORY BEFORE FILTERING! (Fixes Rarity Mixups)
+        # 🔥 UPDATE ALL CHARACTERS FIRST
         await self.update_live_data_all(collection.characters)
 
         display_order = collection.get_filtered_characters()
         if not display_order:
             await message.reply_text(
-                f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ᴡɪᴛʜ ᴛʜɪs ᴍᴏᴅᴇ: {rarity_premium_display(collection.filter_mode) if collection.filter_mode in RARITIES else collection.filter_mode}</b>\n"
+                f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ɪɴ ᴛʜɪs ᴍᴏᴅᴇ.</b>\n"
                 f"<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /hmode</b>",
                 parse_mode='HTML'
             )
@@ -407,6 +406,7 @@ class HaremHandler:
         else:
             await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
 
+
 class ModeHandler:
     IMG = "https://files.catbox.moe/sgo9in.png"
     LABELS = {"default": "ᴅᴇғᴀᴜʟᴛ", "latest": "ʟᴀᴛᴇsᴛ", "animes": "ᴀɴɪᴍᴇs", "waifus": "ᴡᴀɪғᴜs"}
@@ -420,9 +420,14 @@ class ModeHandler:
 
     def _keyboard(self, current: str, user_id: int) -> InlineKeyboardMarkup:
         def label(key, text):
-            return f"{text} ✓" if key == current else text
+            if key == "default" and current == "default": return f"{text} ✓"
+            if key == "latest" and current == "latest": return f"{text} ✓"
+            if key == "rarity" and current in RARITIES: return f"{text} ✓"
+            if key == "animes" and str(current).startswith("anime:"): return f"{text} ✓"
+            if key == "waifus" and str(current).startswith("char:"): return f"{text} ✓"
+            return text
 
-        rarity_label = label("rarity", "ʀᴀʀɪᴛʏ") if current in RARITIES else "ʀᴀʀɪᴛʏ"
+        rarity_label = label("rarity", "ʀᴀʀɪᴛʏ") 
         rows = [
             [InlineKeyboardButton(label("default", "ᴅᴇғᴀᴜʟᴛ"), callback_data=f"harem_mode:default:{user_id}"),
              InlineKeyboardButton(rarity_label, callback_data=f"harem_mode:rarity:{user_id}")],
@@ -445,8 +450,90 @@ class ModeHandler:
         buttons = [InlineKeyboardButton(db_emoji, callback_data=f"harem_mode:{key}:{user_id}") for key, (db_emoji, _, _) in RARITIES.items()]
         keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")]]
         await query.edit_message_caption(
-            caption="<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ ʏᴏᴜʀ ʜᴀʀᴇᴍ</b>",
+            caption="<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ:</b>",
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
+        )
+
+    # 🟢 ANIME LIST SELECTION MENU
+    async def show_anime_menu(self, query, user_id: int, page: int):
+        user = await self.user_db.find_one({'id': user_id})
+        chars = user.get('characters', []) if user else []
+        unique_animes = sorted(list(set(c.get('anime', 'Unknown') for c in chars)))
+
+        if not unique_animes:
+            return await query.answer("ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴀɴɪᴍᴇs ʏᴇᴛ!", show_alert=True)
+
+        total_pages = math.ceil(len(unique_animes) / 10)
+        page = max(0, min(page, total_pages - 1))
+        start = page * 10
+        current_animes = unique_animes[start:start+10]
+
+        keyboard = []
+        for i, anime in enumerate(current_animes):
+            idx = start + i
+            display_anime = f"{anime[:30]}..." if len(anime) > 30 else anime
+            keyboard.append([InlineKeyboardButton(display_anime, callback_data=f"harem_mode:set_a:{user_id}:{idx}")])
+
+        nav = []
+        if page > 0:
+            nav.append(InlineKeyboardButton("❮", callback_data=f"harem_mode:alist:{user_id}:{page-1}"))
+        nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="harem_ignore"))
+        if page < total_pages - 1:
+            nav.append(InlineKeyboardButton("❯", callback_data=f"harem_mode:alist:{user_id}:{page+1}"))
+
+        if nav:
+            keyboard.append(nav)
+
+        keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")])
+
+        await query.edit_message_caption(
+            caption="<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> sᴇʟᴇᴄᴛ ᴀɴ ᴀɴɪᴍᴇ ᴛᴏ ғɪʟᴛᴇʀ:</b>",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='HTML'
+        )
+
+    # 🟢 CHARACTER (WAIFU) LIST SELECTION MENU
+    async def show_char_menu(self, query, user_id: int, page: int):
+        user = await self.user_db.find_one({'id': user_id})
+        chars = user.get('characters', []) if user else []
+
+        unique_chars_dict = {}
+        for c in chars:
+            cid = str(c.get('id', ''))
+            if cid not in unique_chars_dict:
+                unique_chars_dict[cid] = c.get('name', 'Unknown')
+
+        unique_chars = sorted(list(unique_chars_dict.items()), key=lambda x: x[1])
+
+        if not unique_chars:
+            return await query.answer("ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!", show_alert=True)
+
+        total_pages = math.ceil(len(unique_chars) / 10)
+        page = max(0, min(page, total_pages - 1))
+        start = page * 10
+        current_chars = unique_chars[start:start+10]
+
+        keyboard = []
+        for cid, cname in current_chars:
+            display_name = f"{cname[:28]}..." if len(cname) > 28 else cname
+            keyboard.append([InlineKeyboardButton(f"{display_name} ({cid})", callback_data=f"harem_mode:set_c:{user_id}:{cid}")])
+
+        nav = []
+        if page > 0:
+            nav.append(InlineKeyboardButton("❮", callback_data=f"harem_mode:clist:{user_id}:{page-1}"))
+        nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="harem_ignore"))
+        if page < total_pages - 1:
+            nav.append(InlineKeyboardButton("❯", callback_data=f"harem_mode:clist:{user_id}:{page+1}"))
+
+        if nav:
+            keyboard.append(nav)
+
+        keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")])
+
+        await query.edit_message_caption(
+            caption="<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴛᴏ ғɪʟᴛᴇʀ:</b>",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='HTML'
         )
 
     async def set_mode(self, user_id: int, mode: str):
@@ -467,18 +554,52 @@ class ModeHandler:
         if user_id is None:
             return
 
+        # Simple Menu Transitions
         if action == "rarity":
             await query.answer()
             return await self.show_rarity_menu(query, user_id)
-
+        if action == "animes":
+            await query.answer()
+            return await self.show_anime_menu(query, user_id, 0)
+        if action == "waifus":
+            await query.answer()
+            return await self.show_char_menu(query, user_id, 0)
         if action == "back":
             await query.answer()
             return await self.show_mode_menu(update, user_id)
-
         if action == "close":
             await query.answer()
             return await query.message.delete()
 
+        # Paginated Sub-Menu Handles
+        if action == "alist":
+            page = int(parts[3])
+            return await self.show_anime_menu(query, user_id, page)
+        if action == "clist":
+            page = int(parts[3])
+            return await self.show_char_menu(query, user_id, page)
+
+        # Set Value Handles
+        if action == "set_a":
+            idx = int(parts[3])
+            user = await self.user_db.find_one({'id': user_id})
+            chars = user.get('characters', [])
+            unique_animes = sorted(list(set(c.get('anime', 'Unknown') for c in chars)))
+            if idx < len(unique_animes):
+                anime_name = unique_animes[idx]
+                await self.set_mode(user_id, f"anime:{anime_name}")
+                await query.answer(f"✓ {anime_name} sᴇʟᴇᴄᴛᴇᴅ")
+            else:
+                await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴀɴɪᴍᴇ", show_alert=True)
+            return await self.show_mode_menu(update, user_id)
+
+        if action == "set_c":
+            char_id = parts[3]
+            await self.set_mode(user_id, f"char:{char_id}")
+            await query.answer("✓ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇʟᴇᴄᴛᴇᴅ")
+            return await self.show_mode_menu(update, user_id)
+
+        # Basic Settings Fallback
         label = self.LABELS.get(action) or (RARITIES[action][2] if action in RARITIES else None)
         if not label:
             return await query.answer("ɪɴᴠᴀʟɪᴅ ᴏᴘᴛɪᴏɴ", show_alert=True)
