@@ -233,4 +233,4 @@ async def Ukill(update: Update, context: CallbackContext) -> None:
         await message.reply_text(f"<b>⚠️ ᴇʀʀᴏʀ:</b> <code>{str(e)}</code>", parse_mode='HTML')
 
 # 🔥 GROUP 69 ADD KIYA HAI - TAKI PURANA CODE ISE BLOCK NA KAR PAYE
-application.add_handler(CommandHandler(['Ukill', 'ukill'], Ukill, block=False), group=69)
+application.add_handler(CommandHandler(['Ukill', 'ukill'], Ukill, block=False), group=827)
