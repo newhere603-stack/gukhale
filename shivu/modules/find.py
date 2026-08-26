@@ -1,3 +1,4 @@
+import asyncio
 import random
 import traceback
 import logging
@@ -109,6 +110,7 @@ def get_media_info(char_doc):
     is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
     return img_url, (InputMediaVideo if is_video else InputMediaPhoto), 'url'
 
+
 # --- Set Price & Toggle Command (Owner Only) ---
 async def set_mp_price(update: Update, context: CallbackContext):
     try:
@@ -157,7 +159,6 @@ async def toggle_rarity(update: Update, context: CallbackContext):
 
 # --- SUPER FAST DEALS LOADER ---
 async def load_user_deals(user_id):
-    # 🔥 PROJECTION: Harem load nahi karenge, sirf required IDs lenge
     user = await user_collection.find_one({'id': user_id}, {'id': 1, 'mp_data': 1})
     if not user: return None
         
@@ -173,7 +174,6 @@ async def load_user_deals(user_id):
             pattern = "|".join([re.escape(r) for r in disabled_rarities])
             base_query['rarity'] = {'$not': {'$regex': pattern, '$options': 'i'}}
             
-        # 🔥 ULTRA FAST AGGREGATION ($sample) instead of count() & skip()
         pipeline = [{"$match": base_query}, {"$sample": {"size": 2}}]
         random_chars = await collection.aggregate(pipeline).to_list(length=2)
         
@@ -194,11 +194,9 @@ async def load_user_deals(user_id):
             })
             
         mp_data = {'day': current_day, 'chars': formatted_chars}
-        # Update user doc efficiently
         await user_collection.update_one({'id': user_id}, {'$set': {'mp_data': mp_data}})
         user['mp_data'] = mp_data
 
-    # 🔥 SINGLE BULK QUERY ($in) instead of loop queries
     search_ids = []
     for item in user['mp_data']['chars']:
         cid = str(item.get('id'))
@@ -241,6 +239,15 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     if index >= len(chars): index = 0
     char = chars[index]
     user_id = user['id'] 
+    
+    # 🔥 LIVE UPDATE: Turant global database se connect karke latest details nikalega
+    search_ids = [str(char.get('id'))]
+    if str(char.get('id')).isdigit():
+        search_ids.append(int(char.get('id')))
+        
+    live_char = await collection.find_one({'id': {'$in': search_ids}})
+    if live_char:
+        char.update({k: v for k, v in live_char.items() if k in ['name', 'anime', 'rarity', 'img_url', 'is_video', 'cached_photo_id', 'cached_video_id', 'cached_anim_id']})
     
     r_emoji, r_name = get_rarity_emoji_and_name(char.get('rarity', 'Unknown'))
     status_text = f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('SOLD')}" if char.get('is_sold') else f"<tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> {bold_sc('AVAILABLE')}"
@@ -342,24 +349,35 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
     if proposed_bid is None or proposed_bid < min_bid:
         proposed_bid = min_bid
 
+    # 🔥 LIVE UPDATE FOR AUCTIONS
+    search_ids = [str(active_auc.get('char_id'))]
+    if str(active_auc.get('char_id')).isdigit():
+        search_ids.append(int(active_auc.get('char_id')))
+        
+    live_auc_char = await collection.find_one({'id': {'$in': search_ids}})
+    if live_auc_char:
+        active_auc['char_name'] = live_auc_char.get('name', active_auc.get('char_name'))
+        active_auc['anime'] = live_auc_char.get('anime', active_auc.get('anime'))
+        active_auc['rarity'] = live_auc_char.get('rarity', active_auc.get('rarity'))
+        active_auc['img_url'] = live_auc_char.get('img_url', active_auc.get('img_url'))
+
     top_bids = active_auc.get('top_bids', [])
-    top_3_text = f"\n\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> 𝗧𝗢𝗣 𝗕𝗜𝗗𝗗𝗘𝗥𝗦:\n"
-    
-    medals = [
-        '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>', 
-        '<tg-emoji emoji-id="5447203607294265305">🥈</tg-emoji>', 
-        '<tg-emoji emoji-id="5453902265922376865">🥉</tg-emoji>'
-    ]
+    # 🔥 TOP 20 LIST WITH 1-3 MEDALS
+    top_list_text = f"\n\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> 𝗧𝗢𝗣 𝗕𝗜𝗗𝗗𝗘𝗥𝗦:\n"
     
     if top_bids:
-        for i, b in enumerate(top_bids[:3]):
-            medal = medals[i]
+        for i, b in enumerate(top_bids[:20]):
+            if i == 0: medal = '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>'
+            elif i == 1: medal = '<tg-emoji emoji-id="5447203607294265305">🥈</tg-emoji>'
+            elif i == 2: medal = '<tg-emoji emoji-id="5453902265922376865">🥉</tg-emoji>'
+            else: medal = f"<b>{i+1}.</b>"
+            
             clean_name = str(b['name']).replace('<', '&lt;').replace('>', '&gt;')
             mention_link = f"<b><a href='tg://user?id={b['id']}'>{clean_name}</a></b>"
             bid_amount = b['bid']
-            top_3_text += f"{medal} {mention_link}: {bold_sc(f'{bid_amount:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
+            top_list_text += f"{medal} {mention_link}: {bold_sc(f'{bid_amount:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
     else:
-        top_3_text += f"<tg-emoji emoji-id=\"6093837944756379538\">👻</tg-emoji> {bold_sc('No bids placed yet!')}\n"
+        top_list_text += f"<tg-emoji emoji-id=\"6093837944756379538\">👻</tg-emoji> {bold_sc('No bids placed yet!')}\n"
 
     r_emoji, r_name = get_rarity_emoji_and_name(active_auc['rarity'])
 
@@ -367,7 +385,7 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
 
 <tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> {bold_sc('NAME:')} {bold_sc(active_auc['char_name'])}
 <tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
-{r_emoji} {bold_sc('RARITY:')} {bold_sc(r_name)}{top_3_text}"""
+{r_emoji} {bold_sc('RARITY:')} {bold_sc(r_name)}{top_list_text}"""
 
     buttons = [
         [
@@ -438,6 +456,41 @@ async def marketplace(update: Update, context: CallbackContext):
         await update.message.reply_text(bold_sc("Please /start the bot first or Not enough characters matching the allowed rarities."), parse_mode='HTML')
         return
     await render_mp_message(update, user, 0, is_edit=False)
+
+
+# 🔥 NAYA BID COMMAND
+async def place_bid_cmd(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_text(bold_sc("Usage: /bid [amount]"), parse_mode='HTML')
+        return
+        
+    proposed = int(context.args[0])
+    active_auc = await auction_collection.find_one({'status': 'active'})
+    
+    if not active_auc:
+        await update.message.reply_text(bold_sc("No active auction right now!"), parse_mode='HTML')
+        return
+        
+    if proposed <= active_auc.get('highest_bid', 0) and active_auc.get('top_bids'):
+        await update.message.reply_text(bold_sc(f"Bid must be higher than {active_auc['highest_bid']:,}!"), parse_mode='HTML')
+        return
+        
+    eco_user = await eco_collection.find_one({'id': user_id}, {'balance': 1})
+    if not eco_user or eco_user.get('balance', 0) < proposed:
+        await update.message.reply_text(bold_sc(f"Low balance! You need {proposed:,} 💸"), parse_mode='HTML')
+        return
+        
+    top_bids = active_auc.get('top_bids', [])
+    top_bids = [b for b in top_bids if b['id'] != user_id]
+    top_bids.append({'id': user_id, 'name': update.effective_user.first_name, 'bid': proposed})
+    top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
+    
+    await auction_collection.update_one(
+        {'_id': active_auc['_id']},
+        {'$set': {'highest_bid': top_bids[0]['bid'], 'top_bids': top_bids}}
+    )
+    await update.message.reply_text(bold_sc(f"✅ Bid of {proposed:,} placed successfully! Open /mp to see the auction."), parse_mode='HTML')
 
 
 async def marketplace_callbacks(update: Update, context: CallbackContext):
@@ -561,7 +614,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 eco_user = await eco_collection.find_one_and_update(
                     {'id': user_id, 'balance': {'$gte': char['mp_sale']}},
                     {'$inc': {'balance': -char['mp_sale']}},
-                    projection={'balance': 1} # 🔥 FAST PROJECTION
+                    projection={'balance': 1} 
                 )
                 
                 if not eco_user:
@@ -574,7 +627,6 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 
                 await user_collection.update_one({'id': user_id}, {'$push': {'characters': clean_char}})
                 
-                # Instant Cache Update for /check
                 try:
                     from shivu.modules.check import clear_char_cache
                     clear_char_cache(str(char.get('id')))
@@ -759,6 +811,7 @@ async def end_auction(update: Update, context: CallbackContext):
 
 # --- Handlers ---
 application.add_handler(CommandHandler(["mp", "marketplace"], marketplace, block=False))
+application.add_handler(CommandHandler("bid", place_bid_cmd, block=False))
 application.add_handler(CommandHandler("setprice", set_mp_price, block=False))
 application.add_handler(CommandHandler("startauction", start_auction, block=False))
 application.add_handler(CommandHandler("endauction", end_auction, block=False))
