@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.constants import ParseMode
+from telegram.error import RetryAfter, BadRequest # Added this for handling Rate Limits
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -380,7 +381,6 @@ async def tic_callback(update: Update, context: CallbackContext):
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
     
-    # Queue system lock for Tic-Tac-Toe
     if key not in tic_locks:
         tic_locks[key] = asyncio.Lock()
         
@@ -463,7 +463,7 @@ async def tic_callback(update: Update, context: CallbackContext):
 
                 replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{to_small_caps('Play Again')} ⟳", callback_data="tic_play_again")]])
                 await tic_collection.delete_one({'key': key})
-                tic_locks.pop(key, None) # Clear lock 
+                tic_locks.pop(key, None) 
                 await query.message.edit_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
                 return
 
@@ -487,6 +487,23 @@ async def tic_callback(update: Update, context: CallbackContext):
 # ==========================================
 # MINES GAME HANDLERS
 # ==========================================
+
+# SAFE EDIT HELPER: Rate Limit aur Glitch se bachne ke liye naya function
+async def safe_edit_mines_board(query, text, keyboard):
+    try:
+        await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+    except RetryAfter as e:
+        logger.warning(f"FloodWait in mines: sleeping {e.retry_after}s to update board safely.")
+        await asyncio.sleep(e.retry_after)
+        try:
+            await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+        except Exception as ex:
+            logger.error(f"Retry edit failed: {ex}")
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            logger.error(f"BadRequest in edit: {e}")
+    except Exception as e:
+        logger.error(f"Error updating mines board: {e}")
 
 def get_mines_multiplier(found_cash: int, mines: int, total: int = 25) -> float:
     if found_cash == 0 or found_cash > (total - mines): return 1.00
@@ -587,10 +604,8 @@ async def start_mines(update: Update, context: CallbackContext):
     game['key'] = key
     await mines_collection.insert_one(game)
 
-    # --- MINES GAME LOG TRIGGER (BACKGROUND TASK) ---
     chat_title = update.effective_chat.title if update.effective_chat.title else "ᴘʀɪᴠᴀᴛᴇ ᴄʜᴀᴛ"
     
-    # 5x5 board layout bananana logs ke liye
     board_grid = ""
     for i in range(0, 25, 5):
         row = board[i:i+5]
@@ -620,7 +635,6 @@ async def mines_callback(update: Update, context: CallbackContext):
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
     
-    # Queue system lock for Mines
     if key not in mines_locks:
         mines_locks[key] = asyncio.Lock()
         
@@ -628,8 +642,8 @@ async def mines_callback(update: Update, context: CallbackContext):
         game = await mines_collection.find_one({'key': key})
         
         if not game:
-            # Agar bomb fatne ke baad queue wale clicks aate hain toh unhe chup-chap clear kar dega bina popup ke
-            await query.answer("Game Ended!", show_alert=False) 
+            # Agar multiple fast click kiye hain, toh blank answer karo taaki main popup hide na ho!
+            await query.answer() 
             return
             
         if user_id != game['user_id']:
@@ -654,15 +668,12 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<b>{to_small_caps('Final Board')}:</b>"
             )
             
-            try:
-                await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-            except Exception as e:
-                logger.error(f"Error updating cashout board: {e}")
-                
             await mines_collection.delete_one({'key': key}) 
-            mines_locks.pop(key, None) # Clear lock
+            mines_locks.pop(key, None) 
             
-            await query.answer(f"Cashed out {win_amount} coins! 💸", show_alert=False) # Cash out pe koi popup alert nahi aayega
+            # Answer query pehle, taaki loading ghoome nahi, uske baad message edit hoga gracefully
+            await query.answer(f"Cashed out {win_amount} coins! 💸", show_alert=False) 
+            await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
             return
 
         if data.startswith("mines_click_"):
@@ -681,20 +692,16 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{to_small_caps('Found before boom')}:</b> {game['found']}\n\n"
                     f"<b>{to_small_caps('Final Board')}:</b>"
                 )
-                try:
-                    await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-                except Exception as e:
-                    logger.error(f"Error updating busted board: {e}")
-                    
-                await mines_collection.delete_one({'key': key}) 
-                mines_locks.pop(key, None) # Clear lock
                 
+                await mines_collection.delete_one({'key': key}) 
+                mines_locks.pop(key, None) 
+                
+                # Turant user ko batao ki boom hua (before any rate-limit delay)!
                 await query.answer("BOOM! You lost the bet. 💥", show_alert=True) 
+                await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
                 return
                 
             else:
-                await query.answer("Safe! 💸", show_alert=False) # Safe wala notification wapas lag gaya (bina popup ke)
-                
                 game['revealed'][idx] = True
                 game['found'] += 1
                 mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -711,15 +718,12 @@ async def mines_callback(update: Update, context: CallbackContext):
                         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{to_small_caps('Winnings')}:</b> {win_amount} coins!\n\n"
                         f"<b>{to_small_caps('Final Board')}:</b>"
                     )
-                    try:
-                        await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-                    except Exception as e:
-                        logger.error(f"Error updating perfect game board: {e}")
                         
                     await mines_collection.delete_one({'key': key}) 
-                    mines_locks.pop(key, None) # Clear lock
+                    mines_locks.pop(key, None) 
                     
                     await query.answer(f"Incredible! You found all the money! {win_amount} 💸", show_alert=True)
+                    await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
                     return
 
                 text = (
@@ -734,10 +738,9 @@ async def mines_callback(update: Update, context: CallbackContext):
                 game_data = game.copy()
                 game_data.pop('_id', None)
                 await mines_collection.update_one({'key': key}, {'$set': game_data}) 
-                try:
-                    await query.message.edit_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
-                except Exception as e:
-                     logger.error(f"Error updating active game board: {e}")
+                
+                await query.answer("Safe! 💸", show_alert=False) 
+                await safe_edit_mines_board(query, text, get_mines_keyboard(game))
 
 
 # ==========================================
