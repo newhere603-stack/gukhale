@@ -344,10 +344,8 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
             char.update(update_data)
 
 
-async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
-    min_bid = active_auc['highest_bid'] + 1000
-    if proposed_bid is None or proposed_bid < min_bid:
-        proposed_bid = min_bid
+async def render_auction_ui(update_obj, active_auc, user_id, add_amount=1000, is_edit=False):
+    add_amount = max(1000, add_amount)
 
     # 🔥 LIVE UPDATE FOR AUCTIONS
     search_ids = [str(active_auc.get('char_id'))]
@@ -387,54 +385,80 @@ async def render_auction_ui(query, active_auc, user_id, proposed_bid=None):
 <tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
 {r_emoji} {bold_sc('RARITY:')} {bold_sc(r_name)}{top_list_text}"""
 
+    # 🔥 Adding Amount Buttons 
     buttons = [
         [
-            InlineKeyboardButton("⋞", callback_data=f"auc_adj_{user_id}_-1000_{proposed_bid}"),
-            InlineKeyboardButton(f"{proposed_bid:,}", callback_data=f"auc_none_{user_id}"),
-            InlineKeyboardButton("⋟", callback_data=f"auc_adj_{user_id}_1000_{proposed_bid}")
+            InlineKeyboardButton("⋞", callback_data=f"auc_adj_{user_id}_-1000_{add_amount}"),
+            InlineKeyboardButton(f"+ {add_amount:,}", callback_data=f"auc_none_{user_id}"),
+            InlineKeyboardButton("⋟", callback_data=f"auc_adj_{user_id}_1000_{add_amount}")
         ],
-        [InlineKeyboardButton(to_small_caps("Confirm Bid"), callback_data=f"auc_conf_{user_id}_{proposed_bid}")],
+        [InlineKeyboardButton(to_small_caps("Confirm Bid"), callback_data=f"auc_conf_{user_id}_{add_amount}")],
         [
-            InlineKeyboardButton(to_small_caps("⟲ Back"), callback_data=f"mp_back_{user_id}"),
-            InlineKeyboardButton(to_small_caps("Cancel ⟳"), callback_data=f"auc_can_{user_id}")
+            InlineKeyboardButton(to_small_caps("⟲ Marketplace"), callback_data=f"mp_back_{user_id}"),
+            InlineKeyboardButton(to_small_caps("Cancel My Bid ⟳"), callback_data=f"auc_can_{user_id}")
         ]
     ]
     
     reply_markup = InlineKeyboardMarkup(buttons)
-    
     media_source, media_class, media_type = get_media_info(active_auc)
     img_url = active_auc.get('img_url')
     
     msg = None
-    try:
-        if query.message.photo or query.message.video or query.message.animation:
-            if media_source:
-                try:
-                    msg = await query.edit_message_media(
-                        media=media_class(media=media_source, caption=caption, parse_mode='HTML'), 
-                        reply_markup=reply_markup
-                    )
-                except BadRequest as e:
-                    if "message is not modified" in str(e).lower():
-                        msg = query.message
-                    elif media_type == 'url' and ("video" in str(e).lower() or "animation" in str(e).lower()):
+    if is_edit:
+        query = update_obj
+        try:
+            if query.message.photo or query.message.video or query.message.animation:
+                if media_source:
+                    try:
                         msg = await query.edit_message_media(
-                            media=InputMediaVideo(media=media_source, caption=caption, parse_mode='HTML'), 
+                            media=media_class(media=media_source, caption=caption, parse_mode='HTML'), 
                             reply_markup=reply_markup
                         )
-                    else:
-                        raise e
+                    except BadRequest as e:
+                        if "message is not modified" in str(e).lower():
+                            msg = query.message
+                        elif media_type == 'url' and ("video" in str(e).lower() or "animation" in str(e).lower()):
+                            msg = await query.edit_message_media(
+                                media=InputMediaVideo(media=media_source, caption=caption, parse_mode='HTML'), 
+                                reply_markup=reply_markup
+                            )
+                        else:
+                            raise e
+                else:
+                    msg = await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
             else:
-                msg = await query.edit_message_caption(caption=caption, reply_markup=reply_markup, parse_mode='HTML')
-        else:
-            msg = await query.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
-    except BadRequest as e:
-        if "message is not modified" in str(e).lower():
-            msg = query.message
-        else:
+                msg = await query.edit_message_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+        except BadRequest as e:
+            if "message is not modified" not in str(e).lower():
+                pass
+        except Exception:
             pass
-    except Exception:
-        pass
+    else:
+        # Initial call via /auction command
+        message = update_obj.message
+        if media_source:
+            try:
+                if media_type == 'photo':
+                    msg = await message.reply_photo(photo=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                elif media_type in ['video', 'animation']:
+                    msg = await message.reply_video(video=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                else:
+                    is_video = img_url and str(img_url).lower().endswith(('.mp4', '.gif'))
+                    if is_video:
+                        msg = await message.reply_video(video=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    else:
+                        msg = await message.reply_photo(photo=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+            except BadRequest as e:
+                if "video" in str(e).lower() or "animation" in str(e).lower():
+                    try:
+                        msg = await message.reply_video(video=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    except BadRequest:
+                        msg = await message.reply_animation(animation=media_source, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                else:
+                    raise e
+        else:
+            msg = await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
+
         
     if msg and media_type == 'url' and img_url:
         update_data = {}
@@ -458,39 +482,59 @@ async def marketplace(update: Update, context: CallbackContext):
     await render_mp_message(update, user, 0, is_edit=False)
 
 
-# 🔥 NAYA BID COMMAND
+# 🔥 NAYA AUCTION COMMAND (Direct Entry)
+async def auction_cmd(update: Update, context: CallbackContext):
+    user_id = update.effective_user.id
+    active_auc = await auction_collection.find_one({'status': 'active'})
+    if not active_auc:
+        await update.message.reply_text(bold_sc("There is no active auction right now!"), parse_mode='HTML')
+        return
+    await render_auction_ui(update, active_auc, user_id, 1000, is_edit=False)
+
+
+# 🔥 NAYA BID COMMAND (Any Amount Add)
 async def place_bid_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     if not context.args or not context.args[0].isdigit():
         await update.message.reply_text(bold_sc("Usage: /bid [amount]"), parse_mode='HTML')
         return
         
-    proposed = int(context.args[0])
+    add_amount = int(context.args[0])
+    if add_amount <= 0:
+        await update.message.reply_text(bold_sc("Bid amount must be greater than 0!"), parse_mode='HTML')
+        return
+        
     active_auc = await auction_collection.find_one({'status': 'active'})
-    
     if not active_auc:
         await update.message.reply_text(bold_sc("No active auction right now!"), parse_mode='HTML')
         return
         
-    if proposed <= active_auc.get('highest_bid', 0) and active_auc.get('top_bids'):
-        await update.message.reply_text(bold_sc(f"Bid must be higher than {active_auc['highest_bid']:,}!"), parse_mode='HTML')
-        return
-        
-    eco_user = await eco_collection.find_one({'id': user_id}, {'balance': 1})
-    if not eco_user or eco_user.get('balance', 0) < proposed:
-        await update.message.reply_text(bold_sc(f"Low balance! You need {proposed:,} 💸"), parse_mode='HTML')
-        return
-        
     top_bids = active_auc.get('top_bids', [])
+    existing_bid = next((b['bid'] for b in top_bids if b['id'] == user_id), 0)
+    new_total = existing_bid + add_amount
+    
+    # Fast Projection
+    eco_user = await eco_collection.find_one({'id': user_id}, {'balance': 1})
+    if not eco_user or eco_user.get('balance', 0) < new_total:
+        await update.message.reply_text(bold_sc(f"Low balance! You need {new_total:,} 💸 for this total bid."), parse_mode='HTML')
+        return
+        
     top_bids = [b for b in top_bids if b['id'] != user_id]
-    top_bids.append({'id': user_id, 'name': update.effective_user.first_name, 'bid': proposed})
+    top_bids.append({'id': user_id, 'name': update.effective_user.first_name, 'bid': new_total})
     top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
+    highest_bid = top_bids[0]['bid']
     
     await auction_collection.update_one(
         {'_id': active_auc['_id']},
-        {'$set': {'highest_bid': top_bids[0]['bid'], 'top_bids': top_bids}}
+        {'$set': {'highest_bid': highest_bid, 'top_bids': top_bids}}
     )
-    await update.message.reply_text(bold_sc(f"✅ Bid of {proposed:,} placed successfully! Open /mp to see the auction."), parse_mode='HTML')
+    
+    await update.message.reply_text(bold_sc(f"✅ Added {add_amount:,} to your bid! Total bid: {new_total:,}"), parse_mode='HTML')
+    
+    # Re-render to show updated board
+    active_auc['highest_bid'] = highest_bid
+    active_auc['top_bids'] = top_bids
+    await render_auction_ui(update, active_auc, user_id, 1000, is_edit=False)
 
 
 async def marketplace_callbacks(update: Update, context: CallbackContext):
@@ -512,7 +556,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
         # ---------------- AUCTION LOGIC ----------------
         if data.startswith("auc_"):
             if data.startswith("auc_none_"):
-                await query.answer(to_small_caps("Use left/right arrows to adjust bid!"), show_alert=False)
+                await query.answer(to_small_caps("Use left/right arrows to adjust bid amount!"), show_alert=False)
                 return
                 
             active_auc = await auction_collection.find_one({'status': 'active'})
@@ -522,41 +566,41 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
 
             if data.startswith("auc_adj_"):
                 increment = int(parts[3])
-                current_proposed = int(parts[4])
-                new_proposed = current_proposed + increment
+                current_add = int(parts[4])
+                new_add = current_add + increment
+                if new_add < 1000: new_add = 1000
                 await query.answer() 
-                await render_auction_ui(query, active_auc, user_id, new_proposed)
+                await render_auction_ui(query, active_auc, user_id, new_add, is_edit=True)
                 return
 
             if data.startswith("auc_conf_"):
-                proposed = int(parts[3])
+                add_amount = int(parts[3])
                 
-                if proposed <= active_auc['highest_bid'] and active_auc.get('top_bids'):
-                    await query.answer(to_small_caps(f"Bid must be higher than {active_auc['highest_bid']:,}!"), show_alert=True)
-                    await render_auction_ui(query, active_auc, user_id, active_auc['highest_bid'] + 1000)
-                    return
+                top_bids = active_auc.get('top_bids', [])
+                existing_bid = next((b['bid'] for b in top_bids if b['id'] == clicker_id), 0)
+                new_total = existing_bid + add_amount
                 
                 # 🔥 PROJECTION: Faster coin fetch
                 eco_user = await eco_collection.find_one({'id': clicker_id}, {'balance': 1})
-                if not eco_user or eco_user.get('balance', 0) < proposed:
-                    await query.answer(to_small_caps(f"Low balance! You need {proposed:,} 💸"), show_alert=True)
+                if not eco_user or eco_user.get('balance', 0) < new_total:
+                    await query.answer(to_small_caps(f"Low balance! You need {new_total:,} 💸 total."), show_alert=True)
                     return
                 
-                top_bids = active_auc.get('top_bids', [])
                 top_bids = [b for b in top_bids if b['id'] != clicker_id]
-                top_bids.append({'id': clicker_id, 'name': query.from_user.first_name, 'bid': proposed})
+                top_bids.append({'id': clicker_id, 'name': query.from_user.first_name, 'bid': new_total})
                 top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
+                highest_bid = top_bids[0]['bid']
                     
                 await auction_collection.update_one(
                     {'_id': active_auc['_id']},
-                    {'$set': {'highest_bid': top_bids[0]['bid'], 'top_bids': top_bids}}
+                    {'$set': {'highest_bid': highest_bid, 'top_bids': top_bids}}
                 )
                 
-                await query.answer(to_small_caps(f"✅ Bid of {proposed:,} placed successfully!"), show_alert=True)
+                await query.answer(to_small_caps(f"✅ Added {add_amount:,} successfully!"), show_alert=True)
                 
-                active_auc['highest_bid'] = top_bids[0]['bid']
+                active_auc['highest_bid'] = highest_bid
                 active_auc['top_bids'] = top_bids
-                await render_auction_ui(query, active_auc, user_id, top_bids[0]['bid'] + 1000)
+                await render_auction_ui(query, active_auc, user_id, 1000, is_edit=True)
                 return
 
             if data.startswith("auc_can_"):
@@ -581,7 +625,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 
                 active_auc['highest_bid'] = highest_bid
                 active_auc['top_bids'] = top_bids
-                await render_auction_ui(query, active_auc, user_id, highest_bid + 1000)
+                await render_auction_ui(query, active_auc, user_id, 1000, is_edit=True)
                 return
 
         # ---------------- DEALS LOGIC ----------------
@@ -643,7 +687,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await query.answer(to_small_caps("There is no active auction right now!"), show_alert=True)
                     return
                 await query.answer() 
-                await render_auction_ui(query, active_auc, user_id)
+                await render_auction_ui(query, active_auc, user_id, 1000, is_edit=True)
                 return
 
             elif data.startswith("mp_ref_"):
@@ -811,6 +855,7 @@ async def end_auction(update: Update, context: CallbackContext):
 
 # --- Handlers ---
 application.add_handler(CommandHandler(["mp", "marketplace"], marketplace, block=False))
+application.add_handler(CommandHandler("auction", auction_cmd, block=False))
 application.add_handler(CommandHandler("bid", place_bid_cmd, block=False))
 application.add_handler(CommandHandler("setprice", set_mp_price, block=False))
 application.add_handler(CommandHandler("startauction", start_auction, block=False))
