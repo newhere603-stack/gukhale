@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from PIL import Image, ImageDraw, ImageFont
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.error import BadRequest
 
 from shivu import application, user_collection, db
 from shivu.modules.words_data_full_az import WORD_LIST
@@ -58,7 +59,6 @@ async def ensure_db_loaded():
 # 🚀 ZERO-LAG CACHED FONT LOADER
 # ==========================================
 def get_bold_font(size):
-    # Agar font pehle se RAM mein hai toh wahi se instant return kar do
     if size in _FONT_CACHE:
         return _FONT_CACHE[size]
         
@@ -74,12 +74,11 @@ def get_bold_font(size):
         if os.path.exists(path):
             try:
                 font = ImageFont.truetype(path, size)
-                _FONT_CACHE[size] = font  # Cache it for next time
+                _FONT_CACHE[size] = font  
                 return font
             except:
                 pass
                 
-    # Fallback to default and cache it
     font = ImageFont.load_default()
     _FONT_CACHE[size] = font
     return font
@@ -639,6 +638,7 @@ def get_grid_top_keyboard(state):
         [InlineKeyboardButton(year_btn, callback_data="wg_top_time_year"), InlineKeyboardButton(all_btn, callback_data="wg_top_time_all")]
     ])
 
+# 🚀 DB Optimization: Optimized Projection to load data fast without fetching heavy user documents
 async def fetch_grid_leaderboard(chat_id, state):
     scope = state["scope"]
     time_f = state["time"]
@@ -653,12 +653,15 @@ async def fetch_grid_leaderboard(chat_id, state):
             return cached_msg
             
     try:
-        cursor = user_collection.find({sort_key: {"$gt": 0}}).sort(sort_key, -1).limit(10)
+        # Reduced payload size for faster DB queries
+        projection = {"id": 1, "_id": 1, "first_name": 1, "username": 1, sort_key: 1}
+        cursor = user_collection.find({sort_key: {"$gt": 0}}, projection).sort(sort_key, -1).limit(10)
         top_users = await cursor.to_list(length=10)
         
         title_scope = "GLOBAL" if scope == "global" else "THIS CHAT"
         time_title = "" if time_f == "all" else f" ({time_f.upper()})"
-        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji><b>WORDGRID LEADERBOARD</b><tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n"
+        msg = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>WordGrid Leaderboard</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n\n"
         
         if not top_users:
             msg += "<b><i>No players on the leaderboard yet! Play WordGrid to score points.</i></b>"
@@ -672,7 +675,7 @@ async def fetch_grid_leaderboard(chat_id, state):
                     first_name = username if username else 'Unknown'
                 name = html.escape(first_name)
                 
-                # Silent profile link (No tag notification & no box preview due to photo format)
+                # Silent profile link HTML
                 if uid:
                     user_mention = f"<a href='tg://user?id={uid}'>{name}</a>"
                 else:
@@ -681,7 +684,6 @@ async def fetch_grid_leaderboard(chat_id, state):
                 points = user.get(sort_key, 0)
                 msg += f"<b>{i + 1}.</b> <b>{user_mention}</b> - <b>{points:,}</b> <tg-emoji emoji-id=\"6080267780836302938\">💎</tg-emoji>\n"
         
-        # Save to memory cache so next clicks are instant
         LB_CACHE[cache_key] = (msg, now_ts)
         return msg
     except Exception as e:
@@ -693,16 +695,22 @@ async def leaderboard_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     msg = await fetch_grid_leaderboard(chat_id, state)
     keyboard = get_grid_top_keyboard(state)
     
-    # Send as photo (This inherently fixes any web link preview boxes!)
-    await update.message.reply_photo(
+    # 🚀 SILENT MENTION HACK: Pehle bina tags ke load karega, fir edit kar dega tag ke saath. (No @ Notification)
+    loading_msg = await update.message.reply_photo(
         photo=LEADERBOARD_IMG,
-        caption=msg,
-        parse_mode="HTML",
-        reply_markup=keyboard
+        caption="<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>Loading WordGrid Leaderboard...</b>",
+        parse_mode="HTML"
     )
+    await loading_msg.edit_caption(caption=msg, parse_mode="HTML", reply_markup=keyboard)
 
 async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    # 🚀 INSTANT BUTTON FEEDBACK: Spinner turant stop hoga
+    try:
+        await query.answer()
+    except Exception:
+        pass
+        
     data = query.data
     chat_id = query.message.chat_id
     state = get_wg_user_state(chat_id)
@@ -711,16 +719,22 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     elif data == "wg_top_scope_chat": state["scope"] = "chat"
     elif data.startswith("wg_top_time_"): state["time"] = data.replace("wg_top_time_", "")
         
-    await query.answer()
     msg = await fetch_grid_leaderboard(chat_id, state)
     keyboard = get_grid_top_keyboard(state)
     
     try:
-        # Edit media directly for instant button clicks
-        await query.edit_message_media(
-            media=InputMediaPhoto(media=LEADERBOARD_IMG, caption=msg, parse_mode="HTML"),
-            reply_markup=keyboard
-        )
+        # 🚀 ZERO LAG: edit_message_caption se bina image reload kiye text instantly badlega
+        await query.edit_message_caption(caption=msg, parse_mode="HTML", reply_markup=keyboard)
+    except BadRequest as e:
+        if "not modified" in str(e).lower(): return
+        try:
+            # Fallback agar image purani cache se issue de
+            await query.edit_message_media(
+                media=InputMediaPhoto(media=LEADERBOARD_IMG, caption=msg, parse_mode="HTML"),
+                reply_markup=keyboard
+            )
+        except Exception:
+            pass
     except Exception:
         pass
 
