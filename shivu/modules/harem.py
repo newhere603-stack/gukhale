@@ -21,23 +21,42 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
+# 🔥 UNIFIED RARITY DICTIONARY (SYNCED WITH CHECK CODE)
 RARITIES = {
-    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common"),
-    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
-    "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🔥</tg-emoji>', "Legendary"),
-    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"),
-    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"),
-    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
-    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"),
-    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"),
+    "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🔥</tg-emoji>', "Legendary"),
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
+    "summer": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"),
     "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"),
+    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"),
     "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"),
     "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
-    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
-    "pearl": ("🏝️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"),
-    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
+    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common")
 }
+
+# 🔥 POWERFUL RARITY MATCHER (FROM CHECK CODE)
+def get_base_rarity(rarity_str: str) -> str:
+    if not rarity_str or not isinstance(rarity_str, str):
+        return "common"
+    r_lower = rarity_str.lower().strip()
+    
+    # 1. Exact Match Check
+    for key, (_, _, name) in RARITIES.items():
+        if key == r_lower or name.lower() == r_lower:
+            return key
+
+    # 2. Substring Match Check
+    for key, (db_emoji, _, name) in RARITIES.items():
+        if key in r_lower or name.lower() in r_lower or db_emoji in r_lower:
+            return key
+            
+    return "common"
 
 def rarity_display(key: str) -> str:
     db_emoji, _, name = RARITIES.get(key, RARITIES["common"])
@@ -48,11 +67,9 @@ def rarity_premium_display(key: str) -> str:
     return f"{prem_emoji} {name}"
 
 def get_prem_emoji(rarity_text: str) -> str:
-    rarity_text = str(rarity_text).lower()
-    for k, (db_e, prem_e, name) in RARITIES.items():
-        if name.lower() in rarity_text or k.lower() in rarity_text or db_e in rarity_text:
-            return prem_e
-    return "🟢" 
+    # 🚀 Now uses exact logic from check code to prevent mix-ups!
+    base_key = get_base_rarity(rarity_text)
+    return RARITIES[base_key][1]
 
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
@@ -91,13 +108,13 @@ class DisplayOptions:
     show_rarity_full: bool = False
     compact_mode: bool = False
 
-# 🔥 FULL LENGTH DASHED LINES & EXACT SCREENSHOT FORMATTING
+# 🔥 EXACT FORMATTING ACCORDING TO SCREENSHOT
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s Harem</b>\n\n",
     'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
-    'separator': "----------------------------------------\n",
+    'separator': "----------------------------\n",
     'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
-    'footer': "----------------------------------------\n\n",
+    'footer': "----------------------------\n\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
 
@@ -122,16 +139,13 @@ class UserCollection:
             target_char_id = mode.split(":", 1)[1]
             return [c for c in chars if str(c.id) == target_char_id]
 
-        # 🟢 RARITY FILTER
+        # 🟢 RARITY FILTER (Fully synchronized with Check Code logic)
         if mode in RARITIES:
-            target_emoji = RARITIES[mode][0]
-            target_name = RARITIES[mode][2].lower()
             target_key = mode.lower()
-            
             filtered = []
             for c in chars:
-                r_str = str(c.rarity).lower()
-                if target_emoji in c.rarity or target_name in r_str or target_key in r_str:
+                base_r = get_base_rarity(c.rarity)
+                if base_r == target_key:
                     filtered.append(c)
             return sorted(filtered, key=lambda c: (c.anime, c.id))
             
@@ -248,6 +262,7 @@ class HaremHandler:
     CHARACTERS_PER_PAGE = 10
 
     def __init__(self):
+        # Targeting only anime_characters_lol (same as check command)
         self.collection_db = db['anime_characters_lol']
         self.user_db = db['user_collection_lmaoooo']
 
@@ -269,29 +284,26 @@ class HaremHandler:
         )
 
     async def update_live_data_all(self, characters: List[Character]):
-        """🚀 BULK LIVE UPDATE: Bulletproof ID mapping ('085' vs '85') solves the Rarity mixup perfectly!"""
+        """🚀 BULK LIVE UPDATE: Bulletproof mapping to prevent any rarity mismatch"""
         if not characters:
             return
             
-        unique_ids_str = [str(c.id).strip() for c in characters]
-        unique_ids_int = [int(c.id) for c in characters if str(c.id).strip().isdigit()]
-        query_ids = list(set(unique_ids_str + unique_ids_int))
+        query_ids = set()
+        for c in characters:
+            c_str = str(c.id).strip()
+            c_clean = c_str.lstrip('0') or '0'
+            query_ids.add(c_str)
+            query_ids.add(c_clean)
+            if c_str.isdigit(): query_ids.add(int(c_str))
+            if c_clean.isdigit(): query_ids.add(int(c_clean))
         
-        projection = {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
-        
-        # Checking across all collections parallelly to ensure we miss nothing
-        tasks = [
-            self.collection_db.find({"id": {"$in": query_ids}}, projection).to_list(length=None),
-            db['characters'].find({"id": {"$in": query_ids}}, projection).to_list(length=None),
-            db['collection'].find({"id": {"$in": query_ids}}, projection).to_list(length=None)
-        ]
-        
-        results = await asyncio.gather(*tasks)
-        live_docs = []
-        for res in results:
-            live_docs.extend(res)
+        # Searching the same database as check command
+        cursor = self.collection_db.find(
+            {"id": {"$in": list(query_ids)}},
+            {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
+        )
+        live_docs = await cursor.to_list(length=None)
             
-        # 🧠 SMART MAP: Links "085" to "85" flawlessly
         live_map = {}
         for doc in live_docs:
             doc_id_str = str(doc.get('id')).strip()
@@ -302,15 +314,12 @@ class HaremHandler:
         for c in characters:
             cid_str = str(c.id).strip()
             clean_cid = cid_str.lstrip('0') or '0'
-            
-            # Fetch using exact match, or stripped match
             doc = live_map.get(cid_str) or live_map.get(clean_cid)
             if doc:
                 c.name = doc.get('name', c.name)
                 c.anime = doc.get('anime', c.anime)
                 c.rarity = doc.get('rarity', c.rarity) 
-                if doc.get('img_url'):
-                    c.img_url = doc.get('img_url')
+                if doc.get('img_url'): c.img_url = doc.get('img_url')
                 c.is_video = doc.get('is_video', c.is_video)
                 c.gender = doc.get('gender', c.gender)
 
@@ -373,7 +382,7 @@ class HaremHandler:
             await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
             return
 
-        # 🔥 UPDATE ALL CHARACTERS FIRST - This completely eliminates the Rarity bug
+        # 🔥 UPDATE ALL CHARACTERS FIRST
         await self.update_live_data_all(collection.characters)
 
         display_order = collection.get_filtered_characters()
