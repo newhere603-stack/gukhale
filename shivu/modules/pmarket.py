@@ -174,6 +174,24 @@ async def toggle_exchange_cmd(update: Update, context: CallbackContext):
     await bot_settings_collection.update_one({'_id': 'pmarket_settings'}, {'$set': {'exchange_enabled': new_state}}, upsert=True)
     await update.message.reply_html(f"<b>PMarket exchange button ab {'ENABLED ✅' if new_state else 'DISABLED ❌'} ho gaya hai.</b>")
 
+async def set_exchange_limit_cmd(update: Update, context: CallbackContext):
+    if update.effective_user.id != OWNER_ID:
+        return
+        
+    if not context.args or not context.args[0].isdigit():
+        await update.message.reply_html("⚠️ <b>Iɴᴠᴀʟɪᴅ ғᴏʀᴍᴀᴛ.</b>\nUsaɢᴇ: <code>/set_exchange_limit <amount></code>")
+        return
+        
+    new_limit = int(context.args[0])
+    
+    await bot_settings_collection.update_one(
+        {'_id': 'pmarket_settings'}, 
+        {'$set': {'daily_token_limit': new_limit}}, 
+        upsert=True
+    )
+    
+    await update.message.reply_html(f"✅ <b>Dᴀɪʟʏ ᴇxᴄʜᴀɴɢᴇ ʟɪᴍɪᴛ ʜᴀs ʙᴇᴇɴ ᴜᴘᴅᴀᴛᴇᴅ ᴛᴏ <code>{new_limit}</code> ᴛᴏᴋᴇɴs!</b>")
+
 async def force_delist_cmd(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID: return
     if not context.args: return await update.message.reply_html("⚠️ <b>Invalid format.</b>\nUsage: <code>/forcedelist <char_id></code>")
