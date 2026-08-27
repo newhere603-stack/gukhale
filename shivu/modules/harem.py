@@ -177,7 +177,8 @@ class MediaHelper:
     @staticmethod
     async def send_media_message(message, media_url: Optional[str], caption: str,
                                   reply_markup, is_video: bool = False,
-                                  display_options: Optional[DisplayOptions] = None):
+                                  display_options: Optional[DisplayOptions] = None,
+                                  quote: bool = True):
         opts = display_options or DisplayOptions()
 
         if opts.show_url and media_url:
@@ -186,21 +187,21 @@ class MediaHelper:
         is_video = opts.video_support and (is_video or MediaHelper.is_video_url(media_url))
 
         if not opts.preview_image or not media_url:
-            return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
+            return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML', quote=quote)
 
         try:
             if is_video:
                 return await message.reply_video(
                     video=media_url, caption=caption, reply_markup=reply_markup,
                     parse_mode='HTML', supports_streaming=True,
-                    read_timeout=120, write_timeout=120
+                    read_timeout=120, write_timeout=120, quote=quote
                 )
             return await message.reply_photo(
-                photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML'
+                photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML', quote=quote
             )
         except TelegramError as e:
             LOGGER.warning(f"Media send failed, falling back to text: {e}")
-            return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
+            return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML', quote=quote)
 
 class HaremMessageBuilder:
     def __init__(self, collection: UserCollection, page: int, total_pages: int,
@@ -412,27 +413,30 @@ class HaremHandler:
         media_url = display_char.img_url if display_char else None
         is_video = display_char.is_video if display_char else False
 
-        if media_url and edit:
+        if edit:
             try:
-                await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
+                if media_url:
+                    await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
+                else:
+                    await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
                 return
             except TelegramError as e:
                 if "not modified" in str(e).lower():
                     return
-                LOGGER.warning(f"ᴇᴅɪᴛ ғᴀɪʟᴇᴅ, ʀᴇsᴇɴᴅɪɴɢ: {e}")
+                LOGGER.warning(f"ᴇᴅɪᴛ ғᴀɪʟᴇᴅ, ʀᴇsᴇɴᴅɪɴɢ ᴄʟᴇᴀɴʟʏ: {e}")
+                # 🔥 Delete the old message to avoid double harem clutter!
+                try:
+                    await message.delete()
+                except Exception:
+                    pass
+                    
+        # If it's a command, quote=True. If it's a callback, quote=False to prevent nested replies!
+        quote_msg = not edit 
 
         if media_url:
-            await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
-        elif edit:
-            try:
-                await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
-            except TelegramError as e:
-                if "not modified" in str(e).lower():
-                    return
-                LOGGER.warning(f"ᴇᴅɪᴛ ᴛᴇxᴛ ғᴀɪʟᴇᴅ: {e}")
-                await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
+            await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options, quote=quote_msg)
         else:
-            await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
+            await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML', quote=quote_msg)
 
 
 class ModeHandler:
