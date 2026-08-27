@@ -583,16 +583,16 @@ async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: b
         if base_key in disabled_rarities_cache:
             disabled_rarities_cache.remove(base_key)
             await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities_cache)}}, upsert=True)
-            await update.message.reply_html(f"✅ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+            await update.message.reply_html(f"✅ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>")
         else:
-            await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+            await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>")
     else: # rarity_off -> Disable kar de (disabled list me daal de)
         if base_key not in disabled_rarities_cache:
             disabled_rarities_cache.add(base_key)
             await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities_cache)}}, upsert=True)
-            await update.message.reply_html(f"❌ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+            await update.message.reply_html(f"❌ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>")
         else:
-            await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+            await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>")
 
 async def rarity_on_cmd(update, context):
     await _rarity_toggle_cmd(update, context, True)
