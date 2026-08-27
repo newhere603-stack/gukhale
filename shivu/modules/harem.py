@@ -21,6 +21,9 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
+# 🔥 GLOBAL CACHE FOR INSANE SPEED
+ANIME_COUNTS_CACHE: Dict[str, int] = {}
+
 # 🔥 UNIFIED RARITY DICTIONARY (SYNCED WITH CHECK CODE)
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
@@ -67,7 +70,6 @@ def rarity_premium_display(key: str) -> str:
     return f"{prem_emoji} {name}"
 
 def get_prem_emoji(rarity_text: str) -> str:
-    # 🚀 Now uses exact logic from check code to prevent mix-ups!
     base_key = get_base_rarity(rarity_text)
     return RARITIES[base_key][1]
 
@@ -262,7 +264,6 @@ class HaremHandler:
     CHARACTERS_PER_PAGE = 10
 
     def __init__(self):
-        # Targeting only anime_characters_lol (same as check command)
         self.collection_db = db['anime_characters_lol']
         self.user_db = db['user_collection_lmaoooo']
 
@@ -284,7 +285,7 @@ class HaremHandler:
         )
 
     async def update_live_data_all(self, characters: List[Character]):
-        """🚀 BULK LIVE UPDATE: Bulletproof mapping to prevent any rarity mismatch"""
+        """🚀 BULK LIVE UPDATE (Only for current page items)"""
         if not characters:
             return
             
@@ -297,7 +298,6 @@ class HaremHandler:
             if c_str.isdigit(): query_ids.add(int(c_str))
             if c_clean.isdigit(): query_ids.add(int(c_clean))
         
-        # Searching the same database as check command
         cursor = self.collection_db.find(
             {"id": {"$in": list(query_ids)}},
             {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
@@ -324,20 +324,39 @@ class HaremHandler:
                 c.gender = doc.get('gender', c.gender)
 
     async def get_anime_counts(self, anime_list: List[str]) -> Dict[str, int]:
+        """🚀 CACHED AGGREGATION FOR INSANE SPEED"""
+        global ANIME_COUNTS_CACHE
         if not anime_list:
             return {}
-        
-        pipeline = [
-            {"$match": {"anime": {"$in": anime_list}}},
-            {"$group": {"_id": "$anime", "count": {"$sum": 1}}}
-        ]
-        
+            
         counts = {}
-        cursor = self.collection_db.aggregate(pipeline)
-        docs = await cursor.to_list(length=None)
-        
-        for doc in docs:
-            counts[doc['_id']] = doc['count']
+        missing = []
+        for anime in anime_list:
+            if anime in ANIME_COUNTS_CACHE:
+                counts[anime] = ANIME_COUNTS_CACHE[anime]
+            else:
+                missing.append(anime)
+                
+        if missing:
+            pipeline = [
+                {"$match": {"anime": {"$in": missing}}},
+                {"$group": {"_id": "$anime", "count": {"$sum": 1}}}
+            ]
+            cursor = self.collection_db.aggregate(pipeline)
+            docs = await cursor.to_list(length=None)
+            
+            found_animes = set()
+            for doc in docs:
+                val = doc['count']
+                ANIME_COUNTS_CACHE[doc['_id']] = val
+                counts[doc['_id']] = val
+                found_animes.add(doc['_id'])
+                
+            for m in missing:
+                if m not in found_animes:
+                    ANIME_COUNTS_CACHE[m] = 0
+                    counts[m] = 0
+                    
         return counts
 
     def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int, step: int = 1) -> InlineKeyboardMarkup:
@@ -382,9 +401,6 @@ class HaremHandler:
             await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
             return
 
-        # 🔥 UPDATE ALL CHARACTERS FIRST
-        await self.update_live_data_all(collection.characters)
-
         display_order = collection.get_filtered_characters()
         if not display_order:
             await message.reply_text(
@@ -402,6 +418,12 @@ class HaremHandler:
 
         display_char = collection.favorite if collection.favorite else (random.choice(display_order) if display_order else None)
 
+        # 🔥 SPEED FIX: Update ONLY the visible characters!
+        chars_to_update = current.copy()
+        if display_char and display_char not in chars_to_update:
+            chars_to_update.append(display_char)
+        await self.update_live_data_all(chars_to_update)
+
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
         
@@ -412,24 +434,20 @@ class HaremHandler:
         media_url = display_char.img_url if display_char else None
         is_video = display_char.is_video if display_char else False
 
-        # 🔥 PERFECT EDIT LOGIC: No delete, no fallback, no crash!
+        # 🔥 BUG-FREE EDIT LOGIC (No crashing, no deleting loops)
         if edit:
             try:
-                # Always check the CURRENT message to decide if we edit caption or text
                 if message.photo or message.video or message.animation or message.document:
                     await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
                 else:
                     await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
                 return
             except TelegramError as e:
-                # Ignore "not modified" errors (e.g. spam clicking same button)
                 if "not modified" in str(e).lower():
                     return
-                # If any other error occurs, log it and silently ignore to prevent crashes
                 LOGGER.warning(f"Harem edit ignored silently: {e}")
                 return 
 
-        # Sirf naya command type karne par ye execute hoga
         if media_url:
             await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
         else:
@@ -483,7 +501,7 @@ class ModeHandler:
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
         )
 
-    # 🟢 ANIME LIST SELECTION MENU
+    # 🟢 ANIME LIST SELECTION MENU (Small Caps font applied)
     async def show_anime_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
@@ -500,7 +518,9 @@ class ModeHandler:
         keyboard = []
         for i, anime in enumerate(current_animes):
             idx = start + i
-            display_anime = f"{anime[:30]}..." if len(anime) > 30 else anime
+            # Applied small caps font fix here!
+            truncated_anime = anime[:30] + "..." if len(anime) > 30 else anime
+            display_anime = to_small_caps(truncated_anime)
             keyboard.append([InlineKeyboardButton(display_anime, callback_data=f"harem_mode:set_a:{user_id}:{idx}")])
 
         nav = []
@@ -521,7 +541,7 @@ class ModeHandler:
             parse_mode='HTML'
         )
 
-    # 🟢 CHARACTER (WAIFU) LIST SELECTION MENU
+    # 🟢 CHARACTER (WAIFU) LIST SELECTION MENU (Small Caps font applied)
     async def show_char_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
@@ -544,7 +564,9 @@ class ModeHandler:
 
         keyboard = []
         for cid, cname in current_chars:
-            display_name = f"{cname[:28]}..." if len(cname) > 28 else cname
+            # Applied small caps font fix here!
+            truncated_cname = cname[:28] + "..." if len(cname) > 28 else cname
+            display_name = to_small_caps(truncated_cname)
             keyboard.append([InlineKeyboardButton(f"{display_name} ({cid})", callback_data=f"harem_mode:set_c:{user_id}:{cid}")])
 
         nav = []
