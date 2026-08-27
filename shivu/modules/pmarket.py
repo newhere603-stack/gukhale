@@ -144,7 +144,7 @@ CHAR_PRICES_COINS = {
     "neon": 67000, "summer": 60000, "cosmic": 640000
 }
 
-# Advanced string matching for accurate rarity detection (fixes the Common bug)
+# Advanced string matching for accurate rarity detection 
 def get_normalized_rarity(rarity_str):
     if not rarity_str: return "common"
     r = str(rarity_str).lower().strip()
@@ -190,7 +190,7 @@ async def get_pmarket_keyboard(user_id, bot_username=""):
     ])
     
     if bot_username:
-        keyboard.append([InlineKeyboardButton("💳 ʙᴜʏ ᴛᴏᴋᴇɴ/ᴄᴏɪɴs", url=f"https://t.me/{bot_username}?start=buy_tokens")])
+        keyboard.append([InlineKeyboardButton("💳 ʙᴜʏ ᴛᴏᴋᴇɴs/ᴄᴏɪɴs", url=f"https://t.me/{bot_username}?start=buy_tokens")])
         
     return InlineKeyboardMarkup(keyboard)
 
@@ -343,7 +343,16 @@ async def ask_buy_char_id(update: Update, context: CallbackContext):
         await update.message.reply_html(f"<b>⚠️ {sc('character not found! please send a valid character id.')}</b>")
         return WAITING_FOR_BUY_CHAR_ID
 
+    # Normalize rarity and check if it is disabled
     r = get_normalized_rarity(live_char.get('rarity'))
+    
+    settings = await bot_settings_collection.find_one({'_id': 'market_rarity_settings'})
+    enabled_dict = settings.get('enabled', {}) if settings else {}
+    
+    if not enabled_dict.get(r, True):
+        await update.message.reply_html(f"<b>⚠️ {sc('the rarity')} ({to_small_caps(r)}) {sc('is currently disabled for purchase!')}</b>")
+        return WAITING_FOR_BUY_CHAR_ID
+
     coin_price = CHAR_PRICES_COINS.get(r, 1000)
 
     context.user_data['buy_char_id'] = live_char['id']
@@ -412,16 +421,23 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
     )
     kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel")]])
 
-    await context.bot.send_photo(
+    msg = await context.bot.send_photo(
         chat_id=update.message.chat_id,
         photo="https://files.catbox.moe/0qjgih.png",
         caption=caption, reply_markup=kb, parse_mode='HTML'
     )
+    # Save the message ID of the QR image to delete it later
+    context.user_data['qr_msg_id'] = msg.message_id
     return WAITING_FOR_BUY_SCREENSHOT
 
 async def receive_buy_screenshot(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     if not update.message.photo: return WAITING_FOR_BUY_SCREENSHOT
+
+    qr_msg_id = context.user_data.get('qr_msg_id')
+    if qr_msg_id:
+        try: await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=qr_msg_id)
+        except: pass
 
     photo_id = update.message.photo[-1].file_id
     order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
@@ -476,8 +492,12 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
 async def cancel_buy_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
-    if query.message.photo: await query.message.edit_caption(f"<b>❌ {sc('order cancelled.')}</b>", parse_mode='HTML')
-    else: await query.message.edit_text(f"<b>❌ {sc('order cancelled.')}</b>", parse_mode='HTML')
+    
+    if query.message.photo: 
+        await query.message.delete()
+        await context.bot.send_message(chat_id=query.message.chat_id, text=f"<b>❌ {sc('order cancelled.')}</b>", parse_mode='HTML')
+    else: 
+        await query.message.edit_text(f"<b>❌ {sc('order cancelled.')}</b>", parse_mode='HTML')
         
     order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
     await send_buy_log(context, "❌ CANCELLED", query.from_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Usᴇʀ ᴄᴀɴᴄᴇʟʟᴇᴅ ᴛʜᴇ ᴘʀᴏᴄᴇss")
@@ -918,15 +938,28 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
 # --- CANCEL AND TIMEOUT METHODS ---
 async def cancel_process(update: Update, context: CallbackContext):
+    qr_msg_id = context.user_data.get('qr_msg_id')
+    if qr_msg_id:
+        try: await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=qr_msg_id)
+        except: pass
+
     context.user_data.pop('sell_owner_id', None)
     context.user_data.pop('sell_character', None)
     context.user_data.pop('exc_owner_id', None)
     context.user_data.pop('exc_type', None)
     context.user_data.pop('buy_prompt_active', None)
+    
     await update.message.reply_text(f"<b>❌ {sc('process cancelled.')}</b>", parse_mode='HTML')
     return ConversationHandler.END
 
 async def timeout_process(update: Update, context: CallbackContext):
+    qr_msg_id = context.user_data.get('qr_msg_id')
+    if qr_msg_id:
+        try:
+            chat_id = update.effective_chat.id if update.effective_chat else update.callback_query.message.chat_id
+            await context.bot.delete_message(chat_id=chat_id, message_id=qr_msg_id)
+        except: pass
+
     context.user_data.pop('sell_owner_id', None)
     context.user_data.pop('sell_character', None)
     context.user_data.pop('exc_owner_id', None)
