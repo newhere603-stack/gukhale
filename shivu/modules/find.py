@@ -28,7 +28,7 @@ DEFAULT_PRICES = {
     "legendary": 5000, "celestial": 70000, "spicy": 59000, 
     "exclusive": 12000, "mythic": 180000, "premium edition": 250000, 
     "sweet": 52000, "valentine": 90000, "winter": 55000, 
-    "neon": 67000, "summer": 60000, "cosmic": 580000
+    "neon": 67000, "summer": 60000, "cosmic": 640000
 }
 
 PREMIUM_RARITIES = {
