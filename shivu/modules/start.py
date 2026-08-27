@@ -212,73 +212,84 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     return "<b>sᴜᴅᴏ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
 
 
-# 🔥 FIX: SUPERFAST DUAL DATABASE UPSERT (5000 Coins + bot_started logic)
+# 🔥 SUPERFAST DUAL DATABASE UPSERT
 async def _ensure_user(user_id, first_name, username):
     try:
-        # Check if user already exists and if they have started the bot before
-        char_doc = await user_collection.find_one({"id": user_id})
-        is_new_char = not char_doc or not char_doc.get("bot_started")
-        
-        eco_doc = await eco_collection.find_one({"id": user_id})
-        is_new_eco = not eco_doc or not eco_doc.get("bot_started")
+        # DB se fetch parallel karwao jisse double wait na karna pade
+        char_task = user_collection.find_one({"id": user_id}, {"bot_started": 1})
+        eco_task = eco_collection.find_one({"id": user_id}, {"bot_started": 1})
+        char_doc, eco_doc = await asyncio.gather(char_task, eco_task)
 
+        is_new_char = not char_doc or not char_doc.get("bot_started")
+        is_new_eco = not eco_doc or not eco_doc.get("bot_started")
         is_new_user = is_new_char or is_new_eco
 
-        # 1. Update Character DB (Harem)
-        await user_collection.update_one(
-            {"id": user_id},
-            {
-                "$set": {
-                    "first_name": first_name, 
-                    "username": username, 
-                    "bot_started": True
-                },
-                "$setOnInsert": {
-                    "characters": [],
-                    "pass_data": {
-                        "tier": "free",
-                        "weekly_claims": 0,
-                        "last_weekly_claim": None,
-                        "streak_count": 0,
-                        "last_streak_claim": None,
-                        "tasks": {"weekly_claims": 0, "grabs": 0},
-                        "mythic_unlocked": False,
-                        "premium_expires": None,
-                        "elite_expires": None,
-                        "pending_elite_payment": None,
-                    }
-                }
-            },
-            upsert=True
-        )
+        update_tasks = []
 
-        # 2. Update Economy DB (🔥 FIX: Used $inc for 5000 coins to ensure they get it even if doc already existed via middleware)
-        if is_new_user:
-            await eco_collection.update_one(
+        # 1. Update Character DB (Harem)
+        update_tasks.append(
+            user_collection.update_one(
                 {"id": user_id},
                 {
                     "$set": {
-                        "first_name": first_name,
-                        "username": username,
+                        "first_name": first_name, 
+                        "username": username, 
                         "bot_started": True
                     },
-                    "$inc": {"balance": 5000},  # Directly adds 5000 coins!
-                    "$setOnInsert": {"tokens": 0}
-                },
-                upsert=True
-            )
-        else:
-            await eco_collection.update_one(
-                {"id": user_id},
-                {
-                    "$set": {
-                        "first_name": first_name,
-                        "username": username,
-                        "bot_started": True
+                    "$setOnInsert": {
+                        "characters": [],
+                        "pass_data": {
+                            "tier": "free",
+                            "weekly_claims": 0,
+                            "last_weekly_claim": None,
+                            "streak_count": 0,
+                            "last_streak_claim": None,
+                            "tasks": {"weekly_claims": 0, "grabs": 0},
+                            "mythic_unlocked": False,
+                            "premium_expires": None,
+                            "elite_expires": None,
+                            "pending_elite_payment": None,
+                        }
                     }
                 },
                 upsert=True
             )
+        )
+
+        # 2. Update Economy DB
+        if is_new_user:
+            update_tasks.append(
+                eco_collection.update_one(
+                    {"id": user_id},
+                    {
+                        "$set": {
+                            "first_name": first_name,
+                            "username": username,
+                            "bot_started": True
+                        },
+                        "$inc": {"balance": 5000},  # 🔥 Naye user ko silently 5000 coins denge
+                        "$setOnInsert": {"tokens": 0}
+                    },
+                    upsert=True
+                )
+            )
+        else:
+            update_tasks.append(
+                eco_collection.update_one(
+                    {"id": user_id},
+                    {
+                        "$set": {
+                            "first_name": first_name,
+                            "username": username,
+                            "bot_started": True
+                        }
+                    },
+                    upsert=True
+                )
+            )
+
+        # Data updates ek sath execute honge for max speed
+        await asyncio.gather(*update_tasks)
         
         return is_new_user
     except Exception as e:
@@ -325,17 +336,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         is_new = await _ensure_user(user_id, first_name, username)
-
-        # Welcome Message for New Users
-        if is_new:
-            try:
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=f"🎉 <b>ᴡᴇʟᴄᴏᴍᴇ {html.escape(first_name)}!</b>\n\n<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>5000 ᴄᴏɪɴs</b> ʜᴀᴠᴇ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ᴀs ᴀ sᴛᴀʀᴛᴇʀ ʙᴏɴᴜs!",
-                    parse_mode=ParseMode.HTML
-                )
-            except Exception:
-                pass
 
         if hasattr(context.application, "create_task"):
             context.application.create_task(
@@ -395,17 +395,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             is_new = await _ensure_user(user_id, first_name, username)
-            
-            # Welcome Message for New Users via Callback
-            if is_new:
-                try:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text=f"🎉 <b>ᴡᴇʟᴄᴏᴍᴇ {html.escape(first_name)}!</b>\n\n<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>5000 ᴄᴏɪɴs</b> ʜᴀᴠᴇ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ᴀᴄᴄᴏᴜɴᴛ ᴀs ᴀ sᴛᴀʀᴛᴇʀ ʙᴏɴᴜs!",
-                        parse_mode=ParseMode.HTML
-                    )
-                except Exception:
-                    pass
             
             try:
                 await query.message.delete()
