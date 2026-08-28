@@ -190,16 +190,24 @@ def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
     )
     return cap
 
-def owners_caption(ch: Dict, owners: List[Dict]) -> str:
+def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
     cap = f"<b>{escape(sc(nm))}</b>\n\n<b>🏆 {len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
+    
     medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-    for i, o in enumerate(owners[:30], 1):
+    USERS_PER_PAGE = 10
+    start = page * USERS_PER_PAGE
+    end = start + USERS_PER_PAGE
+    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    
+    for i, o in enumerate(owners[start:end], start + 1):
         medal = medals.get(i, f"{i}.")
         fn = escape(trunc(o.get('first_name', 'User'), 18))
         uid = o.get('id')
         cap += f"{medal} <a href=\"tg://user?id={uid}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
+        
+    cap += f"\n<tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <b>{sc(f'page {page+1}/{total_pages}')}</b>"
     return cap
 
 def stats_caption(ch: Dict, owners: List[Dict]) -> str:
@@ -209,7 +217,8 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
     cap = f"<b>{escape(sc(nm))}</b>\n\n📊 <b>{sc('statistics')}</b>\n🎯 <code>{total}×</code> {sc('grabbed')}\n🏆 <code>{len(owners)}</code> {sc('owners')}\n📈 <code>{avg}×</code> {sc('avg')}\n"
     if owners:
         cap += f"\n🏆 <b>{sc('top collectors')}</b>\n"
-        for i, o in enumerate(owners[:10], 1):
+        # 🔥 FIX: Ab yahan pe sirf Top 3 hi dikhenge 
+        for i, o in enumerate(owners[:3], 1):
             fn = escape(trunc(o.get('first_name', 'User'), 18))
             uid = o.get('id')
             cap += f"{i}. <a href=\"tg://user?id={uid}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
@@ -218,7 +227,8 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(sc("♔ owners"), callback_data=f"o.{cid}"),
+            # Default page parameter 0 set kar diya
+            InlineKeyboardButton(sc("♔ owners"), callback_data=f"o.{cid}:0"),
             InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
         ],
         [
@@ -348,27 +358,54 @@ async def show_owners(update: Update, context) -> None:
     q = update.callback_query
     await q.answer()
     try:
-        cid = q.data.split('.', 1)[1]
+        data = q.data.split('.', 1)[1]
+        
+        # 🔥 Page extract check
+        if ':' in data:
+            cid, page_str = data.split(':')
+            page = int(page_str)
+        else:
+            cid = data
+            page = 0
+            
         ch = await collection.find_one({'id': cid}, {'_id': 0})
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
+            
         owners = await get_owners(cid, 100)
         if not owners:
             await q.answer(sc("no owners"), show_alert=True)
             return
-        cap = owners_caption(ch, owners)
-        kbd = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
-                InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
-            ], 
-            [
-                InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
-            ]
+            
+        cap = owners_caption(ch, owners, page)
+        
+        # 🔥 Pagination Keyboard
+        USERS_PER_PAGE = 10
+        total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+        
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton(sc("⋞ prev"), callback_data=f"o.{cid}:{page-1}"))
+        if page < total_pages - 1:
+            nav_buttons.append(InlineKeyboardButton(sc("next ⋟"), callback_data=f"o.{cid}:{page+1}"))
+            
+        kbd_layout = []
+        if nav_buttons:
+            kbd_layout.append(nav_buttons)
+            
+        kbd_layout.append([
+            InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
+            InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
         ])
+        kbd_layout.append([
+            InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
+        ])
+        
+        kbd = InlineKeyboardMarkup(kbd_layout)
         await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
-    except Exception:
+    except Exception as e:
+        LOGGER.error(f"Error in show_owners: {e}")
         await q.answer(sc("error"), show_alert=True)
 
 async def back_card(update: Update, context) -> None:
@@ -401,7 +438,8 @@ async def show_stats(update: Update, context) -> None:
         kbd = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
-                InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}")
+                # Stats se wapas owners wale page 0 pe bhejna hai
+                InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}:0")
             ], 
             [
                 InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
