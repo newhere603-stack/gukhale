@@ -284,6 +284,14 @@ class HaremHandler:
             filter_mode=user.get('hmode', 'default')
         )
 
+    async def _auto_delete_message(self, message, delay_seconds: int = 1200):
+        """Silently deletes harem message after 20 minutes (1200 seconds)"""
+        await asyncio.sleep(delay_seconds)
+        try:
+            await message.delete()
+        except Exception:
+            pass # Koi error show nahi karega agar delete ho gaya ho pehle se
+
     async def update_live_data_all(self, characters: List[Character]):
         """🚀 BULK LIVE UPDATE (Only for current page items)"""
         if not characters:
@@ -451,10 +459,16 @@ class HaremHandler:
                 LOGGER.warning(f"Harem edit ignored silently: {e}")
                 return 
 
+        # Initial message creation logic
+        sent_msg = None
         if media_url:
-            await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
+            sent_msg = await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
         else:
-            await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
+            sent_msg = await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
+            
+        # 🔥 Added 20 Min Auto-delete feature smoothly
+        if sent_msg:
+            asyncio.create_task(self._auto_delete_message(sent_msg, 1200))
 
 
 class ModeHandler:
@@ -504,7 +518,7 @@ class ModeHandler:
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
         )
 
-    # 🟢 ANIME LIST SELECTION MENU (Small Caps font applied)
+    # 🟢 ANIME LIST SELECTION MENU
     async def show_anime_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
@@ -521,7 +535,6 @@ class ModeHandler:
         keyboard = []
         for i, anime in enumerate(current_animes):
             idx = start + i
-            # Applied small caps font fix here!
             truncated_anime = anime[:30] + "..." if len(anime) > 30 else anime
             display_anime = to_small_caps(truncated_anime)
             keyboard.append([InlineKeyboardButton(display_anime, callback_data=f"harem_mode:set_a:{user_id}:{idx}")])
@@ -544,12 +557,11 @@ class ModeHandler:
             parse_mode='HTML'
         )
 
-    # 🟢 CHARACTER (WAIFU) LIST SELECTION MENU (Small Caps font applied - FIXED TO FILTER BY NAME)
+    # 🟢 CHARACTER (WAIFU) LIST SELECTION MENU
     async def show_char_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
 
-        # 🔥 FIXED: Extracting unique character names directly to fix duplicate selection entries
         unique_names = sorted(list(set(c.get('name', 'Unknown') for c in chars)))
 
         if not unique_names:
@@ -563,7 +575,6 @@ class ModeHandler:
         keyboard = []
         for i, cname in enumerate(current_chars):
             idx = start + i
-            # Applied small caps font fix here!
             truncated_cname = cname[:28] + "..." if len(cname) > 28 else cname
             display_name = to_small_caps(truncated_cname)
             keyboard.append([InlineKeyboardButton(display_name, callback_data=f"harem_mode:set_c:{user_id}:{idx}")])
@@ -643,7 +654,6 @@ class ModeHandler:
                 await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴀɴɪᴍᴇ", show_alert=True)
             return await self.show_mode_menu(update, user_id)
 
-        # 🔥 FIXED: Set Waifu mode using Name instead of ID
         if action == "set_c":
             idx = int(parts[3])
             user = await self.user_db.find_one({'id': user_id})
