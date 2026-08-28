@@ -290,7 +290,7 @@ class HaremHandler:
         try:
             await message.delete()
         except Exception:
-            pass # Koi error show nahi karega agar delete ho gaya ho pehle se
+            pass 
 
     async def update_live_data_all(self, characters: List[Character]):
         """🚀 BULK LIVE UPDATE (Only for current page items)"""
@@ -435,15 +435,33 @@ class HaremHandler:
             chars_to_update.append(display_char)
         await self.update_live_data_all(chars_to_update)
 
+        # Ab image set karenge 
+        media_url = display_char.img_url if display_char else None
+        is_video = display_char.is_video if display_char else False
+
+        # 🚨 SUPER FALLBACK: Agar uske first character ki image DB mein miss hai ya invalid hai, 
+        # toh Harem text mode mein na bheje isliye current page ya poore collection se koi bhi available picture nikal lo!
+        if not media_url and not collection.favorite:
+            for c in current:
+                if c.img_url:
+                    media_url = c.img_url
+                    is_video = c.is_video
+                    break
+            
+            # Agar uske pure page pe bhi koi photo nahi hai, toh whole collection mein se first photo find karega
+            if not media_url:
+                for c in collection.characters:
+                    if c.img_url:
+                        media_url = c.img_url
+                        is_video = c.is_video
+                        break
+
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
         
         builder = HaremMessageBuilder(collection, page, total_pages, style, options, user_name, user_id)
         text = builder.build_message(current, anime_counts)
         markup = self._build_keyboard(page, total_pages, len(display_order), user_id, step)
-
-        media_url = display_char.img_url if display_char else None
-        is_video = display_char.is_video if display_char else False
 
         # 🔥 BUG-FREE EDIT LOGIC (No crashing, no deleting loops)
         if edit:
@@ -469,7 +487,6 @@ class HaremHandler:
         # 🔥 Added 20 Min Auto-delete feature smoothly
         if sent_msg:
             asyncio.create_task(self._auto_delete_message(sent_msg, 1200))
-
 
 class ModeHandler:
     IMG = "https://files.catbox.moe/sgo9in.png"
