@@ -1,3 +1,6 @@
+import asyncio
+import random
+import math
 from html import escape
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple
@@ -104,6 +107,14 @@ def rarity_parts(rarity) -> Tuple[str, str]:
     _, tg_emoji, name = RARITIES[base_key]
     return tg_emoji, name
 
+async def silent_auto_delete(message, delay_seconds: int = 1200):
+    """Silently deletes a message after a specified number of seconds."""
+    await asyncio.sleep(delay_seconds)
+    try:
+        await message.delete()
+    except Exception:
+        pass # Silently ignore if already deleted or bot lacks permission
+
 async def get_char(cid: str) -> Optional[Char]:
     if cid in char_cache:
         return char_cache[cid]
@@ -140,7 +151,7 @@ async def global_count(cid: str) -> int:
     user_cache[key] = n
     return n
 
-# 🔥 MEGA FIX: Aggregation Pipeline for SUPER FAST owner fetching (Replaced slow python parsing)
+# 🔥 MEGA FIX: Aggregation Pipeline for SUPER FAST owner fetching
 async def get_owners(cid: str) -> List[Dict]:
     key = f"o_{cid}"
     if key in user_cache:
@@ -259,31 +270,39 @@ def find_caption(query: str, r: Dict, page: int, show_all: bool) -> Tuple[str, i
     return "\n".join(lines), total_pages
 
 async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
+    sent_message = None
     try:
         kwargs = {'caption': caption, 'parse_mode': ParseMode.HTML}
         if kb:
             kwargs['reply_markup'] = kb
         if char.is_video:
-            await update.message.reply_video(video=char.img_url, **kwargs)
+            sent_message = await update.message.reply_video(video=char.img_url, **kwargs)
         else:
             try:
-                await update.message.reply_photo(photo=char.img_url, **kwargs)
+                sent_message = await update.message.reply_photo(photo=char.img_url, **kwargs)
             except TelegramError:
-                await update.message.reply_document(document=char.img_url, **kwargs)
+                sent_message = await update.message.reply_document(document=char.img_url, **kwargs)
     except TelegramError as e:
-        await update.message.reply_text(
+        sent_message = await update.message.reply_text(
             f"{caption}\n\n<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('media error:')} {bold_sc(escape(str(e)))}",
             reply_markup=kb, parse_mode=ParseMode.HTML
         )
+        
+    if sent_message:
+        asyncio.create_task(silent_auto_delete(sent_message))
 
 # 🔥 CHECK CHARACTER COMMAND (AB OWNERS FETCH NAHI KAREGA = EXTREMELY FAST)
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/check <id></code>", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/check <id></code>", parse_mode=ParseMode.HTML)
+        asyncio.create_task(silent_auto_delete(msg))
+        return
     
     char = await get_char(context.args[0])
     if not char:
-        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('character not found in database!')}", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('character not found in database!')}", parse_mode=ParseMode.HTML)
+        asyncio.create_task(silent_auto_delete(msg))
+        return
     
     gcount = await global_count(char.id)
     # Owners block removed from here! Fast load now!
@@ -292,14 +311,21 @@ async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # 🔥 FIND ANIME COMMAND
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/anime <name></code>", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/anime <name></code>", parse_mode=ParseMode.HTML)
+        asyncio.create_task(silent_auto_delete(msg))
+        return
+        
     name = ' '.join(context.args)
     chars = await find_by_anime(name)
     if not chars:
-        return await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('no characters found from')} <b><i>{to_small_caps(escape(name))}</i></b>", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('no characters found from')} <b><i>{to_small_caps(escape(name))}</i></b>", parse_mode=ParseMode.HTML)
+        asyncio.create_task(silent_auto_delete(msg))
+        return
+        
     r = process_search(chars)
     text, _ = find_caption(name, r, 0, True)
-    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    msg = await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    asyncio.create_task(silent_auto_delete(msg))
 
 # 🔥 GET ID COMMAND
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -307,22 +333,28 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return 
 
     if not update.message or not update.message.reply_to_message:
-        return await update.message.reply_text(f"⚠️ {bold_sc('error: reply to a high-quality photo or video with')} <code>/getid</code>.", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"⚠️ {bold_sc('error: reply to a high-quality photo or video with')} <code>/getid</code>.", parse_mode=ParseMode.HTML)
+        asyncio.create_task(silent_auto_delete(msg))
+        return
 
     reply_msg = update.message.reply_to_message
     instruction = bold_sc("copy this id and paste it in mongodb as 'img_url'!")
 
+    msg = None
     if reply_msg.photo:
         file_id = reply_msg.photo[-1].file_id
-        await update.message.reply_text(f"📸 {bold_sc('photo file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"📸 {bold_sc('photo file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
     elif reply_msg.video:
         file_id = reply_msg.video.file_id
-        await update.message.reply_text(f"🎥 {bold_sc('video file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"🎥 {bold_sc('video file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
     elif reply_msg.document:
         file_id = reply_msg.document.file_id
-        await update.message.reply_text(f"📁 {bold_sc('document file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"📁 {bold_sc('document file id:')}\n<code>{file_id}</code>\n\n{instruction}", parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(f"⚠️ {bold_sc('invalid media: this is not a proper photo or video.')}", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"⚠️ {bold_sc('invalid media: this is not a proper photo or video.')}", parse_mode=ParseMode.HTML)
+        
+    if msg:
+        asyncio.create_task(silent_auto_delete(msg))
 
 # 🔥 FIX RARITY COMMAND
 async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -332,7 +364,8 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return 
 
         if not context.args:
-            await update.message.reply_text(f"<b>⚠️ {to_small_caps('usage:')}</b> <code>/fixrarity [char_id]</code>", parse_mode=ParseMode.HTML)
+            msg = await update.message.reply_text(f"<b>⚠️ {to_small_caps('usage:')}</b> <code>/fixrarity [char_id]</code>", parse_mode=ParseMode.HTML)
+            asyncio.create_task(silent_auto_delete(msg))
             return
 
         char_id_input = str(context.args[0])
@@ -344,7 +377,8 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         global_char = await collection.find_one({'id': {'$in': search_ids}})
         
         if not global_char:
-            await update.message.reply_text(f"<b>❌ {to_small_caps('character id')} <code>{char_id_input}</code> {to_small_caps('not found in database!')}</b>", parse_mode=ParseMode.HTML)
+            msg = await update.message.reply_text(f"<b>❌ {to_small_caps('character id')} <code>{char_id_input}</code> {to_small_caps('not found in database!')}</b>", parse_mode=ParseMode.HTML)
+            asyncio.create_task(silent_auto_delete(msg))
             return
 
         current_rarity = global_char.get('rarity', 'Unknown')
@@ -381,10 +415,12 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"<b>👥 {to_small_caps('users affected:')}</b> <code>{affected_count}</code> {to_small_caps('players')}\n"
             f"━━━━━━━━━━━━━━━━━━━━"
         )
-        await update.message.reply_text(success_msg, parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(success_msg, parse_mode=ParseMode.HTML)
+        asyncio.create_task(silent_auto_delete(msg))
 
     except Exception as e:
-        await update.message.reply_text(f"<b>⚠️ {to_small_caps('error:')}</b> <code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+        msg = await update.message.reply_text(f"<b>⚠️ {to_small_caps('error:')}</b> <code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+        asyncio.create_task(silent_auto_delete(msg))
 
 # 🔥 PAGINATION HANDLERS (Owners fetch ab yahan hoga)
 async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
