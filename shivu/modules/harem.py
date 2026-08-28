@@ -136,10 +136,10 @@ class UserCollection:
             target_anime = mode.split(":", 1)[1]
             return sorted([c for c in chars if c.anime == target_anime], key=lambda c: c.id)
 
-        # 🟢 WAIFU/CHARACTER MENU SELECTION FILTER
+        # 🟢 WAIFU/CHARACTER MENU SELECTION FILTER (Filtered by Name to Group Everything)
         if mode.startswith("char:"):
-            target_char_id = mode.split(":", 1)[1]
-            return [c for c in chars if str(c.id) == target_char_id]
+            target_char_name = mode.split(":", 1)[1]
+            return sorted([c for c in chars if c.name == target_char_name], key=lambda c: (c.anime, c.id))
 
         # 🟢 RARITY FILTER (Fully synchronized with Check Code logic)
         if mode in RARITIES:
@@ -416,7 +416,10 @@ class HaremHandler:
         start = page * self.CHARACTERS_PER_PAGE
         current = display_order[start:start + self.CHARACTERS_PER_PAGE]
 
-        display_char = collection.favorite if collection.favorite else (random.choice(display_order) if display_order else None)
+        # 🔥 FIXED: Set first collected character as default if no favorite is chosen
+        display_char = collection.favorite
+        if not display_char and collection.characters:
+            display_char = collection.characters[0]
 
         # 🔥 SPEED FIX: Update ONLY the visible characters!
         chars_to_update = current.copy()
@@ -541,33 +544,29 @@ class ModeHandler:
             parse_mode='HTML'
         )
 
-    # 🟢 CHARACTER (WAIFU) LIST SELECTION MENU (Small Caps font applied)
+    # 🟢 CHARACTER (WAIFU) LIST SELECTION MENU (Small Caps font applied - FIXED TO FILTER BY NAME)
     async def show_char_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
 
-        unique_chars_dict = {}
-        for c in chars:
-            cid = str(c.get('id', ''))
-            if cid not in unique_chars_dict:
-                unique_chars_dict[cid] = c.get('name', 'Unknown')
+        # 🔥 FIXED: Extracting unique character names directly to fix duplicate selection entries
+        unique_names = sorted(list(set(c.get('name', 'Unknown') for c in chars)))
 
-        unique_chars = sorted(list(unique_chars_dict.items()), key=lambda x: x[1])
-
-        if not unique_chars:
+        if not unique_names:
             return await query.answer("ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!", show_alert=True)
 
-        total_pages = math.ceil(len(unique_chars) / 10)
+        total_pages = math.ceil(len(unique_names) / 10)
         page = max(0, min(page, total_pages - 1))
         start = page * 10
-        current_chars = unique_chars[start:start+10]
+        current_chars = unique_names[start:start+10]
 
         keyboard = []
-        for cid, cname in current_chars:
+        for i, cname in enumerate(current_chars):
+            idx = start + i
             # Applied small caps font fix here!
             truncated_cname = cname[:28] + "..." if len(cname) > 28 else cname
             display_name = to_small_caps(truncated_cname)
-            keyboard.append([InlineKeyboardButton(f"{display_name} ({cid})", callback_data=f"harem_mode:set_c:{user_id}:{cid}")])
+            keyboard.append([InlineKeyboardButton(display_name, callback_data=f"harem_mode:set_c:{user_id}:{idx}")])
 
         nav = []
         if page > 0:
@@ -644,10 +643,18 @@ class ModeHandler:
                 await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴀɴɪᴍᴇ", show_alert=True)
             return await self.show_mode_menu(update, user_id)
 
+        # 🔥 FIXED: Set Waifu mode using Name instead of ID
         if action == "set_c":
-            char_id = parts[3]
-            await self.set_mode(user_id, f"char:{char_id}")
-            await query.answer("✓ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇʟᴇᴄᴛᴇᴅ")
+            idx = int(parts[3])
+            user = await self.user_db.find_one({'id': user_id})
+            chars = user.get('characters', [])
+            unique_names = sorted(list(set(c.get('name', 'Unknown') for c in chars)))
+            if idx < len(unique_names):
+                char_name = unique_names[idx]
+                await self.set_mode(user_id, f"char:{char_name}")
+                await query.answer("✓ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇʟᴇᴄᴛᴇᴅ")
+            else:
+                await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴄʜᴀʀᴀᴄᴛᴇʀ", show_alert=True)
             return await self.show_mode_menu(update, user_id)
 
         # Basic Settings Fallback
