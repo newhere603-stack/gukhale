@@ -273,8 +273,22 @@ class HaremHandler:
             return None
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
-        favorite = Character.from_dict(user.get('favorites')) if user.get('favorites') else None
+        
+        # 🔥 FIXED: Ye block ab kisi dusre file (jaise /fav) se save kiye hue String/Number ID ko bhi pakad lega
+        fav_data = user.get('favorites')
+        favorite = None
+        if fav_data:
+            if isinstance(fav_data, dict):
+                favorite = Character.from_dict(fav_data)
+            else:
+                # Agar ID format me save hua hai
+                fav_id_str = str(fav_data).strip()
+                for c in characters:
+                    if str(c.id).strip() == fav_id_str:
+                        favorite = c
+                        break
 
+        # Remove favorite if the character is completely missing from user's collection
         if favorite and not any(c.id == favorite.id for c in characters):
             asyncio.create_task(self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}}))
             favorite = None
@@ -424,10 +438,13 @@ class HaremHandler:
         start = page * self.CHARACTERS_PER_PAGE
         current = display_order[start:start + self.CHARACTERS_PER_PAGE]
 
-        # 🔥 FIXED: Set first collected character as default if no favorite is chosen
+        # 🔥 FIXED: Set first character of the CURRENT PAGE as default if no favorite is active
         display_char = collection.favorite
-        if not display_char and collection.characters:
-            display_char = collection.characters[0]
+        if not display_char:
+            if current:
+                display_char = current[0]
+            elif collection.characters:
+                display_char = collection.characters[0]
 
         # 🔥 SPEED FIX: Update ONLY the visible characters!
         chars_to_update = current.copy()
@@ -435,26 +452,18 @@ class HaremHandler:
             chars_to_update.append(display_char)
         await self.update_live_data_all(chars_to_update)
 
-        # Ab image set karenge 
-        media_url = display_char.img_url if display_char else None
-        is_video = display_char.is_video if display_char else False
+        # Image variables set karenge
+        media_url = getattr(display_char, 'img_url', None)
+        is_video = getattr(display_char, 'is_video', False)
 
-        # 🚨 SUPER FALLBACK: Agar uske first character ki image DB mein miss hai ya invalid hai, 
-        # toh Harem text mode mein na bheje isliye current page ya poore collection se koi bhi available picture nikal lo!
-        if not media_url and not collection.favorite:
+        # 🚨 SUPER FALLBACK: Agar fir bhi media_url empty hai (DB mein missing ho etc), 
+        # toh immediately current page se aisi waifu ka image pick kar lo jiska link available hai.
+        if not media_url:
             for c in current:
-                if c.img_url:
+                if getattr(c, 'img_url', None):
                     media_url = c.img_url
-                    is_video = c.is_video
+                    is_video = getattr(c, 'is_video', False)
                     break
-            
-            # Agar uske pure page pe bhi koi photo nahi hai, toh whole collection mein se first photo find karega
-            if not media_url:
-                for c in collection.characters:
-                    if c.img_url:
-                        media_url = c.img_url
-                        is_video = c.is_video
-                        break
 
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
@@ -487,6 +496,7 @@ class HaremHandler:
         # 🔥 Added 20 Min Auto-delete feature smoothly
         if sent_msg:
             asyncio.create_task(self._auto_delete_message(sent_msg, 1200))
+
 
 class ModeHandler:
     IMG = "https://files.catbox.moe/sgo9in.png"
@@ -705,7 +715,19 @@ class UnfavHandler:
             await update.message.reply_text('<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ɢᴏᴛ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴇᴛ!</b>', parse_mode='HTML')
             return
 
-        fav = Character.from_dict(user.get('favorites'))
+        fav_data = user.get('favorites')
+        fav = None
+        if fav_data:
+            if isinstance(fav_data, dict):
+                fav = Character.from_dict(fav_data)
+            else:
+                characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
+                fav_id_str = str(fav_data).strip()
+                for c in characters:
+                    if str(c.id).strip() == fav_id_str:
+                        fav = c
+                        break
+        
         if not fav:
             await update.message.reply_text("<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!</b>", parse_mode='HTML')
             return
@@ -720,8 +742,16 @@ class UnfavHandler:
             f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n"
             f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ:</b> <code>{fav.id}</code>"
         )
+        
+        # Ek chhota sa live update fav ke image url ke liye
+        collection_db = db['anime_characters_lol']
+        live_doc = await collection_db.find_one({"id": {"$in": [str(fav.id), fav.id, int(fav.id) if str(fav.id).isdigit() else fav.id]}})
+        if live_doc and live_doc.get('img_url'):
+            fav.img_url = live_doc.get('img_url')
+            fav.is_video = live_doc.get('is_video', False)
+
         await MediaHelper.send_media_message(
-            update.message, fav.img_url, caption, InlineKeyboardMarkup(buttons), fav.is_video, DEFAULT_OPTIONS
+            update.message, getattr(fav, 'img_url', None), caption, InlineKeyboardMarkup(buttons), getattr(fav, 'is_video', False), DEFAULT_OPTIONS
         )
 
     async def handle_unfav_callback(self, update: Update):
@@ -734,8 +764,8 @@ class UnfavHandler:
 
         if action == 'harem_unfav_yes':
             user = await self.user_db.find_one({'id': user_id})
-            fav = Character.from_dict(user.get('favorites')) if user else None
-            if not fav:
+            fav_data = user.get('favorites') if user else None
+            if not fav_data:
                 await query.answer("ɴᴏ ғᴀᴠᴏʀɪᴛᴇ ғᴏᴜɴᴅ!", show_alert=True)
                 return
 
@@ -743,14 +773,13 @@ class UnfavHandler:
             await query.edit_message_caption(
                 caption=(
                     f"<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ғᴀᴠᴏʀɪᴛᴇ ʀᴇᴍᴏᴠᴇᴅ!</b>\n\n"
-                    f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ɴᴀᴍᴇ:</b> <code>{escape(to_small_caps(fav.name))}</code>\n"
-                    f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n\n"
                     f"<b><i><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ɴᴇᴡ ғᴀᴠᴏʀɪᴛᴇ ᴜsɪɴɢ /fav</i></b>"
                 ),
                 parse_mode='HTML'
             )
         elif action == 'harem_unfav_no':
             await query.edit_message_caption(caption="<b>ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.</b>", parse_mode='HTML')
+
 
 async def verify_owner(query, user_id_str: str, error_msg: str = "ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ʙᴀᴋᴀ!") -> Optional[int]:
     try:
