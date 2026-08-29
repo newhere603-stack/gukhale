@@ -10,17 +10,21 @@ from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import TelegramError
 from shivu import db, application, LOGGER
 
+# --- SMALL CAPS CONVERTER HELPERS ---
 SMALL_CAPS_TRANS = str.maketrans(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
     "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
 )
 
 def to_small_caps(text: str) -> str:
-    if not text: return ""
+    if not text:
+        return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
+# 🔥 GLOBAL CACHE FOR INSANE SPEED
 ANIME_COUNTS_CACHE: Dict[str, int] = {}
 
+# 🔥 UNIFIED RARITY DICTIONARY
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
@@ -76,7 +80,7 @@ class Character:
             id=str(data.get('id', '')),
             name=data.get('name', 'Unknown'),
             anime=data.get('anime', 'Unknown'),
-            rarity=data.get('rarity', rarity_display('common')),
+            rarity=data.get('rarity', '🟢 Common'),
             img_url=data.get('img_url'),
             is_video=data.get('is_video', False),
             event_emoji=data.get('event_emoji') or data.get('event'),
@@ -91,13 +95,13 @@ class DisplayOptions:
     show_rarity_full: bool = False
     compact_mode: bool = False
 
-# 🔥 EXACT 15 LIMIT DESIGN WITH "⚋" SYMBOL ON BOTH SIDES
+# 🔥 EXACT STYLE WITH "⚋" LINES ON BOTH SIDES
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s Harem</b>\n\n",
     'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
-    'separator': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n",
+    'separator': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n",
     'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
-    'footer': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n\n",
+    'footer': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
 
@@ -179,7 +183,6 @@ class MediaHelper:
                 err_msg = str(e).lower()
                 LOGGER.warning(f"Media rejected. URL: {url}, Error: {e}")
                 
-                # 🔥 Agar 15 characters ke wajah se caption 1024 char cross kare, toh bot error bypass karke text alag bhej dega bina fail hue!
                 if "caption" in err_msg or "too long" in err_msg:
                     try:
                         if is_vid:
@@ -192,6 +195,7 @@ class MediaHelper:
                         pass
                 continue 
                 
+        # 👑 Ultimate Brahmastra Fallback
         try:
             return await message.reply_photo(photo=MediaHelper.GLOBAL_FALLBACK, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         except TelegramError:
@@ -231,6 +235,7 @@ class HaremMessageBuilder:
 
     def _format_character(self, char: Character, count: int) -> str:
         char_id = str(char.id).zfill(3)
+        # 🔥 BACK TO PREMIUM EMOJI
         r_emoji = get_prem_emoji(char.rarity)
         event_str = f" [{char.event_emoji}]" if char.event_emoji else ""
         return self.style['character'].format(
@@ -238,8 +243,8 @@ class HaremMessageBuilder:
         )
 
 class HaremHandler:
-    # 🔥 EXACLTY 15 CHARACTERS LIMIT JAISE TUMNE MANGA
-    CHARACTERS_PER_PAGE = 15
+    # 🔥 WAPAS 10 CHARACTERS PER PAGE
+    CHARACTERS_PER_PAGE = 10
 
     def __init__(self):
         self.collection_db = db['anime_characters_lol']
@@ -251,21 +256,13 @@ class HaremHandler:
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
         
-        # 🔥 ULTRA-SAFE & INDESTRUCTIBLE FAVORITE FINDER
         fav_data = user.get('favorites')
         favorite = None
-        
         if fav_data:
             fav_id_clean = ""
             if isinstance(fav_data, dict):
                 fav_id_clean = str(fav_data.get('id', '')).strip().lstrip('0') or '0'
                 favorite = Character.from_dict(fav_data)
-            elif isinstance(fav_data, list) and len(fav_data) > 0:
-                if isinstance(fav_data[0], dict):
-                    fav_id_clean = str(fav_data[0].get('id', '')).strip().lstrip('0') or '0'
-                    favorite = Character.from_dict(fav_data[0])
-                else:
-                    fav_id_clean = str(fav_data[0]).strip().lstrip('0') or '0'
             else:
                 fav_id_clean = str(fav_data).strip().lstrip('0') or '0'
                 
@@ -378,7 +375,6 @@ class HaremHandler:
         if not display_char:
             display_char = current[0] if current else collection.characters[0]
 
-        # 🚀 FORCE DB FETCH FOR ANY BROKEN IMAGES
         if display_char:
             c_clean = str(display_char.id).strip().lstrip('0') or '0'
             q_ids = [str(display_char.id).strip(), c_clean]
@@ -446,7 +442,7 @@ class HaremHandler:
                 return
             except TelegramError as e:
                 err_msg = str(e).lower()
-                # 🔥 Fallback for Edit if text length goes crazy during pagination
+                if "not modified" in err_msg: return
                 if "too long" in err_msg or "caption" in err_msg:
                     await message.delete()
                     sent_msg = await MediaHelper.send_media_message(
