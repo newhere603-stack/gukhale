@@ -413,8 +413,8 @@ async def propose(update: Update, context: CallbackContext):
     display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
     caption = (
         f"<b>🎉 ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ ʜᴀs ʙᴇᴇɴ ᴀᴄᴄᴇᴘᴛᴇᴅ! 💖</b>\n\n"
-        f"<b>☘️ ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b>🏵️ ʀᴀʀɪᴛʏ: {display_rarity}</b>\n"
+        f"<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
+        f"<b>💎 ʀᴀʀɪᴛʏ: {display_rarity}</b>\n"
         f"<b>🎞 ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
         f"<b>🔖 ɪᴅ: {char.get('id', 'N/A')}</b>"
     )
