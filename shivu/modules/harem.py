@@ -144,7 +144,6 @@ class UserCollection:
 
 class MediaHelper:
     VIDEO_EXT = ('.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v')
-    GLOBAL_FALLBACK = "https://files.catbox.moe/sgo9in.png"
 
     @staticmethod
     def is_video_url(url: Optional[str]) -> bool:
@@ -163,7 +162,7 @@ class MediaHelper:
         if not valid_pairs or not opts.preview_image:
             return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
 
-        # 🚀 Ultra-Safe Sender Loop
+        # 🚀 Ultra-Safe Sender Loop: Image fail hui toh Video try karega
         for url, vid in valid_pairs:
             is_vid = opts.video_support and (vid or MediaHelper.is_video_url(url))
             try:
@@ -181,11 +180,8 @@ class MediaHelper:
                 LOGGER.warning(f"Media rejected. URL: {url}, Error: {e}")
                 continue 
                 
-        # 👑 Ultimate Brahmastra Fallback: Agar upar ki saari links break hui toh default image pakka jayega!
-        try:
-            return await message.reply_photo(photo=MediaHelper.GLOBAL_FALLBACK, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
-        except TelegramError:
-            return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
+        # Text fallback ONLY IF every single image link is totally dead
+        return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
 
 class HaremMessageBuilder:
     def __init__(self, collection: UserCollection, page: int, total_pages: int,
@@ -240,25 +236,20 @@ class HaremHandler:
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
         
-        # 🚀 100% BULLETPROOF FAVORITE MATCHER
+        # 🔥 100% BUG-FREE FAVORITE LOADER (Koi aggressive unset nahi)
         fav_data = user.get('favorites')
         favorite = None
         
         if fav_data:
-            fav_id_clean = ""
             if isinstance(fav_data, dict):
-                fav_id_clean = str(fav_data.get('id', '')).strip().lstrip('0') or '0'
+                favorite = Character.from_dict(fav_data)
             else:
                 fav_id_clean = str(fav_data).strip().lstrip('0') or '0'
-                
-            # Direct instance linking taaki property hamesha update ho!
-            for c in characters:
-                if (str(c.id).strip().lstrip('0') or '0') == fav_id_clean:
-                    favorite = c
-                    break
-
-            if not favorite:
-                asyncio.create_task(self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}}))
+                for c in characters:
+                    if (str(c.id).strip().lstrip('0') or '0') == fav_id_clean:
+                        # Fresh object banaya taaki local list modify na ho
+                        favorite = Character(id=c.id, name=c.name, anime=c.anime, rarity=c.rarity, img_url=c.img_url, is_video=c.is_video, event_emoji=c.event_emoji)
+                        break
 
         return UserCollection(
             user_id=user_id, characters=characters, favorite=favorite,
@@ -378,15 +369,20 @@ class HaremHandler:
         if not display_char:
             display_char = current[0] if current else collection.characters[0]
 
-        # 🚀 IMMEDIATE FORCE FETCH FOR IMAGE (Ager local DB mein khali hai)
-        if display_char and not getattr(display_char, 'img_url', None):
+        # 🚀 FORCE DB FETCH FOR FAVORITE IMAGE IF MISSING
+        if display_char:
             c_clean = str(display_char.id).strip().lstrip('0') or '0'
             q_ids = [str(display_char.id).strip(), c_clean]
-            if c_clean.isdigit(): q_ids.extend([int(c_clean), f"{int(c_clean):02d}", f"{int(c_clean):03d}"])
-            doc = await self.collection_db.find_one({"id": {"$in": q_ids}})
-            if doc and doc.get("img_url"):
+            if c_clean.isdigit(): 
+                q_ids.extend([int(c_clean), f"{int(c_clean):02d}", f"{int(c_clean):03d}", f"{int(c_clean):04d}"])
+            
+            doc = await self.collection_db.find_one({"id": {"$in": q_ids}, "img_url": {"$nin": [None, ""]}})
+            if doc:
                 display_char.img_url = doc.get("img_url")
                 display_char.is_video = doc.get("is_video", False)
+                display_char.name = doc.get("name", display_char.name)
+                display_char.anime = doc.get("anime", display_char.anime)
+                display_char.rarity = doc.get("rarity", display_char.rarity)
 
         chars_to_update = current.copy()
         if display_char and display_char not in chars_to_update:
@@ -405,7 +401,6 @@ class HaremHandler:
                 media_urls.append(c.img_url)
                 is_videos.append(getattr(c, 'is_video', False))
 
-        # Backup Fetch
         if not media_urls:
             db_query_ids = set()
             for c in collection.characters[:30]:
@@ -425,11 +420,6 @@ class HaremHandler:
                 if url and url not in media_urls:
                     media_urls.append(url)
                     is_videos.append(doc.get("is_video", False))
-                    
-        # 👑 Absolute Final Safeguard Ensure
-        if not media_urls:
-            media_urls.append(MediaHelper.GLOBAL_FALLBACK)
-            is_videos.append(False)
 
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
@@ -655,7 +645,7 @@ class UnfavHandler:
         
         c_clean = str(fav.id).strip().lstrip('0') or '0'
         q_ids = [str(fav.id).strip(), c_clean]
-        if c_clean.isdigit(): q_ids.extend([int(c_clean), f"{int(c_clean):02d}", f"{int(c_clean):03d}"])
+        if c_clean.isdigit(): q_ids.extend([int(c_clean), f"{int(c_clean):02d}", f"{int(c_clean):03d}", f"{int(c_clean):04d}"])
             
         live_doc = await db['anime_characters_lol'].find_one({"id": {"$in": q_ids}})
         if live_doc and live_doc.get('img_url'):
@@ -664,7 +654,7 @@ class UnfavHandler:
 
         await MediaHelper.send_media_message(
             message=update.message, 
-            media_url_or_urls=getattr(fav, 'img_url', None) or MediaHelper.GLOBAL_FALLBACK, 
+            media_url_or_urls=getattr(fav, 'img_url', None), 
             caption=caption, 
             reply_markup=InlineKeyboardMarkup(buttons), 
             is_video_or_videos=getattr(fav, 'is_video', False), 
@@ -734,7 +724,7 @@ async def unfav_command(update: Update, context: CallbackContext):
     try: await unfav_handler.show_unfav_prompt(update)
     except TelegramError as e:
         LOGGER.error(f"Error in unfav_command: {e}", exc_info=True)
-        await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ᴘʀᴏᴄᴇssɪɴɢ ᴜɴғᴀᴠ ᴄᴏᴍᴍᴀɴᴅ.</b>", parse_mode='HTML')
+        await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ᴘʀᴏssɪɴɢ ᴜɴғᴀᴠ ᴄᴏᴍᴍᴀɴᴅ.</b>", parse_mode='HTML')
 
 async def unfav_callback(update: Update, context: CallbackContext):
     try: await unfav_handler.handle_unfav_callback(update)
