@@ -10,21 +10,17 @@ from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import TelegramError
 from shivu import db, application, LOGGER
 
-# --- SMALL CAPS CONVERTER HELPERS ---
 SMALL_CAPS_TRANS = str.maketrans(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
     "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
 )
 
 def to_small_caps(text: str) -> str:
-    if not text:
-        return ""
+    if not text: return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-# 🔥 GLOBAL CACHE FOR INSANE SPEED
 ANIME_COUNTS_CACHE: Dict[str, int] = {}
 
-# 🔥 UNIFIED RARITY DICTIONARY
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
@@ -95,13 +91,13 @@ class DisplayOptions:
     show_rarity_full: bool = False
     compact_mode: bool = False
 
-# 🔥 CAPTION LIMIT FIX: Formatting ko thoda compact kar diya
+# 🔥 EXACT 15 LIMIT DESIGN WITH "⚋" SYMBOL ON BOTH SIDES
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s Harem</b>\n\n",
     'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
-    'separator': "━─━─━─━─━─━─━─━─━\n", # Shortened separator to save character limits
+    'separator': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n",
     'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
-    'footer': "\n", # Removed extra lines
+    'footer': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n\n",
 }
 DEFAULT_OPTIONS = DisplayOptions()
 
@@ -162,7 +158,7 @@ class MediaHelper:
         if not valid_pairs or not opts.preview_image:
             return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
 
-        # 🚀 Ultra-Safe Sender Loop (Fixes "Caption too long" & "Photo as Video" errors)
+        # 🚀 TELEGRAM "CAPTION TOO LONG" SMART BYPASS
         for url, vid in valid_pairs:
             is_vid = opts.video_support and (vid or MediaHelper.is_video_url(url))
             try:
@@ -170,30 +166,32 @@ class MediaHelper:
                     try:
                         return await message.reply_video(video=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML', supports_streaming=True, read_timeout=120, write_timeout=120)
                     except TelegramError as e:
-                        if "caption" in str(e).lower(): raise e # Agar limit issue hai to photo try mat karo waha b limit ayegi
+                        if "caption" in str(e).lower() or "too long" in str(e).lower(): raise e
                         return await message.reply_photo(photo=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
                 else:
                     try:
                         return await message.reply_photo(photo=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
                     except TelegramError as e:
-                        if "caption" in str(e).lower(): raise e 
+                        if "caption" in str(e).lower() or "too long" in str(e).lower(): raise e 
                         return await message.reply_video(video=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML', supports_streaming=True, read_timeout=120, write_timeout=120)
                         
             except TelegramError as e:
                 err_msg = str(e).lower()
                 LOGGER.warning(f"Media rejected. URL: {url}, Error: {e}")
                 
-                # Agar caption limit exceed ho gai, to turant truncate text mode lagao
+                # 🔥 Agar 15 characters ke wajah se caption 1024 char cross kare, toh bot error bypass karke text alag bhej dega bina fail hue!
                 if "caption" in err_msg or "too long" in err_msg:
                     try:
-                        # Fallback for too long caption (sending image + reduced text separately)
-                        sent_pic = await message.reply_photo(photo=url, caption="<b>[Caption Trimmed]</b>", parse_mode='HTML')
+                        if is_vid:
+                            await message.reply_video(video=url, caption="<b>✨ Harem Collection ✨</b>", parse_mode='HTML', supports_streaming=True)
+                        else:
+                            await message.reply_photo(photo=url, caption="<b>✨ Harem Collection ✨</b>", parse_mode='HTML')
+                        
                         return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
                     except Exception:
                         pass
                 continue 
                 
-        # 👑 Ultimate Brahmastra Fallback
         try:
             return await message.reply_photo(photo=MediaHelper.GLOBAL_FALLBACK, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         except TelegramError:
@@ -240,8 +238,8 @@ class HaremMessageBuilder:
         )
 
 class HaremHandler:
-    # 🔥 FIXED: Page Limit 8 ki taaki 1024 Characters limit (Caption Too Long) Error kabhi na aye
-    CHARACTERS_PER_PAGE = 8
+    # 🔥 EXACLTY 15 CHARACTERS LIMIT JAISE TUMNE MANGA
+    CHARACTERS_PER_PAGE = 15
 
     def __init__(self):
         self.collection_db = db['anime_characters_lol']
@@ -253,13 +251,21 @@ class HaremHandler:
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
         
+        # 🔥 ULTRA-SAFE & INDESTRUCTIBLE FAVORITE FINDER
         fav_data = user.get('favorites')
         favorite = None
+        
         if fav_data:
             fav_id_clean = ""
             if isinstance(fav_data, dict):
                 fav_id_clean = str(fav_data.get('id', '')).strip().lstrip('0') or '0'
                 favorite = Character.from_dict(fav_data)
+            elif isinstance(fav_data, list) and len(fav_data) > 0:
+                if isinstance(fav_data[0], dict):
+                    fav_id_clean = str(fav_data[0].get('id', '')).strip().lstrip('0') or '0'
+                    favorite = Character.from_dict(fav_data[0])
+                else:
+                    fav_id_clean = str(fav_data[0]).strip().lstrip('0') or '0'
             else:
                 fav_id_clean = str(fav_data).strip().lstrip('0') or '0'
                 
@@ -372,12 +378,13 @@ class HaremHandler:
         if not display_char:
             display_char = current[0] if current else collection.characters[0]
 
-        # 🚀 FORCE DB FETCH FOR FAVORITE IMAGE IF MISSING
+        # 🚀 FORCE DB FETCH FOR ANY BROKEN IMAGES
         if display_char:
             c_clean = str(display_char.id).strip().lstrip('0') or '0'
             q_ids = [str(display_char.id).strip(), c_clean]
             if c_clean.isdigit(): 
-                q_ids.extend([int(c_clean), f"{int(c_clean):02d}", f"{int(c_clean):03d}", f"{int(c_clean):04d}"])
+                val = int(c_clean)
+                q_ids.extend([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
             
             doc = await self.collection_db.find_one({"id": {"$in": q_ids}, "img_url": {"$nin": [None, ""]}})
             if doc:
@@ -437,7 +444,17 @@ class HaremHandler:
                 else:
                     await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
                 return
-            except TelegramError: return 
+            except TelegramError as e:
+                err_msg = str(e).lower()
+                # 🔥 Fallback for Edit if text length goes crazy during pagination
+                if "too long" in err_msg or "caption" in err_msg:
+                    await message.delete()
+                    sent_msg = await MediaHelper.send_media_message(
+                        message=message, media_url_or_urls=media_urls, caption=text, 
+                        reply_markup=markup, is_video_or_videos=is_videos, display_options=options
+                    )
+                    if sent_msg: asyncio.create_task(self._auto_delete_message(sent_msg, 1200))
+                return 
 
         sent_msg = await MediaHelper.send_media_message(
             message=message, media_url_or_urls=media_urls, caption=text, 
@@ -614,7 +631,9 @@ class UnfavHandler:
         
         c_clean = str(fav.id).strip().lstrip('0') or '0'
         q_ids = [str(fav.id).strip(), c_clean]
-        if c_clean.isdigit(): q_ids.extend([int(c_clean), f"{int(c_clean):02d}", f"{int(c_clean):03d}", f"{int(c_clean):04d}"])
+        if c_clean.isdigit(): 
+            val = int(c_clean)
+            q_ids.extend([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
         live_doc = await db['anime_characters_lol'].find_one({"id": {"$in": q_ids}})
         if live_doc and live_doc.get('img_url'):
             fav.img_url = live_doc.get('img_url')
