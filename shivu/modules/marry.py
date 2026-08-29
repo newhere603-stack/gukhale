@@ -48,7 +48,6 @@ def get_rarity_display(rarity_str):
     
     return rarity_str
 
-# 🔥 NAYA FIX: Rarity ko sahi se normalize karne wala function (Emoji/Caps sab handle karega)
 def get_base_rarity(rarity_str):
     if not rarity_str:
         return "common"
@@ -83,13 +82,29 @@ REJECT_IMAGES = [
     "https://files.catbox.moe/8ezqu8.jpg"
 ]
 
+# 🔥 EXTRA MESSAGES ADDED HERE
 PROPOSE_START_TEXTS = [
-    "<b><tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji> ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ <tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji> ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ... <tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ғɪɴᴀʟʟʏ ᴛʜᴇ ᴛɪᴍᴇ ʜᴀs ᴄᴏᴍᴇ <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"5440911110838425969\">🌹</tg-emoji> ʜᴏʟᴅɪɴɢ ʏᴏᴜʀ ʙʀᴇᴀᴛʜ, ʏᴏᴜ ᴋɴᴇᴇʟ ᴅᴏᴡɴ... <tg-emoji emoji-id=\"5370900820336319679\">🥰</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"6093881568739205721\">🌙</tg-emoji> ᴜɴᴅᴇʀ ᴛʜᴇ sᴛᴀʀʀʏ sᴋʏ, ᴀ sᴘᴇᴄɪᴀʟ ᴄᴏɴғᴇssɪᴏɴ... <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ᴀ ʜᴇᴀʀᴛ-ᴘᴏᴜɴᴅɪɴɢ ᴄᴏɴғᴇssɪᴏɴ ɪs ᴀʙᴏᴜᴛ ᴛᴏ ʜᴀᴘᴘᴇɴ! <tg-emoji emoji-id=\"6093681968724059707\">💌</tg-emoji></b>",
-    "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ᴛᴀᴋɪɴɢ ᴀ ᴅᴇᴇᴘ ʙʀᴇᴀᴛʜ ɪs ɪᴛ ᴛʀᴜᴇ ʟᴏᴠᴇ? <tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji></b>"
+    "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ᴛᴀᴋɪɴɢ ᴀ ᴅᴇᴇᴘ ʙʀᴇᴀᴛʜ... ɪs ɪᴛ ᴛʀᴜᴇ ʟᴏᴠᴇ? <tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ɢᴀᴛʜᴇʀɪɴɢ ᴄᴏᴜʀᴀɢᴇ ᴛᴏ sᴀʏ ɪᴛ... <tg-emoji emoji-id=\"5449455694870748968\">💓</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> sᴛᴇᴘᴘɪɴɢ ᴄʟᴏsᴇʀ ᴡɪᴛʜ ᴀ ʙᴇᴀᴛɪɴɢ ʜᴇᴀʀᴛ... <tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji> ᴀ ᴍᴀɢɪᴄᴀʟ ᴍᴏᴍᴇɴᴛ ɪs ᴜɴғᴏʟᴅɪɴɢ... <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>"
+]
+
+# 🔥 EXTRA LOADING MESSAGES ADDED HERE
+PROPOSING_LOADING_TEXTS = [
+    "<b>ᴘʀᴏᴘᴏsɪɴɢ ʜᴇʀ....<tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ᴡᴀɪᴛɪɴɢ ғᴏʀ ʜᴇʀ ʀᴇsᴘᴏɴsᴇ....<tg-emoji emoji-id=\"6093681968724059707\">💌</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5449455694870748968\">💓</tg-emoji> ʜᴇʀ ʜᴇᴀʀᴛ ɪs ʙᴇᴀᴛɪɴɢ ғᴀsᴛ....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ᴏᴘᴇɴɪɴɢ ᴛʜᴇ ʀɪɴɢ ʙᴏx....<tg-emoji emoji-id=\"5199749070830197566\">🎁</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji> ʟᴏᴏᴋɪɴɢ ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....<tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ᴇxᴘʀᴇssɪɴɢ ᴛʀᴜᴇ ғᴇᴇʟɪɴɢs....<tg-emoji emoji-id=\"6093681968724059707\">💌</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> sʜᴏᴡɪɴɢ ᴛʜᴇ ʙᴇᴀᴜᴛɪғᴜʟ ʀɪɴɢ....<tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ʜᴏᴘɪɴɢ ғᴏʀ ᴀ ʏᴇs....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>"
 ]
 
 DICE_REJECT_TEXTS = [
@@ -100,6 +115,7 @@ DICE_REJECT_TEXTS = [
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ ɪs ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.</b>"
 ]
 
+# 🔥 EXTRA REJECT MESSAGES ADDED HERE
 PROPOSE_REJECT_TEXTS = [
     "<b>sʜᴇ sᴀɪᴅ sʜᴇ'ʟʟ ᴅᴀᴛᴇ ʏᴏᴜ... ɪɴ ʜᴇʀ ɴᴇxᴛ ʟɪғᴇ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
     "<b>ʏᴏᴜ ʜᴀᴠᴇ ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ʏᴏᴜ ᴀʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
@@ -107,7 +123,11 @@ PROPOSE_REJECT_TEXTS = [
     "<b>sʜᴇ sᴀɪᴅ ʏᴏᴜ ᴀʀᴇ ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ʏᴏᴜ ᴏɴ ʀᴇᴀᴅ!</b>",
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ. <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
     "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
-    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
+    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>",
+    "<b>sʜᴇ ʀᴏʟʟᴇᴅ ʜᴇʀ ᴇʏᴇs ᴀɴᴅ ʟᴇғᴛ! <tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji></b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ғᴀɪʟᴇᴅ! sʜᴇ ᴘʀᴇғᴇʀs 𝟸ᴅ ʜᴜsʙᴀɴᴅᴏs. <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
+    "<b>sʜᴇ ᴄᴀʟʟᴇᴅ ʏᴏᴜ ᴀ ᴄʀᴇᴇᴘ ᴀɴᴅ ʀᴀɴ ᴀᴡᴀʏ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>ʏᴏᴜ ɢᴏᴛ ʀᴇᴊᴇᴄᴛᴇᴅ ɪɴ 𝟺ᴋ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>"
 ]
 
 cooldowns = {"dice": {}, "propose": {}}
@@ -231,7 +251,6 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     except Exception:
         pass
 
-# 🔥 PERFECTLY SYNCED OFF/ON LOGIC
 async def prarity_on(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
         return  
@@ -300,9 +319,9 @@ async def dice_marry(update: Update, context: CallbackContext):
     
     try:
         dice_msg = await context.bot.send_dice(chat_id=chat_id, emoji="🎲", reply_to_message_id=msg_id)
-        val = dice_msg.dice.value
         await asyncio.sleep(3.2)
 
+        val = dice_msg.dice.value
         if val not in (1, 2, 5, 6):
             text = random.choice(DICE_REJECT_TEXTS)
             return await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
@@ -374,19 +393,23 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
         
-        # Ab editing APIs hata di taaki flood control na ho, seedha wait karke delete hoga
-        await asyncio.sleep(2.5)
+        # Fast animation (Flood Control safe logic)
+        await asyncio.sleep(1.2)
+        try:
+            await msg.edit_caption(caption=random.choice(PROPOSING_LOADING_TEXTS), parse_mode="HTML")
+            await asyncio.sleep(1.2)
+        except TelegramError:
+            # Agar edit par flood control hit hua to ignore karke seedha result dega
+            pass
         
         try:
             await msg.delete()
-        except Exception:
+        except TelegramError:
             pass
 
-    except Exception as e:
+    except TelegramError as e:
         LOGGER.error(f"Error sending propose image: {e}")
-        # Agar pehla message hi send nahi hua (API limit ki wajah se) toh coin wapas de do
-        await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
-        cooldowns["propose"].pop(user.id, None)
+        # Agar pehla message hi send nahi hua, tabhi fail return hoga
         return
 
     # Check Success or Failure
@@ -406,7 +429,7 @@ async def propose(update: Update, context: CallbackContext):
     char = await get_unique_char(user.id, None)
     
     if not char:
-        # Koi naya char nahi hai, par user ke paas saare hain. No refund, seedha reply.
+        # Koi naya char nahi hai. No refund, seedha reply
         try:
             return await context.bot.send_message(
                 chat_id=chat_id,
