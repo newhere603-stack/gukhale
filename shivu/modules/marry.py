@@ -84,19 +84,12 @@ REJECT_IMAGES = [
 ]
 
 PROPOSE_START_TEXTS = [
-    "<b><tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji> ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ... <tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji> ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ <tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ғɪɴᴀʟʟʏ ᴛʜᴇ ᴛɪᴍᴇ ʜᴀs ᴄᴏᴍᴇ <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"5440911110838425969\">🌹</tg-emoji> ʜᴏʟᴅɪɴɢ ʏᴏᴜʀ ʙʀᴇᴀᴛʜ, ʏᴏᴜ ᴋɴᴇᴇʟ ᴅᴏᴡɴ... <tg-emoji emoji-id=\"5370900820336319679\">🥰</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"6093881568739205721\">🌙</tg-emoji> ᴜɴᴅᴇʀ ᴛʜᴇ sᴛᴀʀʀʏ sᴋʏ, ᴀ sᴘᴇᴄɪᴀʟ ᴄᴏɴғᴇssɪᴏɴ... <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ᴀ ʜᴇᴀʀᴛ-ᴘᴏᴜɴᴅɪɴɢ ᴄᴏɴғᴇssɪᴏɴ ɪs ᴀʙᴏᴜᴛ ᴛᴏ ʜᴀᴘᴘᴇɴ! <tg-emoji emoji-id=\"6093681968724059707\">💌</tg-emoji></b>",
-    "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ᴛᴀᴋɪɴɢ ᴀ ᴅᴇᴇᴘ ʙʀᴇᴀᴛʜ... ɪs ɪᴛ ᴛʀᴜᴇ ʟᴏᴠᴇ? <tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji></b>"
-]
-PROPOSING_LOADING_TEXTS = [
-    "<b>ᴘʀᴏᴘᴏsɪɴɢ ʜᴇʀ....<tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
-    "<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ᴡᴀɪᴛɪɴɢ ғᴏʀ ʜᴇʀ ʀᴇsᴘᴏɴsᴇ....<tg-emoji emoji-id=\"6093681968724059707\">💌</tg-emoji></b>",
-    "<b><tg-emoji emoji-id=\"5449455694870748968\">💓</tg-emoji> ʜᴇʀ ʜᴇᴀʀᴛ ɪs ʙᴇᴀᴛɪɴɢ ғᴀsᴛ....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>",
-    "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ᴏᴘᴇɴɪɴɢ ᴛʜᴇ ʀɪɴɢ ʙᴏx....<tg-emoji emoji-id=\"5199749070830197566\">🎁</tg-emoji></b>",
-    "<b><tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji> ʟᴏᴏᴋɪɴɢ ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....<tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji></b>"
+    "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ᴛᴀᴋɪɴɢ ᴀ ᴅᴇᴇᴘ ʙʀᴇᴀᴛʜ ɪs ɪᴛ ᴛʀᴜᴇ ʟᴏᴠᴇ? <tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji></b>"
 ]
 
 DICE_REJECT_TEXTS = [
@@ -118,13 +111,6 @@ PROPOSE_REJECT_TEXTS = [
 ]
 
 cooldowns = {"dice": {}, "propose": {}}
-
-def fix_motor_loop():
-    try:
-        client = user_collection.database.client
-        client.get_io_loop = asyncio.get_running_loop
-    except Exception:
-        pass
 
 def is_authorized(user_id: int) -> bool:
     return user_id == OWNER_ID or user_id in SUDO_USERS
@@ -293,7 +279,6 @@ async def prarity_off(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def dice_marry(update: Update, context: CallbackContext):
-    fix_motor_loop() 
     if not update.message or not update.effective_user:
         return
     
@@ -313,28 +298,30 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     set_cooldown(user.id, "dice")
     
-    dice_msg = await context.bot.send_dice(chat_id=chat_id, emoji="🎲", reply_to_message_id=msg_id)
-    val = dice_msg.dice.value
-    await asyncio.sleep(3.5)
+    try:
+        dice_msg = await context.bot.send_dice(chat_id=chat_id, emoji="🎲", reply_to_message_id=msg_id)
+        val = dice_msg.dice.value
+        await asyncio.sleep(3.2)
 
-    if val not in (1, 2, 5, 6):
-        text = random.choice(DICE_REJECT_TEXTS)
-        return await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
+        if val not in (1, 2, 5, 6):
+            text = random.choice(DICE_REJECT_TEXTS)
+            return await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
 
-    char = await get_unique_char(user.id, None)
-    if not char:
-        cooldowns["dice"].pop(user.id, None) 
-        return await context.bot.send_message(chat_id=chat_id, text=f"<b>ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>", parse_mode="HTML", reply_to_message_id=msg_id)
+        char = await get_unique_char(user.id, None)
+        if not char:
+            return await context.bot.send_message(chat_id=chat_id, text=f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>", parse_mode="HTML", reply_to_message_id=msg_id)
 
-    await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
-    display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
-    caption = f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b>\n<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n<b><tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> ʀᴀʀɪᴛʏ: {display_rarity}</b>"
-    
-    await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
-    await send_win_log(context, user, char, "dice")
+        await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
+        display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
+        caption = f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b>\n<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n<b><tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> ʀᴀʀɪᴛʏ: {display_rarity}</b>"
+        
+        await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+        await send_win_log(context, user, char, "dice")
+    except Exception as e:
+        LOGGER.error(f"Error in dice command: {e}")
+        cooldowns["dice"].pop(user.id, None)
 
 async def propose(update: Update, context: CallbackContext):
-    fix_motor_loop() 
     if not update.message or not update.effective_user:
         return
 
@@ -374,50 +361,61 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
+    # Coins seedha cut kar rahe hain
     await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
     set_cooldown(user.id, "propose")
 
-    msg = await context.bot.send_photo(
-        chat_id=chat_id,
-        photo=random.choice(PROPOSE_IMAGES),
-        caption=random.choice(PROPOSE_START_TEXTS),
-        parse_mode="HTML",
-        reply_to_message_id=msg_id
-    )
-    await asyncio.sleep(2)
-
     try:
-        await msg.edit_caption(caption=random.choice(PROPOSING_LOADING_TEXTS), parse_mode="HTML")
-    except Exception:
-        pass
-
-    await asyncio.sleep(2.5)
-
-    try:
-        await msg.delete()
-    except Exception:
-        pass
-
-    if random.random() > PROPOSE_SUCCESS_RATE:
-        reject_text = random.choice(PROPOSE_REJECT_TEXTS)
-        return await context.bot.send_photo(
+        msg = await context.bot.send_photo(
             chat_id=chat_id,
-            photo=random.choice(REJECT_IMAGES),
-            caption=reject_text,
+            photo=random.choice(PROPOSE_IMAGES),
+            caption=random.choice(PROPOSE_START_TEXTS),
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
+        
+        # Ab editing APIs hata di taaki flood control na ho, seedha wait karke delete hoga
+        await asyncio.sleep(2.5)
+        
+        try:
+            await msg.delete()
+        except Exception:
+            pass
+
+    except Exception as e:
+        LOGGER.error(f"Error sending propose image: {e}")
+        # Agar pehla message hi send nahi hua (API limit ki wajah se) toh coin wapas de do
+        await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
+        cooldowns["propose"].pop(user.id, None)
+        return
+
+    # Check Success or Failure
+    if random.random() > PROPOSE_SUCCESS_RATE:
+        reject_text = random.choice(PROPOSE_REJECT_TEXTS)
+        try:
+            return await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=random.choice(REJECT_IMAGES),
+                caption=reject_text,
+                parse_mode="HTML",
+                reply_to_message_id=msg_id
+            )
+        except Exception:
+            return
 
     char = await get_unique_char(user.id, None)
     
     if not char:
-        await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": PROPOSAL_COST}})
-        return await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"<b>ʀᴇғᴜɴᴅᴇᴅ! ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ꜰᴏʀ ʏᴏᴜ.</b>",
-            parse_mode="HTML",
-            reply_to_message_id=msg_id
-        )
+        # Koi naya char nahi hai, par user ke paas saare hain. No refund, seedha reply.
+        try:
+            return await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>",
+                parse_mode="HTML",
+                reply_to_message_id=msg_id
+            )
+        except Exception:
+            return
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
     display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
@@ -428,8 +426,12 @@ async def propose(update: Update, context: CallbackContext):
         f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
         f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ: {char.get('id', 'N/A')}</b>"
     )
-    await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
-    await send_win_log(context, user, char, "propose")
+    
+    try:
+        await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+        await send_win_log(context, user, char, "propose")
+    except Exception as e:
+        LOGGER.error(f"Error sending propose win: {e}")
 
 async def propose_callback(update: Update, context: CallbackContext):
     query = update.callback_query
