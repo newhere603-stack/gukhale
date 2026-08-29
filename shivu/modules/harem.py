@@ -24,7 +24,7 @@ def to_small_caps(text: str) -> str:
 # 🔥 GLOBAL CACHE FOR INSANE SPEED
 ANIME_COUNTS_CACHE: Dict[str, int] = {}
 
-# 🔥 UNIFIED RARITY DICTIONARY (SYNCED WITH CHECK CODE)
+# 🔥 UNIFIED RARITY DICTIONARY
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
@@ -43,31 +43,19 @@ RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common")
 }
 
-# 🔥 POWERFUL RARITY MATCHER (FROM CHECK CODE)
 def get_base_rarity(rarity_str: str) -> str:
     if not rarity_str or not isinstance(rarity_str, str):
         return "common"
     r_lower = rarity_str.lower().strip()
-    
-    # 1. Exact Match Check
     for key, (_, _, name) in RARITIES.items():
-        if key == r_lower or name.lower() == r_lower:
-            return key
-
-    # 2. Substring Match Check
+        if key == r_lower or name.lower() == r_lower: return key
     for key, (db_emoji, _, name) in RARITIES.items():
-        if key in r_lower or name.lower() in r_lower or db_emoji in r_lower:
-            return key
-            
+        if key in r_lower or name.lower() in r_lower or db_emoji in r_lower: return key
     return "common"
 
 def rarity_display(key: str) -> str:
     db_emoji, _, name = RARITIES.get(key, RARITIES["common"])
     return f"{db_emoji} {name}"
-
-def rarity_premium_display(key: str) -> str:
-    _, prem_emoji, name = RARITIES.get(key, RARITIES["common"])
-    return f"{prem_emoji} {name}"
 
 def get_prem_emoji(rarity_text: str) -> str:
     base_key = get_base_rarity(rarity_text)
@@ -89,8 +77,7 @@ class Character:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Optional['Character']:
-        if not isinstance(data, dict):
-            return None
+        if not isinstance(data, dict): return None
         return cls(
             id=str(data.get('id', '')),
             name=data.get('name', 'Unknown'),
@@ -110,7 +97,6 @@ class DisplayOptions:
     show_rarity_full: bool = False
     compact_mode: bool = False
 
-# 🔥 EXACT FORMATTING ACCORDING TO SCREENSHOT
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s Harem</b>\n\n",
     'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
@@ -131,42 +117,29 @@ class UserCollection:
         mode = str(self.filter_mode)
         chars = self.characters
         
-        # 🟢 ANIME MENU SELECTION FILTER
         if mode.startswith("anime:"):
             target_anime = mode.split(":", 1)[1]
             return sorted([c for c in chars if c.anime == target_anime], key=lambda c: c.id)
-
-        # 🟢 WAIFU/CHARACTER MENU SELECTION FILTER (Filtered by Name to Group Everything)
         if mode.startswith("char:"):
             target_char_name = mode.split(":", 1)[1]
             return sorted([c for c in chars if c.name == target_char_name], key=lambda c: (c.anime, c.id))
-
-        # 🟢 RARITY FILTER (Fully synchronized with Check Code logic)
         if mode in RARITIES:
             target_key = mode.lower()
-            filtered = []
-            for c in chars:
-                base_r = get_base_rarity(c.rarity)
-                if base_r == target_key:
-                    filtered.append(c)
+            filtered = [c for c in chars if get_base_rarity(c.rarity) == target_key]
             return sorted(filtered, key=lambda c: (c.anime, c.id))
-            
         if mode == "latest":
             return list(reversed(chars))
             
-        # 🟢 DEFAULT MODE (Sorts by Anime A-Z)
         return sorted(chars, key=lambda c: (c.anime, c.id))
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
-        counts: Dict[str, int] = {}
-        for char in characters:
-            counts[char.id] = counts.get(char.id, 0) + 1
+        counts = {}
+        for char in characters: counts[char.id] = counts.get(char.id, 0) + 1
         return counts
 
     def group_by_anime(self, characters: List[Character]) -> Dict[str, List[Character]]:
-        grouped: Dict[str, List[Character]] = {}
-        for char in characters:
-            grouped.setdefault(char.anime, []).append(char)
+        grouped = {}
+        for char in characters: grouped.setdefault(char.anime, []).append(char)
         return grouped
 
 class MediaHelper:
@@ -174,35 +147,43 @@ class MediaHelper:
 
     @staticmethod
     def is_video_url(url: Optional[str]) -> bool:
-        return bool(url) and url.lower().split('?')[0].endswith(MediaHelper.VIDEO_EXT)
+        return bool(url) and str(url).lower().split('?')[0].endswith(MediaHelper.VIDEO_EXT)
 
+    # 🔥 Indestructible Media Sender
     @staticmethod
-    async def send_media_message(message, media_url: Optional[str], caption: str,
-                                  reply_markup, is_video: bool = False,
+    async def send_media_message(message, media_url_or_urls, caption: str,
+                                  reply_markup, is_video_or_videos = False,
                                   display_options: Optional[DisplayOptions] = None):
         opts = display_options or DisplayOptions()
+        
+        urls = media_url_or_urls if isinstance(media_url_or_urls, list) else [media_url_or_urls]
+        vids = is_video_or_videos if isinstance(is_video_or_videos, list) else [is_video_or_videos] * len(urls)
 
-        if opts.show_url and media_url:
-            caption += f"\n\n🔗 <code>{media_url}</code>"
+        valid_pairs = [(u, v) for u, v in zip(urls, vids) if u and str(u).strip()]
 
-        is_video = opts.video_support and (is_video or MediaHelper.is_video_url(media_url))
-
-        if not opts.preview_image or not media_url:
+        if not valid_pairs or not opts.preview_image:
             return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
 
-        try:
-            if is_video:
-                return await message.reply_video(
-                    video=media_url, caption=caption, reply_markup=reply_markup,
-                    parse_mode='HTML', supports_streaming=True,
-                    read_timeout=120, write_timeout=120
-                )
-            return await message.reply_photo(
-                photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode='HTML'
-            )
-        except TelegramError as e:
-            LOGGER.warning(f"Media send failed, falling back to text: {e}")
-            return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
+        for url, vid in valid_pairs:
+            is_vid = opts.video_support and (vid or MediaHelper.is_video_url(url))
+            try:
+                # Cross-Try Fallback: Photo fail hui toh Video try karega and vice-versa
+                if is_vid:
+                    try:
+                        return await message.reply_video(video=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML', supports_streaming=True, read_timeout=120, write_timeout=120)
+                    except TelegramError:
+                        return await message.reply_photo(photo=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                else:
+                    try:
+                        return await message.reply_photo(photo=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+                    except TelegramError:
+                        return await message.reply_video(video=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML', supports_streaming=True, read_timeout=120, write_timeout=120)
+            except TelegramError as e:
+                LOGGER.warning(f"Media rejected. URL: {url}, Error: {e}")
+                continue # Agar file_id dead hai, toh loop automatically next image try karega!
+                
+        # Text fallback ONLY IF every single image link is totally dead
+        return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
 
 class HaremMessageBuilder:
     def __init__(self, collection: UserCollection, page: int, total_pages: int,
@@ -217,47 +198,31 @@ class HaremMessageBuilder:
 
     def build_message(self, characters: List[Character], anime_counts: Dict[str, int]) -> str:
         user_mention = f'<a href="tg://user?id={self.user_id}">{escape(self.user_name)}</a>'
-
         message = self.style['header'].format(user_mention=user_mention)
-
         grouped = self.collection.group_by_anime(characters)
         counts = self.collection.count_by_id(self.collection.characters)
         seen = set()
 
         for anime, chars in grouped.items():
             user_count = sum(1 for c in self.collection.characters if c.anime == anime)
-            
-            formatted_anime = to_small_caps(escape(anime))
             message += self.style['anime_header'].format(
-                anime=formatted_anime,
-                user_count=user_count,
-                total_count=anime_counts.get(anime, 0)
+                anime=to_small_caps(escape(anime)), user_count=user_count, total_count=anime_counts.get(anime, 0)
             )
             message += self.style['separator']
 
             for char in chars:
-                if char.id in seen:
-                    continue
+                if char.id in seen: continue
                 message += self._format_character(char, counts.get(char.id, 1))
                 seen.add(char.id)
-
             message += self.style['footer']
-
         return message
 
     def _format_character(self, char: Character, count: int) -> str:
         char_id = str(char.id).zfill(3)
         r_emoji = get_prem_emoji(char.rarity)
-        
-        formatted_name = to_small_caps(escape(char.name))
         event_str = f" [{char.event_emoji}]" if char.event_emoji else ""
-
         return self.style['character'].format(
-            id=char_id,
-            rarity=r_emoji,
-            name=formatted_name,
-            event=event_str,
-            count=count
+            id=char_id, rarity=r_emoji, name=to_small_caps(escape(char.name)), event=event_str, count=count
         )
 
 class HaremHandler:
@@ -269,29 +234,30 @@ class HaremHandler:
 
     async def load_user_collection(self, user_id: int) -> Optional[UserCollection]:
         user = await self.user_db.find_one({'id': user_id})
-        if not user:
-            return None
+        if not user: return None
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
         
-        # 🔥 FIXED: Ye block ab kisi dusre file (jaise /fav) se save kiye hue String/Number ID ko bhi pakad lega
+        # 🔥 ULTRA-SAFE ID MATCHING (Prevents False Deletions of Favorites)
         fav_data = user.get('favorites')
         favorite = None
         if fav_data:
             if isinstance(fav_data, dict):
                 favorite = Character.from_dict(fav_data)
             else:
-                # Agar ID format me save hua hai
-                fav_id_str = str(fav_data).strip()
+                fav_id_clean = str(fav_data).strip().lstrip('0') or '0'
                 for c in characters:
-                    if str(c.id).strip() == fav_id_str:
+                    if (str(c.id).strip().lstrip('0') or '0') == fav_id_clean:
                         favorite = c
                         break
 
-        # Remove favorite if the character is completely missing from user's collection
-        if favorite and not any(c.id == favorite.id for c in characters):
-            asyncio.create_task(self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}}))
-            favorite = None
+        # Verification: Delete favorite ONLY IF user genuinely doesn't own it anymore
+        if favorite:
+            fav_id_clean = str(favorite.id).strip().lstrip('0') or '0'
+            has_fav = any((str(c.id).strip().lstrip('0') or '0') == fav_id_clean for c in characters)
+            if not has_fav:
+                asyncio.create_task(self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}}))
+                favorite = None
 
         return UserCollection(
             user_id=user_id, characters=characters, favorite=favorite,
@@ -299,7 +265,6 @@ class HaremHandler:
         )
 
     async def _auto_delete_message(self, message, delay_seconds: int = 1200):
-        """Silently deletes harem message after 20 minutes (1200 seconds)"""
         await asyncio.sleep(delay_seconds)
         try:
             await message.delete()
@@ -307,18 +272,16 @@ class HaremHandler:
             pass 
 
     async def update_live_data_all(self, characters: List[Character]):
-        """🚀 BULK LIVE UPDATE (Only for current page items)"""
-        if not characters:
-            return
+        if not characters: return
             
+        # 🔥 Bulletproof Format Query
         query_ids = set()
         for c in characters:
-            c_str = str(c.id).strip()
-            c_clean = c_str.lstrip('0') or '0'
-            query_ids.add(c_str)
-            query_ids.add(c_clean)
-            if c_str.isdigit(): query_ids.add(int(c_str))
-            if c_clean.isdigit(): query_ids.add(int(c_clean))
+            c_clean = str(c.id).strip().lstrip('0') or '0'
+            query_ids.update([str(c.id).strip(), c_clean])
+            if c_clean.isdigit():
+                val = int(c_clean)
+                query_ids.update([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
         
         cursor = self.collection_db.find(
             {"id": {"$in": list(query_ids)}},
@@ -330,13 +293,11 @@ class HaremHandler:
         for doc in live_docs:
             doc_id_str = str(doc.get('id')).strip()
             live_map[doc_id_str] = doc
-            clean_doc_id = doc_id_str.lstrip('0') or '0'
-            live_map[clean_doc_id] = doc
+            live_map[doc_id_str.lstrip('0') or '0'] = doc
             
         for c in characters:
-            cid_str = str(c.id).strip()
-            clean_cid = cid_str.lstrip('0') or '0'
-            doc = live_map.get(cid_str) or live_map.get(clean_cid)
+            c_clean = str(c.id).strip().lstrip('0') or '0'
+            doc = live_map.get(str(c.id).strip()) or live_map.get(c_clean)
             if doc:
                 c.name = doc.get('name', c.name)
                 c.anime = doc.get('anime', c.anime)
@@ -346,18 +307,14 @@ class HaremHandler:
                 c.gender = doc.get('gender', c.gender)
 
     async def get_anime_counts(self, anime_list: List[str]) -> Dict[str, int]:
-        """🚀 CACHED AGGREGATION FOR INSANE SPEED"""
         global ANIME_COUNTS_CACHE
-        if not anime_list:
-            return {}
+        if not anime_list: return {}
             
         counts = {}
         missing = []
         for anime in anime_list:
-            if anime in ANIME_COUNTS_CACHE:
-                counts[anime] = ANIME_COUNTS_CACHE[anime]
-            else:
-                missing.append(anime)
+            if anime in ANIME_COUNTS_CACHE: counts[anime] = ANIME_COUNTS_CACHE[anime]
+            else: missing.append(anime)
                 
         if missing:
             pipeline = [
@@ -366,45 +323,29 @@ class HaremHandler:
             ]
             cursor = self.collection_db.aggregate(pipeline)
             docs = await cursor.to_list(length=None)
-            
             found_animes = set()
             for doc in docs:
-                val = doc['count']
-                ANIME_COUNTS_CACHE[doc['_id']] = val
-                counts[doc['_id']] = val
+                ANIME_COUNTS_CACHE[doc['_id']] = counts[doc['_id']] = doc['count']
                 found_animes.add(doc['_id'])
-                
             for m in missing:
                 if m not in found_animes:
-                    ANIME_COUNTS_CACHE[m] = 0
-                    counts[m] = 0
-                    
+                    ANIME_COUNTS_CACHE[m] = counts[m] = 0
         return counts
 
     def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int, step: int = 1) -> InlineKeyboardMarkup:
-        keyboard = [[InlineKeyboardButton(
-            f"✨ ʜᴀʀᴇᴍ ({total_chars})", switch_inline_query_current_chat=f"collection.{user_id}"
-        )]]
-
+        keyboard = [[InlineKeyboardButton(f"✨ ʜᴀʀᴇᴍ ({total_chars})", switch_inline_query_current_chat=f"collection.{user_id}")]]
         if total_pages > 1:
             nav = []
             if page > 0:
-                prev_page = max(0, page - step)
-                nav.append(InlineKeyboardButton("❮", callback_data=f"harem_page:{prev_page}:{user_id}:{step}"))
-                
+                nav.append(InlineKeyboardButton("❮", callback_data=f"harem_page:{max(0, page - step)}:{user_id}:{step}"))
             nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="harem_ignore"))
-            
             if page < total_pages - 1:
-                next_page = min(total_pages - 1, page + step)
-                nav.append(InlineKeyboardButton("❯", callback_data=f"harem_page:{next_page}:{user_id}:{step}"))
-            if nav:
-                keyboard.append(nav)
+                nav.append(InlineKeyboardButton("❯", callback_data=f"harem_page:{min(total_pages - 1, page + step)}:{user_id}:{step}"))
+            if nav: keyboard.append(nav)
 
             if total_pages > 2:
-                if step == 1:
-                    keyboard.append([InlineKeyboardButton("⭆ 2x sᴋɪᴘ", callback_data=f"harem_2x:{page}:{user_id}:2")])
-                else:
-                    keyboard.append([InlineKeyboardButton("⭆ 1x sᴋɪᴘ", callback_data=f"harem_2x:{page}:{user_id}:1")])
+                skip_val = 2 if step == 1 else 1
+                keyboard.append([InlineKeyboardButton(f"⭆ {skip_val}x sᴋɪᴘ", callback_data=f"harem_2x:{page}:{user_id}:{skip_val}")])
 
         keyboard.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"harem_close:{user_id}")])
         return InlineKeyboardMarkup(keyboard)
@@ -417,77 +358,62 @@ class HaremHandler:
 
         collection = await self.load_user_collection(user_id)
         if not collection:
-            await message.reply_text("<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!</b>", parse_mode='HTML')
-            return
+            return await message.reply_text("<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!</b>", parse_mode='HTML')
         if not collection.characters:
-            await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
-            return
+            return await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
 
         display_order = collection.get_filtered_characters()
         if not display_order:
-            await message.reply_text(
-                f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ɪɴ ᴛʜɪs ᴍᴏᴅᴇ.</b>\n"
-                f"<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /hmode</b>",
+            return await message.reply_text(
+                f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ɪɴ ᴛʜɪs ᴍᴏᴅᴇ.</b>\n<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /hmode</b>",
                 parse_mode='HTML'
             )
-            return
 
         total_pages = math.ceil(len(display_order) / self.CHARACTERS_PER_PAGE)
         page = max(0, min(page, total_pages - 1))
-
         start = page * self.CHARACTERS_PER_PAGE
         current = display_order[start:start + self.CHARACTERS_PER_PAGE]
 
-        # 🔥 FIXED: Set first character of the CURRENT PAGE as default if no favorite is active
         display_char = collection.favorite
         if not display_char:
-            if current:
-                display_char = current[0]
-            elif collection.characters:
-                display_char = collection.characters[0]
+            display_char = current[0] if current else collection.characters[0]
 
-        # 🔥 SPEED FIX: Update ONLY the visible characters!
         chars_to_update = current.copy()
         if display_char and display_char not in chars_to_update:
             chars_to_update.append(display_char)
         await self.update_live_data_all(chars_to_update)
 
-        # Image variables set karenge
-        media_url = getattr(display_char, 'img_url', None)
-        is_video = getattr(display_char, 'is_video', False)
+        media_urls = []
+        is_videos = []
 
-        # 🚨 SUPER EXTREME FALLBACK: Agar image DB mein empty ya missing hai
-        # Toh DB se direct fetch karke user ke collection se koi bhi valid image nikal lega 100%
-        if not media_url or str(media_url).strip() == "":
-            search_ids = []
-            
-            # Pehle try karo uske current display character ka hi ID
-            if display_char:
-                search_ids.append(display_char.id)
+        if display_char and getattr(display_char, 'img_url', None):
+            media_urls.append(display_char.img_url)
+            is_videos.append(getattr(display_char, 'is_video', False))
+
+        for c in current:
+            if getattr(c, 'img_url', None) and c.img_url not in media_urls:
+                media_urls.append(c.img_url)
+                is_videos.append(getattr(c, 'is_video', False))
+
+        if not media_urls:
+            db_query_ids = set()
+            for c in collection.characters[:30]:
+                c_clean = str(c.id).strip().lstrip('0') or '0'
+                db_query_ids.update([str(c.id).strip(), c_clean])
+                if c_clean.isdigit():
+                    val = int(c_clean)
+                    db_query_ids.update([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
                 
-            # Phir user ke starting ke 50 characters ke IDs list mein daal do backup ke liye
-            for c in collection.characters[:50]:
-                if c.id not in search_ids:
-                    search_ids.append(c.id)
-
-            # String aur Integer formats dono ko handle karne ke liye proper ID list banate hain
-            db_query_ids = []
-            for cid in search_ids:
-                cid_str = str(cid).strip()
-                cid_clean = cid_str.lstrip('0') or '0'
-                db_query_ids.extend([cid_str, cid_clean])
-                if cid_str.isdigit(): db_query_ids.append(int(cid_str))
-                if cid_clean.isdigit(): db_query_ids.append(int(cid_clean))
-
-            # Database se sabse pehla character dhundho jiska image actually available ho
-            valid_doc = await self.collection_db.find_one({
-                "id": {"$in": db_query_ids},
-                "img_url": {"$type": "string", "$ne": ""} 
-            })
+            valid_docs = await self.collection_db.find({
+                "id": {"$in": list(db_query_ids)},
+                "img_url": {"$type": "string", "$ne": ""}
+            }).to_list(length=10)
             
-            if valid_doc:
-                media_url = valid_doc.get("img_url")
-                is_video = valid_doc.get("is_video", False)
+            for doc in valid_docs:
+                url = doc.get("img_url")
+                if url and url not in media_urls:
+                    media_urls.append(url)
+                    is_videos.append(doc.get("is_video", False))
 
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
@@ -496,7 +422,6 @@ class HaremHandler:
         text = builder.build_message(current, anime_counts)
         markup = self._build_keyboard(page, total_pages, len(display_order), user_id, step)
 
-        # 🔥 BUG-FREE EDIT LOGIC (No crashing, no deleting loops)
         if edit:
             try:
                 if message.photo or message.video or message.animation or message.document:
@@ -505,19 +430,19 @@ class HaremHandler:
                     await message.edit_text(text=text, reply_markup=markup, parse_mode='HTML')
                 return
             except TelegramError as e:
-                if "not modified" in str(e).lower():
-                    return
+                if "not modified" in str(e).lower(): return
                 LOGGER.warning(f"Harem edit ignored silently: {e}")
                 return 
 
-        # Initial message creation logic (Fallback successful guarantee)
-        sent_msg = None
-        if media_url:
-            sent_msg = await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
-        else:
-            sent_msg = await message.reply_text(text=text, reply_markup=markup, parse_mode='HTML')
+        sent_msg = await MediaHelper.send_media_message(
+            message=message, 
+            media_url_or_urls=media_urls, 
+            caption=text, 
+            reply_markup=markup, 
+            is_video_or_videos=is_videos, 
+            display_options=options
+        )
             
-        # 🔥 Added 20 Min Auto-delete feature smoothly
         if sent_msg:
             asyncio.create_task(self._auto_delete_message(sent_msg, 1200))
 
@@ -569,7 +494,6 @@ class ModeHandler:
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML'
         )
 
-    # 🟢 ANIME LIST SELECTION MENU
     async def show_anime_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
@@ -591,28 +515,17 @@ class ModeHandler:
             keyboard.append([InlineKeyboardButton(display_anime, callback_data=f"harem_mode:set_a:{user_id}:{idx}")])
 
         nav = []
-        if page > 0:
-            nav.append(InlineKeyboardButton("❮", callback_data=f"harem_mode:alist:{user_id}:{page-1}"))
+        if page > 0: nav.append(InlineKeyboardButton("❮", callback_data=f"harem_mode:alist:{user_id}:{page-1}"))
         nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="harem_ignore"))
-        if page < total_pages - 1:
-            nav.append(InlineKeyboardButton("❯", callback_data=f"harem_mode:alist:{user_id}:{page+1}"))
-
-        if nav:
-            keyboard.append(nav)
+        if page < total_pages - 1: nav.append(InlineKeyboardButton("❯", callback_data=f"harem_mode:alist:{user_id}:{page+1}"))
+        if nav: keyboard.append(nav)
 
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")])
+        await query.edit_message_caption(caption="<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> sᴇʟᴇᴄᴛ ᴀɴ ᴀɴɪᴍᴇ ᴛᴏ ғɪʟᴛᴇʀ:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
-        await query.edit_message_caption(
-            caption="<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> sᴇʟᴇᴄᴛ ᴀɴ ᴀɴɪᴍᴇ ᴛᴏ ғɪʟᴛᴇʀ:</b>",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='HTML'
-        )
-
-    # 🟢 CHARACTER (WAIFU) LIST SELECTION MENU
     async def show_char_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
-
         unique_names = sorted(list(set(c.get('name', 'Unknown') for c in chars)))
 
         if not unique_names:
@@ -631,98 +544,57 @@ class ModeHandler:
             keyboard.append([InlineKeyboardButton(display_name, callback_data=f"harem_mode:set_c:{user_id}:{idx}")])
 
         nav = []
-        if page > 0:
-            nav.append(InlineKeyboardButton("❮", callback_data=f"harem_mode:clist:{user_id}:{page-1}"))
+        if page > 0: nav.append(InlineKeyboardButton("❮", callback_data=f"harem_mode:clist:{user_id}:{page-1}"))
         nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="harem_ignore"))
-        if page < total_pages - 1:
-            nav.append(InlineKeyboardButton("❯", callback_data=f"harem_mode:clist:{user_id}:{page+1}"))
-
-        if nav:
-            keyboard.append(nav)
+        if page < total_pages - 1: nav.append(InlineKeyboardButton("❯", callback_data=f"harem_mode:clist:{user_id}:{page+1}"))
+        if nav: keyboard.append(nav)
 
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")])
-
-        await query.edit_message_caption(
-            caption="<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴛᴏ ғɪʟᴛᴇʀ:</b>",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode='HTML'
-        )
+        await query.edit_message_caption(caption="<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴛᴏ ғɪʟᴛᴇʀ:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
     async def set_mode(self, user_id: int, mode: str):
         await self.user_db.update_one({'id': user_id}, {'$set': {'hmode': mode}}, upsert=True)
 
     async def handle_mode_callback(self, update: Update, context: CallbackContext):
         query = update.callback_query
-        
         parts = query.data.split(':')
-        if len(parts) < 3:
-            await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ", show_alert=True)
-            return
+        if len(parts) < 3: return await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ", show_alert=True)
             
-        action = parts[1]
-        owner_id_str = parts[2]
-        
+        action, owner_id_str = parts[1], parts[2]
         user_id = await verify_owner(query, owner_id_str, "ʙᴀᴋᴀ! ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ ʜᴍᴏᴅᴇ ᴜsɪɴɢ /hmode !")
-        if user_id is None:
-            return
+        if user_id is None: return
 
-        # Simple Menu Transitions
-        if action == "rarity":
-            await query.answer()
-            return await self.show_rarity_menu(query, user_id)
-        if action == "animes":
-            await query.answer()
-            return await self.show_anime_menu(query, user_id, 0)
-        if action == "waifus":
-            await query.answer()
-            return await self.show_char_menu(query, user_id, 0)
-        if action == "back":
-            await query.answer()
-            return await self.show_mode_menu(update, user_id)
-        if action == "close":
-            await query.answer()
-            return await query.message.delete()
+        if action == "rarity": await query.answer(); return await self.show_rarity_menu(query, user_id)
+        if action == "animes": await query.answer(); return await self.show_anime_menu(query, user_id, 0)
+        if action == "waifus": await query.answer(); return await self.show_char_menu(query, user_id, 0)
+        if action == "back": await query.answer(); return await self.show_mode_menu(update, user_id)
+        if action == "close": await query.answer(); return await query.message.delete()
 
-        # Paginated Sub-Menu Handles
-        if action == "alist":
-            page = int(parts[3])
-            return await self.show_anime_menu(query, user_id, page)
-        if action == "clist":
-            page = int(parts[3])
-            return await self.show_char_menu(query, user_id, page)
+        if action == "alist": return await self.show_anime_menu(query, user_id, int(parts[3]))
+        if action == "clist": return await self.show_char_menu(query, user_id, int(parts[3]))
 
-        # Set Value Handles
         if action == "set_a":
             idx = int(parts[3])
             user = await self.user_db.find_one({'id': user_id})
-            chars = user.get('characters', [])
-            unique_animes = sorted(list(set(c.get('anime', 'Unknown') for c in chars)))
+            unique_animes = sorted(list(set(c.get('anime', 'Unknown') for c in user.get('characters', []))))
             if idx < len(unique_animes):
-                anime_name = unique_animes[idx]
-                await self.set_mode(user_id, f"anime:{anime_name}")
-                await query.answer(f"✓ {anime_name} sᴇʟᴇᴄᴛᴇᴅ")
-            else:
-                await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴀɴɪᴍᴇ", show_alert=True)
+                await self.set_mode(user_id, f"anime:{unique_animes[idx]}")
+                await query.answer(f"✓ {unique_animes[idx]} sᴇʟᴇᴄᴛᴇᴅ")
+            else: await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴀɴɪᴍᴇ", show_alert=True)
             return await self.show_mode_menu(update, user_id)
 
         if action == "set_c":
             idx = int(parts[3])
             user = await self.user_db.find_one({'id': user_id})
-            chars = user.get('characters', [])
-            unique_names = sorted(list(set(c.get('name', 'Unknown') for c in chars)))
+            unique_names = sorted(list(set(c.get('name', 'Unknown') for c in user.get('characters', []))))
             if idx < len(unique_names):
-                char_name = unique_names[idx]
-                await self.set_mode(user_id, f"char:{char_name}")
+                await self.set_mode(user_id, f"char:{unique_names[idx]}")
                 await query.answer("✓ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇʟᴇᴄᴛᴇᴅ")
-            else:
-                await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴄʜᴀʀᴀᴄᴛᴇʀ", show_alert=True)
+            else: await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴄʜᴀʀᴀᴄᴛᴇʀ", show_alert=True)
             return await self.show_mode_menu(update, user_id)
 
-        # Basic Settings Fallback
         label = self.LABELS.get(action) or (RARITIES[action][2] if action in RARITIES else None)
-        if not label:
-            return await query.answer("ɪɴᴠᴀʟɪᴅ ᴏᴘᴛɪᴏɴ", show_alert=True)
-
+        if not label: return await query.answer("ɪɴᴠᴀʟɪᴅ ᴏᴘᴛɪᴏɴ", show_alert=True)
         await self.set_mode(user_id, action)
         await query.answer(f"✓ {label} sᴇʟᴇᴄᴛᴇᴅ")
         await self.show_mode_menu(update, user_id)
@@ -736,8 +608,7 @@ class UnfavHandler:
         user = await self.user_db.find_one({'id': user_id})
 
         if not user:
-            await update.message.reply_text('<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ɢᴏᴛ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴇᴛ!</b>', parse_mode='HTML')
-            return
+            return await update.message.reply_text('<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ɢᴏᴛ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʏᴇᴛ!</b>', parse_mode='HTML')
 
         fav_data = user.get('favorites')
         fav = None
@@ -746,15 +617,13 @@ class UnfavHandler:
                 fav = Character.from_dict(fav_data)
             else:
                 characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
-                fav_id_str = str(fav_data).strip()
                 for c in characters:
-                    if str(c.id).strip() == fav_id_str:
+                    if (str(c.id).strip().lstrip('0') or '0') == (str(fav_data).strip().lstrip('0') or '0'):
                         fav = c
                         break
         
         if not fav:
-            await update.message.reply_text("<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!</b>", parse_mode='HTML')
-            return
+            return await update.message.reply_text("<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!</b>", parse_mode='HTML')
 
         buttons = [[
             InlineKeyboardButton("✓ ʏᴇs", callback_data=f"harem_unfav_yes:{user_id}"),
@@ -767,38 +636,34 @@ class UnfavHandler:
             f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ:</b> <code>{fav.id}</code>"
         )
         
-        # Ek chhota sa live update fav ke image url ke liye
-        collection_db = db['anime_characters_lol']
-        live_doc = await collection_db.find_one({"id": {"$in": [str(fav.id), fav.id, int(fav.id) if str(fav.id).isdigit() else fav.id]}})
+        live_doc = await db['anime_characters_lol'].find_one({"id": {"$in": [str(fav.id).strip(), str(fav.id).strip().lstrip('0') or '0', int(str(fav.id).strip().lstrip('0') or '0')]}})
         if live_doc and live_doc.get('img_url'):
             fav.img_url = live_doc.get('img_url')
             fav.is_video = live_doc.get('is_video', False)
 
         await MediaHelper.send_media_message(
-            update.message, getattr(fav, 'img_url', None), caption, InlineKeyboardMarkup(buttons), getattr(fav, 'is_video', False), DEFAULT_OPTIONS
+            message=update.message, 
+            media_url_or_urls=getattr(fav, 'img_url', None), 
+            caption=caption, 
+            reply_markup=InlineKeyboardMarkup(buttons), 
+            is_video_or_videos=getattr(fav, 'is_video', False), 
+            display_options=DEFAULT_OPTIONS
         )
 
     async def handle_unfav_callback(self, update: Update):
         query = update.callback_query
         action, _, user_id_str = query.data.partition(':')
         user_id = await verify_owner(query, user_id_str)
-        if user_id is None:
-            return
+        if user_id is None: return
         await query.answer()
 
         if action == 'harem_unfav_yes':
             user = await self.user_db.find_one({'id': user_id})
-            fav_data = user.get('favorites') if user else None
-            if not fav_data:
-                await query.answer("ɴᴏ ғᴀᴠᴏʀɪᴛᴇ ғᴏᴜɴᴅ!", show_alert=True)
-                return
-
+            if not user or not user.get('favorites'):
+                return await query.answer("ɴᴏ ғᴀᴠᴏʀɪᴛᴇ ғᴏᴜɴᴅ!", show_alert=True)
             await self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}})
             await query.edit_message_caption(
-                caption=(
-                    f"<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ғᴀᴠᴏʀɪᴛᴇ ʀᴇᴍᴏᴠᴇᴅ!</b>\n\n"
-                    f"<b><i><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ɴᴇᴡ ғᴀᴠᴏʀɪᴛᴇ ᴜsɪɴɢ /fav</i></b>"
-                ),
+                caption=f"<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ғᴀᴠᴏʀɪᴛᴇ ʀᴇᴍᴏᴠᴇᴅ!</b>\n\n<b><i><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ɴᴇᴡ ғᴀᴠᴏʀɪᴛᴇ ᴜsɪɴɢ /fav</i></b>",
                 parse_mode='HTML'
             )
         elif action == 'harem_unfav_no':
@@ -806,11 +671,8 @@ class UnfavHandler:
 
 
 async def verify_owner(query, user_id_str: str, error_msg: str = "ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ʙᴀᴋᴀ!") -> Optional[int]:
-    try:
-        owner_id = int(user_id_str)
-    except ValueError:
-        await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ!", show_alert=True)
-        return None
+    try: owner_id = int(user_id_str)
+    except ValueError: await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ!", show_alert=True); return None
     if query.from_user.id != owner_id:
         await query.answer(error_msg, show_alert=True)
         return None
@@ -821,8 +683,7 @@ mode_handler = ModeHandler()
 unfav_handler = UnfavHandler()
 
 async def harem_command(update: Update, context: CallbackContext):
-    try:
-        await harem_handler.show_harem(update, context)
+    try: await harem_handler.show_harem(update, context)
     except TelegramError as e:
         LOGGER.error(f"Error in harem_command: {e}", exc_info=True)
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ʟᴏᴀᴅɪɴɢ ʜᴀʀᴇᴍ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>", parse_mode='HTML')
@@ -831,74 +692,47 @@ async def harem_page_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     try:
         parts = query.data.split(':')
-        page_str = parts[1]
-        user_id_str = parts[2]
-        step = int(parts[3]) if len(parts) > 3 else 1
-        
-        user_id = await verify_owner(query, user_id_str)
-        if user_id is None:
-            return
+        if await verify_owner(query, parts[2]) is None: return
         await query.answer()
-        await harem_handler.show_harem(update, context, int(page_str), edit=True, step=step)
-    except (ValueError, TelegramError) as e:
+        await harem_handler.show_harem(update, context, int(parts[1]), edit=True, step=int(parts[3]) if len(parts) > 3 else 1)
+    except Exception as e:
         LOGGER.error(f"Error in harem_page_callback: {e}", exc_info=True)
         await query.answer("ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴘᴀɢᴇ", show_alert=True)
 
 async def hmode_command(update: Update, context: CallbackContext):
-    try:
-        await mode_handler.show_mode_menu(update, update.effective_user.id)
+    try: await mode_handler.show_mode_menu(update, update.effective_user.id)
     except TelegramError as e:
         LOGGER.error(f"Error in hmode_command: {e}", exc_info=True)
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴍᴏᴅᴇ ᴍᴇɴᴜ.</b>", parse_mode='HTML')
 
 async def mode_callback(update: Update, context: CallbackContext):
-    try:
-        await mode_handler.handle_mode_callback(update, context)
-    except TelegramError as e:
-        LOGGER.error(f"Error in mode_callback: {e}", exc_info=True)
+    try: await mode_handler.handle_mode_callback(update, context)
+    except TelegramError as e: LOGGER.error(f"Error in mode_callback: {e}", exc_info=True)
 
 async def unfav_command(update: Update, context: CallbackContext):
-    try:
-        await unfav_handler.show_unfav_prompt(update)
+    try: await unfav_handler.show_unfav_prompt(update)
     except TelegramError as e:
         LOGGER.error(f"Error in unfav_command: {e}", exc_info=True)
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴇʀʀᴏʀ ᴘʀᴏᴄᴇssɪɴɢ ᴜɴғᴀᴠ ᴄᴏᴍᴍᴀɴᴅ.</b>", parse_mode='HTML')
 
 async def unfav_callback(update: Update, context: CallbackContext):
-    try:
-        await unfav_handler.handle_unfav_callback(update)
-    except TelegramError as e:
-        LOGGER.error(f"Error in unfav_callback: {e}", exc_info=True)
+    try: await unfav_handler.handle_unfav_callback(update)
+    except TelegramError as e: LOGGER.error(f"Error in unfav_callback: {e}", exc_info=True)
 
 async def harem_2x_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     try:
         parts = query.data.split(':')
-        curr_page_str = parts[1]
-        user_id_str = parts[2]
+        if await verify_owner(query, parts[2]) is None: return
         target_step = int(parts[3]) if len(parts) > 3 else 2
-        
-        user_id = await verify_owner(query, user_id_str)
-        if user_id is None:
-            return
-            
-        curr_page = int(curr_page_str)
-        target_page = curr_page + target_step
-        
-        msg = "2x ᴘᴀɢᴇ sᴋɪᴘ ᴏɴ" if target_step == 2 else "1x (ɴᴏʀᴍᴀʟ) sᴋɪᴘ ᴏɴ"
-        await query.answer(msg)
-        
-        await harem_handler.show_harem(update, context, target_page, edit=True, step=target_step)
-    except Exception as e:
-        LOGGER.error(f"Error in harem_2x_callback: {e}", exc_info=True)
+        await query.answer("2x ᴘᴀɢᴇ sᴋɪᴘ ᴏɴ" if target_step == 2 else "1x (ɴᴏʀᴍᴀʟ) sᴋɪᴘ ᴏɴ")
+        await harem_handler.show_harem(update, context, int(parts[1]) + target_step, edit=True, step=target_step)
+    except Exception as e: LOGGER.error(f"Error in harem_2x_callback: {e}", exc_info=True)
 
 async def harem_close_callback(update: Update, context: CallbackContext):
-    query = update.callback_query
-    _, _, user_id_str = query.data.partition(':')
-    if await verify_owner(query, user_id_str) is None:
-        return
-    await query.answer()
-    await query.message.delete()
+    if await verify_owner(update.callback_query, update.callback_query.data.partition(':')[2]) is not None:
+        await update.callback_query.answer()
+        await update.callback_query.message.delete()
     
 async def ignore_callback(update: Update, context: CallbackContext):
     await update.callback_query.answer()
