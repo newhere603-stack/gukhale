@@ -400,8 +400,9 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 if active_spawn:
                     active_spawns_cache[chat_id] = active_spawn
 
+            # 🔥 FIX: 15 Seconds se badhakar 60 seconds (1 minute) kar diya gaya hai
             if not active_spawn:
-                if chat_id in last_grabbed and time.time() - last_grabbed[chat_id] < 15:
+                if chat_id in last_grabbed and time.time() - last_grabbed[chat_id] < 60:
                     return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>.\nʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
                 return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
 
@@ -415,7 +416,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
             if not guess_text:
                 return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ɴᴀᴍᴇ!</b>')
             if "()" in guess_text or "&" in guess_text:
-                return await update.message.reply_html("<b>ɴᴀʜʜ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴛʜɪs ᴛʏᴘᴇs ᴏғ ᴡᴏʀᴅs...<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>")
+                return await update.message.reply_html("<b>ɴᴀʜʜ ʏᴏᴜ ᴄᴀɴ'ᴛ ᴜsᴇ ᴛʜᴇsᴇ ᴛʏᴘᴇs ᴏғ ᴡᴏʀᴅs...<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>")
 
             character = active_spawn['character']
             char_name = character.get('name', '').lower()
