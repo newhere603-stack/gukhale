@@ -18,23 +18,33 @@ bot_settings_collection = db['bot_settings'] # 🔥 Persistent Settings ke liye
 
 # ---------------- CUSTOM RARITIES ----------------
 RARITIES = {
-    "common": ("🟢", "Common"), "rare": ("🟠", "Rare"), "legendary": ("🟡", "Legendary"),
-    "special": ("🔵", "Medium"), "celestial": ("🪽", "Celestial"), "erotic": ("🥵", "Spicy"),
-    "exclusive": ("💮", "Exclusive"), "premium": ("🔮", "Premium Edition"), "mythic": ("💎", "Mythic"),
-    "sweet": ("🍭", "Sweet"), "valentine": ("💞", "Valentine"), "winter": ("❄️", "Winter"),
-    "neon": ("⚡", "Neon"), "pearl": ("🐚", "Summer"), "cosmic": ("🌌", "Cosmic"),
+    "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>', "Exclusive"),
+    "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🔥</tg-emoji>', "Legendary"),
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
+    "summer": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"),
+    "special": ("🔵", '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>', "Medium"),
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"),
+    "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
+    "common": ("🟢", '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>', "Common")
 }
 
 def get_rarity_display(rarity_str):
     if not isinstance(rarity_str, str):
-        return "🟢 Common"
+        return '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji> Common'
     rarity_str = rarity_str.strip()
     emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
     name = name.strip().lower()
     
-    for key, (r_emoji, r_name) in RARITIES.items():
+    for key, (r_emoji, prem_emoji, r_name) in RARITIES.items():
         if rarity_str.lower() == key or emoji == r_emoji or name == r_name.lower():
-            return f"{r_emoji} {r_name}"
+            return f"{prem_emoji} {r_name}"
     
     return rarity_str
 
@@ -43,8 +53,8 @@ def get_base_rarity(rarity_str):
     if not rarity_str:
         return "common"
     rarity_str = str(rarity_str).lower().strip()
-    for key, (emoji, name) in RARITIES.items():
-        if key in rarity_str or name.lower() in rarity_str or emoji in rarity_str:
+    for key, (r_emoji, prem_emoji, r_name) in RARITIES.items():
+        if key in rarity_str or r_name.lower() in rarity_str or r_emoji in rarity_str:
             return key
     return rarity_str
 
@@ -74,37 +84,37 @@ REJECT_IMAGES = [
 ]
 
 PROPOSE_START_TEXTS = [
-    "<b>💫 ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ... 💍</b>",
-    "<b>✨ ғɪɴᴀʟʟʏ ᴛʜᴇ ᴛɪᴍᴇ ʜᴀs ᴄᴏᴍᴇ ✨</b>",
-    "<b>🌹 ʜᴏʟᴅɪɴɢ ʏᴏᴜʀ ʙʀᴇᴀᴛʜ, ʏᴏᴜ ᴋɴᴇᴇʟ ᴅᴏᴡɴ... 🛐</b>",
-    "<b>🌙 ᴜɴᴅᴇʀ ᴛʜᴇ sᴛᴀʀʀʏ sᴋʏ, ᴀ sᴘᴇᴄɪᴀʟ ᴄᴏɴғᴇssɪᴏɴ... ✨</b>",
-    "<b>💖 ᴀ ʜᴇᴀʀᴛ-ᴘᴏᴜɴᴅɪɴɢ ᴄᴏɴғᴇssɪᴏɴ ɪs ᴀʙᴏᴜᴛ ᴛᴏ ʜᴀᴘᴘᴇɴ! 💌</b>",
-    "<b>🕊️ ᴛᴀᴋɪɴɢ ᴀ ᴅᴇᴇᴘ ʙʀᴇᴀᴛʜ... ɪs ɪᴛ ᴛʀᴜᴇ ʟᴏᴠᴇ? 🌸</b>"
+    "<b><tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji> ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ... <tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ғɪɴᴀʟʟʏ ᴛʜᴇ ᴛɪᴍᴇ ʜᴀs ᴄᴏᴍᴇ <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5440911110838425969\">🌹</tg-emoji> ʜᴏʟᴅɪɴɢ ʏᴏᴜʀ ʙʀᴇᴀᴛʜ, ʏᴏᴜ ᴋɴᴇᴇʟ ᴅᴏᴡɴ... <tg-emoji emoji-id=\"5370900820336319679\">🥰</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"6093881568739205721\">🌙</tg-emoji> ᴜɴᴅᴇʀ ᴛʜᴇ sᴛᴀʀʀʏ sᴋʏ, ᴀ sᴘᴇᴄɪᴀʟ ᴄᴏɴғᴇssɪᴏɴ... <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ᴀ ʜᴇᴀʀᴛ-ᴘᴏᴜɴᴅɪɴɢ ᴄᴏɴғᴇssɪᴏɴ ɪs ᴀʙᴏᴜᴛ ᴛᴏ ʜᴀᴘᴘᴇɴ! <tg-emoji emoji-id=\"6093681968724059707\">💌</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ᴛᴀᴋɪɴɢ ᴀ ᴅᴇᴇᴘ ʙʀᴇᴀᴛʜ... ɪs ɪᴛ ᴛʀᴜᴇ ʟᴏᴠᴇ? <tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji></b>"
 ]
 PROPOSING_LOADING_TEXTS = [
-    "<b>ᴘʀᴏᴘᴏsɪɴɢ ʜᴇʀ....💍</b>",
-    "<b>🌸 ᴡᴀɪᴛɪɴɢ ғᴏʀ ʜᴇʀ ʀᴇsᴘᴏɴsᴇ....💌</b>",
-    "<b>💓 ʜᴇʀ ʜᴇᴀʀᴛ ɪs ʙᴇᴀᴛɪɴɢ ғᴀsᴛ....💫</b>",
-    "<b>✨ ᴏᴘᴇɴɪɴɢ ᴛʜᴇ ʀɪɴɢ ʙᴏx....🎁</b>",
-    "<b>👀 ʟᴏᴏᴋɪɴɢ ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....🕊️</b>"
+    "<b>ᴘʀᴏᴘᴏsɪɴɢ ʜᴇʀ....<tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ᴡᴀɪᴛɪɴɢ ғᴏʀ ʜᴇʀ ʀᴇsᴘᴏɴsᴇ....<tg-emoji emoji-id=\"6093681968724059707\">💌</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5449455694870748968\">💓</tg-emoji> ʜᴇʀ ʜᴇᴀʀᴛ ɪs ʙᴇᴀᴛɪɴɢ ғᴀsᴛ....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ᴏᴘᴇɴɪɴɢ ᴛʜᴇ ʀɪɴɢ ʙᴏx....<tg-emoji emoji-id=\"5199749070830197566\">🎁</tg-emoji></b>",
+    "<b><tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji> ʟᴏᴏᴋɪɴɢ ɪɴᴛᴏ ʜᴇʀ ᴇʏᴇs....<tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji></b>"
 ]
 
 DICE_REJECT_TEXTS = [
     "<b>ᴛʜᴇ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏsᴀʟ ᴡᴀs ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ sʜᴇ ʀᴀɴ ᴀᴡᴀʏ!</b>",
     "<b>sʜᴇ sᴀɪᴅ 'ᴇᴡᴡ, ɴᴏ!' ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ ᴇᴠᴇʀʏᴡʜᴇʀᴇ!</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀɴᴅ wᴀʟᴋᴇᴅ ᴀᴡᴀʏ! 😂</b>",
-    "<b>sʜᴇ sᴀɪᴅ sʜᴇ ᴏɴʟʏ sᴇᴇs ʏᴏᴜ ᴀs ᴀ ʙʀᴏᴛʜᴇʀ! 🫂</b>",
+    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀɴᴅ ᴡᴀʟᴋᴇᴅ ᴀᴡᴀʏ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>",
+    "<b>sʜᴇ sᴀɪᴅ sʜᴇ ᴏɴʟʏ sᴇᴇs ʏᴏᴜ ᴀs ᴀ ʙʀᴏᴛʜᴇʀ! <tg-emoji emoji-id=\"6159082552431746788\">🫂</tg-emoji></b>",
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ ɪs ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.</b>"
 ]
 
 PROPOSE_REJECT_TEXTS = [
-    "<b>sʜᴇ sᴀɪᴅ sʜᴇ'ʟʟ ᴅᴀᴛᴇ ʏᴏᴜ... ɪɴ ʜᴇʀ ɴᴇxᴛ ʟɪғᴇ! 🔄</b>",
-    "<b>ʏᴏᴜ ʜᴀᴠᴇ ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ʏᴏᴜ ᴀʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ! 🏙️</b>",
-    "<b>sʜᴇ ᴛᴏᴏᴋ ʏᴏᴜʀ ᴄᴏɪɴs, ᴀᴛᴇ ʏᴏᴜʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' 🍟</b>",
+    "<b>sʜᴇ sᴀɪᴅ sʜᴇ'ʟʟ ᴅᴀᴛᴇ ʏᴏᴜ... ɪɴ ʜᴇʀ ɴᴇxᴛ ʟɪғᴇ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
+    "<b>ʏᴏᴜ ʜᴀᴠᴇ ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ʏᴏᴜ ᴀʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
+    "<b>sʜᴇ ᴛᴏᴏᴋ ʏᴏᴜʀ ᴄᴏɪɴs, ᴀᴛᴇ ʏᴏᴜʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' <tg-emoji emoji-id=\"5370962534721395008\">🍟</tg-emoji></b>",
     "<b>sʜᴇ sᴀɪᴅ ʏᴏᴜ ᴀʀᴇ ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ʏᴏᴜ ᴏɴ ʀᴇᴀᴅ!</b>",
-    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ. 🎬</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏps! 🚓💨</b>",
-    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴْد ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ. <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
+    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>"
 ]
 
 cooldowns = {"dice": {}, "propose": {}}
@@ -227,8 +237,8 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
         "<b>🏆 ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴄʟᴀɪᴍᴇᴅ!</b>\n━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>👤 ᴜsᴇʀ: {user_link}</b>\n"
         f"<b>🕹️ ᴍᴇᴛʜᴏᴅ: <code>/{method}</code></b>\n"
-        f"<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b>💎 ʀᴀʀɪᴛʏ: <code>{display_rarity}</code></b>\n━━━━━━━━━━━━━━━━━━━━"
+        f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
+        f"<b><tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> ʀᴀʀɪᴛʏ: {display_rarity}</b>\n━━━━━━━━━━━━━━━━━━━━"
     )
     try:
         await context.bot.send_photo(LOG_GROUP_ID, char["img_url"], caption=text, parse_mode="HTML")
@@ -255,9 +265,9 @@ async def prarity_on(update: Update, context: CallbackContext):
     if base_key in normalized_disabled:
         normalized_disabled.remove(base_key)
         await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
-        await update.message.reply_text(f"✅ <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def prarity_off(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
@@ -278,9 +288,9 @@ async def prarity_off(update: Update, context: CallbackContext):
     if base_key not in normalized_disabled:
         normalized_disabled.add(base_key)
         await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
-        await update.message.reply_text(f"❌ <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(f"⚠️ <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def dice_marry(update: Update, context: CallbackContext):
     fix_motor_loop() 
@@ -296,7 +306,7 @@ async def dice_marry(update: Update, context: CallbackContext):
     if not ok:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⏳ ᴡᴀɪᴛ {rem // 60}ᴍ {rem % 60}s ʙᴇғᴏʀᴇ ᴜsɪɴɢ ᴀɢᴀɪɴ!</b>",
+            text=f"<b><tg-emoji emoji-id=\"5451732530048802485\">⏳</tg-emoji> ᴡᴀɪᴛ {rem // 60}ᴍ {rem % 60}s ʙᴇғᴏʀᴇ ᴜsɪɴɢ ᴀɢᴀɪɴ!</b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
@@ -318,7 +328,7 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
     display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
-    caption = f"<b>🎉 ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏns!</b>\n<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n<b>💎 ʀᴀʀɪᴛʏ: {display_rarity}</b>"
+    caption = f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b>\n<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n<b><tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> ʀᴀʀɪᴛʏ: {display_rarity}</b>"
     
     await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
     await send_win_log(context, user, char, "dice")
@@ -340,7 +350,7 @@ async def propose(update: Update, context: CallbackContext):
         ]
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⚠️ ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
+            text=f"<b><tg-emoji emoji-id=\"5291873529464122510\">🔓</tg-emoji> ᴀᴄᴄᴇss ʟᴏᴄᴋᴇᴅ!</b>\n\n<b>ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇ ᴛᴏ ᴜsᴇ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ.</b>",
             reply_markup=InlineKeyboardMarkup(btn),
             parse_mode="HTML",
             reply_to_message_id=msg_id
@@ -359,7 +369,7 @@ async def propose(update: Update, context: CallbackContext):
     if not ok:
         return await context.bot.send_message(
             chat_id=chat_id,
-            text=f"<b>⏳ ᴄᴏᴏʟᴅᴏᴡɴ: <code>{rem // 60}ᴍ {rem % 60}s</code></b>",
+            text=f"<b><tg-emoji emoji-id=\"5451732530048802485\">⏳</tg-emoji> ᴄᴏᴏʟᴅᴏᴡɴ: <code>{rem // 60}ᴍ {rem % 60}s</code></b>",
             parse_mode="HTML",
             reply_to_message_id=msg_id
         )
@@ -412,11 +422,11 @@ async def propose(update: Update, context: CallbackContext):
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
     display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
     caption = (
-        f"<b>🎉 ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ ʜᴀs ʙᴇᴇɴ ᴀᴄᴄᴇᴘᴛᴇᴅ! 💖</b>\n\n"
-        f"<b>🌸 ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b>💎 ʀᴀʀɪᴛʏ: {display_rarity}</b>\n"
-        f"<b>🎞 ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
-        f"<b>🔖 ɪᴅ: {char.get('id', 'N/A')}</b>"
+        f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ ʜᴀs ʙᴇᴇɴ ᴀᴄᴄᴇᴘᴛᴇᴅ! <tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji></b>\n\n"
+        f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
+        f"<b><tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> ʀᴀʀɪᴛʏ: {display_rarity}</b>\n"
+        f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
+        f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ: {char.get('id', 'N/A')}</b>"
     )
     await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
     await send_win_log(context, user, char, "propose")
@@ -436,7 +446,7 @@ async def propose_callback(update: Update, context: CallbackContext):
             await query.message.delete()
         except Exception:
             pass
-        await context.bot.send_message(chat_id=query.message.chat_id, text=f"<b>✨ ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=query.message.chat_id, text=f"<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>", parse_mode="HTML")
 
 async def cdm_cmd(update: Update, context: CallbackContext):
     if not update.message or not update.effective_user:
@@ -475,7 +485,7 @@ async def cdm_cmd(update: Update, context: CallbackContext):
     
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"<b>✅ ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ <a href='tg://user?id={target_id}'>{target_name}</a>.</b>",
+        text=f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ᴄᴏᴏʟᴅᴏᴡɴ ʀᴇsᴇᴛ ғᴏʀ <a href='tg://user?id={target_id}'>{target_name}</a>.</b>",
         parse_mode="HTML",
         reply_to_message_id=msg_id
     )
