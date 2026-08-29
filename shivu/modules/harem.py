@@ -144,18 +144,17 @@ class UserCollection:
 
 class MediaHelper:
     VIDEO_EXT = ('.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v')
+    GLOBAL_FALLBACK = "https://files.catbox.moe/sgo9in.png"
 
     @staticmethod
     def is_video_url(url: Optional[str]) -> bool:
         return bool(url) and str(url).lower().split('?')[0].endswith(MediaHelper.VIDEO_EXT)
 
-    # 🔥 Indestructible Media Sender
     @staticmethod
     async def send_media_message(message, media_url_or_urls, caption: str,
                                   reply_markup, is_video_or_videos = False,
                                   display_options: Optional[DisplayOptions] = None):
         opts = display_options or DisplayOptions()
-        
         urls = media_url_or_urls if isinstance(media_url_or_urls, list) else [media_url_or_urls]
         vids = is_video_or_videos if isinstance(is_video_or_videos, list) else [is_video_or_videos] * len(urls)
 
@@ -164,10 +163,10 @@ class MediaHelper:
         if not valid_pairs or not opts.preview_image:
             return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
 
+        # 🚀 Ultra-Safe Sender Loop
         for url, vid in valid_pairs:
             is_vid = opts.video_support and (vid or MediaHelper.is_video_url(url))
             try:
-                # Cross-Try Fallback: Photo fail hui toh Video try karega and vice-versa
                 if is_vid:
                     try:
                         return await message.reply_video(video=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML', supports_streaming=True, read_timeout=120, write_timeout=120)
@@ -180,10 +179,13 @@ class MediaHelper:
                         return await message.reply_video(video=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML', supports_streaming=True, read_timeout=120, write_timeout=120)
             except TelegramError as e:
                 LOGGER.warning(f"Media rejected. URL: {url}, Error: {e}")
-                continue # Agar file_id dead hai, toh loop automatically next image try karega!
+                continue 
                 
-        # Text fallback ONLY IF every single image link is totally dead
-        return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
+        # 👑 Ultimate Brahmastra Fallback: Agar upar ki saari links break hui toh default image pakka jayega!
+        try:
+            return await message.reply_photo(photo=MediaHelper.GLOBAL_FALLBACK, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
+        except TelegramError:
+            return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
 
 class HaremMessageBuilder:
     def __init__(self, collection: UserCollection, page: int, total_pages: int,
@@ -238,26 +240,25 @@ class HaremHandler:
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
         
-        # 🔥 ULTRA-SAFE ID MATCHING (Prevents False Deletions of Favorites)
+        # 🚀 100% BULLETPROOF FAVORITE MATCHER
         fav_data = user.get('favorites')
         favorite = None
+        
         if fav_data:
+            fav_id_clean = ""
             if isinstance(fav_data, dict):
-                favorite = Character.from_dict(fav_data)
+                fav_id_clean = str(fav_data.get('id', '')).strip().lstrip('0') or '0'
             else:
                 fav_id_clean = str(fav_data).strip().lstrip('0') or '0'
-                for c in characters:
-                    if (str(c.id).strip().lstrip('0') or '0') == fav_id_clean:
-                        favorite = c
-                        break
+                
+            # Direct instance linking taaki property hamesha update ho!
+            for c in characters:
+                if (str(c.id).strip().lstrip('0') or '0') == fav_id_clean:
+                    favorite = c
+                    break
 
-        # Verification: Delete favorite ONLY IF user genuinely doesn't own it anymore
-        if favorite:
-            fav_id_clean = str(favorite.id).strip().lstrip('0') or '0'
-            has_fav = any((str(c.id).strip().lstrip('0') or '0') == fav_id_clean for c in characters)
-            if not has_fav:
+            if not favorite:
                 asyncio.create_task(self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}}))
-                favorite = None
 
         return UserCollection(
             user_id=user_id, characters=characters, favorite=favorite,
@@ -274,7 +275,6 @@ class HaremHandler:
     async def update_live_data_all(self, characters: List[Character]):
         if not characters: return
             
-        # 🔥 Bulletproof Format Query
         query_ids = set()
         for c in characters:
             c_clean = str(c.id).strip().lstrip('0') or '0'
@@ -378,6 +378,16 @@ class HaremHandler:
         if not display_char:
             display_char = current[0] if current else collection.characters[0]
 
+        # 🚀 IMMEDIATE FORCE FETCH FOR IMAGE (Ager local DB mein khali hai)
+        if display_char and not getattr(display_char, 'img_url', None):
+            c_clean = str(display_char.id).strip().lstrip('0') or '0'
+            q_ids = [str(display_char.id).strip(), c_clean]
+            if c_clean.isdigit(): q_ids.extend([int(c_clean), f"{int(c_clean):02d}", f"{int(c_clean):03d}"])
+            doc = await self.collection_db.find_one({"id": {"$in": q_ids}})
+            if doc and doc.get("img_url"):
+                display_char.img_url = doc.get("img_url")
+                display_char.is_video = doc.get("is_video", False)
+
         chars_to_update = current.copy()
         if display_char and display_char not in chars_to_update:
             chars_to_update.append(display_char)
@@ -395,6 +405,7 @@ class HaremHandler:
                 media_urls.append(c.img_url)
                 is_videos.append(getattr(c, 'is_video', False))
 
+        # Backup Fetch
         if not media_urls:
             db_query_ids = set()
             for c in collection.characters[:30]:
@@ -414,6 +425,11 @@ class HaremHandler:
                 if url and url not in media_urls:
                     media_urls.append(url)
                     is_videos.append(doc.get("is_video", False))
+                    
+        # 👑 Absolute Final Safeguard Ensure
+        if not media_urls:
+            media_urls.append(MediaHelper.GLOBAL_FALLBACK)
+            is_videos.append(False)
 
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
@@ -617,8 +633,9 @@ class UnfavHandler:
                 fav = Character.from_dict(fav_data)
             else:
                 characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
+                fav_id_clean = str(fav_data).strip().lstrip('0') or '0'
                 for c in characters:
-                    if (str(c.id).strip().lstrip('0') or '0') == (str(fav_data).strip().lstrip('0') or '0'):
+                    if (str(c.id).strip().lstrip('0') or '0') == fav_id_clean:
                         fav = c
                         break
         
@@ -636,14 +653,18 @@ class UnfavHandler:
             f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ:</b> <code>{fav.id}</code>"
         )
         
-        live_doc = await db['anime_characters_lol'].find_one({"id": {"$in": [str(fav.id).strip(), str(fav.id).strip().lstrip('0') or '0', int(str(fav.id).strip().lstrip('0') or '0')]}})
+        c_clean = str(fav.id).strip().lstrip('0') or '0'
+        q_ids = [str(fav.id).strip(), c_clean]
+        if c_clean.isdigit(): q_ids.extend([int(c_clean), f"{int(c_clean):02d}", f"{int(c_clean):03d}"])
+            
+        live_doc = await db['anime_characters_lol'].find_one({"id": {"$in": q_ids}})
         if live_doc and live_doc.get('img_url'):
             fav.img_url = live_doc.get('img_url')
             fav.is_video = live_doc.get('is_video', False)
 
         await MediaHelper.send_media_message(
             message=update.message, 
-            media_url_or_urls=getattr(fav, 'img_url', None), 
+            media_url_or_urls=getattr(fav, 'img_url', None) or MediaHelper.GLOBAL_FALLBACK, 
             caption=caption, 
             reply_markup=InlineKeyboardMarkup(buttons), 
             is_video_or_videos=getattr(fav, 'is_video', False), 
