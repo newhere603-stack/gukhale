@@ -456,14 +456,38 @@ class HaremHandler:
         media_url = getattr(display_char, 'img_url', None)
         is_video = getattr(display_char, 'is_video', False)
 
-        # 🚨 SUPER FALLBACK: Agar fir bhi media_url empty hai (DB mein missing ho etc), 
-        # toh immediately current page se aisi waifu ka image pick kar lo jiska link available hai.
-        if not media_url:
-            for c in current:
-                if getattr(c, 'img_url', None):
-                    media_url = c.img_url
-                    is_video = getattr(c, 'is_video', False)
-                    break
+        # 🚨 SUPER EXTREME FALLBACK: Agar image DB mein empty ya missing hai
+        # Toh DB se direct fetch karke user ke collection se koi bhi valid image nikal lega 100%
+        if not media_url or str(media_url).strip() == "":
+            search_ids = []
+            
+            # Pehle try karo uske current display character ka hi ID
+            if display_char:
+                search_ids.append(display_char.id)
+                
+            # Phir user ke starting ke 50 characters ke IDs list mein daal do backup ke liye
+            for c in collection.characters[:50]:
+                if c.id not in search_ids:
+                    search_ids.append(c.id)
+
+            # String aur Integer formats dono ko handle karne ke liye proper ID list banate hain
+            db_query_ids = []
+            for cid in search_ids:
+                cid_str = str(cid).strip()
+                cid_clean = cid_str.lstrip('0') or '0'
+                db_query_ids.extend([cid_str, cid_clean])
+                if cid_str.isdigit(): db_query_ids.append(int(cid_str))
+                if cid_clean.isdigit(): db_query_ids.append(int(cid_clean))
+
+            # Database se sabse pehla character dhundho jiska image actually available ho
+            valid_doc = await self.collection_db.find_one({
+                "id": {"$in": db_query_ids},
+                "img_url": {"$type": "string", "$ne": ""} 
+            })
+            
+            if valid_doc:
+                media_url = valid_doc.get("img_url")
+                is_video = valid_doc.get("is_video", False)
 
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
         anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
@@ -486,7 +510,7 @@ class HaremHandler:
                 LOGGER.warning(f"Harem edit ignored silently: {e}")
                 return 
 
-        # Initial message creation logic
+        # Initial message creation logic (Fallback successful guarantee)
         sent_msg = None
         if media_url:
             sent_msg = await MediaHelper.send_media_message(message, media_url, text, markup, is_video, options)
