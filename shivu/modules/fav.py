@@ -2,8 +2,10 @@ import asyncio
 from html import escape
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
-from shivu import LOGGER, application, user_collection
+from shivu import LOGGER, application, user_collection, db
 
+# 🔥 Global collection add ki taaki wahan se original image utha sake
+collection = db['anime_characters_lol']
 
 # Small Caps Font Converter Helper
 def to_small_caps(text: str) -> str:
@@ -55,13 +57,24 @@ async def fav(update: Update, context: CallbackContext) -> None:
         character = None
         for c in user.get("characters", []):
             if isinstance(c, dict) and str(c.get("id")) == character_id:
-                character = c
+                character = c.copy()  # Copy banaya taaki original reference alter na ho
                 break
 
         if not character:
             msg = f"<b>{to_small_caps('CHARACTER NOT FOUND IN YOUR COLLECTION!')}</b>"
             await update.message.reply_text(msg, parse_mode="HTML")
             return
+
+        # 🔥 FIX: Global database se full details fetch kar rahe hain image guarantee karne ke liye
+        global_char = await collection.find_one({
+            "id": {"$in": [character_id, int(character_id) if character_id.isdigit() else character_id]}
+        })
+
+        if global_char:
+            character['img_url'] = global_char.get('img_url')
+            character['is_video'] = global_char.get('is_video', False)
+            character['name'] = global_char.get('name', character.get('name'))
+            character['anime'] = global_char.get('anime', character.get('anime'))
 
         buttons = [
             [
@@ -75,19 +88,28 @@ async def fav(update: Update, context: CallbackContext) -> None:
         char_name = str(character.get("name", "Unknown"))
         anime_name = str(character.get("anime", "Unknown"))
 
-        # Heading & Text in Bold Small Caps
+        # Heading & Text in Bold Small Caps (Spelling theek kar di: 'YOUR' FAVOURITE)
         heading = to_small_caps(
-            "ARE YOU SURE YOU WANT TO MAKE THIS WAIFU YOU FAVOURITE?"
+            "ARE YOU SURE YOU WANT TO MAKE THIS WAIFU YOUR FAVOURITE?"
         )
         small_char_name = to_small_caps(char_name)
         small_anime_name = to_small_caps(anime_name)
 
         caption = (
-            f"<b>{heading}</b>\n"
+            f"<b>{heading}</b>\n\n"
             f"⤿ <b>{escape(small_char_name)}</b> ↷\n(<b>{escape(small_anime_name)}</b>)"
         )
 
         media_url = character.get("img_url")
+
+        # Agar global DB mein bhi image nahi milti (to error aane se bachega)
+        if not media_url:
+            await update.message.reply_text(
+                text=caption + f"\n\n<b>⚠️ {to_small_caps('IMAGE NOT FOUND IN DATABASE')}</b>",
+                reply_markup=InlineKeyboardMarkup(buttons),
+                parse_mode="HTML",
+            )
+            return
 
         if character.get("is_video", False):
             await update.message.reply_video(
@@ -148,13 +170,24 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
             character = None
             for c in user.get("characters", []):
                 if isinstance(c, dict) and str(c.get("id")) == character_id:
-                    character = c
+                    character = c.copy()
                     break
 
             if not character:
                 pop_err = to_small_caps("CHARACTER NOT FOUND!")
                 await query.answer(pop_err, show_alert=True)
                 return
+
+            # 🔥 FIX: Save karne se pehle ek baar aur check karke image url insert kar rahe hain
+            global_char = await collection.find_one({
+                "id": {"$in": [character_id, int(character_id) if character_id.isdigit() else character_id]}
+            })
+
+            if global_char:
+                character['img_url'] = global_char.get('img_url')
+                character['is_video'] = global_char.get('is_video', False)
+                character['name'] = global_char.get('name', character.get('name'))
+                character['anime'] = global_char.get('anime', character.get('anime'))
 
             await update_user_fav(req_user_id, character)
 
