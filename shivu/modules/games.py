@@ -506,9 +506,9 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
     
     # 🔥 GROUP LOCK CHECK (SUPERFAST)
     if update.effective_chat.id != -1003087506512:
-        text = "<b><tg-emoji emoji-id=\"5427009714745517609\">🔒</tg-emoji> ᴛʜɪs ɢᴀᴍᴇ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴘʟᴀʏᴇᴅ ɪɴ ᴏᴜʀ ᴏғғɪᴄɪᴀʟ ɢʀᴏᴜᴘ.</b>"
+        text = "<b><tg-emoji emoji-id=\"5291873529464122510\">🔒</tg-emoji> ᴛʜɪs ɢᴀᴍᴇ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴘʟᴀʏᴇᴅ ɪɴ ᴏᴜʀ ᴏғғɪᴄɪᴀʟ ɢʀᴏᴜᴘ.</b>"
         markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("ᴊᴏɪɴ ɢʀᴏᴜᴘ ᴛᴏ ᴘʟᴀʏ 🎮", url="https://t.me/c/3087506512/1")
+            InlineKeyboardButton("ᴊᴏɪɴ ɢʀᴏᴜᴘ ᴛᴏ ᴘʟᴀʏ", url="https://t.me/Anime_Group_hai")
         ]])
         await send_or_edit_response(update, text, markup)
         return
