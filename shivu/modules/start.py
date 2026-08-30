@@ -3,7 +3,8 @@ import html
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus, ChatType, ParseMode
 from telegram.error import BadRequest, TelegramError
-from telegram.ext import ContextTypes, CallbackQueryHandler, CommandHandler
+# 🔥 NAYA IMPORT: ChatMemberHandler add kiya gaya hai auto-detect karne ke liye
+from telegram.ext import ContextTypes, CallbackQueryHandler, CommandHandler, ChatMemberHandler
 from shivu import (
     BOT_USERNAME,
     LOGGER,
@@ -23,6 +24,9 @@ START_VIDEO = "https://gxtusqitetsemwjdtvvq.supabase.co/storage/v1/object/public
 FORCE_SUB_CHAT = "anime_group_hai"
 OWNER_ID = 7657218453  # Aapki Master Owner ID
 
+# 🔥 DEEP LINK UPDATE: Jab bot add hoga to auto full-rights maangega
+ADMIN_RIGHTS_LINK = f"https://t.me/{BOT_USERNAME}?startgroup=new&admin=change_info+delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+promote_members"
+
 MAIN_KEYBOARD = InlineKeyboardMarkup([
     [
         InlineKeyboardButton(
@@ -33,9 +37,10 @@ MAIN_KEYBOARD = InlineKeyboardMarkup([
         ),
     ],
     [
+        # Is button se automatic full rights prompt hoga
         InlineKeyboardButton(
-            "sᴛᴀʀᴛ ɢᴜᴇssɪɴɢ💫",
-            url=f"https://t.me/{BOT_USERNAME}?startgroup=new",
+            "ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ 💫",
+            url=ADMIN_RIGHTS_LINK,
         )
     ],
     [
@@ -325,6 +330,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_name = update.effective_user.first_name or "User"
         username = update.effective_user.username or ""
 
+        # 🔥 FAST ADMIN CHECK: Agar group mein start trigger ho to verify karo ki bot admin hai ya nahi
+        if update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+            try:
+                bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+                if bot_member.status != ChatMemberStatus.ADMINISTRATOR:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="<b>⚠️ ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛs ᴛᴏ ᴜsᴇ ᴍᴇ ʜᴇʀᴇ!</b>",
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ 👑", url=ADMIN_RIGHTS_LINK)]
+                        ])
+                    )
+                    return # Aage ka koi action nahi hoga, bas yehi message bolega
+            except Exception as e:
+                LOGGER.error(f"Error checking admin status inside group: {e}")
+                return
+
         # Safe FSub Check
         if not await is_force_sub_member(update, context):
             await context.bot.send_message(
@@ -455,9 +478,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
+# 🔥 NEW: Agar bot direct group mein bina admin banaye add hua, toh message drop karega
+async def bot_added_to_group_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result = update.my_chat_member
+    if not result or result.chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        return
+
+    # Jab naya member (bot) group mein aata hai
+    if result.new_chat_member.status == ChatMemberStatus.MEMBER: 
+        try:
+            await context.bot.send_message(
+                chat_id=result.chat.id,
+                text="<b>⚠️ ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛs ᴛᴏ ᴜsᴇ ᴍᴇ!</b>",
+                parse_mode=ParseMode.HTML,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ 👑", url=ADMIN_RIGHTS_LINK)]
+                ])
+            )
+        except Exception as e:
+            LOGGER.error(f"Admin prompt bhejne mein error: {e}")
+
+# Handlers Register Karte Waqt (Fast Processing Ke Liye Block=False Rakha Hai)
 application.add_handler(CommandHandler("start", start, block=False))
 application.add_handler(
     CallbackQueryHandler(button_callback, pattern=r"^sxc_", block=False)
 )
+# Ye trigger hoga jab bhi bot ko kisi naye group me add/remove kiya jayega
+application.add_handler(ChatMemberHandler(bot_added_to_group_handler, ChatMemberHandler.MY_CHAT_MEMBER, block=False))
 
 LOGGER.info("✓ Start module loaded successfully")
