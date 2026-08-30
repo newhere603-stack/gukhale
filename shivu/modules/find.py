@@ -32,13 +32,13 @@ DEFAULT_PRICES = {
 }
 
 PREMIUM_RARITIES = {
-    "common": '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji>',
+    "common": '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>',
     "rare": '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>',
-    "medium": '<tg-emoji emoji-id="5393592081748877575">🔵</tg-emoji>',
+    "medium": '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>',
     "legendary": '<tg-emoji emoji-id="6084550327086883643">🔥</tg-emoji>',
     "celestial": '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>',
     "spicy": '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>',
-    "exclusive": '<tg-emoji emoji-id="5262772355779809182">💮</tg-emoji>',
+    "exclusive": '<tg-emoji emoji-id="5764869176736880220">👑</tg-emoji>',
     "mythic": '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>',
     "premium edition": '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>',
     "sweet": '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>',
