@@ -70,7 +70,7 @@ class RarityLevel(Enum):
     NEON = (7, "⚡ Neon")
     PEARL = (8, "🐚 Summer")
     SWEET = (9, "🍭 Sweet")
-    SPECIAL_EDITION = (10, "🔵 Medium")
+    SPECIAL_EDITION = (10, "🔴 Medium")
     VALENTINE = (11, "💞 Valentine")
     WINTER = (12, "❄️ Winter")
     EROTIC = (13, "🥵 Spicy")
