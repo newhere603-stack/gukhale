@@ -35,18 +35,14 @@ RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common")
 }
 
-def get_rarity_display(rarity_str):
-    if not isinstance(rarity_str, str):
-        return '<tg-emoji emoji-id="6093722470265658964">🟢</tg-emoji> Common'
-    rarity_str = rarity_str.strip()
-    emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
-    name = name.strip().lower()
-    
+def get_rarity_details(rarity_str):
+    if not rarity_str:
+        return ('<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', 'Common')
+    rarity_str = str(rarity_str).lower().strip()
     for key, (r_emoji, prem_emoji, r_name) in RARITIES.items():
-        if rarity_str.lower() == key or emoji == r_emoji or name == r_name.lower():
-            return f"{prem_emoji} {r_name}"
-    
-    return rarity_str
+        if key in rarity_str or r_name.lower() in rarity_str or r_emoji in rarity_str:
+            return (prem_emoji, r_name)
+    return ('<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', rarity_str.title())
 
 def get_base_rarity(rarity_str):
     if not rarity_str:
@@ -64,7 +60,7 @@ SUDO_USERS = {7657218453}
 PROPOSAL_COST = 2000
 DICE_COOLDOWN = 1800
 PROPOSE_COOLDOWN = 300
-PROPOSE_SUCCESS_RATE = 0.20  # 🔥 EXACT 20% WIN CHANCE!
+PROPOSE_SUCCESS_RATE = 0.23  # 🔥 EXACT 23% WIN CHANCE!
 
 UPDATE_GROUP_URL = "https://t.me/Anime_Group_hai"
 UPDATE_GROUP_ID = -1003087506512
@@ -76,13 +72,22 @@ PROPOSE_IMAGES = [
     "https://files.catbox.moe/a0ybe8.jpg",
     "https://files.catbox.moe/5z3vgb.jpg"
 ]
+
+# 🔥 UNIQUE REJECT IMAGES (No Duplicates)
 REJECT_IMAGES = [
-    "https://files.catbox.moe/b9l3ot.jpg",
-    "https://files.catbox.moe/yjygaj.jpg",
-    "https://files.catbox.moe/8ezqu8.jpg"
+    "https://files.catbox.moe/2ala3u.png",
+    "https://files.catbox.moe/k01s4a.png",
+    "https://files.catbox.moe/hno2jd.png",
+    "https://files.catbox.moe/mia10p.png",
+    "https://files.catbox.moe/l5i2sr.png",
+    "https://files.catbox.moe/mn22b9.png",
+    "https://files.catbox.moe/8b7ibd.png",
+    "https://files.catbox.moe/z96p27.png",
+    "https://files.catbox.moe/b4x4yb.png",
+    "https://files.catbox.moe/z7i3e8.png",
+    "https://files.catbox.moe/m18gqd.png"
 ]
 
-# 🔥 EXTRA MESSAGES ADDED HERE
 PROPOSE_START_TEXTS = [
     "<b><tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji> ᴛʜᴇ ᴍᴏᴍᴇɴᴛ ʏᴏᴜ'ᴠᴇ ʙᴇᴇɴ ᴡᴀɪᴛɪɴɢ ғᴏʀ... <tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ғɪɴᴀʟʟʏ ᴛʜᴇ ᴛɪᴍᴇ ʜᴀs ᴄᴏᴍᴇ <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>",
@@ -95,7 +100,6 @@ PROPOSE_START_TEXTS = [
     "<b><tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji> ᴀ ᴍᴀɢɪᴄᴀʟ ᴍᴏᴍᴇɴᴛ ɪs ᴜɴғᴏʟᴅɪɴɢ... <tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji></b>"
 ]
 
-# 🔥 EXTRA LOADING MESSAGES ADDED HERE
 PROPOSING_LOADING_TEXTS = [
     "<b>ᴘʀᴏᴘᴏsɪɴɢ ʜᴇʀ....<tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
     "<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ᴡᴀɪᴛɪɴɢ ғᴏʀ ʜᴇʀ ʀᴇsᴘᴏɴsᴇ....<tg-emoji emoji-id=\"6093681968724059707\">💌</tg-emoji></b>",
@@ -107,7 +111,7 @@ PROPOSING_LOADING_TEXTS = [
     "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ʜᴏᴘɪɴɢ ғᴏʀ ᴀ ʏᴇs....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>"
 ]
 
-# 🔥 MORE FUNNY DICE REJECTS IN HINGLISH ADDED
+# 🔥 FUNNY DICE REJECTS IN HINGLISH
 DICE_REJECT_TEXTS = [
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛ ʜᴏ ɢᴀʏᴀ ᴀᴜʀ ᴡᴏ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
     "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴇᴡᴡ, ɴᴏ!' ᴀᴜʀ sᴀʙ ᴊᴀɢᴀʜ sᴇ ʙʟᴏᴄᴋ ᴋᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
@@ -120,7 +124,7 @@ DICE_REJECT_TEXTS = [
     "<b>ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴄʀᴇᴇᴘ ʙᴏʟᴋᴀʀ ᴘᴏʟɪᴄᴇ ʙᴜʟᴀ ʟɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji></b>"
 ]
 
-# 🔥 EXTRA FUNNY PROPOSE REJECT MESSAGES IN HINGLISH ADDED
+# 🔥 FUNNY PROPOSE REJECT MESSAGES IN HINGLISH
 PROPOSE_REJECT_TEXTS = [
     "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴡᴏ ᴛᴜᴍsᴇ ᴀɢʟᴇ ᴊᴀɴᴀᴍ ᴍᴇɪɴ ᴘᴀᴛᴇɢɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
     "<b>ᴛᴜᴍ ɪᴛɴɪ ʙᴜʀɪ ᴛᴀʀᴀʜ ғʀɪᴇɴᴅ-ᴢᴏɴᴇ ʜᴜᴇ ʜᴏ ᴋɪ ᴀʙ ᴛᴜᴍ ᴡᴀʜᴀɴ ᴋᴇ ᴍᴀʏᴏʀ ʜᴏ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
@@ -245,13 +249,13 @@ async def add_char_to_user(user_id: int, username: str, first_name: str, char: d
 
 async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
-    display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
+    prem_emoji, r_name = get_rarity_details(char.get('rarity', 'common'))
     text = (
         "<b>🏆 ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴄʟᴀɪᴍᴇᴅ!</b>\n━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>👤 ᴜsᴇʀ: {user_link}</b>\n"
         f"<b>🕹️ ᴍᴇᴛʜᴏᴅ: <code>/{method}</code></b>\n"
         f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b><tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> ʀᴀʀɪᴛʏ: {display_rarity}</b>\n━━━━━━━━━━━━━━━━━━━━"
+        f"<b>{prem_emoji} ʀᴀʀɪᴛʏ: {r_name}</b>\n━━━━━━━━━━━━━━━━━━━━"
     )
     try:
         await context.bot.send_photo(LOG_GROUP_ID, char["img_url"], caption=text, parse_mode="HTML")
@@ -332,11 +336,15 @@ async def dice_marry(update: Update, context: CallbackContext):
     
     try:
         dice_msg = await context.bot.send_dice(chat_id=chat_id, emoji="🎲", reply_to_message_id=msg_id)
-        await asyncio.sleep(3.2)
+        
+        # 🔥 Suspenseful wait for dice roll to complete (takes approx ~4 seconds)
+        await asyncio.sleep(4.0)
 
         val = dice_msg.dice.value
-        # 🔥 FIX: Win on 5 or 6 (2 out of 6 chances = 33% Win Rate)
-        if val not in (5, 6):
+        # 🔥 EXACT 23% OVERALL WIN RATE LOGIC
+        # Probability of rolling 5 or 6 = 33.3%
+        # So we apply a random check of 69% if you roll 5 or 6 (0.3333 * 0.69 ≈ 0.23)
+        if val not in (5, 6) or random.random() > 0.69:
             text = random.choice(DICE_REJECT_TEXTS)
             return await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
 
@@ -345,8 +353,17 @@ async def dice_marry(update: Update, context: CallbackContext):
             return await context.bot.send_message(chat_id=chat_id, text=f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>", parse_mode="HTML", reply_to_message_id=msg_id)
 
         await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
-        display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
-        caption = f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴs!</b>\n<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n<b><tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> ʀᴀʀɪᴛʏ: {display_rarity}</b>"
+        
+        # 🔥 Perfect format: Emoji in front of RARITY, Text value behind (Like Screenshot)
+        prem_emoji, r_name = get_rarity_details(char.get('rarity', 'common'))
+        
+        caption = (
+            f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> {char.get('name', 'Unknown')} ᴀᴄᴄᴇᴘᴛᴇᴅ ʏᴏᴜʀ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏsᴀʟ! <tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji></b>\n\n"
+            f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
+            f"<b>{prem_emoji} ʀᴀʀɪᴛʏ: {r_name}</b>\n"
+            f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
+            f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ: {char.get('id', 'N/A')}</b>"
+        )
         
         await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
         await send_win_log(context, user, char, "dice")
@@ -407,13 +424,12 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
         
-        # Fast animation (Flood Control safe logic)
-        await asyncio.sleep(1.2)
+        # 🔥 Suspenseful pacing (Wait to build excitement)
+        await asyncio.sleep(2.0)
         try:
             await msg.edit_caption(caption=random.choice(PROPOSING_LOADING_TEXTS), parse_mode="HTML")
-            await asyncio.sleep(1.2)
+            await asyncio.sleep(2.5) # Extra wait for rejection/acceptance!
         except TelegramError:
-            # Agar edit par flood control hit hua to ignore karke seedha result dega
             pass
         
         try:
@@ -423,10 +439,9 @@ async def propose(update: Update, context: CallbackContext):
 
     except TelegramError as e:
         LOGGER.error(f"Error sending propose image: {e}")
-        # Agar pehla message hi send nahi hua, tabhi fail return hoga
         return
 
-    # Check Success or Failure
+    # 🔥 EXACT 23% WIN CHANCE!
     if random.random() > PROPOSE_SUCCESS_RATE:
         reject_text = random.choice(PROPOSE_REJECT_TEXTS)
         try:
@@ -443,7 +458,6 @@ async def propose(update: Update, context: CallbackContext):
     char = await get_unique_char(user.id, None)
     
     if not char:
-        # Koi naya char nahi hai. No refund, seedha reply
         try:
             return await context.bot.send_message(
                 chat_id=chat_id,
@@ -455,11 +469,14 @@ async def propose(update: Update, context: CallbackContext):
             return
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
-    display_rarity = get_rarity_display(char.get('rarity', '🟢 Common'))
+    
+    # 🔥 Perfect format: Emoji in front of RARITY, Text value behind (Like Screenshot)
+    prem_emoji, r_name = get_rarity_details(char.get('rarity', 'common'))
+    
     caption = (
-        f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ ʜᴀs ʙᴇᴇɴ ᴀᴄᴄᴇᴘᴛᴇᴅ! <tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji></b>\n\n"
+        f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> {char.get('name', 'Unknown')} ᴀᴄᴄᴇᴘᴛᴇᴅ ʏᴏᴜʀ ᴘʀᴏᴘᴏsᴀʟ! <tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji></b>\n\n"
         f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ: {char.get('name', 'Unknown')}</b>\n"
-        f"<b><tg-emoji emoji-id=\"6093611479720795757\">💫</tg-emoji> ʀᴀʀɪᴛʏ: {display_rarity}</b>\n"
+        f"<b>{prem_emoji} ʀᴀʀɪᴛʏ: {r_name}</b>\n"
         f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ: {char.get('anime', 'Unknown')}</b>\n"
         f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ: {char.get('id', 'N/A')}</b>"
     )
