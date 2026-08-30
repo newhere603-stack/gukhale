@@ -64,7 +64,7 @@ SUDO_USERS = {7657218453}
 PROPOSAL_COST = 2000
 DICE_COOLDOWN = 1800
 PROPOSE_COOLDOWN = 300
-PROPOSE_SUCCESS_RATE = 0.6  # 60% Win Rate
+PROPOSE_SUCCESS_RATE = 0.30  # 🔥 EXACT 30% WIN CHANCE!
 
 UPDATE_GROUP_URL = "https://t.me/Anime_Group_hai"
 UPDATE_GROUP_ID = -1003087506512
@@ -107,27 +107,34 @@ PROPOSING_LOADING_TEXTS = [
     "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ʜᴏᴘɪɴɢ ғᴏʀ ᴀ ʏᴇs....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>"
 ]
 
+# 🔥 MORE FUNNY DICE REJECTS IN HINGLISH ADDED
 DICE_REJECT_TEXTS = [
-    "<b>ᴛʜᴇ ᴍᴀʀʀɪᴀɢᴇ ᴘʀᴏᴘᴏsᴀʟ ᴡᴀs ʀᴇᴊᴇᴄᴛᴇᴅ ᴀɴᴅ sʜᴇ ʀᴀɴ ᴀᴡᴀʏ!</b>",
-    "<b>sʜᴇ sᴀɪᴅ 'ᴇᴡᴡ, ɴᴏ!' ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ ᴇᴠᴇʀʏᴡʜᴇʀᴇ!</b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ ᴀɴᴅ ᴡᴀʟᴋᴇᴅ ᴀᴡᴀʏ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>",
-    "<b>sʜᴇ sᴀɪᴅ sʜᴇ ᴏɴʟʏ sᴇᴇs ʏᴏᴜ ᴀs ᴀ ʙʀᴏᴛʜᴇʀ! <tg-emoji emoji-id=\"6159082552431746788\">🫂</tg-emoji></b>",
-    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ ɪs ᴀʟʀᴇᴀᴅʏ ᴅᴀᴛɪɴɢ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ.</b>"
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛ ʜᴏ ɢᴀʏᴀ ᴀᴜʀ ᴡᴏ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴇᴡᴡ, ɴᴏ!' ᴀᴜʀ sᴀʙ ᴊᴀɢᴀʜ sᴇ ʙʟᴏᴄᴋ ᴋᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
+    "<b>ᴡᴏ ʙᴀs ʜᴀsɪ ᴀᴜʀ ᴡᴀʜᴀɴ sᴇ ᴄʜᴀʟɪ ɢᴀʏɪ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴋɪ ᴡᴏ ᴛᴜᴍʜᴇ sɪʀғ ᴇᴋ ʙʜᴀɪ ᴋɪ ᴛᴀʀᴀʜ ᴅᴇᴋʜᴛɪ ʜᴀɪ! <tg-emoji emoji-id=\"6159082552431746788\">🫂</tg-emoji></b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! ᴡᴏ ᴘᴇʜʟᴇ sᴇ ᴋɪsɪ ᴀᴜʀ ᴋᴏ ᴅᴀᴛᴇ ᴋᴀʀ ʀᴀʜɪ ʜᴀɪ. <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
+    "<b>ᴛᴜᴍɴᴇ ᴅɪᴄᴇ ʀᴏʟʟ ᴋɪʏᴀ, ᴘᴀʀ ᴜsɴᴇ ᴀᴘɴɪ ᴀᴀɴᴋʜᴇɪɴ ʀᴏʟʟ ᴋᴀʀ ᴅɪ! <tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji></b>",
+    "<b>ᴡᴏ ᴛᴜᴍʜᴇ ᴅᴇᴋʜ ᴋᴀʀ ᴛᴀʀᴀs ᴋʜᴀᴛᴇ ʜᴜᴇ ʀᴏɴᴇ ʟᴀɢɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴅɪᴄᴇ ᴡᴀᴘᴀs ᴛᴜᴍʜᴀʀᴇ ᴍᴜʜ ᴘᴀʀ ᴍᴀᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴄʀᴇᴇᴘ ʙᴏʟᴋᴀʀ ᴘᴏʟɪᴄᴇ ʙᴜʟᴀ ʟɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji></b>"
 ]
 
-# 🔥 EXTRA REJECT MESSAGES ADDED HERE
+# 🔥 EXTRA FUNNY PROPOSE REJECT MESSAGES IN HINGLISH ADDED
 PROPOSE_REJECT_TEXTS = [
-    "<b>sʜᴇ sᴀɪᴅ sʜᴇ'ʟʟ ᴅᴀᴛᴇ ʏᴏᴜ... ɪɴ ʜᴇʀ ɴᴇxᴛ ʟɪғᴇ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
-    "<b>ʏᴏᴜ ʜᴀᴠᴇ ʙᴇᴇɴ ғʀɪᴇɴᴅ-ᴢᴏɴᴇᴅ sᴏ ʜᴀʀᴅ, ʏᴏᴜ ᴀʀᴇ ɴᴏᴡ ᴛʜᴇ ᴍᴀʏᴏʀ ᴏғ ғʀɪᴇɴᴅ ᴢᴏɴᴇ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
-    "<b>sʜᴇ ᴛᴏᴏᴋ ʏᴏᴜʀ ᴄᴏɪɴs, ᴀᴛᴇ ʏᴏᴜʀ ғᴏᴏᴅ, ᴀɴᴅ sᴀɪᴅ 'ʟᴇᴛ's ᴊᴜsᴛ ʙᴇ ʙᴇsᴛɪᴇs!' <tg-emoji emoji-id=\"5370962534721395008\">🍟</tg-emoji></b>",
-    "<b>sʜᴇ sᴀɪᴅ ʏᴏᴜ ᴀʀᴇ ᴛᴏᴏ ɢᴏᴏᴅ ғᴏʀ ʜᴇʀ ᴀɴᴅ ʟᴇғᴛ ʏᴏᴜ ᴏɴ ʀᴇᴀᴅ!</b>",
-    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! sʜᴇ sᴀɪᴅ sʜᴇ ɪs ғᴏᴄᴜsɪɴɢ ᴏɴ ʜᴇʀ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ʀɪɢʜᴛ ɴᴏᴡ. <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
-    "<b>sʜᴇ ᴊᴜsᴛ ʟᴀᴜɢʜᴇᴅ, sʟᴀᴘᴘᴇᴅ ʏᴏᴜ ᴀɴᴅ ᴄᴀʟʟᴇᴅ ᴛʜᴇ ᴄᴏᴘs! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
-    "<b>'ᴇᴡᴡ, ɴᴏ!' sʜᴇ sᴀɪᴅ ᴀɴᴅ ʙʟᴏᴄᴋᴇᴅ ʏᴏᴜ!</b>",
-    "<b>sʜᴇ ʀᴏʟʟᴇᴅ ʜᴇʀ ᴇʏᴇs ᴀɴᴅ ʟᴇғᴛ! <tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji></b>",
-    "<b>ᴘʀᴏᴘᴏsᴀʟ ғᴀɪʟᴇᴅ! sʜᴇ ᴘʀᴇғᴇʀs 𝟸ᴅ ʜᴜsʙᴀɴᴅᴏs. <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
-    "<b>sʜᴇ ᴄᴀʟʟᴇᴅ ʏᴏᴜ ᴀ ᴄʀᴇᴇᴘ ᴀɴᴅ ʀᴀɴ ᴀᴡᴀʏ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
-    "<b>ʏᴏᴜ ɢᴏᴛ ʀᴇᴊᴇᴄᴛᴇᴅ ɪɴ 𝟺ᴋ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>"
+    "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴡᴏ ᴛᴜᴍsᴇ ᴀɢʟᴇ ᴊᴀɴᴀᴍ ᴍᴇɪɴ ᴘᴀᴛᴇɢɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
+    "<b>ᴛᴜᴍ ɪᴛɴɪ ʙᴜʀɪ ᴛᴀʀᴀʜ ғʀɪᴇɴᴅ-ᴢᴏɴᴇ ʜᴜᴇ ʜᴏ ᴋɪ ᴀʙ ᴛᴜᴍ ᴡᴀʜᴀɴ ᴋᴇ ᴍᴀʏᴏʀ ʜᴏ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴀʀᴇ ᴄᴏɪɴs ʟɪʏᴇ, ᴋʜᴀɴᴀ ᴋʜᴀʏᴀ ᴀᴜʀ ʙᴏʟɪ 'ʜᴜᴍ ʙᴀs ʙᴇsᴛɪᴇs ʜᴀɪɴ!' <tg-emoji emoji-id=\"5370962534721395008\">🍟</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴛᴜᴍ ᴜsᴋᴇ ʟɪʏᴇ ʙᴏʜᴏᴛ ᴀᴄᴄʜᴇ ʜᴏ ᴀᴜʀ sᴇᴇɴ ᴋᴀʀᴋᴇ ᴄʜʜᴏᴅ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛᴇᴅ! ᴜsɴᴇ ʙᴏʟᴀ ᴡᴏ ᴀʙʜɪ ᴀᴘɴᴇ ᴀɴɪᴍᴇ ᴄᴀʀᴇᴇʀ ᴘᴀʀ ғᴏᴄᴜs ᴋᴀʀ ʀᴀʜɪ ʜᴀɪ. <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
+    "<b>ᴡᴏ ᴢᴏʀsᴇ ʜᴀsɪ, ᴛᴜᴍʜᴇ ᴛʜᴀᴘᴘᴀᴅ ᴍᴀᴀʀᴀ ᴀᴜʀ ᴘᴏʟɪᴄᴇ ʙᴜʟᴀ ʟɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>'ᴇᴡᴡ, ɴᴏ!' ʙᴏʟᴋᴀʀ ᴜsɴᴇ ʙʟᴏᴄᴋ ᴋᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ɪɢɴᴏʀᴇ ᴋɪʏᴀ ᴀᴜʀ ᴋɪsɪ ᴀᴜʀ ʟᴀᴅᴋᴇ ᴋᴇ sᴀᴛʜ ɴɪᴋᴀʟ ɢᴀʏɪ! <tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji></b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ғᴀɪʟᴇᴅ! ᴜsʜᴇ ᴛᴜᴍʜᴀʀᴇ ʙᴀᴊᴀʏᴇ 𝟸ᴅ ʜᴜsʙᴀɴᴅᴏs ᴢʏᴀᴅᴀ ᴘᴀsᴀɴᴅ ʜᴀɪɴ. <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴄʀᴇᴇᴘ ʙᴏʟᴀ ᴀᴜʀ ᴅᴀʀʀ ᴋᴇ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>ʙʜᴀɪ ᴛᴇʀᴀ ᴛᴏ 𝟺ᴋ ᴍᴇɪɴ ᴋᴀᴛ ɢᴀʏᴀ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴍᴀɪɴ ᴛᴜᴍsᴇ ᴘʏᴀʀ ᴋᴀʀᴛɪ ʜᴜ... ᴘᴀʀ ᴇᴋ ʙʜᴀɪ ᴋɪ ᴛᴀʀᴀʜ!' <tg-emoji emoji-id=\"6159082552431746788\">🫂</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴀʀᴀ ʙᴀɴᴋ ʙᴀʟᴀɴᴄᴇ ᴅᴇᴋʜᴀ ᴀᴜʀ ᴄʜᴀʟɪ ɢᴀʏɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>"
 ]
 
 cooldowns = {"dice": {}, "propose": {}}
@@ -263,16 +270,19 @@ async def prarity_on(update: Update, context: CallbackContext):
     raw_input = " ".join(context.args)
     base_key = get_base_rarity(raw_input)
     
+    if base_key not in RARITIES:
+        return await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ɪɴᴠᴀʟɪᴅ ʀᴀʀɪᴛʏ ɴᴀᴍᴇ! ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴠᴀʟɪᴅ ʀᴀʀɪᴛʏ.</b>", parse_mode="HTML")
+    
     settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
     raw_disabled = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
-    normalized_disabled = {get_base_rarity(d) for d in raw_disabled}
+    normalized_disabled = {get_base_rarity(d) for d in raw_disabled if get_base_rarity(d) in RARITIES}
 
     if base_key in normalized_disabled:
         normalized_disabled.remove(base_key)
         await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
-        await update.message.reply_text(f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʀᴀʀɪᴛʏ '{base_key.upper()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ʀᴀʀɪᴛʏ '{base_key.upper()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def prarity_off(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
@@ -286,16 +296,19 @@ async def prarity_off(update: Update, context: CallbackContext):
     raw_input = " ".join(context.args)
     base_key = get_base_rarity(raw_input)
     
+    if base_key not in RARITIES:
+        return await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ɪɴᴠᴀʟɪᴅ ʀᴀʀɪᴛʏ ɴᴀᴍᴇ! ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴠᴀʟɪᴅ ʀᴀʀɪᴛʏ.</b>", parse_mode="HTML")
+    
     settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
     raw_disabled = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
-    normalized_disabled = {get_base_rarity(d) for d in raw_disabled}
+    normalized_disabled = {get_base_rarity(d) for d in raw_disabled if get_base_rarity(d) in RARITIES}
 
     if base_key not in normalized_disabled:
         normalized_disabled.add(base_key)
         await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
-        await update.message.reply_text(f"<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ʀᴀʀɪᴛʏ '{base_key.upper()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(f"<tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> <b>ʀᴀʀɪᴛʏ '{base_key.title()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ʀᴀʀɪᴛʏ '{base_key.upper()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def dice_marry(update: Update, context: CallbackContext):
     if not update.message or not update.effective_user:
@@ -322,7 +335,8 @@ async def dice_marry(update: Update, context: CallbackContext):
         await asyncio.sleep(3.2)
 
         val = dice_msg.dice.value
-        if val not in (1, 2, 5, 6):
+        # 🔥 FIX: Win on 5 or 6 (2 out of 6 chances = 33% Win Rate)
+        if val not in (5, 6):
             text = random.choice(DICE_REJECT_TEXTS)
             return await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
 
