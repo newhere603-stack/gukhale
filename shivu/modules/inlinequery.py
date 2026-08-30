@@ -37,7 +37,7 @@ RARITIES = {
     "neon": ("⚡", "Neon", 7),
     "summer": ("🏖️", "Summer", 8),
     "sweet": ("🍭", "Sweet", 9),
-    "special": ("🔵", "Medium", 10),
+    "special": ("🔴", "Medium", 10),
     "valentine": ("💞", "Valentine", 11),
     "winter": ("❄️", "Winter", 12),
     "erotic": ("🥵", "Spicy", 13),
