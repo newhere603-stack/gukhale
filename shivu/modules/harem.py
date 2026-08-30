@@ -245,8 +245,9 @@ class HaremMessageBuilder:
             user_count = len(user_unique)
             total_count = anime_counts.get(display_anime, 0)
 
+            # 🔥 Fix 1: Properly escape small caps anime to avoid &AMP; glitch
             message += self.style['anime_header'].format(
-                anime=to_small_caps(escape(display_anime)), user_count=user_count, total_count=total_count
+                anime=escape(to_small_caps(display_anime)), user_count=user_count, total_count=total_count
             )
             message += self.style['separator']
 
@@ -259,13 +260,14 @@ class HaremMessageBuilder:
         char_id = str(char.id).zfill(3)
         r_emoji = get_prem_emoji(char.rarity)
         event_str = f" [{char.event_emoji}]" if char.event_emoji else ""
+        # 🔥 Fix 2: Properly escape small caps name to avoid &AMP; glitch
         return self.style['character'].format(
-            id=char_id, rarity=r_emoji, name=to_small_caps(escape(char.name)), event=event_str, count=count
+            id=char_id, rarity=r_emoji, name=escape(to_small_caps(char.name)), event=event_str, count=count
         )
 
 class HaremHandler:
-    # 🔥 FIXED: Set to 15 to ensure large pages are generated
-    CHARACTERS_PER_PAGE = 15
+    # 🔥 FIXED: Set to 12. Perfect balance to keep image attached and avoid long caption limit
+    CHARACTERS_PER_PAGE = 12
 
     def __init__(self):
         self.collection_db = db['anime_characters_lol']
