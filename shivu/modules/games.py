@@ -503,6 +503,16 @@ async def stour(update: Update, context: CallbackContext, override_args: List[st
 
 async def riddle(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
+    
+    # 🔥 GROUP LOCK CHECK (SUPERFAST)
+    if update.effective_chat.id != -1003087506512:
+        text = "<b><tg-emoji emoji-id=\"5427009714745517609\">🔒</tg-emoji> ᴛʜɪs ɢᴀᴍᴇ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴘʟᴀʏᴇᴅ ɪɴ ᴏᴜʀ ᴏғғɪᴄɪᴀʟ ɢʀᴏᴜᴘ.</b>"
+        markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("ᴊᴏɪɴ ɢʀᴏᴜᴘ ᴛᴏ ᴘʟᴀʏ 🎮", url="https://t.me/c/3087506512/1")
+        ]])
+        await send_or_edit_response(update, text, markup)
+        return
+        
     if await check_cooldown(update, user_id):
         return
     
@@ -540,6 +550,10 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
 
 async def riddle_answer(update: Update, context: CallbackContext):
     if not update.effective_user or not update.message:
+        return
+        
+    # 🔥 FAST GROUP CHECK: Ignore all texts from other groups instantly
+    if update.effective_chat.id != -1003087506512:
         return
     
     user_id = update.effective_user.id
