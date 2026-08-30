@@ -116,29 +116,50 @@ class UserCollection:
         mode = str(self.filter_mode)
         chars = self.characters
         
+        # 🔥 Step 1: Remove duplicates for pagination to ensure pages are always full!
+        unique_chars_dict = {}
+        if mode == "latest":
+            # Reverse first to keep the newest instances of the character
+            for c in reversed(chars):
+                if c.id not in unique_chars_dict:
+                    unique_chars_dict[c.id] = c
+            unique_list = list(unique_chars_dict.values())
+        else:
+            for c in chars:
+                if c.id not in unique_chars_dict:
+                    unique_chars_dict[c.id] = c
+            unique_list = list(unique_chars_dict.values())
+        
+        # 🔥 Step 2: Apply filters on unique characters
         if mode.startswith("anime:"):
             target_anime = mode.split(":", 1)[1]
-            return sorted([c for c in chars if c.anime == target_anime], key=lambda c: c.id)
+            filtered = [c for c in unique_list if c.anime == target_anime]
+            return sorted(filtered, key=lambda c: c.id)
         if mode.startswith("char:"):
             target_char_name = mode.split(":", 1)[1]
-            return sorted([c for c in chars if c.name == target_char_name], key=lambda c: (c.anime, c.id))
+            filtered = [c for c in unique_list if c.name == target_char_name]
+            return sorted(filtered, key=lambda c: (c.anime, c.id))
         if mode in RARITIES:
             target_key = mode.lower()
-            filtered = [c for c in chars if get_base_rarity(c.rarity) == target_key]
+            filtered = [c for c in unique_list if get_base_rarity(c.rarity) == target_key]
             return sorted(filtered, key=lambda c: (c.anime, c.id))
         if mode == "latest":
-            return list(reversed(chars))
+            return unique_list
             
-        return sorted(chars, key=lambda c: (c.anime, c.id))
+        return sorted(unique_list, key=lambda c: (c.anime, c.id))
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
         counts = {}
+        # Count from the original full list to get correct x2, x3
         for char in characters: counts[char.id] = counts.get(char.id, 0) + 1
         return counts
 
     def group_by_anime(self, characters: List[Character]) -> Dict[str, List[Character]]:
         grouped = {}
-        for char in characters: grouped.setdefault(char.anime, []).append(char)
+        for char in characters:
+            # Case insensitive grouping to avoid duplicate anime headers
+            key = (char.anime or "Unknown").strip().upper()
+            grouped.setdefault(key, []).append(char)
         return grouped
 
 class MediaHelper:
@@ -162,7 +183,6 @@ class MediaHelper:
         if not valid_pairs or not opts.preview_image:
             return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
 
-        # 🚀 TELEGRAM "CAPTION TOO LONG" SMART BYPASS
         for url, vid in valid_pairs:
             is_vid = opts.video_support and (vid or MediaHelper.is_video_url(url))
             try:
@@ -195,7 +215,6 @@ class MediaHelper:
                         pass
                 continue 
                 
-        # 👑 Ultimate Brahmastra Fallback
         try:
             return await message.reply_photo(photo=MediaHelper.GLOBAL_FALLBACK, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         except TelegramError:
@@ -217,25 +236,27 @@ class HaremMessageBuilder:
         message = self.style['header'].format(user_mention=user_mention)
         grouped = self.collection.group_by_anime(characters)
         counts = self.collection.count_by_id(self.collection.characters)
-        seen = set()
 
-        for anime, chars in grouped.items():
-            user_count = sum(1 for c in self.collection.characters if c.anime == anime)
+        for anime_key, chars in grouped.items():
+            display_anime = chars[0].anime or "Unknown"
+            
+            # Count how many unique characters the user has from this specific anime
+            user_unique = {c.id for c in self.collection.characters if (c.anime or "Unknown").strip().upper() == anime_key}
+            user_count = len(user_unique)
+            total_count = anime_counts.get(display_anime, 0)
+
             message += self.style['anime_header'].format(
-                anime=to_small_caps(escape(anime)), user_count=user_count, total_count=anime_counts.get(anime, 0)
+                anime=to_small_caps(escape(display_anime)), user_count=user_count, total_count=total_count
             )
             message += self.style['separator']
 
             for char in chars:
-                if char.id in seen: continue
                 message += self._format_character(char, counts.get(char.id, 1))
-                seen.add(char.id)
             message += self.style['footer']
         return message
 
     def _format_character(self, char: Character, count: int) -> str:
         char_id = str(char.id).zfill(3)
-        # 🔥 BACK TO PREMIUM EMOJI
         r_emoji = get_prem_emoji(char.rarity)
         event_str = f" [{char.event_emoji}]" if char.event_emoji else ""
         return self.style['character'].format(
@@ -243,8 +264,8 @@ class HaremMessageBuilder:
         )
 
 class HaremHandler:
-    # 🔥 WAPAS 10 CHARACTERS PER PAGE
-    CHARACTERS_PER_PAGE = 10
+    # 🔥 FIXED: Set to 15 to ensure large pages are generated
+    CHARACTERS_PER_PAGE = 15
 
     def __init__(self):
         self.collection_db = db['anime_characters_lol']
@@ -295,7 +316,7 @@ class HaremHandler:
         
         cursor = self.collection_db.find(
             {"id": {"$in": list(query_ids)}},
-            {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
+            {"id": 1, "img_url": 1, "is_video": 1, "gender": 1} # Only fetching cosmetic changes to prevent filter mismatch
         )
         live_docs = await cursor.to_list(length=None)
             
@@ -309,9 +330,7 @@ class HaremHandler:
             c_clean = str(c.id).strip().lstrip('0') or '0'
             doc = live_map.get(str(c.id).strip()) or live_map.get(c_clean)
             if doc:
-                c.name = doc.get('name', c.name)
-                c.anime = doc.get('anime', c.anime)
-                c.rarity = doc.get('rarity', c.rarity) 
+                # Do NOT overwrite rarity or anime to avoid filter display bugs!
                 if doc.get('img_url'): c.img_url = doc.get('img_url')
                 c.is_video = doc.get('is_video', c.is_video)
                 c.gender = doc.get('gender', c.gender)
@@ -338,6 +357,7 @@ class HaremHandler:
         return counts
 
     def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int, step: int = 1) -> InlineKeyboardMarkup:
+        # Fixed the total text to reflect the actual full unique list count (total_chars is len of display_order now)
         keyboard = [[InlineKeyboardButton(f"✨ ʜᴀʀᴇᴍ ({total_chars})", switch_inline_query_current_chat=f"collection.{user_id}")]]
         if total_pages > 1:
             nav = []
@@ -386,9 +406,8 @@ class HaremHandler:
             if doc:
                 display_char.img_url = doc.get("img_url")
                 display_char.is_video = doc.get("is_video", False)
+                # Keep names/rarities intact to match user db
                 display_char.name = doc.get("name", display_char.name)
-                display_char.anime = doc.get("anime", display_char.anime)
-                display_char.rarity = doc.get("rarity", display_char.rarity)
 
         chars_to_update = current.copy()
         if display_char and display_char not in chars_to_update:
