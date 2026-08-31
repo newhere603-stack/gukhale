@@ -196,7 +196,7 @@ class GameUI:
 
     @staticmethod
     def format_result(result: GameResult, emoji: str) -> str:
-        status = "<b><tg-emoji emoji-id=\"6068616612599044781\">✅</tg-emoji> ᴡɪɴ</b>" if result.won else "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ʟᴏsᴇ</b>"
+        status = "<b><tg-emoji emoji-id=\"6100179962185129743\">✅</tg-emoji> ᴡɪɴ</b>" if result.won else "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ʟᴏsᴇ</b>"
         msg = f"<b>{emoji} ɢᴀᴍᴇ ʀᴇsᴜʟᴛ</b>\n{status}\n"
         if result.display_outcome:
             msg += f"<b>ᴏᴜᴛᴄᴏᴍᴇ: {result.display_outcome}</b>\n"
@@ -587,7 +587,7 @@ async def riddle_answer(update: Update, context: CallbackContext):
             rewards_str += f" <b>& {total_tokens} ᴛᴏᴋᴇɴ!</b>"
             
         await update.message.reply_text(
-            f"<b><tg-emoji emoji-id=\"6068616612599044781\">✅</tg-emoji> ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
+            f"<b><tg-emoji emoji-id=\"6100179962185129743\">✅</tg-emoji> ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
             parse_mode="HTML"
         )
         game_state.riddles.pop(user_id, None)
