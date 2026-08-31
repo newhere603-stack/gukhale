@@ -98,7 +98,7 @@ class DisplayOptions:
 # 🔥 EXACT STYLE WITH "⚋" LINES ON BOTH SIDES
 DEFAULT_STYLE = {
     'header': "<b>{user_mention}'s Harem</b>\n\n",
-    'anime_header': "<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
+    'anime_header': "<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
     'separator': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n",
     'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
     'footer': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n\n",
@@ -546,7 +546,7 @@ class ModeHandler:
         if page < total_pages - 1: nav.append(InlineKeyboardButton("❯", callback_data=f"harem_mode:alist:{user_id}:{page+1}"))
         if nav: keyboard.append(nav)
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")])
-        await query.edit_message_caption(caption="<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> sᴇʟᴇᴄᴛ ᴀɴ ᴀɴɪᴍᴇ ᴛᴏ ғɪʟᴛᴇʀ:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
+        await query.edit_message_caption(caption="<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> sᴇʟᴇᴄᴛ ᴀɴ ᴀɴɪᴍᴇ ᴛᴏ ғɪʟᴛᴇʀ:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
     async def show_char_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
