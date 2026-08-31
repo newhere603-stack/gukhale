@@ -24,11 +24,11 @@ except ImportError:
 OWNER_ID = 7657218453
 
 DEFAULT_PRICES = {
-    "common": 1000, "rare": 3200, "medium": 2900, 
-    "legendary": 5000, "celestial": 70000, "spicy": 59000, 
-    "exclusive": 12000, "mythic": 180000, "premium edition": 250000, 
-    "sweet": 52000, "valentine": 90000, "winter": 55000, 
-    "neon": 67000, "summer": 60000, "cosmic": 640000
+    "common": 1000, "rare": 10000, "medium": 8000, 
+    "legendary": 15000, "celestial": 70000, "spicy": 99000, 
+    "exclusive": 30000, "mythic": 180000, "premium edition": 250000, 
+    "sweet": 62000, "valentine": 90000, "winter": 59000, 
+    "neon": 67000, "summer": 65000, "cosmic": 740000
 }
 
 PREMIUM_RARITIES = {
