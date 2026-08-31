@@ -276,7 +276,7 @@ async def despawn_character(chat_id, message_id, character, context):
             f"<tg-emoji emoji-id=\"5413704112220949842\">⏰</tg-emoji> <b>ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ!</b>\n\n"
             f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> <b>ɴᴀᴍᴇ:</b> <b>{escape(character.get('name', 'Unknown'))}</b>\n"
             f"{r_display_emoji}<b> ʀᴀʀɪᴛʏ: {r_name}</b>\n"
-            f"<tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> <b>sᴏᴜʀᴄᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n\n"
+            f"<tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> <b>sᴏᴜʀᴄᴇ:</b> <b>{escape(character.get('anime', 'Unknown'))}</b>\n\n"
             f"<tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> <b>ʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ!</b>"
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
@@ -626,7 +626,7 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
     text = (
         "<b><tg-emoji emoji-id=\"5359441070201513074\">🎭</tg-emoji> ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
         f"<b><tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> ɴᴀᴍᴇ:</b><code> {escape(c.get('name', 'Unknown'))} </code>\n"
-        f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b><code> {escape(c.get('anime', 'Unknown'))} </code>\n"
+        f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ:</b><code> {escape(c.get('anime', 'Unknown'))} </code>\n"
         f"{r_display_emoji} <b>ʀᴀʀɪᴛʏ:</b><code> {r_name} </code>\n"
         f"<b><tg-emoji emoji-id=\"6093857216274635770\">🔖</tg-emoji> ɪᴅ:</b><code> {escape(str(c.get('id', 'Unknown')))} </code>\n\n"
         "<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴀᴅᴅ ɪᴛ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ!</b>"
