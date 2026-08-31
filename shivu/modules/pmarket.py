@@ -631,7 +631,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     elif action == "pm_m":
         bot_username = context.bot.username
         keyboard = await get_pmarket_keyboard(user_id, bot_username)
-        await update_menu(query, f"<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> {sc('p2p marketplace')}</b>\n\n<i>{sc('choose an option to proceed.')}</i>", keyboard)
+        await update_menu(query, f"<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>{sc('choose an option to proceed.')}</i>", keyboard)
 
     # --- EXCHANGE SUB-MENU ---
     elif action == "pm_exc_menu":
@@ -739,7 +739,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
         caption = (
             f"<b>{prem_emoji} {sc(display_char.get('name', 'Unknown'))}</b>\n\n"
-            f"<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> {sc(display_char.get('anime', 'Unknown'))}\n"
+            f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ:</b> {sc(display_char.get('anime', 'Unknown'))}\n"
             f"<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> ʀᴀʀɪᴛʏ:</b> {prem_emoji} {sc(name)}\n"
             f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ᴘʀɪᴄᴇ:</b> <code>{price:,}</code>\n"
             f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> sᴇʟʟᴇʀ:</b> <code>{seller_id}</code>"
