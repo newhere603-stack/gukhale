@@ -27,7 +27,7 @@ def to_small_caps(text: str) -> str:
     mapping = {
         'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
         'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
-        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴏ', 'q': 'ǫ', 'r': 'ʀ', 
+        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
         's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 
         'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
         'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
@@ -322,10 +322,22 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
     if not message: 
         return
         
-    text = message.text or message.caption or ""
+    # Normal text, media caption, aur INVOICE/Payment description ko combine kar rahe hain
+    text_parts = []
+    if message.text: 
+        text_parts.append(message.text)
+    if message.caption: 
+        text_parts.append(message.caption)
+    if message.invoice: 
+        if message.invoice.title:
+            text_parts.append(message.invoice.title)
+        if message.invoice.description:
+            text_parts.append(message.invoice.description)
+            
+    full_text = " ".join(text_parts)
     
     # Exact phrase detect karke instantly delete karega
-    if "Support our mission and spread" in text:
+    if "Support our mission and spread" in full_text:
         try:
             await message.delete()
         except Exception:
