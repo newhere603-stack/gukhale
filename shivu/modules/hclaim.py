@@ -90,6 +90,14 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         logger.error(f"Log error: {e}")
 
+# 🔥 NEW SILENT AUTO DELETE FUNCTION
+async def silent_auto_delete(message, delay_seconds: int = 1200):
+    await asyncio.sleep(delay_seconds)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
 def can_claim_today(last_claim_utc) -> bool:
     if not last_claim_utc:
         return True
@@ -185,12 +193,18 @@ async def swaifu(update: Update, context: CallbackContext):
 
         try:
             if img_url:
-                await update.message.reply_photo(photo=img_url, caption=caption, parse_mode=ParseMode.HTML)
+                sent_msg = await update.message.reply_photo(photo=img_url, caption=caption, parse_mode=ParseMode.HTML)
             else:
-                await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
+                sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
+            
+            # 🔥 20 MINUTE AUTO DELETE TASK ADDED HERE
+            asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
+
         except Exception as img_err:
             logger.warning(f"Image send failed: {img_err}")
-            await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
+            sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
+            # 🔥 AUTO DELETE FOR FALLBACK MESSAGE TOO
+            asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
 
         log_data = {
             "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
