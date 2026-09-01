@@ -240,7 +240,6 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     char = chars[index]
     user_id = user['id'] 
     
-    # 🔥 LIVE UPDATE: Turant global database se connect karke latest details nikalega
     search_ids = [str(char.get('id'))]
     if str(char.get('id')).isdigit():
         search_ids.append(int(char.get('id')))
@@ -333,6 +332,16 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
         else:
             msg = await update_obj.message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
             
+    # Auto-Delete Logic for new MP message
+    if not is_edit and msg:
+        async def auto_delete():
+            await asyncio.sleep(1200) # 20 mins
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+        asyncio.create_task(auto_delete())
+            
     if msg and media_type == 'url' and img_url:
         update_data = {}
         if msg.photo: update_data['cached_photo_id'] = msg.photo[-1].file_id
@@ -347,7 +356,6 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
 async def render_auction_ui(update_obj, active_auc, user_id, add_amount=1000, is_edit=False):
     add_amount = max(1000, add_amount)
 
-    # 🔥 LIVE UPDATE FOR AUCTIONS
     search_ids = [str(active_auc.get('char_id'))]
     if str(active_auc.get('char_id')).isdigit():
         search_ids.append(int(active_auc.get('char_id')))
@@ -360,7 +368,6 @@ async def render_auction_ui(update_obj, active_auc, user_id, add_amount=1000, is
         active_auc['img_url'] = live_auc_char.get('img_url', active_auc.get('img_url'))
 
     top_bids = active_auc.get('top_bids', [])
-    # 🔥 TOP 20 LIST WITH 1-3 MEDALS
     top_list_text = f"\n\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> 𝗧𝗢𝗣 𝗕𝗜𝗗𝗗𝗘𝗥𝗦:\n"
     
     if top_bids:
@@ -385,7 +392,6 @@ async def render_auction_ui(update_obj, active_auc, user_id, add_amount=1000, is
 <tg-emoji emoji-id="6314494724266796319">🟠</tg-emoji> {bold_sc('SERIES:')} {bold_sc(active_auc['anime'])}
 {r_emoji} {bold_sc('RARITY:')} {bold_sc(r_name)}{top_list_text}"""
 
-    # 🔥 Adding Amount Buttons 
     buttons = [
         [
             InlineKeyboardButton("⋞", callback_data=f"auc_adj_{user_id}_-1000_{add_amount}"),
@@ -434,7 +440,6 @@ async def render_auction_ui(update_obj, active_auc, user_id, add_amount=1000, is
         except Exception:
             pass
     else:
-        # Initial call via /auction command
         message = update_obj.message
         if media_source:
             try:
@@ -459,6 +464,15 @@ async def render_auction_ui(update_obj, active_auc, user_id, add_amount=1000, is
         else:
             msg = await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
 
+    # Auto-Delete Logic for new Auction UI
+    if not is_edit and msg:
+        async def auto_delete():
+            await asyncio.sleep(1200) # 20 mins
+            try:
+                await msg.delete()
+            except Exception:
+                pass
+        asyncio.create_task(auto_delete())
         
     if msg and media_type == 'url' and img_url:
         update_data = {}
@@ -482,7 +496,6 @@ async def marketplace(update: Update, context: CallbackContext):
     await render_mp_message(update, user, 0, is_edit=False)
 
 
-# 🔥 NAYA AUCTION COMMAND (Direct Entry)
 async def auction_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     active_auc = await auction_collection.find_one({'status': 'active'})
@@ -492,7 +505,6 @@ async def auction_cmd(update: Update, context: CallbackContext):
     await render_auction_ui(update, active_auc, user_id, 1000, is_edit=False)
 
 
-# 🔥 NAYA BID COMMAND (Any Amount Add)
 async def place_bid_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     if not context.args or not context.args[0].isdigit():
@@ -513,10 +525,14 @@ async def place_bid_cmd(update: Update, context: CallbackContext):
     existing_bid = next((b['bid'] for b in top_bids if b['id'] == user_id), 0)
     new_total = existing_bid + add_amount
     
-    # Fast Projection
-    eco_user = await eco_collection.find_one({'id': user_id}, {'balance': 1})
-    if not eco_user or eco_user.get('balance', 0) < new_total:
-        await update.message.reply_text(bold_sc(f"Low balance! You need {new_total:,} 💸 for this total bid."), parse_mode='HTML')
+    # 🔥 Instant Coins Deduction
+    eco_user = await eco_collection.find_one_and_update(
+        {'id': user_id, 'balance': {'$gte': add_amount}},
+        {'$inc': {'balance': -add_amount}},
+        projection={'balance': 1}
+    )
+    if not eco_user:
+        await update.message.reply_text(bold_sc(f"Low balance! You need {add_amount:,} 💸 more for this bid."), parse_mode='HTML')
         return
         
     top_bids = [b for b in top_bids if b['id'] != user_id]
@@ -529,12 +545,8 @@ async def place_bid_cmd(update: Update, context: CallbackContext):
         {'$set': {'highest_bid': highest_bid, 'top_bids': top_bids}}
     )
     
-    await update.message.reply_text(bold_sc(f"✅ Added {add_amount:,} to your bid! Total bid: {new_total:,}"), parse_mode='HTML')
-    
-    # Re-render to show updated board
-    active_auc['highest_bid'] = highest_bid
-    active_auc['top_bids'] = top_bids
-    await render_auction_ui(update, active_auc, user_id, 1000, is_edit=False)
+    await update.message.reply_text(bold_sc(f"✅ Bid Confirmed! Added {add_amount:,} 💸. Your total bid is now {new_total:,}"), parse_mode='HTML')
+    # Yaha auction page wapas render nahi hoga, silent rakha gaya hai command se bid ke liye.
 
 
 async def marketplace_callbacks(update: Update, context: CallbackContext):
@@ -580,10 +592,14 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 existing_bid = next((b['bid'] for b in top_bids if b['id'] == clicker_id), 0)
                 new_total = existing_bid + add_amount
                 
-                # 🔥 PROJECTION: Faster coin fetch
-                eco_user = await eco_collection.find_one({'id': clicker_id}, {'balance': 1})
-                if not eco_user or eco_user.get('balance', 0) < new_total:
-                    await query.answer(to_small_caps(f"Low balance! You need {new_total:,} 💸 total."), show_alert=True)
+                # 🔥 Instant Coins Deduction
+                eco_user = await eco_collection.find_one_and_update(
+                    {'id': clicker_id, 'balance': {'$gte': add_amount}},
+                    {'$inc': {'balance': -add_amount}},
+                    projection={'balance': 1}
+                )
+                if not eco_user:
+                    await query.answer(to_small_caps(f"Low balance! You need {add_amount:,} 💸 more."), show_alert=True)
                     return
                 
                 top_bids = [b for b in top_bids if b['id'] != clicker_id]
@@ -605,12 +621,15 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
 
             if data.startswith("auc_can_"):
                 top_bids = active_auc.get('top_bids', [])
-                has_bid = any(b['id'] == clicker_id for b in top_bids)
+                existing_bid = next((b['bid'] for b in top_bids if b['id'] == clicker_id), 0)
                 
-                if not has_bid:
+                if existing_bid == 0:
                     await query.answer(to_small_caps("You haven't placed any bid yet!"), show_alert=True)
                     return
                     
+                # 🔥 Refund user unka paisa jo bet me lagaya tha
+                await eco_collection.update_one({'id': clicker_id}, {'$inc': {'balance': existing_bid}})
+                
                 top_bids = [b for b in top_bids if b['id'] != clicker_id]
                 top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
                 
@@ -621,7 +640,7 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     {'$set': {'highest_bid': highest_bid, 'top_bids': top_bids}}
                 )
                 
-                await query.answer(to_small_caps("✅ Your bid has been cancelled! Coins are safe."), show_alert=True)
+                await query.answer(to_small_caps("✅ Your bid has been cancelled! Coins are refunded."), show_alert=True)
                 
                 active_auc['highest_bid'] = highest_bid
                 active_auc['top_bids'] = top_bids
@@ -823,35 +842,58 @@ async def end_auction(update: Update, context: CallbackContext):
         await update.message.reply_text(bold_sc("Auction ended! No one placed a bid."), parse_mode='HTML')
         return
         
-    winner = top_bids[0]
-    bidder_id = winner['id']
-    winning_bid = winner['bid']
-    
-    clean_winner_name = str(winner['name']).replace('<', '&lt;').replace('>', '&gt;')
-    winner_mention = f"<b><a href='tg://user?id={bidder_id}'>{to_small_caps(clean_winner_name)}</a></b>"
-    
-    eco_user = await eco_collection.find_one_and_update(
-        {'id': bidder_id, 'balance': {'$gte': winning_bid}},
-        {'$inc': {'balance': -winning_bid}},
-        projection={'balance': 1}
-    )
-    
     char_query = {'$or': [{'id': active_auc['char_id']}, {'id': str(active_auc['char_id'])}, {'id': int(active_auc['char_id']) if str(active_auc['char_id']).isdigit() else active_auc['char_id']}]}
     char = await collection.find_one(char_query)
     
-    if eco_user and char:
-        clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
+    if not char:
+        await update.message.reply_text(bold_sc("Error: Character not found! Refunding all bids..."), parse_mode='HTML')
+        for b in top_bids:
+            await eco_collection.update_one({'id': b['id']}, {'$inc': {'balance': b['bid']}})
+        return
+
+    clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold']}
+    
+    # 🔥 Top 3 Winners aur Losers ko filter karna
+    winners = top_bids[:3]
+    losers = top_bids[3:]
+    
+    winners_text = ""
+    for i, w in enumerate(winners):
+        bidder_id = w['id']
         await user_collection.update_one({'id': bidder_id}, {'$push': {'characters': clean_char}})
+        clean_name = str(w['name']).replace('<', '&lt;').replace('>', '&gt;')
+        winners_text += f"<b>{i+1}. <a href='tg://user?id={bidder_id}'>{to_small_caps(clean_name)}</a></b> - {w['bid']:,} 💸\n"
         
-        header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION ENDED!')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n{bold_sc('WINNER: ')}"
-        footer = f"\n{bold_sc('WINNING BID:')} {bold_sc(f'{winning_bid:,}')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>"
-        msg = f"{header}{winner_mention}{footer}"
+    # 🔥 Losers ko refund Dena
+    for l in losers:
+        await eco_collection.update_one({'id': l['id']}, {'$inc': {'balance': l['bid']}})
         
-        await update.message.reply_text(msg, parse_mode='HTML')
-    else:
-        header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION ENDED WITH ERROR!')}\n\n"
-        msg = f"{header}{winner_mention} {bold_sc('did not have enough coins to pay the bid!')}\n{bold_sc('Auction has been cancelled.')}"
-        await update.message.reply_text(msg, parse_mode='HTML')
+    header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION ENDED!')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n{bold_sc('WINNERS:')}\n"
+    footer = f"\n{bold_sc('Rest of the bidders have received their full refund!')}"
+    msg = f"{header}{winners_text}{footer}"
+    
+    await update.message.reply_text(msg, parse_mode='HTML')
+
+
+# 🔥 NAYA CANCEL AUCTION COMMAND
+async def cancel_auction(update: Update, context: CallbackContext):
+    if update.effective_user.id != OWNER_ID: 
+        return 
+        
+    active_auc = await auction_collection.find_one({'status': 'active'})
+    if not active_auc:
+        await update.message.reply_text(bold_sc("No active auction found to cancel."), parse_mode='HTML')
+        return
+        
+    await auction_collection.update_one({'_id': active_auc['_id']}, {'$set': {'status': 'cancelled'}})
+    
+    # 🔥 Sabke coins refund karna
+    top_bids = active_auc.get('top_bids', [])
+    for b in top_bids:
+        await eco_collection.update_one({'id': b['id']}, {'$inc': {'balance': b['bid']}})
+        
+    await update.message.reply_text(bold_sc("Auction Cancelled! All active bids have been refunded."), parse_mode='HTML')
+
 
 # --- Handlers ---
 application.add_handler(CommandHandler(["mp", "marketplace"], marketplace, block=False))
@@ -860,5 +902,6 @@ application.add_handler(CommandHandler("bid", place_bid_cmd, block=False))
 application.add_handler(CommandHandler("setprice", set_mp_price, block=False))
 application.add_handler(CommandHandler("startauction", start_auction, block=False))
 application.add_handler(CommandHandler("endauction", end_auction, block=False))
+application.add_handler(CommandHandler("cancelauction", cancel_auction, block=False))
 application.add_handler(CommandHandler("togglerarity", toggle_rarity, block=False))
 application.add_handler(CallbackQueryHandler(marketplace_callbacks, pattern="^(mp_|auc_)", block=False))
