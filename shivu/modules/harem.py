@@ -21,8 +21,9 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-# 🔥 GLOBAL CACHE FOR INSANE SPEED
+# 🔥 GLOBAL CACHE FOR INSANE SPEED & INSTANT DATA SYNC
 ANIME_COUNTS_CACHE: Dict[str, int] = {}
+GLOBAL_CHAR_CACHE: Dict[str, Optional[Dict[str, str]]] = {}
 
 # 🔥 UNIFIED RARITY DICTIONARY
 RARITIES = {
@@ -116,21 +117,22 @@ class UserCollection:
         mode = str(self.filter_mode)
         chars = self.characters
         
-        # 🔥 Step 1: Remove duplicates for pagination to ensure pages are always full!
+        # 🔥 Step 1: Remove duplicates perfectly by normalizing IDs (9 == 09)
         unique_chars_dict = {}
         if mode == "latest":
-            # Reverse first to keep the newest instances of the character
             for c in reversed(chars):
-                if c.id not in unique_chars_dict:
-                    unique_chars_dict[c.id] = c
+                c_clean = str(c.id).strip().lstrip('0') or '0'
+                if c_clean not in unique_chars_dict:
+                    unique_chars_dict[c_clean] = c
             unique_list = list(unique_chars_dict.values())
         else:
             for c in chars:
-                if c.id not in unique_chars_dict:
-                    unique_chars_dict[c.id] = c
+                c_clean = str(c.id).strip().lstrip('0') or '0'
+                if c_clean not in unique_chars_dict:
+                    unique_chars_dict[c_clean] = c
             unique_list = list(unique_chars_dict.values())
         
-        # 🔥 Step 2: Apply filters on unique characters
+        # 🔥 Step 2: Apply filters on correctly synced unique characters
         if mode.startswith("anime:"):
             target_anime = mode.split(":", 1)[1]
             filtered = [c for c in unique_list if c.anime == target_anime]
@@ -150,14 +152,14 @@ class UserCollection:
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
         counts = {}
-        # Count from the original full list to get correct x2, x3
-        for char in characters: counts[char.id] = counts.get(char.id, 0) + 1
+        for char in characters: 
+            c_clean = str(char.id).strip().lstrip('0') or '0'
+            counts[c_clean] = counts.get(c_clean, 0) + 1
         return counts
 
     def group_by_anime(self, characters: List[Character]) -> Dict[str, List[Character]]:
         grouped = {}
         for char in characters:
-            # Case insensitive grouping to avoid duplicate anime headers
             key = (char.anime or "Unknown").strip().upper()
             grouped.setdefault(key, []).append(char)
         return grouped
@@ -240,44 +242,92 @@ class HaremMessageBuilder:
         for anime_key, chars in grouped.items():
             display_anime = chars[0].anime or "Unknown"
             
-            # Count how many unique characters the user has from this specific anime
-            user_unique = {c.id for c in self.collection.characters if (c.anime or "Unknown").strip().upper() == anime_key}
+            user_unique = {
+                str(c.id).strip().lstrip('0') or '0' 
+                for c in self.collection.characters 
+                if (c.anime or "Unknown").strip().upper() == anime_key
+            }
             user_count = len(user_unique)
             total_count = anime_counts.get(display_anime, 0)
 
-            # 🔥 Fix 1: Properly escape small caps anime to avoid &AMP; glitch
             message += self.style['anime_header'].format(
                 anime=escape(to_small_caps(display_anime)), user_count=user_count, total_count=total_count
             )
             message += self.style['separator']
 
             for char in chars:
-                message += self._format_character(char, counts.get(char.id, 1))
+                c_clean = str(char.id).strip().lstrip('0') or '0'
+                message += self._format_character(char, counts.get(c_clean, 1))
             message += self.style['footer']
         return message
 
     def _format_character(self, char: Character, count: int) -> str:
-        char_id = str(char.id).zfill(3)
+        c_clean = str(char.id).strip().lstrip('0') or '0'
+        char_id = c_clean.zfill(3)
         r_emoji = get_prem_emoji(char.rarity)
         event_str = f" [{char.event_emoji}]" if char.event_emoji else ""
-        # 🔥 Fix 2: Properly escape small caps name to avoid &AMP; glitch
         return self.style['character'].format(
             id=char_id, rarity=r_emoji, name=escape(to_small_caps(char.name)), event=event_str, count=count
         )
 
 class HaremHandler:
-    # 🔥 FIXED: Set to 12. Perfect balance to keep image attached and avoid long caption limit
     CHARACTERS_PER_PAGE = 12
 
     def __init__(self):
         self.collection_db = db['anime_characters_lol']
         self.user_db = db['user_collection_lmaoooo']
 
+    # 🔥 INSTANT DATA SYNC METHOD (Solves Anime Grouping & Typos Mismatch Issue!)
+    async def sync_user_characters_with_live_data(self, characters: List[Character]):
+        global GLOBAL_CHAR_CACHE
+        if not characters: return
+        
+        missing_ids = set()
+        for c in characters:
+            c_clean = str(c.id).strip().lstrip('0') or '0'
+            if c_clean not in GLOBAL_CHAR_CACHE:
+                missing_ids.add(c_clean)
+                
+        if missing_ids:
+            query_ids = list(missing_ids)
+            int_ids = [int(mid) for mid in missing_ids if mid.isdigit()]
+            
+            cursor = self.collection_db.find(
+                {"id": {"$in": query_ids + int_ids}}, 
+                {"id": 1, "name": 1, "anime": 1, "rarity": 1}
+            )
+            docs = await cursor.to_list(length=None)
+            
+            for doc in docs:
+                c_clean = str(doc.get('id', '')).strip().lstrip('0') or '0'
+                if c_clean:
+                    GLOBAL_CHAR_CACHE[c_clean] = {
+                        "name": doc.get('name', 'Unknown'),
+                        "anime": doc.get('anime', 'Unknown'),
+                        "rarity": doc.get('rarity', '🟢 Common')
+                    }
+                    
+            for mid in missing_ids:
+                if mid not in GLOBAL_CHAR_CACHE:
+                    GLOBAL_CHAR_CACHE[mid] = None 
+                    
+        # Replace outdated user db names/animes with global perfectly synced ones!
+        for c in characters:
+            c_clean = str(c.id).strip().lstrip('0') or '0'
+            live_data = GLOBAL_CHAR_CACHE.get(c_clean)
+            if live_data:
+                c.name = live_data['name']
+                c.anime = live_data['anime']
+                c.rarity = live_data['rarity']
+
     async def load_user_collection(self, user_id: int) -> Optional[UserCollection]:
         user = await self.user_db.find_one({'id': user_id})
         if not user: return None
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
+        
+        # 🔥 PERFECT SYNC: Sync memory with Global Live Data so it groups correctly every time
+        await self.sync_user_characters_with_live_data(characters)
         
         fav_data = user.get('favorites')
         favorite = None
@@ -316,9 +366,10 @@ class HaremHandler:
                 val = int(c_clean)
                 query_ids.update([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
         
+        # Ye sirf media laane ke liye current page par use hoga
         cursor = self.collection_db.find(
             {"id": {"$in": list(query_ids)}},
-            {"id": 1, "img_url": 1, "is_video": 1, "gender": 1} # Only fetching cosmetic changes to prevent filter mismatch
+            {"id": 1, "img_url": 1, "is_video": 1, "gender": 1}
         )
         live_docs = await cursor.to_list(length=None)
             
@@ -332,7 +383,6 @@ class HaremHandler:
             c_clean = str(c.id).strip().lstrip('0') or '0'
             doc = live_map.get(str(c.id).strip()) or live_map.get(c_clean)
             if doc:
-                # Do NOT overwrite rarity or anime to avoid filter display bugs!
                 if doc.get('img_url'): c.img_url = doc.get('img_url')
                 c.is_video = doc.get('is_video', c.is_video)
                 c.gender = doc.get('gender', c.gender)
@@ -359,7 +409,6 @@ class HaremHandler:
         return counts
 
     def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int, step: int = 1) -> InlineKeyboardMarkup:
-        # Fixed the total text to reflect the actual full unique list count (total_chars is len of display_order now)
         keyboard = [[InlineKeyboardButton(f"✨ ʜᴀʀᴇᴍ ({total_chars})", switch_inline_query_current_chat=f"collection.{user_id}")]]
         if total_pages > 1:
             nav = []
@@ -408,8 +457,6 @@ class HaremHandler:
             if doc:
                 display_char.img_url = doc.get("img_url")
                 display_char.is_video = doc.get("is_video", False)
-                # Keep names/rarities intact to match user db
-                display_char.name = doc.get("name", display_char.name)
 
         chars_to_update = current.copy()
         if display_char and display_char not in chars_to_update:
@@ -481,7 +528,6 @@ class HaremHandler:
         if sent_msg:
             asyncio.create_task(self._auto_delete_message(sent_msg, 1200))
 
-
 class ModeHandler:
     IMG = "https://files.catbox.moe/sgo9in.png"
     LABELS = {"default": "ᴅᴇғᴀᴜʟᴛ", "latest": "ʟᴀᴛᴇsᴛ", "animes": "ᴀɴɪᴍᴇs", "waifus": "ᴡᴀɪғᴜs"}
@@ -526,7 +572,10 @@ class ModeHandler:
     async def show_anime_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
-        unique_animes = sorted(list(set(c.get('anime', 'Unknown') for c in chars)))
+        # Need to fix the anime mode menu names instantly too
+        await harem_handler.sync_user_characters_with_live_data([Character.from_dict(c) for c in chars if c])
+        
+        unique_animes = sorted(list({GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0', {}).get('anime', c.get('anime', 'Unknown')) for c in chars}))
         if not unique_animes: return await query.answer("ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴀɴɪᴍᴇs ʏᴇᴛ!", show_alert=True)
 
         total_pages = math.ceil(len(unique_animes) / 10)
@@ -551,7 +600,9 @@ class ModeHandler:
     async def show_char_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
-        unique_names = sorted(list(set(c.get('name', 'Unknown') for c in chars)))
+        await harem_handler.sync_user_characters_with_live_data([Character.from_dict(c) for c in chars if c])
+
+        unique_names = sorted(list({GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0', {}).get('name', c.get('name', 'Unknown')) for c in chars}))
         if not unique_names: return await query.answer("ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!", show_alert=True)
 
         total_pages = math.ceil(len(unique_names) / 10)
@@ -597,7 +648,9 @@ class ModeHandler:
         if action == "set_a":
             idx = int(parts[3])
             user = await self.user_db.find_one({'id': user_id})
-            unique_animes = sorted(list(set(c.get('anime', 'Unknown') for c in user.get('characters', []))))
+            chars = user.get('characters', []) if user else []
+            await harem_handler.sync_user_characters_with_live_data([Character.from_dict(c) for c in chars if c])
+            unique_animes = sorted(list({GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0', {}).get('anime', c.get('anime', 'Unknown')) for c in chars}))
             if idx < len(unique_animes):
                 await self.set_mode(user_id, f"anime:{unique_animes[idx]}")
                 await query.answer(f"✓ {unique_animes[idx]} sᴇʟᴇᴄᴛᴇᴅ")
@@ -607,7 +660,9 @@ class ModeHandler:
         if action == "set_c":
             idx = int(parts[3])
             user = await self.user_db.find_one({'id': user_id})
-            unique_names = sorted(list(set(c.get('name', 'Unknown') for c in user.get('characters', []))))
+            chars = user.get('characters', []) if user else []
+            await harem_handler.sync_user_characters_with_live_data([Character.from_dict(c) for c in chars if c])
+            unique_names = sorted(list({GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0', {}).get('name', c.get('name', 'Unknown')) for c in chars}))
             if idx < len(unique_names):
                 await self.set_mode(user_id, f"char:{unique_names[idx]}")
                 await query.answer("✓ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇʟᴇᴄᴛᴇᴅ")
