@@ -52,7 +52,7 @@ async def send_market_log(context: CallbackContext, action: str, details: str):
     except Exception as e:
         pass
 
-# 🔥 HELPER: SEND BUY LOGS TO THE NEW GROUP STEP-BY-STEP
+# 🔥 HELPER: SEND BUY LOGS TO THE NEW GROUP
 async def send_buy_log(context: CallbackContext, action: str, user, details: str):
     ist_now = get_ist_now()
     user_mention = f"<a href='tg://user?id={user.id}'>{html.escape(user.first_name)}</a> (<code>{user.id}</code>)"
@@ -88,12 +88,23 @@ async def get_token_limit_info(user_id):
     return global_limit, used_today, today_str
 
 
-# --- HELPER TO GET LIVE CHARACTER (PARALLEL & FAST) ---
+# 🔥 HELPER TO GET LIVE CHARACTER (1, 01, 001 SAB MATCH HOGA)
 async def get_live_character_doc(char_id):
     if char_id is None:
         return None
     
-    query = {'$or': [{'id': char_id}, {'id': str(char_id)}, {'id': int(char_id) if str(char_id).isdigit() else None}]}
+    char_str = str(char_id).strip()
+    query_conditions = [{'id': char_str}]
+    
+    if char_str.isdigit():
+        num = int(char_str)
+        query_conditions.extend([
+            {'id': num}, 
+            {'id': str(num)}, 
+            {'id': f"{num:02d}"}
+        ])
+        
+    query = {'$or': query_conditions}
     
     tasks = [
         db['anime_characters_lol'].find_one(query),
@@ -126,7 +137,6 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
-# Shortcut variable for small caps converter
 sc = to_small_caps
 
 # --- RARITIES & PRICES ---
@@ -156,7 +166,6 @@ CHAR_PRICES_COINS = {
     "neon": 67000, "summer": 65000, "cosmic": 740000
 }
 
-# Advanced string matching for accurate rarity detection 
 def get_normalized_rarity(rarity_str):
     if not rarity_str: return "common"
     r = str(rarity_str).lower().strip()
@@ -190,14 +199,12 @@ async def clear_existing_states(context: CallbackContext):
     for k in keys:
         context.user_data.pop(k, None)
 
-# --- PMARKET KEYBOARD GENERATOR HELPER ---
 async def get_pmarket_keyboard(user_id, bot_username=""):
     settings = await bot_settings_collection.find_one({'_id': 'pmarket_settings'})
     exchange_enabled = settings.get('exchange_enabled', True) if settings else True
     
     keyboard = []
     if exchange_enabled:
-        # Note: Normal emoji is used here for inline buttons 
         keyboard.append([InlineKeyboardButton("💱 ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}")])
     
     keyboard.append([
@@ -316,7 +323,6 @@ async def start_buy_menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel")]
     ])
 
-    # 🔥 BACK BUTTON FIX: Edit msg if callback, reply if fresh command
     if update.callback_query: 
         await update.callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
         await send_buy_log(context, "🔄 BACK TO MENU", update.effective_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Rᴇᴛᴜʀɴᴇᴅ ᴛᴏ Bᴜʏ Mᴇɴᴜ")
@@ -415,14 +421,14 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
         if amount < 15 or amount > 1000:
             await update.message.reply_html(f"<b>{E_WARN} {sc('amount must be between 15 and 1000 tokens.')}</b>")
             return WAITING_FOR_BUY_AMOUNT
-        price_inr = amount / 3  # (amount / 15) * 5
+        price_inr = amount / 3
         disp_txt = f"{amount} {sc('tokens')}"
         
     elif prod == 'c':
         if amount < 37500 or amount > 2500000:
             await update.message.reply_html(f"<b>{E_WARN} {sc('amount must be between 37,500 and 2,500,000 coins.')}</b>")
             return WAITING_FOR_BUY_AMOUNT
-        price_inr = amount / 7500  # (amount / 37500) * 5
+        price_inr = amount / 7500
         disp_txt = f"{amount:,} {sc('coins')}"
         
     elif prod == 'char':
@@ -434,7 +440,7 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
             await update.message.reply_html(f"<b>{E_WARN} {sc(f'quantity must be between {min_qty} and 100 copies for this rarity.')}</b>")
             return WAITING_FOR_BUY_AMOUNT
             
-        price_inr = (amount * coin_price) / 7500  # (amount * coin_price / 37500) * 5
+        price_inr = (amount * coin_price) / 7500
         disp_txt = f"{amount}x {sc(context.user_data.get('buy_char_name'))}"
 
     order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
@@ -511,7 +517,6 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
             InlineKeyboardButton(f"{amount:,}", callback_data="ignore"),
             InlineKeyboardButton("❯", callback_data=f"b_adj:+1:{order_id}")
         ],
-        # Note: Normal emojis are used for inline buttons here too
         [InlineKeyboardButton("✅ ᴄᴏɴғɪʀᴍ", callback_data=f"b_cnf:{order_id}")],
         [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}")]
     ])
@@ -666,7 +671,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         keyboard = await get_pmarket_keyboard(user_id, bot_username)
         await update_menu(query, f"<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>{sc('choose an option to proceed.')}</i>", keyboard)
 
-    # --- EXCHANGE SUB-MENU ---
     elif action == "pm_exc_menu":
         global_limit, used_today, _ = await get_token_limit_info(user_id)
         limit_text = f"{E_INF}" if user_id == OWNER_ID else f"{global_limit - used_today} {sc('left today')}"
@@ -720,7 +724,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             price = item['price']
             market_id = str(item['_id'])
             
-            # Note: Normal emoji used in InlineKeyboardButton
             btn_text = f"{db_emoji} {sc(char_name)} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_v:{market_id}:{user_id}")])
         
@@ -850,9 +853,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
 
-    # --------------------------
-    # SELL (MY LISTINGS) MENU
-    # --------------------------
     elif action == "pm_sm":
         cursor = market_collection.find({'seller_id': user_id}).limit(50)
         listings = await cursor.to_list(length=50)
@@ -864,7 +864,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             price = item['price']
             market_id = str(item['_id'])
             
-            # Note: Normal emoji used in InlineKeyboardButton
             btn_text = f"{sc('cancel')} | {char_name} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{market_id}:{user_id}")])
             
@@ -905,7 +904,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             price = item['price']
             m_id = str(item['_id'])
             
-            # Note: Normal emoji used in InlineKeyboardButton
             btn_text = f"{sc('cancel')} | {char_name} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{m_id}:{user_id}")])
             
@@ -972,8 +970,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 # ========================
 # CONVERSATION HANDLERS
 # ========================
-
-# --- CANCEL AND TIMEOUT METHODS ---
 async def cancel_process(update: Update, context: CallbackContext):
     qr_msg_id = context.user_data.get('qr_msg_id')
     if qr_msg_id:
@@ -1001,6 +997,7 @@ async def timeout_process(update: Update, context: CallbackContext):
         await update.callback_query.message.reply_text(msg, parse_mode='HTML')
     return ConversationHandler.END
 
+
 # --- 1. SELL CONVERSATION ---
 async def sell_start(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -1021,6 +1018,7 @@ async def sell_start(update: Update, context: CallbackContext):
     )
     return WAITING_FOR_CHARACTER_ID
 
+# 🔥 SELL MENU KA BHI ID LOGIC FIX 🔥
 async def ask_character_id(update: Update, context: CallbackContext):
     if not update.message or not update.message.text: return WAITING_FOR_CHARACTER_ID
     user_id = update.message.from_user.id
@@ -1033,8 +1031,13 @@ async def ask_character_id(update: Update, context: CallbackContext):
     if not user_data or 'characters' not in user_data:
         return WAITING_FOR_CHARACTER_ID
 
-    character = next((c for c in user_data.get('characters', []) if str(c.get('id')) == str(char_id)), None)
-    
+    character = None
+    for c in user_data.get('characters', []):
+        db_id = str(c.get('id')).strip()
+        if db_id == char_id or (db_id.isdigit() and char_id.isdigit() and int(db_id) == int(char_id)):
+            character = c
+            break
+            
     if not character:
         return WAITING_FOR_CHARACTER_ID
 
@@ -1099,6 +1102,7 @@ async def ask_price(update: Update, context: CallbackContext):
         parse_mode='HTML'
     )
     return ConversationHandler.END
+
 
 # --- 2. EXCHANGE CONVERSATION (T2C and C2T) ---
 async def exchange_start_t2c(update: Update, context: CallbackContext):
@@ -1242,7 +1246,6 @@ exchange_conv = ConversationHandler(
     per_chat=True,
 )
 
-# 🔥 BUY CONVERSATION SE TIMEOUT HATA DIYA 🔥
 buy_conv = ConversationHandler(
     entry_points=[
         MessageHandler(filters.Regex(r'^/start buy_tokens$'), start_buy_menu),
