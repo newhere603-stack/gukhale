@@ -183,7 +183,7 @@ def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
     r = parse_rar(ch.get('rarity', ''))
     
     cap = (
-        f"<b>{sc('Character Info ✨')}</b>\n\n"
+        f"<b>{sc('Character Info ')}<tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji></b>\n\n"
         f"<b>{escape(sc(an))}</b>\n"
         f"<b>{cid}: {escape(sc(nm))}</b>\n"
         f"({r.emoji}<b>{sc('RARITY:')}</b> {r.name})"
@@ -193,9 +193,14 @@ def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
 def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
-    cap = f"<b>{escape(sc(nm))}</b>\n\n<b>🏆 {len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
+    cap = f"<b>{escape(sc(nm))}</b>\n\n<b><tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
     
-    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    medals = {
+        1: "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>", 
+        2: "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>", 
+        3: "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>"
+    }
+    
     USERS_PER_PAGE = 10
     start = page * USERS_PER_PAGE
     end = start + USERS_PER_PAGE
@@ -214,9 +219,15 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
     avg = round(total / len(owners), 1) if owners else 0
-    cap = f"<b>{escape(sc(nm))}</b>\n\n📊 <b>{sc('statistics')}</b>\n🎯 <code>{total}×</code> {sc('grabbed')}\n🏆 <code>{len(owners)}</code> {sc('owners')}\n📈 <code>{avg}×</code> {sc('avg')}\n"
+    cap = (
+        f"<b>{escape(sc(nm))}</b>\n\n"
+        f"<tg-emoji emoji-id=\"5231200819986047254\">📊</tg-emoji> <b>{sc('statistics')}</b>\n"
+        f"<tg-emoji emoji-id=\"5310278924616356636\">🎯</tg-emoji> <code>{total}×</code> {sc('grabbed')}\n"
+        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <code>{len(owners)}</code> {sc('owners')}\n"
+        f"<tg-emoji emoji-id=\"5028746137645876535\">📈</tg-emoji> <code>{avg}×</code> {sc('avg')}\n"
+    )
     if owners:
-        cap += f"\n🏆 <b>{sc('top collectors')}</b>\n"
+        cap += f"\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('top collectors')}</b>\n"
         # 🔥 FIX: Ab yahan pe sirf Top 3 hi dikhenge 
         for i, o in enumerate(owners[:3], 1):
             fn = escape(trunc(o.get('first_name', 'User'), 18))
@@ -232,7 +243,8 @@ def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
             InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
         ],
         [
-            InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
+            # Switch to inline query in CURRENT chat for faster testing & searching
+            InlineKeyboardButton(sc("⤿ share"), switch_inline_query_current_chat=cid)
         ]
     ])
 
@@ -258,7 +270,7 @@ async def inlinequery(update: Update, context) -> None:
             tuid = int(tid)
             usr = await get_user(tuid)
             if not usr:
-                await query.answer([InlineQueryResultArticle(id="nouser", title=sc("no collection"), description=sc("start your journey"), input_message_content=InputTextMessageContent(f"<b>🎮 {sc('start collecting!')}</b>", parse_mode=ParseMode.HTML))], cache_time=5)
+                await query.answer([InlineQueryResultArticle(id="nouser", title=sc("no collection"), description=sc("start your journey"), input_message_content=InputTextMessageContent(f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> {sc('start collecting!')}</b>", parse_mode=ParseMode.HTML))], cache_time=5)
                 return
             cd = {c['id']: c for c in usr.get('characters', []) if isinstance(c, dict) and c.get('id')}
             all_chars = list(cd.values())
@@ -399,7 +411,8 @@ async def show_owners(update: Update, context) -> None:
             InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
         ])
         kbd_layout.append([
-            InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
+            # Inline button update
+            InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=cid)
         ])
         
         kbd = InlineKeyboardMarkup(kbd_layout)
@@ -442,7 +455,8 @@ async def show_stats(update: Update, context) -> None:
                 InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}:0")
             ], 
             [
-                InlineKeyboardButton(sc("⤿ share"), switch_inline_query=cid)
+                # Inline button update
+                InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=cid)
             ]
         ])
         await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
