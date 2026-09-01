@@ -757,5 +757,5 @@ __help__ = """
 - /grid_hard: Start a larger, tougher board.
 - /end: Stop the active game.
 - /gridtop: View the WordGrid Leaderboard.
-- /helpgrid: Manage chat settings for the game.
+- /gridsettings: Manage chat settings for the game.
 """
