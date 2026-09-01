@@ -265,14 +265,12 @@ class GameLogic:
         return f"{a} {op} {b}", str(ans)
 
 
-# 🔥 FIX: Ab ye function message ko edit nahi karega balki naya message bhejega
 async def send_response(update: Update, context: CallbackContext, text: str, markup=None):
     if update.callback_query:
         try:
-            await update.callback_query.answer() # Button ki loading band karne ke liye
+            await update.callback_query.answer() 
         except Exception:
             pass
-        # Sidha naya message group me
         return await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=text,
@@ -280,7 +278,6 @@ async def send_response(update: Update, context: CallbackContext, text: str, mar
             parse_mode="HTML"
         )
     else:
-        # User ki command ka reply
         return await update.message.reply_text(
             text=text, 
             reply_markup=markup, 
@@ -316,7 +313,6 @@ async def validate_amount(update: Update, context: CallbackContext, amount: int,
         await send_response(update, context, f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴍᴀx ʙᴇᴛ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ</b>\n<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴇᴛ ᴍᴏʀᴇ ᴛʜᴀɴ {MAX_BET_LIMIT:,} ᴄᴏɪɴs.</b>")
         return None
     
-    # Ye fetch correct user layega 100% guarantee
     user = await UserDB.get(user_id)
     if not user:
         await send_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴀᴄᴄᴏᴜɴᴛ ɴᴏᴛ ғᴏᴜɴᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ʀᴇɢɪsᴛᴇʀ/ɢᴜᴇss ғɪʀsᴛ!</b>")
@@ -329,7 +325,6 @@ async def validate_amount(update: Update, context: CallbackContext, amount: int,
     return user
 
 
-# 🔥 FIX: Yahan exact user ki _id use ki hai jisse glt database balance update nahi hoga
 async def process_game(update: Update, context: CallbackContext, user: dict, game_type: GameType, amount: int, result: GameResult, extra: str = ""):
     user_id = update.effective_user.id
     
@@ -340,7 +335,6 @@ async def process_game(update: Update, context: CallbackContext, user: dict, gam
     
     _, target_field = await UserDB.get_balance_and_field(user)
     
-    # Exact document match to ensure 100% accuracy
     query = {'_id': user['_id']}
     if net_coins < 0:
         query[target_field] = {'$gte': abs(net_coins)}
@@ -653,8 +647,9 @@ async def games_callback(update: Update, context: CallbackContext):
         except Exception: pass
         
         cmd = parts[2]
-        parsed_args = parts[3:]
-        if parsed_args == ['_']: parsed_args = []
+        
+        # 🔥 FIX: Puraana spam rokne wala behavior. Sirf Usage explain karega bina bet lagaye
+        parsed_args = []
 
         handlers = {
             "sbet": sbet, "roll": roll_cmd, "gamble": gamble,
