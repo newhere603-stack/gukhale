@@ -20,29 +20,31 @@ LOGGER = logging.getLogger(__name__)
 collection = db['anime_characters_lol']
 user_collection = db['user_collection_lmaoooo']
 
+# 🔥 Rarity Dataclass updated to support both normal and premium emojis
 @dataclass
 class Rarity:
     emoji: str
+    premium: str
     name: str
     value: int
 
-# 🔥 UNIFIED RARITY DICTIONARY
+# 🔥 UNIFIED RARITY DICTIONARY WITH PREMIUM EMOJIS & SORTING VALUES
 RARITIES = {
-    "mythic": ("💎", "Mythic", 1),
-    "cosmic": ("🌌", "Cosmic", 2),
-    "celestial": ("🪽", "Celestial", 3),
-    "exclusive": ("💮", "Exclusive", 4),
-    "legendary": ("🟡", "Legendary", 5),
-    "premium": ("🔮", "Premium Edition", 6),
-    "neon": ("⚡", "Neon", 7),
-    "summer": ("🏖️", "Summer", 8),
-    "sweet": ("🍭", "Sweet", 9),
-    "special": ("🔴", "Medium", 10),
-    "valentine": ("💞", "Valentine", 11),
-    "winter": ("❄️", "Winter", 12),
-    "erotic": ("🥵", "Spicy", 13),
-    "rare": ("🟠", "Rare", 14),
-    "common": ("🟢", "Common", 15)
+    "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic", 1),
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic", 2),
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial", 3),
+    "exclusive": ("💮", '<tg-emoji emoji-id="6100567406889935797">🤴</tg-emoji>', "Exclusive", 4),
+    "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🔥</tg-emoji>', "Legendary", 5),
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition", 6),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon", 7),
+    "summer": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer", 8),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet", 9),
+    "special": ("🔴", '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>', "Medium", 10),
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine", 11),
+    "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter", 12),
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy", 13),
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare", 14),
+    "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common", 15)
 }
 
 # 🔥 POWERFUL RARITY MATCHER
@@ -52,12 +54,12 @@ def get_base_rarity(rarity_str: str) -> str:
     r_lower = rarity_str.lower().strip()
     
     # 1. Exact Match Check
-    for key, (_, name, _) in RARITIES.items():
+    for key, (_, _, name, _) in RARITIES.items():
         if key == r_lower or name.lower() == r_lower:
             return key
 
     # 2. Substring Match Check
-    for key, (db_emoji, name, _) in RARITIES.items():
+    for key, (db_emoji, _, name, _) in RARITIES.items():
         if key in r_lower or name.lower() in r_lower or db_emoji in r_lower:
             return key
             
@@ -71,7 +73,7 @@ try:
 except Exception: 
     pass
 
-# 🔥 Faster Updates: Cache time reduced to 60s
+# 🔥 Faster Updates
 char_cache = TTLCache(maxsize=100000, ttl=60)
 user_cache = TTLCache(maxsize=60000, ttl=60) 
 query_cache = TTLCache(maxsize=20000, ttl=30) 
@@ -89,8 +91,8 @@ def sc(t: str) -> str:
 @lru_cache(maxsize=32768)
 def parse_rar(r: str) -> Rarity:
     base_key = get_base_rarity(r)
-    db_emoji, name, val = RARITIES[base_key]
-    return Rarity(db_emoji, sc(name), val)
+    db_emoji, premium_emoji, name, val = RARITIES[base_key]
+    return Rarity(db_emoji, premium_emoji, sc(name), val)
 
 def trunc(t: str, l: int = 22) -> str: 
     return t[:l-2] + '..' if len(t) > l else t
@@ -134,16 +136,15 @@ async def search_chars(q: str, lim: int = 1000) -> List[Dict]:
         if q:
             rx = re.compile(re.escape(q), re.IGNORECASE)
             
-            # 🔥 Smart ID Matcher System (09 = 9 = 009)
+            # 🔥 Smart ID Matcher System
             or_conditions = [{'name': rx}, {'anime': rx}, {'rarity': rx}]
             
             if q.isdigit():
                 clean_num = int(q)
-                # Matches DB string values like "09", "9", "009"
                 id_rx = re.compile(rf"^0*{clean_num}$")
                 or_conditions.append({'id': id_rx})
                 or_conditions.append({'id': str(clean_num)})
-                or_conditions.append({'id': clean_num}) # Just in case DB has integer
+                or_conditions.append({'id': clean_num})
             else:
                 or_conditions.append({'id': q})
                 
@@ -196,11 +197,12 @@ def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
     cid, nm, an = ch.get('id', '??'), ch.get('name', 'Unknown'), ch.get('anime', 'Unknown')
     r = parse_rar(ch.get('rarity', ''))
     
+    # Yahan humne normal emoji ki jagah premium (r.premium) laga diya hai
     cap = (
         f"<b>{sc('Character Info ')}<tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji></b>\n\n"
         f"<b>{escape(sc(an))}</b>\n"
         f"<b>{cid}: {escape(sc(nm))}</b>\n"
-        f"({r.emoji}<b>{sc('RARITY:')}</b> {r.name})"
+        f"({r.premium} <b>{sc('RARITY:')}</b> {r.name})"
     )
     return cap
 
@@ -242,7 +244,6 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
     )
     if owners:
         cap += f"\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('top collectors')}</b>\n"
-        # 🔥 FIX: Ab yahan pe sirf Top 3 hi dikhenge 
         for i, o in enumerate(owners[:3], 1):
             fn = escape(trunc(o.get('first_name', 'User'), 18))
             uid = o.get('id')
@@ -289,18 +290,14 @@ async def inlinequery(update: Update, context) -> None:
             
             if sq:
                 rx = re.compile(re.escape(sq), re.IGNORECASE)
-                
-                # Collection me smart ID matching
                 def match_char(c):
                     cid_str = str(c.get('id', ''))
-                    
                     if sq.isdigit() and cid_str.isdigit():
                         if int(sq) == int(cid_str):
                             return True
                     else:
                         if cid_str == sq:
                             return True
-                            
                     if rx.search(c.get('name', '')) or rx.search(c.get('anime', '')) or rx.search(c.get('rarity', '')):
                         return True
                     return False
@@ -359,7 +356,6 @@ async def inlinequery(update: Update, context) -> None:
             img = ch.get('img_url', '')
             vid = ch.get('is_video', False)
             
-            # 🔥 CRITICAL FIX: Agar image URL empty ho, to telegram reject kar deta hai, isliye skip karenge
             if not cid or not img: 
                 continue
                 
@@ -375,8 +371,8 @@ async def inlinequery(update: Update, context) -> None:
             cap = minimal_caption(ch, fav, uid=uid)
             kbd = create_kbd(cid, uid)
             
-            # Unique rid generate ki hai taaki duplicate errors na aaye inline search me
             rid = f"{cid}_{off}_{i}_{qid[:8]}"
+            # Yahan r.emoji hi use hoga taaki inline results title me normal emoji dikhe (HTML support nahi karta title)
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
             desc = f"{r.name} • {trunc(an, 20)}"
             
