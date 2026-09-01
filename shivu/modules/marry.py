@@ -53,6 +53,14 @@ def get_base_rarity(rarity_str):
             return key
     return rarity_str
 
+# 🔥 SILENT AUTO-DELETE HELPER
+async def auto_delete_msg(message, delay: int):
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
 # ---------------- CONFIG ----------------
 OWNER_ID = 7657218453
 SUDO_USERS = {7657218453}
@@ -60,7 +68,7 @@ SUDO_USERS = {7657218453}
 PROPOSAL_COST = 2000
 DICE_COOLDOWN = 1800
 PROPOSE_COOLDOWN = 300
-PROPOSE_SUCCESS_RATE = 0.30  # 🔥 EXACT 23% WIN CHANCE!
+PROPOSE_SUCCESS_RATE = 0.35  # 🔥 EXACT 33% WIN CHANCE!
 
 UPDATE_GROUP_URL = "https://t.me/Anime_Group_hai"
 UPDATE_GROUP_ID = -1003087506512
@@ -111,7 +119,7 @@ PROPOSING_LOADING_TEXTS = [
     "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ʜᴏᴘɪɴɢ ғᴏʀ ᴀ ʏᴇs....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>"
 ]
 
-# 🔥 FUNNY DICE REJECTS IN HINGLISH
+# 🔥 EXTENDED FUNNY DICE REJECTS IN HINGLISH
 DICE_REJECT_TEXTS = [
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛ ʜᴏ ɢᴀʏᴀ ᴀᴜʀ ᴡᴏ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
     "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴇᴡᴡ, ɴᴏ!' ᴀᴜʀ sᴀʙ ᴊᴀɢᴀʜ sᴇ ʙʟᴏᴄᴋ ᴋᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
@@ -121,10 +129,19 @@ DICE_REJECT_TEXTS = [
     "<b>ᴛᴜᴍɴᴇ ᴅɪᴄᴇ ʀᴏʟʟ ᴋɪʏᴀ, ᴘᴀʀ ᴜsɴᴇ ᴀᴘɴɪ ᴀᴀɴᴋʜᴇɪɴ ʀᴏʟʟ ᴋᴀʀ ᴅɪ! <tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji></b>",
     "<b>ᴡᴏ ᴛᴜᴍʜᴇ ᴅᴇᴋʜ ᴋᴀʀ ᴛᴀʀᴀs ᴋʜᴀᴛᴇ ʜᴜᴇ ʀᴏɴᴇ ʟᴀɢɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
     "<b>ᴜsɴᴇ ᴅɪᴄᴇ ᴡᴀᴘᴀs ᴛᴜᴍʜᴀʀᴇ ᴍᴜʜ ᴘᴀʀ ᴍᴀᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
-    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴄʀᴇᴇᴘ ʙᴏʟᴋᴀʀ ᴘᴏʟɪᴄᴇ ʙᴜʟᴀ ʟɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji></b>"
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴄʀᴇᴇᴘ ʙᴏʟᴋᴀʀ ᴘᴏʟɪᴄᴇ ʙᴜʟᴀ ʟɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji></b>",
+    "<b>ᴅɪᴄᴇ ᴋʜᴀʀᴀʙ ʜᴀɪ! ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴅᴇᴋʜ ᴋᴇ ʜɪ ᴍᴀɴᴀ ᴋᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>",
+    "<b>ᴛᴜᴍʜᴀʀɪ sʜᴀᴋᴀʟ ᴅᴇᴋʜ ᴋᴇ ᴅɪᴄᴇ ʙʜɪ ʀᴏ ᴅɪʏᴀ ᴀᴜʀ ᴡᴏ ʙʜɪ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
+    "<b>ᴡᴏ ʙᴏʟɪ 'ᴍᴇʀᴀ sᴛᴀɴᴅᴀʀᴅ ɪᴛɴᴀ ʙʜɪ ɢɪʀᴀ ɴᴀʜɪ ʜᴀɪ!' <tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji></b>",
+    "<b>ʀᴇᴊᴇᴄᴛ! ᴜsɴᴇ ʙᴏʟᴀ ᴋɪ ᴛᴜᴍ ɴᴀʜᴀᴛᴇ ɴᴀʜɪ ʜᴏ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>ᴅɪᴄᴇ ʀᴏʟʟ ᴋᴀʀɴᴇ sᴇ ᴋʏᴀ ʜᴏɢᴀ, ᴊᴀʙ ᴋɪsᴍᴀᴛ ʜɪ ᴊʜᴀɴᴅ ʜᴀɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
+    "<b>ᴡᴏ ʙᴏʟɪ ᴛᴜᴍʜᴀʀᴇ ᴘᴀss 'ʀɪᴢᴢ' ɴᴀʜɪ ʜᴀɪ! ᴄʜᴀᴘʀɪ ᴋᴀʜɪ ᴋᴇ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji></b>",
+    "<b>ᴛᴜᴍɴᴇ ᴅɪᴄᴇ ғᴇᴋᴀ, ᴜsɴᴇ ᴛᴜᴍʜᴀʀᴀ ᴅɪʟ ғᴇᴋ ᴅɪʏᴀ! <tg-emoji emoji-id=\"5449455694870748968\">💓</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴛᴜᴍʜᴀʀᴇ sᴀᴀᴛʜ ᴅᴀᴛᴇ ᴘᴇ ᴊᴀᴀɴᴇ sᴇ ᴀᴄᴄʜᴀ ᴍᴀɪ ᴊᴀʜᴀʀ ᴋʜᴀ ʟᴜ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
+    "<b>ᴏᴏᴘs! ᴜsɴᴇ ᴛᴏ ᴛᴜᴍʜᴇ 'ʙʜᴀɪʏᴀ' ʙᴏʟ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6159082552431746788\">🫂</tg-emoji></b>"
 ]
 
-# 🔥 FUNNY PROPOSE REJECT MESSAGES IN HINGLISH
+# 🔥 EXTENDED FUNNY PROPOSE REJECT MESSAGES IN HINGLISH
 PROPOSE_REJECT_TEXTS = [
     "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴡᴏ ᴛᴜᴍsᴇ ᴀɢʟᴇ ᴊᴀɴᴀᴍ ᴍᴇɪɴ ᴘᴀᴛᴇɢɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
     "<b>ᴛᴜᴍ ɪᴛɴɪ ʙᴜʀɪ ᴛᴀʀᴀʜ ғʀɪᴇɴᴅ-ᴢᴏɴᴇ ʜᴜᴇ ʜᴏ ᴋɪ ᴀʙ ᴛᴜᴍ ᴡᴀʜᴀɴ ᴋᴇ ᴍᴀʏᴏʀ ʜᴏ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
@@ -138,7 +155,17 @@ PROPOSE_REJECT_TEXTS = [
     "<b>ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴄʀᴇᴇᴘ ʙᴏʟᴀ ᴀᴜʀ ᴅᴀʀʀ ᴋᴇ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
     "<b>ʙʜᴀɪ ᴛᴇʀᴀ ᴛᴏ 𝟺ᴋ ᴍᴇɪɴ ᴋᴀᴛ ɢᴀʏᴀ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>",
     "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴍᴀɪɴ ᴛᴜᴍsᴇ ᴘʏᴀʀ ᴋᴀʀᴛɪ ʜᴜ... ᴘᴀʀ ᴇᴋ ʙʜᴀɪ ᴋɪ ᴛᴀʀᴀʜ!' <tg-emoji emoji-id=\"6159082552431746788\">🫂</tg-emoji></b>",
-    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴀʀᴀ ʙᴀɴᴋ ʙᴀʟᴀɴᴄᴇ ᴅᴇᴋʜᴀ ᴀᴜʀ ᴄʜᴀʟɪ ɢᴀʏɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>"
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴀʀᴀ ʙᴀɴᴋ ʙᴀʟᴀɴᴄᴇ ᴅᴇᴋʜᴀ ᴀᴜʀ ᴄʜᴀʟɪ ɢᴀʏɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴘʀᴏᴘᴏsᴀʟ sᴜɴ ᴋᴇ 'ᴄʜᴇᴇ' ʙᴏʟᴀ ᴀᴜʀ ᴄʜᴀʟɪ ɢᴀʏɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
+    "<b>ᴛᴜᴍʜᴀʀᴀ ᴘʀᴏᴘᴏsᴀʟ ʀɪᴊᴇᴄᴛ ʜᴜᴀ ᴋʏᴜɴᴋɪ ᴛᴜᴍ ɢᴀʀᴇᴇʙ ʜᴏ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
+    "<b>ᴡᴏ ʙᴏʟɪ 'ᴍᴇʀᴀ ᴅɪʟ ᴘᴇʜʟᴇ sᴇ ɢᴏᴊᴏ sᴀᴛᴏʀᴜ ᴋᴇ ᴘᴀss ʜᴀɪ'! <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ᴋɪ ʀɪɴɢ ᴅᴇᴋʜ ᴋᴇ ʙᴏʟɪ 'ʏᴇ ᴛᴏ ɴᴀᴋʟɪ ʜᴀɪ' ᴀᴜʀ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"5262922516426420894\">💍</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴛᴜᴍʜᴀʀᴇ ᴊᴀɪsᴇ 𝟹𝟼 ᴀᴀᴛᴇ ʜᴀɪ 𝟹𝟼 ᴊᴀᴀᴛᴇ ʜᴀɪ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>ᴘʀᴏᴘᴏsᴀʟ ғᴀɪʟᴇᴅ! ᴜsɴᴇ ᴛᴜᴍʜᴇ 'ᴡᴇɪʀᴅᴏ' ʙᴏʟ ᴋᴀʀ ʙʟᴏᴄᴋ ᴍᴀᴀʀᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
+    "<b>ᴡᴏ ʜᴀsᴛᴇ ʜᴀsᴛᴇ ɢɪʀ ɢᴀʏɪ ᴀᴜʀ ʙᴏʟɪ 'ᴍᴀᴢᴀᴀᴋ ᴀᴄᴄʜᴀ ᴛʜᴀ'! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴀʀᴇ ᴍᴜʜ ᴘᴇ ᴘᴀᴀɴɪ ᴘʜᴇᴋᴀ ᴀᴜʀ 'ɴᴇxᴛ ᴘʟᴇᴀsᴇ' ʙᴏʟ ᴅɪʏᴀ! <tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji></b>",
+    "<b>ᴀʀᴇ ʙʜᴀɪ! ᴜsɴᴇ ᴛᴏʜ ᴘᴏʟɪᴄᴇ ᴋᴏ ʜɪ ʙᴜʟᴀ ʟɪʏᴀ ʜᴀʀᴀssᴍᴇɴᴛ ᴋᴇ ʟɪʏᴇ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji></b>",
+    "<b>ᴡᴏ ʙᴏʟɪ ᴛᴜᴍ ᴍᴇʀᴇ 'ᴅᴏɢɢʏ' sᴇ ʙʜɪ ʙᴇᴋᴀᴀʀ ᴅɪᴋʜᴛᴇ ʜᴏ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>"
 ]
 
 cooldowns = {"dice": {}, "propose": {}}
@@ -337,16 +364,16 @@ async def dice_marry(update: Update, context: CallbackContext):
     try:
         dice_msg = await context.bot.send_dice(chat_id=chat_id, emoji="🎲", reply_to_message_id=msg_id)
         
-        # 🔥 Suspenseful wait for dice roll to complete (takes approx ~4 seconds)
+        # 🔥 Suspenseful wait for dice roll to complete
         await asyncio.sleep(4.0)
 
         val = dice_msg.dice.value
-        # 🔥 EXACT 23% OVERALL WIN RATE LOGIC
-        # Probability of rolling 5 or 6 = 33.3%
-        # So we apply a random check of 69% if you roll 5 or 6 (0.3333 * 0.69 ≈ 0.23)
-        if val not in (5, 6) or random.random() > 0.69:
+        # 🔥 EXACT 33.3% WIN RATE (Dice me 5 aur 6 aane ki probability exactly 2/6 = 33.3% hoti hai)
+        if val not in (5, 6):
             text = random.choice(DICE_REJECT_TEXTS)
-            return await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
+            rej_msg = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
+            asyncio.create_task(auto_delete_msg(rej_msg, 1800)) # 30 mins me delete
+            return
 
         char = await get_unique_char(user.id, None)
         if not char:
@@ -354,7 +381,6 @@ async def dice_marry(update: Update, context: CallbackContext):
 
         await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
         
-        # 🔥 Perfect format: Emoji in front of RARITY, Text value behind (Like Screenshot)
         prem_emoji, r_name = get_rarity_details(char.get('rarity', 'common'))
         
         caption = (
@@ -365,7 +391,8 @@ async def dice_marry(update: Update, context: CallbackContext):
             f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ: {char.get('id', 'N/A')}</b>"
         )
         
-        await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+        win_msg = await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+        asyncio.create_task(auto_delete_msg(win_msg, 1200)) # Win image 20 mins me delete
         await send_win_log(context, user, char, "dice")
     except Exception as e:
         LOGGER.error(f"Error in dice command: {e}")
@@ -424,11 +451,10 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
         
-        # 🔥 Suspenseful pacing (Wait to build excitement)
         await asyncio.sleep(2.0)
         try:
             await msg.edit_caption(caption=random.choice(PROPOSING_LOADING_TEXTS), parse_mode="HTML")
-            await asyncio.sleep(2.5) # Extra wait for rejection/acceptance!
+            await asyncio.sleep(2.5)
         except TelegramError:
             pass
         
@@ -441,17 +467,19 @@ async def propose(update: Update, context: CallbackContext):
         LOGGER.error(f"Error sending propose image: {e}")
         return
 
-    # 🔥 EXACT 23% WIN CHANCE!
+    # 🔥 EXACT 33% WIN CHANCE!
     if random.random() > PROPOSE_SUCCESS_RATE:
         reject_text = random.choice(PROPOSE_REJECT_TEXTS)
         try:
-            return await context.bot.send_photo(
+            rej_msg = await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=random.choice(REJECT_IMAGES),
                 caption=reject_text,
                 parse_mode="HTML",
                 reply_to_message_id=msg_id
             )
+            asyncio.create_task(auto_delete_msg(rej_msg, 1800)) # 30 mins me delete
+            return
         except Exception:
             return
 
@@ -470,7 +498,6 @@ async def propose(update: Update, context: CallbackContext):
 
     await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
     
-    # 🔥 Perfect format: Emoji in front of RARITY, Text value behind (Like Screenshot)
     prem_emoji, r_name = get_rarity_details(char.get('rarity', 'common'))
     
     caption = (
@@ -482,7 +509,8 @@ async def propose(update: Update, context: CallbackContext):
     )
     
     try:
-        await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+        win_msg = await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+        asyncio.create_task(auto_delete_msg(win_msg, 1200)) # Win image 20 mins me delete
         await send_win_log(context, user, char, "propose")
     except Exception as e:
         LOGGER.error(f"Error sending propose win: {e}")
