@@ -1,4 +1,4 @@
-import asyncio
+Import asyncio
 import traceback
 import importlib
 import random
@@ -65,6 +65,14 @@ RARITIES = {
     "pearl": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
 }
+
+# 🔥 SILENT AUTO-DELETE HELPER
+async def auto_delete_msg(context, chat_id, message_id, delay: int):
+    await asyncio.sleep(delay)
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
 
 # 🔥 NAYA SINGLE UNIFIED CACHE (Sirf OFF hui rarities isme rahengi)
 disabled_rarities_cache = set()
@@ -281,6 +289,9 @@ async def despawn_character(chat_id, message_id, character, context):
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
         
+        # 🔥 20 minutes (1200s) baad silently missed message delete ho jayega
+        asyncio.create_task(auto_delete_msg(context, chat_id, missed_msg.message_id, 1200))
+        
         should_delete_miss = await get_group_setting(chat_id, 'miss_delete', False)
         if should_delete_miss:
             await asyncio.sleep(10)
@@ -348,6 +359,9 @@ async def send_image(update: Update, context: CallbackContext) -> None:
 
         caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴘᴘᴇᴀʀᴇᴅ! <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji>\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
         spawn_msg = await _send_media(context, chat_id, character, caption)
+        
+        # 🔥 30 minutes (1800s) baad silently spawn message delete ho jayega
+        asyncio.create_task(auto_delete_msg(context, chat_id, spawn_msg.message_id, 1800))
 
         username = update.effective_chat.username
         spawn_message_link = (
@@ -472,8 +486,10 @@ async def guess(update: Update, context: CallbackContext) -> None:
             
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
             
+            # 🔥 SUCCESS MESSAGE TURANT BHEJEGA (FASTEST RESPONSE)
             await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
 
+            # 🔥 HEAVY DATABASE OPERATIONS BACKGROUND MEIN HONGI
             async def process_background_tasks(spawn_msg_id):
                 try:
                     try:
