@@ -417,7 +417,7 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
         f"<b>{sc('item(s):')}</b> {disp_txt}\n"
         f"<b>{sc('total price:')} {price_inr:.2f} ɪɴʀ</b>\n\n"
         f"<b>{sc('pay inr to the following upi or qr in the image:')}</b>\n<b>UPI</b> <code>sasuke72@ptyes</code>\n\n"
-        f"<b>⚠️ {sc('please send the payment screenshot below to confirm your order.')}</b>"
+        f"<b>🍥 {sc('please send the payment screenshot below to confirm your order.')}</b>"
     )
     kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel")]])
 
