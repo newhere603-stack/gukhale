@@ -8,25 +8,28 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, Optional, List
 
-from pymongo import ReturnDocument  # <-- New Import for Atomic Updates
+from pymongo import ReturnDocument
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, filters, CallbackContext
 
-# 🔥 YAHAN CHANGE KIYA HAI: Naye economy database se connect kiya hai
 from shivu import application
 from shivu.Database.db import eco_collection as user_collection
 
+# 🔥 YAHAN CHANGE KIYA HAI: Max Bet Limit
+MAX_BET_LIMIT = 1000000
 
 @dataclass(frozen=True)
 class GameConfig:
     cooldown: int = 5
     riddle_timeout: int = 15
+    # 🔥 YAHAN CHANGE KIYA HAI: Sabhi Win Rates 2% (0.02) kam kar diye gaye hain
     stour_entry_fee: int = 300
-    stour_success_rate: float = 0.1
-    basket_base_win_rate: float = 0.20
-    dart_bullseye_rate: float = 0.1
-    dart_hit_rate: float = 0.20
-    gamble_win_rate: float = 0.20
+    stour_success_rate: float = 0.08       # Pehle 0.1 (10%) tha, ab 8%
+    basket_base_win_rate: float = 0.18      # Pehle 0.20 (20%) tha, ab 18%
+    dart_bullseye_rate: float = 0.08        # Pehle 0.1 (10%) tha, ab 8%
+    dart_hit_rate: float = 0.18             # Pehle 0.20 (20%) tha, ab 18%
+    gamble_win_rate: float = 0.18           # Pehle 0.20 (20%) tha, ab 18%
+    
     coinflip_multiplier: int = 2
     dice_multiplier: int = 2
     gamble_multiplier: int = 2
@@ -226,8 +229,10 @@ class GameLogic:
 
     @staticmethod
     def coinflip(guess: str, amount: int) -> GameResult:
-        outcome = random.choice(['heads', 'tails'])
-        won = outcome == guess
+        # 🔥 Win chance 48% (2% reduction from 50/50)
+        won = random.random() < 0.48
+        outcome = guess if won else ('tails' if guess == 'heads' else 'heads')
+        
         if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.coinflip_multiplier
@@ -236,10 +241,16 @@ class GameLogic:
 
     @staticmethod
     def dice_roll(choice: str, amount: int) -> GameResult:
-        dice = random.randint(1, 6)
+        # 🔥 Win chance 48% (2% reduction from 50/50)
+        won = random.random() < 0.48
+        if won:
+            dice = random.choice([1, 3, 5] if choice == 'odd' else [2, 4, 6])
+        else:
+            dice = random.choice([2, 4, 6] if choice == 'odd' else [1, 3, 5])
+            
         result = 'odd' if dice % 2 else 'even'
-        won = result == choice
         res_str = 'ᴏᴅᴅ' if result == 'odd' else 'ᴇᴠᴇɴ'
+        
         if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dice_multiplier
@@ -328,6 +339,11 @@ async def validate_amount(update: Update, amount: int, user_id: int) -> Optional
     """Optimized to return user document and prevent fetching it again."""
     if amount <= 0:
         await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
+        return None
+        
+    # 🔥 YAHAN CHANGE KIYA HAI: Max bet limit check
+    if amount > MAX_BET_LIMIT:
+        await send_or_edit_response(update, f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴍᴀx ʙᴇᴛ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ</b>\n<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴇᴛ ᴍᴏʀᴇ ᴛʜᴀɴ {MAX_BET_LIMIT:,} ᴄᴏɪɴs.</b>")
         return None
     
     user = await UserDB.get(user_id)
@@ -665,6 +681,7 @@ async def games_callback(update: Update, context: CallbackContext):
         await query.message.reply_text(info_texts.get(game_cmd, "Unknown Game"), parse_mode="HTML")
 
     elif action == "repeat":
+        # 🔥 Timer validation exact yahin check ho raha hai Play Again ke liye
         if remaining := game_state.check_cooldown(user_id):
             await query.answer(f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ!", show_alert=True)
             return
@@ -673,6 +690,7 @@ async def games_callback(update: Update, context: CallbackContext):
         cmd = parts[2]
         args_str = parts[3]
         
+        # Purane inputs (amount + guess) automatically fetch kar liye yahan pe
         parsed_args = args_str.split(":") if args_str != "_" else []
 
         handlers = {
@@ -690,7 +708,6 @@ async def games_callback(update: Update, context: CallbackContext):
 
 
 # --- HANDLERS REGISTRATION ---
-# 🔥 Fast concurrent processing ke liye block=False add kar diya hai
 application.add_handler(CommandHandler("sbet", sbet, block=False))
 application.add_handler(CommandHandler("roll", roll_cmd, block=False))
 application.add_handler(CommandHandler("gamble", gamble, block=False))
