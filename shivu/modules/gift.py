@@ -171,7 +171,12 @@ async def handle_gift_command(update: Update, context: CallbackContext):
 
 async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()
+    
+    # --- FIX: Timeout error se bachne ke liye try-except block ---
+    try:
+        await query.answer()
+    except Exception as e:
+        LOGGER.warning(f"Query answer timeout ignore kiya: {e}")
     
     try:
         action, sender_id = query.data.split(':')
