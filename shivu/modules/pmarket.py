@@ -197,11 +197,12 @@ async def get_pmarket_keyboard(user_id, bot_username=""):
     
     keyboard = []
     if exchange_enabled:
-        keyboard.append([InlineKeyboardButton(f"{E_EXC} ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}")])
+        # Note: Normal emoji is used here for inline buttons 
+        keyboard.append([InlineKeyboardButton("💱 ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}")])
     
     keyboard.append([
         InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}"),
-        InlineKeyboardButton(f"{E_MONEY} sᴇʟʟ", callback_data=f"pm_sm:{user_id}")
+        InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")
     ])
     
     if bot_username:
@@ -304,8 +305,6 @@ async def start_buy_menu(update: Update, context: CallbackContext):
     order_id = uuid.uuid4().hex[:8]
     context.user_data['buy_order_id'] = order_id
 
-    await send_buy_log(context, "🚀 STARTED", update.effective_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Iɴɪᴛɪᴀᴛᴇᴅ Bᴜʏ Mᴇɴᴜ")
-
     text = (
         f"<b>{E_TICK} {sc('order session created successfully!')}</b>\n"
         f"<b>{sc('order id:')}</b> <code>{order_id}</code>\n\n"
@@ -317,8 +316,14 @@ async def start_buy_menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel")]
     ])
 
-    if update.message: await update.message.reply_html(text, reply_markup=keyboard)
-    elif update.callback_query: await update.callback_query.message.reply_html(text, reply_markup=keyboard)
+    # 🔥 BACK BUTTON FIX: Edit msg if callback, reply if fresh command
+    if update.callback_query: 
+        await update.callback_query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+        await send_buy_log(context, "🔄 BACK TO MENU", update.effective_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Rᴇᴛᴜʀɴᴇᴅ ᴛᴏ Bᴜʏ Mᴇɴᴜ")
+    else:
+        await update.message.reply_html(text, reply_markup=keyboard)
+        await send_buy_log(context, "🚀 STARTED", update.effective_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Iɴɪᴛɪᴀᴛᴇᴅ Bᴜʏ Mᴇɴᴜ")
+        
     return WAITING_FOR_BUY_PRODUCT
 
 async def buy_back_callback(update: Update, context: CallbackContext):
@@ -506,8 +511,9 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
             InlineKeyboardButton(f"{amount:,}", callback_data="ignore"),
             InlineKeyboardButton("❯", callback_data=f"b_adj:+1:{order_id}")
         ],
-        [InlineKeyboardButton(f"{E_TICK} ᴄᴏɴғɪʀᴍ", callback_data=f"b_cnf:{order_id}")],
-        [InlineKeyboardButton(f"{E_CROSS} ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}")]
+        # Note: Normal emojis are used for inline buttons here too
+        [InlineKeyboardButton("✅ ᴄᴏɴғɪʀᴍ", callback_data=f"b_cnf:{order_id}")],
+        [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}")]
     ])
     
     await context.bot.send_photo(chat_id=BUY_LOG_GROUP_ID, photo=photo_id, caption=admin_text, reply_markup=kb, parse_mode='HTML')
@@ -583,8 +589,8 @@ async def admin_buy_callback(update: Update, context: CallbackContext):
                 InlineKeyboardButton(f"{new_amt:,}", callback_data="ignore"),
                 InlineKeyboardButton("❯", callback_data=f"b_adj:+1:{order_id}")
             ],
-            [InlineKeyboardButton(f"{E_TICK} ᴄᴏɴғɪʀᴍ", callback_data=f"b_cnf:{order_id}")],
-            [InlineKeyboardButton(f"{E_CROSS} ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}")]
+            [InlineKeyboardButton("✅ ᴄᴏɴғɪʀᴍ", callback_data=f"b_cnf:{order_id}")],
+            [InlineKeyboardButton("❌ ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}")]
         ])
         if query.message.caption_html != new_caption:
             await query.edit_message_caption(caption=new_caption, reply_markup=kb, parse_mode='HTML')
@@ -714,7 +720,8 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             price = item['price']
             market_id = str(item['_id'])
             
-            btn_text = f"{db_emoji} {sc(char_name)} - {E_MONEY} {price:,}"
+            # Note: Normal emoji used in InlineKeyboardButton
+            btn_text = f"{db_emoji} {sc(char_name)} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_v:{market_id}:{user_id}")])
         
         sort_text = sc("low to high") if order == "asc" else sc("high to low")
@@ -856,7 +863,9 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             char_name = sc(item['character'].get('name', 'Unknown'))
             price = item['price']
             market_id = str(item['_id'])
-            btn_text = f"{sc('cancel')} | {char_name} - {E_MONEY} {price:,}"
+            
+            # Note: Normal emoji used in InlineKeyboardButton
+            btn_text = f"{sc('cancel')} | {char_name} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{market_id}:{user_id}")])
             
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_m:{user_id}")])
@@ -895,7 +904,9 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             char_name = sc(item['character'].get('name', 'Unknown'))
             price = item['price']
             m_id = str(item['_id'])
-            btn_text = f"{sc('cancel')} | {char_name} - {E_MONEY} {price:,}"
+            
+            # Note: Normal emoji used in InlineKeyboardButton
+            btn_text = f"{sc('cancel')} | {char_name} - 💸 {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_delist:{m_id}:{user_id}")])
             
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_m:{user_id}")])
