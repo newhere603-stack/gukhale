@@ -569,13 +569,13 @@ class ModeHandler:
         keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")]]
         await query.edit_message_caption(caption="<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
+    # 🔥 FIX: Perfectly handle None cache fallback for animes menu
     async def show_anime_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
-        # Need to fix the anime mode menu names instantly too
         await harem_handler.sync_user_characters_with_live_data([Character.from_dict(c) for c in chars if c])
         
-        unique_animes = sorted(list({GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0', {}).get('anime', c.get('anime', 'Unknown')) for c in chars}))
+        unique_animes = sorted(list({ (GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0') or {}).get('anime', c.get('anime', 'Unknown')) for c in chars }))
         if not unique_animes: return await query.answer("ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴀɴɪᴍᴇs ʏᴇᴛ!", show_alert=True)
 
         total_pages = math.ceil(len(unique_animes) / 10)
@@ -597,12 +597,13 @@ class ModeHandler:
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")])
         await query.edit_message_caption(caption="<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> sᴇʟᴇᴄᴛ ᴀɴ ᴀɴɪᴍᴇ ᴛᴏ ғɪʟᴛᴇʀ:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
+    # 🔥 FIX: Perfectly handle None cache fallback for waifus menu
     async def show_char_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = user.get('characters', []) if user else []
         await harem_handler.sync_user_characters_with_live_data([Character.from_dict(c) for c in chars if c])
 
-        unique_names = sorted(list({GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0', {}).get('name', c.get('name', 'Unknown')) for c in chars}))
+        unique_names = sorted(list({ (GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0') or {}).get('name', c.get('name', 'Unknown')) for c in chars }))
         if not unique_names: return await query.answer("ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ!", show_alert=True)
 
         total_pages = math.ceil(len(unique_names) / 10)
@@ -642,18 +643,26 @@ class ModeHandler:
         if action == "back": await query.answer(); return await self.show_mode_menu(update, user_id)
         if action == "close": await query.answer(); return await query.message.delete()
 
-        if action == "alist": return await self.show_anime_menu(query, user_id, int(parts[3]))
-        if action == "clist": return await self.show_char_menu(query, user_id, int(parts[3]))
+        # 🔥 FIX: Query properly answered before navigating so the button loader doesn't get stuck!
+        if action == "alist": 
+            await query.answer()
+            return await self.show_anime_menu(query, user_id, int(parts[3]))
+        if action == "clist": 
+            await query.answer()
+            return await self.show_char_menu(query, user_id, int(parts[3]))
 
+        # 🔥 FIX: Same safe fallback for None handling here
         if action == "set_a":
             idx = int(parts[3])
             user = await self.user_db.find_one({'id': user_id})
             chars = user.get('characters', []) if user else []
             await harem_handler.sync_user_characters_with_live_data([Character.from_dict(c) for c in chars if c])
-            unique_animes = sorted(list({GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0', {}).get('anime', c.get('anime', 'Unknown')) for c in chars}))
+            unique_animes = sorted(list({ (GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0') or {}).get('anime', c.get('anime', 'Unknown')) for c in chars }))
+            
             if idx < len(unique_animes):
                 await self.set_mode(user_id, f"anime:{unique_animes[idx]}")
-                await query.answer(f"✓ {unique_animes[idx]} sᴇʟᴇᴄᴛᴇᴅ")
+                safe_name = unique_animes[idx][:20] + "..." if len(unique_animes[idx]) > 20 else unique_animes[idx]
+                await query.answer(f"✓ {safe_name} sᴇʟᴇᴄᴛᴇᴅ")
             else: await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴀɴɪᴍᴇ", show_alert=True)
             return await self.show_mode_menu(update, user_id)
 
@@ -662,10 +671,12 @@ class ModeHandler:
             user = await self.user_db.find_one({'id': user_id})
             chars = user.get('characters', []) if user else []
             await harem_handler.sync_user_characters_with_live_data([Character.from_dict(c) for c in chars if c])
-            unique_names = sorted(list({GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0', {}).get('name', c.get('name', 'Unknown')) for c in chars}))
+            unique_names = sorted(list({ (GLOBAL_CHAR_CACHE.get(str(c.get('id', '')).strip().lstrip('0') or '0') or {}).get('name', c.get('name', 'Unknown')) for c in chars }))
+            
             if idx < len(unique_names):
                 await self.set_mode(user_id, f"char:{unique_names[idx]}")
-                await query.answer("✓ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇʟᴇᴄᴛᴇᴅ")
+                safe_name = unique_names[idx][:20] + "..." if len(unique_names[idx]) > 20 else unique_names[idx]
+                await query.answer(f"✓ {safe_name} sᴇʟᴇᴄᴛᴇᴅ")
             else: await query.answer("ᴇʀʀᴏʀ sᴇʟᴇᴄᴛɪɴɢ ᴄʜᴀʀᴀᴄᴛᴇʀ", show_alert=True)
             return await self.show_mode_menu(update, user_id)
 
