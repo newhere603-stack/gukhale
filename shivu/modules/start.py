@@ -337,10 +337,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if bot_member.status != ChatMemberStatus.ADMINISTRATOR:
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="<b>⚠️ ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛs ᴛᴏ ᴜsᴇ ᴍᴇ ʜᴇʀᴇ!</b>",
+                        text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ!</b>",
                         parse_mode=ParseMode.HTML,
                         reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ 👑", url=ADMIN_RIGHTS_LINK)]
+                            [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ", url=ADMIN_RIGHTS_LINK)]
                         ])
                     )
                     return # Aage ka koi action nahi hoga, bas yehi message bolega
