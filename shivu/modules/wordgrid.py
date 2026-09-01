@@ -249,7 +249,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await ensure_db_loaded() 
     chat = update.effective_chat
     if not chat or chat.type not in ["group", "supergroup"]:
-        await update.message.reply_text("<b>This game can only be played in groups!</b>", parse_mode="HTML")
+        await update.message.reply_text("<b>ʏᴏᴜ ᴄᴀɴ ᴘʟᴀʏ ᴡᴏʀᴅɢʀɪᴅ ᴏɴʟʏ ɪɴ ɢʀᴏᴜᴘs!</b>", parse_mode="HTML")
         return
 
     chat_id = chat.id
