@@ -61,6 +61,35 @@ async def auto_delete_msg(message, delay: int):
     except Exception:
         pass
 
+# 🔥 SMART MEDIA SENDER FOR FILE IDs & URLs (Photos + Videos)
+async def send_media_smart(context, chat_id, media, caption, reply_to_msg_id=None):
+    media_str = str(media).lower()
+    is_video_ext = any(media_str.endswith(ext) for ext in ['.mp4', '.gif', '.mov', '.webm'])
+    
+    kwargs = {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"}
+    if reply_to_msg_id:
+        kwargs["reply_to_message_id"] = reply_to_msg_id
+
+    if is_video_ext:
+        try:
+            return await context.bot.send_video(video=media, **kwargs)
+        except Exception:
+            return await context.bot.send_animation(animation=media, **kwargs)
+    
+    # Agar image URL ho ya Telegram File ID (File ID me ext nahi hota)
+    try:
+        return await context.bot.send_photo(photo=media, **kwargs)
+    except Exception:
+        # send_photo fail hua matlab ho sakta hai user ne Video ka File ID daala ho
+        try:
+            return await context.bot.send_video(video=media, **kwargs)
+        except Exception:
+            # Agar video bhi nahi, toh animation/gif ho sakta hai
+            try:
+                return await context.bot.send_animation(animation=media, **kwargs)
+            except Exception as e:
+                raise e # Yahan fail hua to niche fallback text handle karega
+
 # ---------------- CONFIG ----------------
 OWNER_ID = 7657218453
 SUDO_USERS = {7657218453}
@@ -285,7 +314,7 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
         f"<b>{prem_emoji} ʀᴀʀɪᴛʏ: {r_name}</b>\n━━━━━━━━━━━━━━━━━━━━"
     )
     try:
-        await context.bot.send_photo(LOG_GROUP_ID, char["img_url"], caption=text, parse_mode="HTML")
+        await send_media_smart(context, LOG_GROUP_ID, char["img_url"], text)
     except Exception:
         pass
 
@@ -368,16 +397,22 @@ async def dice_marry(update: Update, context: CallbackContext):
         await asyncio.sleep(4.0)
 
         val = dice_msg.dice.value
-        # 🔥 EXACT 33.3% WIN RATE (Dice me 5 aur 6 aane ki probability exactly 2/6 = 33.3% hoti hai)
+        # 🔥 EXACT 33.3% WIN RATE
         if val not in (5, 6):
             text = random.choice(DICE_REJECT_TEXTS)
-            rej_msg = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
-            asyncio.create_task(auto_delete_msg(rej_msg, 1800)) # 30 mins me delete
+            try:
+                rej_msg = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
+                asyncio.create_task(auto_delete_msg(rej_msg, 1800)) # 30 mins me delete
+            except Exception:
+                pass
             return
 
         char = await get_unique_char(user.id, None)
         if not char:
-            return await context.bot.send_message(chat_id=chat_id, text=f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>", parse_mode="HTML", reply_to_message_id=msg_id)
+            try:
+                return await context.bot.send_message(chat_id=chat_id, text=f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>", parse_mode="HTML", reply_to_message_id=msg_id)
+            except Exception:
+                return
 
         await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
         
@@ -391,12 +426,25 @@ async def dice_marry(update: Update, context: CallbackContext):
             f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ: {char.get('id', 'N/A')}</b>"
         )
         
-        win_msg = await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
-        asyncio.create_task(auto_delete_msg(win_msg, 1200)) # Win image 20 mins me delete
+        try:
+            win_msg = await send_media_smart(context, chat_id, char["img_url"], caption, msg_id)
+            asyncio.create_task(auto_delete_msg(win_msg, 1200)) # Win image 20 mins me delete
+        except Exception as e:
+            LOGGER.error(f"Error sending dice win photo, fallback to text: {e}")
+            try:
+                win_msg = await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+                asyncio.create_task(auto_delete_msg(win_msg, 1200))
+            except Exception:
+                pass
+                
         await send_win_log(context, user, char, "dice")
     except Exception as e:
         LOGGER.error(f"Error in dice command: {e}")
         cooldowns["dice"].pop(user.id, None)
+        try:
+            await context.bot.send_message(chat_id=chat_id, text="<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴅɪᴄᴇ ʀᴏʟʟ ꜰᴀɪʟᴇᴅ. ᴛʀʏ ᴀɢᴀɪɴ!</b>", parse_mode="HTML", reply_to_message_id=msg_id)
+        except Exception:
+            pass
 
 async def propose(update: Update, context: CallbackContext):
     if not update.message or not update.effective_user:
@@ -443,12 +491,12 @@ async def propose(update: Update, context: CallbackContext):
     set_cooldown(user.id, "propose")
 
     try:
-        msg = await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=random.choice(PROPOSE_IMAGES),
-            caption=random.choice(PROPOSE_START_TEXTS),
-            parse_mode="HTML",
-            reply_to_message_id=msg_id
+        msg = await send_media_smart(
+            context,
+            chat_id,
+            random.choice(PROPOSE_IMAGES),
+            random.choice(PROPOSE_START_TEXTS),
+            msg_id
         )
         
         await asyncio.sleep(2.0)
@@ -465,23 +513,46 @@ async def propose(update: Update, context: CallbackContext):
 
     except TelegramError as e:
         LOGGER.error(f"Error sending propose image: {e}")
-        return
+        # 🔥 FIX: Agar catbox image ya File ID fail ho gayi, toh text bhej do!
+        try:
+            msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text=random.choice(PROPOSE_START_TEXTS),
+                parse_mode="HTML",
+                reply_to_message_id=msg_id
+            )
+            await asyncio.sleep(2.0)
+            await msg.edit_text(text=random.choice(PROPOSING_LOADING_TEXTS), parse_mode="HTML")
+            await asyncio.sleep(2.5)
+            await msg.delete()
+        except Exception:
+            pass
 
     # 🔥 EXACT 33% WIN CHANCE!
     if random.random() > PROPOSE_SUCCESS_RATE:
         reject_text = random.choice(PROPOSE_REJECT_TEXTS)
         try:
-            rej_msg = await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=random.choice(REJECT_IMAGES),
-                caption=reject_text,
-                parse_mode="HTML",
-                reply_to_message_id=msg_id
+            rej_msg = await send_media_smart(
+                context,
+                chat_id,
+                random.choice(REJECT_IMAGES),
+                reject_text,
+                msg_id
             )
             asyncio.create_task(auto_delete_msg(rej_msg, 1800)) # 30 mins me delete
-            return
-        except Exception:
-            return
+        except Exception as e:
+            LOGGER.error(f"Reject photo failed, falling back to text: {e}")
+            try:
+                rej_msg = await context.bot.send_message(
+                    chat_id=chat_id, 
+                    text=reject_text, 
+                    parse_mode="HTML", 
+                    reply_to_message_id=msg_id
+                )
+                asyncio.create_task(auto_delete_msg(rej_msg, 1800))
+            except Exception:
+                pass
+        return
 
     char = await get_unique_char(user.id, None)
     
@@ -509,11 +580,17 @@ async def propose(update: Update, context: CallbackContext):
     )
     
     try:
-        win_msg = await context.bot.send_photo(chat_id=chat_id, photo=char["img_url"], caption=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+        win_msg = await send_media_smart(context, chat_id, char["img_url"], caption, msg_id)
         asyncio.create_task(auto_delete_msg(win_msg, 1200)) # Win image 20 mins me delete
-        await send_win_log(context, user, char, "propose")
     except Exception as e:
-        LOGGER.error(f"Error sending propose win: {e}")
+        LOGGER.error(f"Error sending propose win photo, fallback to text: {e}")
+        try:
+            win_msg = await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode="HTML", reply_to_message_id=msg_id)
+            asyncio.create_task(auto_delete_msg(win_msg, 1200))
+        except Exception:
+            pass
+            
+    await send_win_log(context, user, char, "propose")
 
 async def propose_callback(update: Update, context: CallbackContext):
     query = update.callback_query
