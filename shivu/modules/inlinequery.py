@@ -133,7 +133,21 @@ async def search_chars(q: str, lim: int = 1000) -> List[Dict]:
     try:
         if q:
             rx = re.compile(re.escape(q), re.IGNORECASE)
-            chars = await collection.find({'$or': [{'name': rx}, {'anime': rx}, {'id': q}, {'rarity': rx}]}, {'_id': 0}).limit(lim).to_list(length=lim)
+            
+            # 🔥 Smart ID Matcher System (09 = 9 = 009)
+            or_conditions = [{'name': rx}, {'anime': rx}, {'rarity': rx}]
+            
+            if q.isdigit():
+                clean_num = int(q)
+                # Matches DB string values like "09", "9", "009"
+                id_rx = re.compile(rf"^0*{clean_num}$")
+                or_conditions.append({'id': id_rx})
+                or_conditions.append({'id': str(clean_num)})
+                or_conditions.append({'id': clean_num}) # Just in case DB has integer
+            else:
+                or_conditions.append({'id': q})
+                
+            chars = await collection.find({'$or': or_conditions}, {'_id': 0}).limit(lim).to_list(length=lim)
         else:
             chars = await collection.find({}, {'_id': 0}).limit(lim).to_list(length=lim)
         query_cache[k] = chars
@@ -238,13 +252,11 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            # Default page parameter 0 set kar diya
             InlineKeyboardButton(sc("♔ owners"), callback_data=f"o.{cid}:0"),
             InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
         ],
         [
-            # Switch to inline query in CURRENT chat for faster testing & searching
-            InlineKeyboardButton(sc("⤿ share"), switch_inline_query_current_chat=cid)
+            InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=cid)
         ]
     ])
 
@@ -274,9 +286,27 @@ async def inlinequery(update: Update, context) -> None:
                 return
             cd = {c['id']: c for c in usr.get('characters', []) if isinstance(c, dict) and c.get('id')}
             all_chars = list(cd.values())
+            
             if sq:
                 rx = re.compile(re.escape(sq), re.IGNORECASE)
-                all_chars = [c for c in all_chars if rx.search(c.get('name', '')) or rx.search(c.get('anime', '')) or str(c.get('id', '')) == sq or rx.search(c.get('rarity', ''))]
+                
+                # Collection me smart ID matching
+                def match_char(c):
+                    cid_str = str(c.get('id', ''))
+                    
+                    if sq.isdigit() and cid_str.isdigit():
+                        if int(sq) == int(cid_str):
+                            return True
+                    else:
+                        if cid_str == sq:
+                            return True
+                            
+                    if rx.search(c.get('name', '')) or rx.search(c.get('anime', '')) or rx.search(c.get('rarity', '')):
+                        return True
+                    return False
+                
+                all_chars = [c for c in all_chars if match_char(c)]
+                
             if fm: 
                 all_chars = await filter_chars(all_chars, fm, tuid)
             fav = usr.get('favorites')
@@ -324,13 +354,19 @@ async def inlinequery(update: Update, context) -> None:
                     ch.update(live_map[cid]) 
         
         results = []
-        for ch in chars:
+        for i, ch in enumerate(chars):
             cid = ch.get('id')
-            if not cid: 
+            img = ch.get('img_url', '')
+            vid = ch.get('is_video', False)
+            
+            # 🔥 CRITICAL FIX: Agar image URL empty ho, to telegram reject kar deta hai, isliye skip karenge
+            if not cid or not img: 
                 continue
-            nm, an, img, vid = ch.get('name', '?'), ch.get('anime', '?'), ch.get('img_url', ''), ch.get('is_video', False)
+                
+            nm, an = ch.get('name', '?'), ch.get('anime', '?')
             r = parse_rar(ch.get('rarity', ''))
             fav = False
+            
             if is_coll and usr:
                 fv = usr.get('favorites')
                 fid = fv.get('id') if isinstance(fv, dict) else fv
@@ -338,7 +374,9 @@ async def inlinequery(update: Update, context) -> None:
             
             cap = minimal_caption(ch, fav, uid=uid)
             kbd = create_kbd(cid, uid)
-            rid = f"{cid}{off}{qid[:8]}"
+            
+            # Unique rid generate ki hai taaki duplicate errors na aaye inline search me
+            rid = f"{cid}_{off}_{i}_{qid[:8]}"
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
             desc = f"{r.name} • {trunc(an, 20)}"
             
@@ -358,9 +396,8 @@ async def inlinequery(update: Update, context) -> None:
 async def chosen_inline_result(update: Update, context) -> None:
     result = update.chosen_inline_result
     cid = result.result_id
-    cp = cid.split('][')
-    cidc = cp[0][:20] if cp else cid[:20]
-    cidc = ''.join(filter(str.isalnum, cidc))
+    cp = cid.split('_')
+    cidc = ''.join(filter(str.isalnum, cp[0]))
     fk = f'pick_{cidc}'
     feedback_cache[fk] = feedback_cache.get(fk, 0) + 1
     qk = f'query_{result.from_user.id}'
@@ -372,7 +409,6 @@ async def show_owners(update: Update, context) -> None:
     try:
         data = q.data.split('.', 1)[1]
         
-        # 🔥 Page extract check
         if ':' in data:
             cid, page_str = data.split(':')
             page = int(page_str)
@@ -392,7 +428,6 @@ async def show_owners(update: Update, context) -> None:
             
         cap = owners_caption(ch, owners, page)
         
-        # 🔥 Pagination Keyboard
         USERS_PER_PAGE = 10
         total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
         
@@ -411,7 +446,6 @@ async def show_owners(update: Update, context) -> None:
             InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
         ])
         kbd_layout.append([
-            # Inline button update
             InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=cid)
         ])
         
@@ -451,11 +485,9 @@ async def show_stats(update: Update, context) -> None:
         kbd = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
-                # Stats se wapas owners wale page 0 pe bhejna hai
                 InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}:0")
             ], 
             [
-                # Inline button update
                 InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=cid)
             ]
         ])
