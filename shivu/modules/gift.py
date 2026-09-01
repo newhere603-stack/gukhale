@@ -3,7 +3,7 @@ import traceback
 from html import escape
 from datetime import datetime, timezone
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
-from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
+from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, MessageHandler, filters
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 
@@ -27,7 +27,7 @@ def to_small_caps(text: str) -> str:
     mapping = {
         'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
         'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
-        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
+        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴏ', 'q': 'ǫ', 'r': 'ʀ', 
         's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 
         'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
         'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
@@ -72,6 +72,14 @@ async def reply_media_message(message, media_url, caption, reply_markup=None):
     except Exception as e:
         LOGGER.error(f"Media reply failed: {e}")
         return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+# 🔥 20 Minutes Auto-Delete Helper
+async def auto_delete_message(message, delay=1200):
+    await asyncio.sleep(delay)
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
 async def cleanup_pending_gift(sender_id: int, sent_msg=None):
     if sender_id in gift_tasks:
@@ -158,7 +166,11 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         ]]
 
         sent_msg = await reply_media_message(msg, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
-        if sent_msg: pending_gifts[sender_id]['message_id'] = sent_msg.message_id
+        
+        if sent_msg: 
+            pending_gifts[sender_id]['message_id'] = sent_msg.message_id
+            # 🔥 Start 20 mins auto-delete task for the UI
+            asyncio.create_task(auto_delete_message(sent_msg, 1200))
         
         async def expire():
             await asyncio.sleep(GIFT_TIMEOUT)
@@ -304,9 +316,26 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             try: await query.message.delete()
             except: pass
 
+# 🔥 Instant Auto-Delete Spam Handler (High Priority)
+async def instant_delete_spam(update: Update, context: CallbackContext):
+    message = update.message or update.edited_message
+    if not message: 
+        return
+        
+    text = message.text or message.caption or ""
+    
+    # Exact phrase detect karke instantly delete karega
+    if "Support our mission and spread" in text:
+        try:
+            await message.delete()
+        except Exception:
+            pass
+
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):'))
+# Group -99 par rakhne se yeh handler dusre normal handlers se pehle chalega and instantly kaam karega
+application.add_handler(MessageHandler(filters.ALL, instant_delete_spam), group=-99)
 
 async def cleanup_stale_gifts():
     while True:
