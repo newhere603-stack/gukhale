@@ -36,6 +36,10 @@ from shivu.Database.db import eco_collection
 OWNER_ID = 7657218453
 SUDO_USERS = [7657218453]
 
+# 🔥 Authorization Check Upar Move Kiya Taaki Flood Control Mein Use Ho Sake
+def is_authorized(user_id):
+    return user_id == OWNER_ID or user_id in SUDO_USERS
+
 collection = db['anime_characters_lol']
 user_collection = db['user_collection_lmaoooo']
 group_user_totals_collection = db['group_user_totalsssssss']
@@ -74,7 +78,7 @@ async def auto_delete_msg(context, chat_id, message_id, delay: int):
     except Exception:
         pass
 
-# 🔥 NAYA SINGLE UNIFIED CACHE (Sirf OFF hui rarities isme rahengi)
+# 🔥 NAYA SINGLE UNIFIED CACHE
 disabled_rarities_cache = set()
 
 group_settings_cache = {}  
@@ -101,6 +105,11 @@ async def check_and_handle_flood(update: Update, context: CallbackContext) -> bo
         return False
         
     user_id = user.id
+    
+    # 🔥 FIX: Owner ya Sudo users ko test karte time block na kare
+    if is_authorized(user_id):
+        return False
+
     now = time.time()
     
     if user_id in blocked_users:
@@ -144,9 +153,12 @@ async def setup_database_indexes():
 async def get_cached_characters():
     global _cached_characters, _last_cache_time
     current_time = time.time()
+    # 🔥 FIX: Agar DB khali return kare to empty cache store na kare
     if not _cached_characters or (current_time - _last_cache_time) > 300:
-        _cached_characters = await collection.find({'auction_exclusive': {'$ne': True}}).to_list(length=None)
-        _last_cache_time = current_time
+        fetched_chars = await collection.find({'auction_exclusive': {'$ne': True}}).to_list(length=None)
+        if fetched_chars:
+            _cached_characters = fetched_chars
+            _last_cache_time = current_time
     return _cached_characters
 
 for module_name in ALL_MODULES:
@@ -162,12 +174,10 @@ def get_base_rarity(rarity_str):
     
     rarity_str = rarity_str.lower().strip()
     
-    # Check exact keys or names first for accurate mapping
     for key, (r_db_emoji, _, r_name) in RARITIES.items():
         if key == rarity_str or r_name.lower() == rarity_str:
             return key
 
-    # Check substring if exact match failed (handles emoji+text combinations)
     for key, (r_db_emoji, _, r_name) in RARITIES.items():
         if key in rarity_str or r_name.lower() in rarity_str or r_db_emoji in rarity_str:
             return key
@@ -183,7 +193,6 @@ def format_time_taken(seconds):
         return f"{mins}m"
     return f"{mins}m {secs}s"
 
-# 🔥 DATA LOAD KARTE TIME BHI EK HI CACHE MEIN JAYEGA
 async def load_rarity_status():
     global disabled_rarities_cache
     try:
@@ -215,9 +224,6 @@ async def set_group_setting(chat_id, setting_name, value):
         upsert=True
     )
 
-def is_authorized(user_id):
-    return user_id == OWNER_ID or user_id in SUDO_USERS
-
 async def is_admin(update: Update, context: CallbackContext) -> bool:
     user_id = update.effective_user.id
     if is_authorized(user_id):
@@ -228,7 +234,6 @@ async def is_admin(update: Update, context: CallbackContext) -> bool:
     member = await context.bot.get_chat_member(chat.id, user_id)
     return member.status in ('administrator', 'creator')
 
-# 🔥 PROPER ALLOW LOGIC
 async def is_character_allowed(character, chat_id=None):
     if character.get('removed', False) or character.get('auction_exclusive', False):
         return False
@@ -236,7 +241,6 @@ async def is_character_allowed(character, chat_id=None):
     rarity = character.get('rarity', '🟢 Common')
     key = get_base_rarity(rarity)
     
-    # Agar key mili aur wo disabled cache mein hai toh BLOCK karega
     if key and key in disabled_rarities_cache:
         return False
         
@@ -289,7 +293,6 @@ async def despawn_character(chat_id, message_id, character, context):
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
         
-        # 🔥 20 minutes (1200s) baad silently missed message delete ho jayega
         asyncio.create_task(auto_delete_msg(context, chat_id, missed_msg.message_id, 1200))
         
         should_delete_miss = await get_group_setting(chat_id, 'miss_delete', False)
@@ -317,6 +320,10 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     locks.setdefault(chat_id, asyncio.Lock())
 
     async with locks[chat_id]:
+        # 🔥 FIX: Agar waifu already spawn ho rakhi hai group me toh message count waste na ho
+        if int(chat_id) in active_spawns_cache:
+            return
+            
         message_counts[chat_id] = message_counts.get(chat_id, 0) + 1
         
         if chat_id not in chat_frequency_cache:
@@ -360,7 +367,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴘᴘᴇᴀʀᴇᴅ! <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji>\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
         spawn_msg = await _send_media(context, chat_id, character, caption)
         
-        # 🔥 30 minutes (1800s) baad silently spawn message delete ho jayega
         asyncio.create_task(auto_delete_msg(context, chat_id, spawn_msg.message_id, 1800))
 
         username = update.effective_chat.username
@@ -414,7 +420,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 if active_spawn:
                     active_spawns_cache[chat_id] = active_spawn
 
-            # 🔥 FIX: 15 Seconds se badhakar 60 seconds (1 minute) kar diya gaya hai
             if not active_spawn:
                 if chat_id in last_grabbed and time.time() - last_grabbed[chat_id] < 60:
                     return await update.message.reply_html('<b>ᴡᴀɪғᴜ ᴀʟʀᴇᴀᴅʏ ɢʀᴀʙʙᴇᴅ ʙʏ sᴏᴍᴇᴏɴᴇ ᴇʟsᴇ <tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>.\nʙᴇᴛᴛᴇʀ ʟᴜᴄᴋ ɴᴇxᴛ ᴛɪᴍᴇ..!!</b>')
@@ -486,10 +491,8 @@ async def guess(update: Update, context: CallbackContext) -> None:
             
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
             
-            # 🔥 SUCCESS MESSAGE TURANT BHEJEGA (FASTEST RESPONSE)
             await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
 
-            # 🔥 HEAVY DATABASE OPERATIONS BACKGROUND MEIN HONGI
             async def process_background_tasks(spawn_msg_id):
                 try:
                     try:
@@ -568,7 +571,6 @@ async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> No
     state = "<b>ᴇɴᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡɪʟʟ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ)</b>" if mode else "<b>ᴅɪsᴀʙʟᴇᴅ (ᴍɪssᴇᴅ ᴍsɢs ᴡᴏɴ'ᴛ ᴅᴇʟᴇᴛᴇ)</b>"
     await update.message.reply_html(f'<b><tg-emoji emoji-id="6307567066572396133\">⚙</tg-emoji> ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇ ᴏɴ ᴍɪss ɪs ɴᴏᴡ:</b> {state}')
 
-# 🔥 FIX: RARITY STATUS AB NAYE WALE DB CACHE SE PADHKE SAHI DIKHAYEGA
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
     global disabled_rarities_cache
     lines = ["<b><tg-emoji emoji-id=\"5256131095094652290\">🎯</tg-emoji> ʀᴀʀɪᴛʏ sᴘᴀᴡɴ sᴛᴀᴛᴜs</b>\n"]
@@ -590,20 +592,19 @@ async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: b
     raw_input = " ".join(context.args)
     base_key = get_base_rarity(raw_input)
 
-    # Validation
     if not base_key or base_key not in RARITIES:
         return await update.message.reply_html(f'<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴜɴᴋɴᴏᴡɴ ʀᴀʀɪᴛʏ:</b> <code>{escape(raw_input)}</code>')
 
     _, display_emoji, name = RARITIES[base_key]
 
-    if enable: # rarity_on -> Enable kar de (disabled se hata de)
+    if enable: 
         if base_key in disabled_rarities_cache:
             disabled_rarities_cache.remove(base_key)
             await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities_cache)}}, upsert=True)
             await update.message.reply_html(f"✅ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>")
         else:
             await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>")
-    else: # rarity_off -> Disable kar de (disabled list me daal de)
+    else:
         if base_key not in disabled_rarities_cache:
             disabled_rarities_cache.add(base_key)
             await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities_cache)}}, upsert=True)
