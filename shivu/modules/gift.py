@@ -184,11 +184,10 @@ async def handle_gift_command(update: Update, context: CallbackContext):
 async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
-    # --- FIX: Timeout error se bachne ke liye try-except block ---
     try:
         await query.answer()
     except Exception as e:
-        LOGGER.warning(f"Query answer timeout ignore kiya: {e}")
+        pass
     
     try:
         action, sender_id = query.data.split(':')
@@ -227,8 +226,6 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
 
             user_characters = sender_data.get('characters', [])
             
-            # --- FIXED LOGIC --- 
-            # Sirf 1st matching character ko loop se find karke list se remove karenge
             found = False
             owned_char = None
             for i, c in enumerate(user_characters):
@@ -242,7 +239,6 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 if query.message: await query.message.delete()
                 return await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
 
-            # Updated list wapas database me $set kar rahe hain
             pull_result = await user_collection.update_one(
                 {'id': sender_id},
                 {'$set': {'characters': user_characters}}
@@ -299,7 +295,6 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                     
             except Exception as push_error:
                 LOGGER.error(f"Push error during gift: {push_error}")
-                # Agar fail hua to sender ko wapas character de do 
                 await user_collection.update_one({'id': sender_id}, {'$push': {'characters': owned_char}})
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
@@ -316,37 +311,39 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             try: await query.message.delete()
             except: pass
 
-# 🔥 Instant Auto-Delete Spam Handler (High Priority)
+
+# 🔥 SUPER INSTANT SPAM DELETE (Har type ke message ko cover karega)
 async def instant_delete_spam(update: Update, context: CallbackContext):
-    message = update.message or update.edited_message
-    if not message: 
+    msg = update.effective_message
+    if not msg: 
         return
         
-    # Normal text, media caption, aur INVOICE/Payment description ko combine kar rahe hain
+    # Text, Captions aur Invoice Details ko combine karke check karega
     text_parts = []
-    if message.text: 
-        text_parts.append(message.text)
-    if message.caption: 
-        text_parts.append(message.caption)
-    if message.invoice: 
-        if message.invoice.title:
-            text_parts.append(message.invoice.title)
-        if message.invoice.description:
-            text_parts.append(message.invoice.description)
+    if msg.text: 
+        text_parts.append(msg.text)
+    if msg.caption: 
+        text_parts.append(msg.caption)
+    if msg.invoice: 
+        if msg.invoice.title:
+            text_parts.append(msg.invoice.title)
+        if msg.invoice.description:
+            text_parts.append(msg.invoice.description)
             
-    full_text = " ".join(text_parts)
+    full_text = " ".join(text_parts).lower() # Case-insensitive check
     
-    # Exact phrase detect karke instantly delete karega
-    if "Support our mission and spread" in full_text:
+    # "support our mission" likha mila toh instantly delete
+    if "support our mission" in full_text:
         try:
-            await message.delete()
-        except Exception:
-            pass
+            await msg.delete()
+        except Exception as e:
+            # Agar permissions nahi hai, to log me error chhod dega
+            LOGGER.error(f"Spam message mila par delete nahi hua! Reason: {e}")
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):'))
-# Group -99 par rakhne se yeh handler dusre normal handlers se pehle chalega and instantly kaam karega
+# Group -99 rakha hai taaki sabse pehle yahi chale
 application.add_handler(MessageHandler(filters.ALL, instant_delete_spam), group=-99)
 
 async def cleanup_stale_gifts():
