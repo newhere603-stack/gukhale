@@ -15,20 +15,20 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, MessageHandler, f
 from shivu import application
 from shivu.Database.db import eco_collection as user_collection
 
-# 🔥 YAHAN CHANGE KIYA HAI: Max Bet Limit
+# 🔥 SETTINGS
 MAX_BET_LIMIT = 1000000
 
 @dataclass(frozen=True)
 class GameConfig:
     cooldown: int = 5
     riddle_timeout: int = 15
-    # 🔥 YAHAN CHANGE KIYA HAI: Sabhi Win Rates 2% (0.02) kam kar diye gaye hain
+    # Sabhi win rates 2% kam hain (0.02 minus)
     stour_entry_fee: int = 300
-    stour_success_rate: float = 0.08       # Pehle 0.1 (10%) tha, ab 8%
-    basket_base_win_rate: float = 0.18      # Pehle 0.20 (20%) tha, ab 18%
-    dart_bullseye_rate: float = 0.08        # Pehle 0.1 (10%) tha, ab 8%
-    dart_hit_rate: float = 0.18             # Pehle 0.20 (20%) tha, ab 18%
-    gamble_win_rate: float = 0.18           # Pehle 0.20 (20%) tha, ab 18%
+    stour_success_rate: float = 0.08       
+    basket_base_win_rate: float = 0.18      
+    dart_bullseye_rate: float = 0.08        
+    dart_hit_rate: float = 0.18             
+    gamble_win_rate: float = 0.18           
     
     coinflip_multiplier: int = 2
     dice_multiplier: int = 2
@@ -105,77 +105,29 @@ GAME_EMOJIS = {
 }
 
 
+# 🔥 SUPERFAST MEMORY CACHE SYSTEM
 class UserDB:
     BALANCE_FIELDS = ['balance', 'coins', 'wallet', 'money', 'gold']
+    FIELD_CACHE = {}
 
     @staticmethod
-    async def get(user_id: int) -> Optional[dict]:
-        try:
-            return await user_collection.find_one({
-                '$or': [
-                    {'id': user_id},
-                    {'id': str(user_id)},
-                    {'user_id': user_id},
-                    {'user_id': str(user_id)}
-                ]
-            })
-        except Exception as e:
-            print(f"Error fetching user {user_id}: {e}")
-            return None
-
-    @staticmethod
-    async def get_balance_and_field(user: dict) -> tuple[int, str]:
+    async def get_target_field(user_id: int) -> str:
+        # Cache check for instant speed
+        if user_id in UserDB.FIELD_CACHE:
+            return UserDB.FIELD_CACHE[user_id]
+        
+        # Fast direct indexed query
+        user = await user_collection.find_one({'id': user_id})
         if not user:
-            return 0, 'balance'
+            return 'balance'
             
         for field in UserDB.BALANCE_FIELDS:
             if field in user and user[field] is not None:
-                try:
-                    return int(user[field]), field
-                except (ValueError, TypeError):
-                    pass
-        return 0, 'balance'
-
-    @staticmethod
-    async def get_balance(user_id: int) -> int:
-        user = await UserDB.get(user_id)
-        balance, _ = await UserDB.get_balance_and_field(user)
-        return balance
-
-    @staticmethod
-    async def apply_net_change(user: dict, delta_coins: int, delta_tokens: int = 0) -> tuple[bool, int, int]:
-        """Atomic update to prevent multiple DB calls per game."""
-        _, target_field = await UserDB.get_balance_and_field(user)
-
-        query = {'_id': user['_id']}
-        if delta_coins < 0:
-            query[target_field] = {'$gte': abs(delta_coins)}  # Prevent negative balance
-
-        inc_data = {target_field: delta_coins}
-        if delta_tokens != 0:
-            inc_data['tokens'] = delta_tokens
-
-        try:
-            updated_user = await user_collection.find_one_and_update(
-                query,
-                {'$inc': inc_data},
-                return_document=ReturnDocument.AFTER
-            )
-            if updated_user:
-                new_bal, _ = await UserDB.get_balance_and_field(updated_user)
-                new_tok = updated_user.get('tokens', 0)
-                return True, new_bal, new_tok
-        except Exception as e:
-            print(f"Error updating user: {e}")
-
-        return False, 0, 0
-
-    @staticmethod
-    async def change_balance(user_id: int, delta_coins: int, delta_tokens: int = 0) -> bool:
-        user = await UserDB.get(user_id)
-        if not user: return False
-        success, _, _ = await UserDB.apply_net_change(user, delta_coins, delta_tokens)
-        return success
+                UserDB.FIELD_CACHE[user_id] = field
+                return field
+                
+        UserDB.FIELD_CACHE[user_id] = 'balance'
+        return 'balance'
 
 
 class GameUI:
@@ -229,7 +181,6 @@ class GameLogic:
 
     @staticmethod
     def coinflip(guess: str, amount: int) -> GameResult:
-        # 🔥 Win chance 48% (2% reduction from 50/50)
         won = random.random() < 0.48
         outcome = guess if won else ('tails' if guess == 'heads' else 'heads')
         
@@ -241,7 +192,6 @@ class GameLogic:
 
     @staticmethod
     def dice_roll(choice: str, amount: int) -> GameResult:
-        # 🔥 Win chance 48% (2% reduction from 50/50)
         won = random.random() < 0.48
         if won:
             dice = random.choice([1, 3, 5] if choice == 'odd' else [2, 4, 6])
@@ -334,50 +284,50 @@ async def check_cooldown(update: Update, user_id: int) -> bool:
         return True
     return False
 
-
-async def validate_amount(update: Update, amount: int, user_id: int) -> Optional[dict]:
-    """Optimized to return user document and prevent fetching it again."""
+def validate_bet_amount(amount: int) -> Optional[str]:
     if amount <= 0:
-        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
-        return None
-        
-    # 🔥 YAHAN CHANGE KIYA HAI: Max bet limit check
+        return "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>"
     if amount > MAX_BET_LIMIT:
-        await send_or_edit_response(update, f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴍᴀx ʙᴇᴛ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ</b>\n<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴇᴛ ᴍᴏʀᴇ ᴛʜᴀɴ {MAX_BET_LIMIT:,} ᴄᴏɪɴs.</b>")
-        return None
+        return f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴍᴀx ʙᴇᴛ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ</b>\n<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴇᴛ ᴍᴏʀᴇ ᴛʜᴀɴ {MAX_BET_LIMIT:,} ᴄᴏɪɴs.</b>"
+    return None
+
+# 🔥 SUPERFAST SINGLE ATOMIC DB UPDATE
+async def execute_game_atomic(update: Update, user_id: int, game_type: GameType, amount: int, result: GameResult, extra: str = ""):
+    game_state.set_cooldown(user_id) 
     
-    user = await UserDB.get(user_id)
-    if not user:
-        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴀᴄᴄᴏᴜɴᴛ ɴᴏᴛ ғᴏᴜɴᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ʀᴇɢɪsᴛᴇʀ/ɢᴜᴇss ғɪʀsᴛ!</b>")
-        return None
-
-    balance, _ = await UserDB.get_balance_and_field(user)
-    if balance < amount:
-        await send_or_edit_response(update, f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {balance:,})</b>")
-        return None
-    return user
-
-
-async def process_game(update: Update, user: dict, game_type: GameType, amount: int, result: GameResult, extra: str = ""):
-    """Super-fast single database write architecture."""
-    user_id = update.effective_user.id
+    target_field = await UserDB.get_target_field(user_id)
     
-    # Calculate Net Changes (Play happens in memory before DB updates)
     net_coins = -amount
     if result.won:
-        net_coins += result.amount_changed + result.bonus_coins
-        
+        net_coins += (result.amount_changed + result.bonus_coins)
     net_tokens = result.tokens_gained if result.won else 0
     
-    # Execute single atomic update
-    success, new_bal, new_tok = await UserDB.apply_net_change(user, net_coins, net_tokens)
+    query = {'id': user_id, target_field: {'$gte': amount}}
+    inc_data = {target_field: net_coins}
+    if net_tokens > 0:
+        inc_data['tokens'] = net_tokens
+        
+    updated_user = await user_collection.find_one_and_update(
+        query,
+        {'$inc': inc_data},
+        return_document=ReturnDocument.AFTER
+    )
     
-    if not success:
-        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>")
+    if not updated_user:
+        game_state.cooldowns.pop(user_id, None) 
+        user = await user_collection.find_one({'id': user_id})
+        
+        if not user:
+            await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴀᴄᴄᴏᴜɴᴛ ɴᴏᴛ ғᴏᴜɴᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ʀᴇɢɪsᴛᴇʀ/ɢᴜᴇss ғɪʀsᴛ!</b>")
+        else:
+            bal = int(user.get(target_field, 0))
+            await send_or_edit_response(update, f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {bal:,})</b>")
         return
         
     game_state.record_play(user_id, game_type.value)
-    game_state.set_cooldown(user_id)
+    
+    new_bal = int(updated_user.get(target_field, 0))
+    new_tok = int(updated_user.get('tokens', 0))
     
     emoji = GAME_EMOJIS.get(game_type, '<tg-emoji emoji-id="6091632796877463207">🧩</tg-emoji>')
     msg = GameUI.format_result(result, emoji)
@@ -396,8 +346,7 @@ def extract_args(update: Update, context: CallbackContext, override_args: List[s
 
 async def sbet(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
-    if await check_cooldown(update, user_id):
-        return
+    if await check_cooldown(update, user_id): return
     
     args = extract_args(update, context, override_args)
     try:
@@ -411,17 +360,16 @@ async def sbet(update: Update, context: CallbackContext, override_args: List[str
         await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'heads' ᴏʀ 'tails'</b>")
         return
     
-    user = await validate_amount(update, amount, user_id)
-    if not user: return
+    if err := validate_bet_amount(amount):
+        return await send_or_edit_response(update, err)
     
     result = GameLogic.coinflip(guess, amount)
-    await process_game(update, user, GameType.COINFLIP, amount, result, f"{amount}:{guess}")
+    await execute_game_atomic(update, user_id, GameType.COINFLIP, amount, result, f"{amount}:{guess}")
 
 
 async def roll_cmd(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
-    if await check_cooldown(update, user_id):
-        return
+    if await check_cooldown(update, user_id): return
     
     args = extract_args(update, context, override_args)
     try:
@@ -435,17 +383,16 @@ async def roll_cmd(update: Update, context: CallbackContext, override_args: List
         await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'odd' ᴏʀ 'even'</b>")
         return
     
-    user = await validate_amount(update, amount, user_id)
-    if not user: return
+    if err := validate_bet_amount(amount):
+        return await send_or_edit_response(update, err)
 
     result = GameLogic.dice_roll(choice, amount)
-    await process_game(update, user, GameType.DICE, amount, result, f"{amount}:{choice}")
+    await execute_game_atomic(update, user_id, GameType.DICE, amount, result, f"{amount}:{choice}")
 
 
 async def gamble(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
-    if await check_cooldown(update, user_id):
-        return
+    if await check_cooldown(update, user_id): return
     
     args = extract_args(update, context, override_args)
     try:
@@ -460,17 +407,16 @@ async def gamble(update: Update, context: CallbackContext, override_args: List[s
     
     pick = 'l' if pick.startswith('l') else 'r'
     
-    user = await validate_amount(update, amount, user_id)
-    if not user: return
+    if err := validate_bet_amount(amount):
+        return await send_or_edit_response(update, err)
 
     result = GameLogic.gamble(pick, amount)
-    await process_game(update, user, GameType.GAMBLE, amount, result, f"{amount}:{pick}")
+    await execute_game_atomic(update, user_id, GameType.GAMBLE, amount, result, f"{amount}:{pick}")
 
 
 async def basket(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
-    if await check_cooldown(update, user_id):
-        return
+    if await check_cooldown(update, user_id): return
     
     args = extract_args(update, context, override_args)
     try:
@@ -479,17 +425,16 @@ async def basket(update: Update, context: CallbackContext, override_args: List[s
         await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
         return
     
-    user = await validate_amount(update, amount, user_id)
-    if not user: return
+    if err := validate_bet_amount(amount):
+        return await send_or_edit_response(update, err)
 
     result = GameLogic.basketball(amount)
-    await process_game(update, user, GameType.BASKET, amount, result, str(amount))
+    await execute_game_atomic(update, user_id, GameType.BASKET, amount, result, str(amount))
 
 
 async def dart(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
-    if await check_cooldown(update, user_id):
-        return
+    if await check_cooldown(update, user_id): return
     
     args = extract_args(update, context, override_args)
     try:
@@ -498,39 +443,33 @@ async def dart(update: Update, context: CallbackContext, override_args: List[str
         await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
         return
     
-    user = await validate_amount(update, amount, user_id)
-    if not user: return
+    if err := validate_bet_amount(amount):
+        return await send_or_edit_response(update, err)
 
     result = GameLogic.darts(amount)
-    await process_game(update, user, GameType.DART, amount, result, str(amount))
+    await execute_game_atomic(update, user_id, GameType.DART, amount, result, str(amount))
 
 
 async def stour(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
-    if await check_cooldown(update, user_id):
-        return
+    if await check_cooldown(update, user_id): return
     
-    user = await validate_amount(update, CONFIG.stour_entry_fee, user_id)
-    if not user: return
+    if err := validate_bet_amount(CONFIG.stour_entry_fee):
+        return await send_or_edit_response(update, err)
 
     result = GameLogic.contract()
-    await process_game(update, user, GameType.CONTRACT, CONFIG.stour_entry_fee, result)
+    await execute_game_atomic(update, user_id, GameType.CONTRACT, CONFIG.stour_entry_fee, result)
 
 
 async def riddle(update: Update, context: CallbackContext, override_args: List[str] = None):
     user_id = update.effective_user.id
     
-    # 🔥 GROUP LOCK CHECK (SUPERFAST)
     if update.effective_chat.id != -1003087506512:
         text = "<b><tg-emoji emoji-id=\"5291873529464122510\">🔒</tg-emoji> ᴛʜɪs ɢᴀᴍᴇ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴘʟᴀʏᴇᴅ ɪɴ ᴏᴜʀ ᴏғғɪᴄɪᴀʟ ɢʀᴏᴜᴘ.</b>"
-        markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("ᴊᴏɪɴ ɢʀᴏᴜᴘ ᴛᴏ ᴘʟᴀʏ", url="https://t.me/Anime_Group_hai")
-        ]])
-        await send_or_edit_response(update, text, markup)
-        return
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton("ᴊᴏɪɴ ɢʀᴏᴜᴘ ᴛᴏ ᴘʟᴀʏ", url="https://t.me/Anime_Group_hai")]])
+        return await send_or_edit_response(update, text, markup)
         
-    if await check_cooldown(update, user_id):
-        return
+    if await check_cooldown(update, user_id): return
     
     question, answer = GameLogic.generate_riddle()
     text = (
@@ -553,11 +492,7 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
             if time.time() >= pending.expires_at:
                 game_state.riddles.pop(user_id, None)
                 try:
-                    await application.bot.send_message(
-                        pending.chat_id, 
-                        f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {answer}</b>", 
-                        parse_mode="HTML"
-                    )
+                    await application.bot.send_message(pending.chat_id, f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {answer}</b>", parse_mode="HTML")
                 except Exception:
                     pass
     
@@ -565,38 +500,35 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
 
 
 async def riddle_answer(update: Update, context: CallbackContext):
-    if not update.effective_user or not update.message:
-        return
-        
-    # 🔥 FAST GROUP CHECK: Ignore all texts from other groups instantly
-    if update.effective_chat.id != -1003087506512:
+    if not update.effective_user or not update.message or update.effective_chat.id != -1003087506512:
         return
     
     user_id = update.effective_user.id
     pending = game_state.riddles.get(user_id)
-    if not pending:
-        return
+    if not pending: return
     
     text = (update.message.text or "").strip()
-    if not text:
-        return
+    if not text: return
     
     if time.time() > pending.expires_at:
         game_state.riddles.pop(user_id, None)
         return
     
     if text == pending.answer:
+        game_state.riddles.pop(user_id, None)
         bonus_c, bonus_t = GameLogic._get_random_rewards()
         total_coins = pending.reward_coins + bonus_c
         total_tokens = pending.reward_tokens + bonus_t
         
-        user = await UserDB.get(user_id)
-        if user:
-            success, bal, tok = await UserDB.apply_net_change(user, total_coins, total_tokens)
-            if not success:
-                bal, tok = 0, 0
-        else:
-            bal, tok = 0, 0
+        target_field = await UserDB.get_target_field(user_id)
+        updated_user = await user_collection.find_one_and_update(
+            {'id': user_id},
+            {'$inc': {target_field: total_coins, 'tokens': total_tokens}},
+            return_document=ReturnDocument.AFTER
+        )
+        
+        bal = int(updated_user.get(target_field, 0)) if updated_user else 0
+        tok = int(updated_user.get('tokens', 0)) if updated_user else 0
             
         rewards_str = f"<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs</b>"
         if total_tokens > 0:
@@ -606,13 +538,12 @@ async def riddle_answer(update: Update, context: CallbackContext):
             f"<b><tg-emoji emoji-id=\"6100179962185129743\">✅</tg-emoji> ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
             parse_mode="HTML"
         )
-        game_state.riddles.pop(user_id, None)
     elif text.isdigit() or (text.startswith('-') and text[1:].isdigit()):
+        game_state.riddles.pop(user_id, None)
         await update.message.reply_text(
             f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴡʀᴏɴɢ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {pending.answer}</b>",
             parse_mode="HTML"
         )
-        game_state.riddles.pop(user_id, None)
 
 
 async def games_menu(update: Update, context: CallbackContext):
@@ -628,19 +559,19 @@ async def games_menu(update: Update, context: CallbackContext):
 
 async def game_stats(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    user = await UserDB.get(user_id)
+    user = await user_collection.find_one({'id': user_id})
     stats = game_state.stats.get(user_id, {})
     
     if not stats:
-        await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
-        return
+        return await send_or_edit_response(update, "<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
 
     stat_lines = [f"• {game.upper()}: {count} ᴘʟᴀʏ(s)" for game, count in stats.items()]
     stats_str = "\n".join(stat_lines)
     name = user.get('first_name', 'ᴜɴᴋɴᴏᴡɴ') if user else 'ᴜɴᴋɴᴏᴡɴ'
     
-    bal, _ = await UserDB.get_balance_and_field(user) if user else (0, 'balance')
-    tok = user.get('tokens', 0) if user else 0
+    target_field = await UserDB.get_target_field(user_id)
+    bal = int(user.get(target_field, 0)) if user else 0
+    tok = int(user.get('tokens', 0)) if user else 0
 
     text = (
         f"<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɢᴀᴍᴇ sᴛᴀᴛɪsᴛɪᴄs</b>\n"
@@ -660,8 +591,7 @@ async def games_callback(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
 
     if not data.startswith("games:"):
-        await query.answer()
-        return
+        return await query.answer()
 
     parts = data.split(":")
     action = parts[1]
@@ -681,26 +611,18 @@ async def games_callback(update: Update, context: CallbackContext):
         await query.message.reply_text(info_texts.get(game_cmd, "Unknown Game"), parse_mode="HTML")
 
     elif action == "repeat":
-        # 🔥 Timer validation exact yahin check ho raha hai Play Again ke liye
         if remaining := game_state.check_cooldown(user_id):
-            await query.answer(f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ!", show_alert=True)
-            return
+            return await query.answer(f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ!", show_alert=True)
 
         await query.answer()
         cmd = parts[2]
-        args_str = parts[3]
         
-        # Purane inputs (amount + guess) automatically fetch kar liye yahan pe
-        parsed_args = args_str.split(":") if args_str != "_" else []
+        parsed_args = parts[3:]
+        if parsed_args == ['_']: parsed_args = []
 
         handlers = {
-            "sbet": sbet,
-            "roll": roll_cmd,
-            "gamble": gamble,
-            "basket": basket,
-            "dart": dart,
-            "stour": stour,
-            "riddle": riddle
+            "sbet": sbet, "roll": roll_cmd, "gamble": gamble,
+            "basket": basket, "dart": dart, "stour": stour, "riddle": riddle
         }
 
         if handler := handlers.get(cmd):
