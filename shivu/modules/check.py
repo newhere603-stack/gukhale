@@ -49,6 +49,28 @@ RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common")
 }
 
+# 🔥 POWERFUL ID MATCHING LOGIC (09, 9, 009 Sab Ek Samaan)
+def normalize_id(cid: str) -> str:
+    """Normalize ID for superfast caching (09 becomes 9)"""
+    cid_str = str(cid).strip()
+    if cid_str.isdigit():
+        return cid_str.lstrip('0') or '0'
+    return cid_str
+
+def get_search_ids(cid: str) -> List:
+    """Generates all possible combinations (string and int) to match DB perfectly"""
+    search_ids = [str(cid)]
+    if str(cid).isdigit():
+        cleaned = str(cid).lstrip('0') or '0'
+        search_ids.extend([
+            cleaned,              # "9"
+            cleaned.zfill(2),     # "09"
+            cleaned.zfill(3),     # "009"
+            cleaned.zfill(4),     # "0009"
+            int(cleaned)          # 9 (Integer)
+        ])
+    return list(set(search_ids))
+
 # 🔥 POWERFUL RARITY MATCHER
 def get_base_rarity(rarity_str: str) -> str:
     if not rarity_str or not isinstance(rarity_str, str):
@@ -116,15 +138,15 @@ async def silent_auto_delete(message, delay_seconds: int = 1200):
         pass # Silently ignore if already deleted or bot lacks permission
 
 async def get_char(cid: str) -> Optional[Char]:
-    if cid in char_cache:
-        return char_cache[cid]
-    search_ids = [str(cid)]
-    if str(cid).isdigit():
-        search_ids.append(int(cid))
+    ncid = normalize_id(cid)
+    if ncid in char_cache:
+        return char_cache[ncid]
+        
+    search_ids = get_search_ids(ncid)
     d = await collection.find_one({'id': {'$in': search_ids}})
     if d:
         char_obj = Char.from_dict(d)
-        char_cache[cid] = char_obj
+        char_cache[ncid] = char_obj
         return char_obj
     return None
 
@@ -138,13 +160,12 @@ async def find_by_anime(anime: str) -> List[Dict]:
     return res
 
 async def global_count(cid: str) -> int:
-    key = f"c_{cid}"
+    ncid = normalize_id(cid)
+    key = f"c_{ncid}"
     if key in user_cache:
         return user_cache[key]
     try:
-        search_ids = [str(cid)]
-        if str(cid).isdigit():
-            search_ids.append(int(cid))
+        search_ids = get_search_ids(ncid)
         n = await user_collection.count_documents({'characters.id': {'$in': search_ids}})
     except Exception:
         n = 0
@@ -153,13 +174,12 @@ async def global_count(cid: str) -> int:
 
 # 🔥 MEGA FIX: Aggregation Pipeline for SUPER FAST owner fetching
 async def get_owners(cid: str) -> List[Dict]:
-    key = f"o_{cid}"
+    ncid = normalize_id(cid)
+    key = f"o_{ncid}"
     if key in user_cache:
         return user_cache[key]
         
-    search_ids = [str(cid)]
-    if str(cid).isdigit():
-        search_ids.append(int(cid))
+    search_ids = get_search_ids(ncid)
         
     try:
         pipeline = [
@@ -189,12 +209,15 @@ async def get_owners(cid: str) -> List[Dict]:
     return owners
 
 def clear_char_cache(cid: str) -> None:
-    owner_key = f"o_{cid}"
-    count_key = f"c_{cid}"
+    ncid = normalize_id(cid)
+    owner_key = f"o_{ncid}"
+    count_key = f"c_{ncid}"
     if owner_key in user_cache:
         del user_cache[owner_key]
     if count_key in user_cache:
         del user_cache[count_key]
+    if ncid in char_cache:
+        del char_cache[ncid]
 
 def process_search(chars: List[Dict]) -> Dict:
     names, data, rarities = {}, {}, {}
@@ -370,9 +393,8 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         char_id_input = str(context.args[0])
         
-        search_ids = [char_id_input]
-        if char_id_input.isdigit():
-            search_ids.append(int(char_id_input))      
+        # 🔥 USE NEW POWERFUL MATCHER
+        search_ids = get_search_ids(char_id_input)
 
         global_char = await collection.find_one({'id': {'$in': search_ids}})
         
