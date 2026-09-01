@@ -223,7 +223,8 @@ def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
     for i, o in enumerate(owners[start:end], start + 1):
-        medal = medals.get(i, f"{i}.")
+        # 🔥 FIX: Ab 4, 5, 6 numbers BOLD mein aayenge properly
+        medal = medals.get(i, f"<b>{i}.</b>")
         fn = escape(trunc(o.get('first_name', 'User'), 18))
         uid = o.get('id')
         cap += f"{medal} <a href=\"tg://user?id={uid}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
@@ -242,12 +243,21 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <code>{len(owners)}</code> {sc('owners')}\n"
         f"<tg-emoji emoji-id=\"5028746137645876535\">📈</tg-emoji> <code>{avg}×</code> {sc('avg')}\n"
     )
+    
+    # 🔥 FIX: Top Collectors section ko Premium Emojis (medals) lagaye gaye
+    medals = {
+        1: "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>", 
+        2: "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>", 
+        3: "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>"
+    }
+
     if owners:
         cap += f"\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('top collectors')}</b>\n"
         for i, o in enumerate(owners[:3], 1):
             fn = escape(trunc(o.get('first_name', 'User'), 18))
             uid = o.get('id')
-            cap += f"{i}. <a href=\"tg://user?id={uid}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
+            medal = medals.get(i, f"<b>{i}.</b>")
+            cap += f"{medal} <a href=\"tg://user?id={uid}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
     return cap
 
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
@@ -278,12 +288,12 @@ async def inlinequery(update: Update, context) -> None:
                     sq = sq.replace(f'-{m}', '').strip()
                     break
             if not tid.isdigit():
-                await query.answer([], cache_time=5)
+                await query.answer([], cache_time=1, is_personal=True)
                 return
             tuid = int(tid)
             usr = await get_user(tuid)
             if not usr:
-                await query.answer([InlineQueryResultArticle(id="nouser", title=sc("no collection"), description=sc("start your journey"), input_message_content=InputTextMessageContent(f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> {sc('start collecting!')}</b>", parse_mode=ParseMode.HTML))], cache_time=5)
+                await query.answer([InlineQueryResultArticle(id="nouser", title=sc("no collection"), description=sc("start your journey"), input_message_content=InputTextMessageContent(f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> {sc('start collecting!')}</b>", parse_mode=ParseMode.HTML))], cache_time=1, is_personal=True)
                 return
             cd = {c['id']: c for c in usr.get('characters', []) if isinstance(c, dict) and c.get('id')}
             all_chars = list(cd.values())
@@ -336,14 +346,15 @@ async def inlinequery(update: Update, context) -> None:
                 all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
         
         all_chars = dedupe(all_chars)
-        
         chars = all_chars[off:off+50]
         has_more = len(all_chars) > off + 50
         noff = str(off + 50) if has_more else ""
 
-        live_ids = [c.get('id') for c in chars if c.get('id')]
-        if live_ids:
-            live_docs = await collection.find({'id': {'$in': live_ids}}, {'_id': 0}).to_list(length=50)
+        # 🔥 FIX: SPEED OPTIMIZATION. Inline query was very slow due to an unnecessary database hit on every scroll.
+        # Now it only fetches if a document actually misses its image URL in the cache!
+        missing_ids = [c.get('id') for c in chars if c.get('id') and not c.get('img_url')]
+        if missing_ids:
+            live_docs = await collection.find({'id': {'$in': missing_ids}}, {'_id': 0}).to_list(length=50)
             live_map = {d['id']: d for d in live_docs}
             for ch in chars:
                 cid = ch.get('id')
@@ -372,7 +383,6 @@ async def inlinequery(update: Update, context) -> None:
             kbd = create_kbd(cid, uid)
             
             rid = f"{cid}_{off}_{i}_{qid[:8]}"
-            # Yahan r.emoji hi use hoga taaki inline results title me normal emoji dikhe (HTML support nahi karta title)
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
             desc = f"{r.name} • {trunc(an, 20)}"
             
@@ -381,11 +391,13 @@ async def inlinequery(update: Update, context) -> None:
             else:
                 results.append(InlineQueryResultPhoto(id=rid, photo_url=img, thumbnail_url=img, title=title, description=desc, caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd))
         
-        await query.answer(results, next_offset=noff, cache_time=5, is_personal=is_coll)
+        # 🔥 FIX: Premium Emoji not showing immediately issue.
+        # Added cache_time=1 and is_personal=True to enforce fresh data mapping and bypass global media cache limitations of Telegram.
+        await query.answer(results, next_offset=noff, cache_time=1, is_personal=True)
     except Exception as e:
         LOGGER.error(f"Inline query error: {e}")
         try:
-            await update.inline_query.answer([], cache_time=5)
+            await update.inline_query.answer([], cache_time=1, is_personal=True)
         except Exception:
             pass
 
