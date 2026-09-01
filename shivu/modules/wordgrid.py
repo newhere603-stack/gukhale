@@ -737,11 +737,16 @@ async def grid_leaderboard_callback(update: Update, context: ContextTypes.DEFAUL
     except Exception:
         pass
 
+# --- HELP COMMAND HANDLER ---
+async def help_grid_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(__help__, parse_mode="HTML")
+
 # --- REGISTER HANDLERS ---
 application.add_handler(CommandHandler(["playgrid", "new_grid", "wordgrid", "grid", "grid_easy", "grid_hard"], start_game, block=False))
 application.add_handler(CommandHandler(["stopgame", "endgrid"], stop_game, block=False))
 application.add_handler(CommandHandler(["gridtop", "topgrid"], leaderboard_handler, block=False))
-application.add_handler(CommandHandler(["helpgrid", "gridsettings"], settings_cmd, block=False))
+application.add_handler(CommandHandler(["gridsettings"], settings_cmd, block=False))
+application.add_handler(CommandHandler(["helpgrid"], help_grid_cmd, block=False)) # Ye raha tumhara naya command
 
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS, handle_guesses, block=False), group=5)
 application.add_handler(CallbackQueryHandler(refresh_grid_callback, pattern="^refresh_grid$", block=False))
@@ -751,11 +756,27 @@ application.add_handler(CallbackQueryHandler(settings_callback, pattern="^wg_|ig
 
 __mod_name__ = "WordGrid"
 __help__ = """
-🎮 <b>WordGrid Game Commands:</b>
-- /grid: Start normal mode.
-- /grid_easy: Start a smaller, easier board.
-- /grid_hard: Start a larger, tougher board.
-- /end: Stop the active game.
-- /gridtop: View the WordGrid Leaderboard.
-- /gridsettings: Manage chat settings for the game.
+<tg-emoji emoji-id="6095903536262949014">🎮</tg-emoji> <b>WordGrid — ᴡᴏʀᴅ ᴘᴜᴢᴢʟᴇ ɢᴀᴍᴇ</b>
+
+<tg-emoji emoji-id="6093637923834438402">✨</tg-emoji> <i>ᴄʜᴀʟʟᴇɴɢᴇ ʏᴏᴜʀsᴇʟꜰ ᴡɪᴛʜ ᴡᴏʀᴅɢʀɪᴅ, ᴀ ꜰᴜɴ ᴀɴᴅ ᴄᴏᴍᴘᴇᴛɪᴛɪᴠᴇ ᴡᴏʀᴅ ᴘᴜᴢᴢʟᴇ ɢᴀᴍᴇ. ꜰɪɴᴅ ᴛʜᴇ ʜɪᴅᴅᴇɴ ᴡᴏʀᴅs, ᴄᴏᴍᴘʟᴇᴛᴇ ᴛʜᴇ ɢʀɪᴅ, ᴀɴᴅ ᴄᴏᴍᴘᴇᴛᴇ ꜰᴏʀ ᴛʜᴇ ᴛᴏᴘ sᴘᴏᴛ!</i>
+
+<b><tg-emoji emoji-id="5310278924616356636">🎯</tg-emoji> ɢᴀᴍᴇ ᴍᴏᴅᴇs</b>
+
+- /grid — sᴛᴀʀᴛ ᴀ sᴛᴀɴᴅᴀʀᴅ ᴡᴏʀᴅɢʀɪᴅ ɢᴀᴍᴇ.
+- /grid_easy — ᴘʟᴀʏ ᴏɴ ᴀ sᴍᴀʟʟᴇʀ, ᴇᴀsɪᴇʀ ʙᴏᴀʀᴅ.
+- /grid_hard — ᴛᴀᴋᴇ ᴏɴ ᴀ ʟᴀʀɢᴇʀ, ᴍᴏʀᴇ ᴄʜᴀʟʟᴇɴɢɪɴɢ ʙᴏᴀʀᴅ.
+
+<b><tg-emoji emoji-id="6104786181466103619">⚙️</tg-emoji> ɢᴀᴍᴇ ᴄᴏɴᴛʀᴏʟs</b>
+
+- /end — sᴛᴏᴘ ᴛʜᴇ ᴀᴄᴛɪᴠᴇ ɢᴀᴍᴇ.
+
+<b><tg-emoji emoji-id="6053140037250323814">🏆</tg-emoji> ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ</b>
+
+- /gridtop — ᴠɪᴇᴡ ᴛʜᴇ ᴡᴏʀᴅɢʀɪᴅ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ ᴀɴᴅ ᴄʜᴇᴄᴋ ᴛʜᴇ ᴛᴏᴘ ᴘʟᴀʏᴇʀs.
+
+<b><tg-emoji emoji-id="6307567066572396133">⚙</tg-emoji> ᴄʜᴀᴛ sᴇᴛᴛɪɴɢs</b>
+
+- /gridsettings — ᴍᴀɴᴀɢᴇ ᴡᴏʀᴅɢʀɪᴅ sᴇᴛᴛɪɴɢs ᴀɴᴅ ɢᴀᴍᴇ ᴘᴇʀᴍɪssɪᴏɴs.
+
+<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> <i>ᴄʜᴏᴏsᴇ ʏᴏᴜʀ ᴅɪꜰꜰɪᴄᴜʟᴛʏ, ꜰɪɴᴅ ᴛʜᴇ ᴡᴏʀᴅs, ᴀɴᴅ ᴄʟɪᴍʙ ᴛʜᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ!</i>
 """
