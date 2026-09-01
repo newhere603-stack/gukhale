@@ -265,24 +265,20 @@ class GameLogic:
         return f"{a} {op} {b}", str(ans)
 
 
-async def send_response(update: Update, context: CallbackContext, text: str, markup=None):
+# 🔥 FIX: Ye function pehle jaisa wapas kar diya gaya hai.
+# Jab button dabega to usi message ko edit karega bina naya msg bheje.
+async def send_or_edit_response(update: Update, context: CallbackContext, text: str, markup=None):
     if update.callback_query:
         try:
-            await update.callback_query.answer() 
+            await update.callback_query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+            return
         except Exception:
             pass
-        return await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=text,
-            reply_markup=markup,
-            parse_mode="HTML"
-        )
-    else:
-        return await update.message.reply_text(
-            text=text, 
-            reply_markup=markup, 
-            parse_mode="HTML"
-        )
+    
+    # Nayi game command lagane par naya message jayega
+    msg = update.callback_query.message if update.callback_query else update.message
+    if msg:
+        return await msg.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
 
 async def check_cooldown(update: Update, context: CallbackContext, user_id: int) -> bool:
@@ -296,7 +292,7 @@ async def check_cooldown(update: Update, context: CallbackContext, user_id: int)
             except Exception:
                 pass
         else:
-            await send_response(
+            await send_or_edit_response(
                 update, context,
                 f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ᴄᴏᴏʟᴅᴏᴡɴ ᴀᴄᴛɪᴠᴇ</b>\n<b>ᴘʟᴇᴀsᴇ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴘʟᴀʏɪɴɢ ᴀɢᴀɪɴ.</b>"
             )
@@ -306,21 +302,21 @@ async def check_cooldown(update: Update, context: CallbackContext, user_id: int)
 
 async def validate_amount(update: Update, context: CallbackContext, amount: int, user_id: int) -> Optional[dict]:
     if amount <= 0:
-        await send_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
+        await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ</b>\n<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ᴘᴏsɪᴛɪᴠᴇ.</b>")
         return None
         
     if amount > MAX_BET_LIMIT:
-        await send_response(update, context, f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴍᴀx ʙᴇᴛ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ</b>\n<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴇᴛ ᴍᴏʀᴇ ᴛʜᴀɴ {MAX_BET_LIMIT:,} ᴄᴏɪɴs.</b>")
+        await send_or_edit_response(update, context, f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴍᴀx ʙᴇᴛ ʟɪᴍɪᴛ ᴇxᴄᴇᴇᴅᴇᴅ</b>\n<b>ʏᴏᴜ ᴄᴀɴɴᴏᴛ ʙᴇᴛ ᴍᴏʀᴇ ᴛʜᴀɴ {MAX_BET_LIMIT:,} ᴄᴏɪɴs.</b>")
         return None
     
     user = await UserDB.get(user_id)
     if not user:
-        await send_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴀᴄᴄᴏᴜɴᴛ ɴᴏᴛ ғᴏᴜɴᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ʀᴇɢɪsᴛᴇʀ/ɢᴜᴇss ғɪʀsᴛ!</b>")
+        await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴀᴄᴄᴏᴜɴᴛ ɴᴏᴛ ғᴏᴜɴᴅ</b>\n<b>ᴘʟᴇᴀsᴇ ʀᴇɢɪsᴛᴇʀ/ɢᴜᴇss ғɪʀsᴛ!</b>")
         return None
 
     balance, _ = await UserDB.get_balance_and_field(user)
     if balance < amount:
-        await send_response(update, context, f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {balance:,})</b>")
+        await send_or_edit_response(update, context, f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ</b>\n<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. (ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {balance:,})</b>")
         return None
     return user
 
@@ -335,6 +331,7 @@ async def process_game(update: Update, context: CallbackContext, user: dict, gam
     
     _, target_field = await UserDB.get_balance_and_field(user)
     
+    # Exact document match via _id to ensure no wrong user is updated
     query = {'_id': user['_id']}
     if net_coins < 0:
         query[target_field] = {'$gte': abs(net_coins)}
@@ -350,7 +347,7 @@ async def process_game(update: Update, context: CallbackContext, user: dict, gam
     )
 
     if not updated_user:
-        await send_response(update, context, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ ᴏʀ ᴇʀʀᴏʀ</b>\n<b>ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>")
+        await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ ᴏʀ ᴇʀʀᴏʀ</b>\n<b>ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>")
         return
         
     game_state.record_play(user_id, game_type.value)
@@ -363,7 +360,7 @@ async def process_game(update: Update, context: CallbackContext, user: dict, gam
     msg = GameUI.format_result(result, emoji)
     msg += f"\n<b>ʙᴀʟᴀɴᴄᴇ: <code>{new_bal:,}</code> ᴄᴏɪɴs</b> | <b>ᴛᴏᴋᴇɴs: <code>{new_tok:,}</code></b>"
     
-    await send_response(update, context, msg, GameUI.play_again(game_type.value, extra))
+    await send_or_edit_response(update, context, msg, GameUI.play_again(game_type.value, extra))
 
 
 def extract_args(update: Update, context: CallbackContext, override_args: List[str] = None) -> List[str]:
@@ -382,11 +379,11 @@ async def sbet(update: Update, context: CallbackContext, override_args: List[str
     try:
         amount, guess = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/sbet &lt;amount&gt; heads|tails</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /sbet 100 heads</b></i>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/sbet &lt;amount&gt; heads|tails</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /sbet 100 heads</b></i>")
     
     guess = 'heads' if guess in ('h', 'head', 'heads') else ('tails' if guess in ('t', 'tail', 'tails') else None)
     if not guess:
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'heads' ᴏʀ 'tails'</b>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'heads' ᴏʀ 'tails'</b>")
     
     user = await validate_amount(update, context, amount, user_id)
     if not user: return
@@ -403,11 +400,11 @@ async def roll_cmd(update: Update, context: CallbackContext, override_args: List
     try:
         amount, choice = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/roll &lt;amount&gt; odd|even</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /roll 50 odd</b></i>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/roll &lt;amount&gt; odd|even</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /roll 50 odd</b></i>")
     
     choice = 'odd' if choice in ('o', 'odd') else ('even' if choice in ('e', 'even') else None)
     if not choice:
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'odd' ᴏʀ 'even'</b>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'odd' ᴏʀ 'even'</b>")
     
     user = await validate_amount(update, context, amount, user_id)
     if not user: return
@@ -424,10 +421,10 @@ async def gamble(update: Update, context: CallbackContext, override_args: List[s
     try:
         amount, pick = int(args[0]), args[1].lower()
     except (IndexError, ValueError):
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/gamble &lt;amount&gt; l|r</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /gamble 100 l</b></i>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/gamble &lt;amount&gt; l|r</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /gamble 100 l</b></i>")
     
     if pick not in ('l', 'r', 'left', 'right'):
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'l' ᴏʀ 'r'</b>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ɪɴᴠᴀʟɪᴅ ᴄʜᴏɪᴄᴇ</b>\n<b>ᴍᴜsᴛ ʙᴇ 'l' ᴏʀ 'r'</b>")
     
     pick = 'l' if pick.startswith('l') else 'r'
     
@@ -446,7 +443,7 @@ async def basket(update: Update, context: CallbackContext, override_args: List[s
     try:
         amount = int(args[0])
     except (IndexError, ValueError):
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/basket &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /basket 75</b></i>")
     
     user = await validate_amount(update, context, amount, user_id)
     if not user: return
@@ -463,7 +460,7 @@ async def dart(update: Update, context: CallbackContext, override_args: List[str
     try:
         amount = int(args[0])
     except (IndexError, ValueError):
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> ᴜsᴀɢᴇ</b>\n<code>/dart &lt;amount&gt;</code>\n<i><b>ᴇxᴀᴍᴘʟᴇ: /dart 50</b></i>")
     
     user = await validate_amount(update, context, amount, user_id)
     if not user: return
@@ -489,7 +486,7 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
     if update.effective_chat.id != -1003087506512:
         text = "<b><tg-emoji emoji-id=\"5291873529464122510\">🔒</tg-emoji> ᴛʜɪs ɢᴀᴍᴇ ᴄᴀɴ ᴏɴʟʏ ʙᴇ ᴘʟᴀʏᴇᴅ ɪɴ ᴏᴜʀ ᴏғғɪᴄɪᴀʟ ɢʀᴏᴜᴘ.</b>"
         markup = InlineKeyboardMarkup([[InlineKeyboardButton("ᴊᴏɪɴ ɢʀᴏᴜᴘ ᴛᴏ ᴘʟᴀʏ", url="https://t.me/Anime_Group_hai")]])
-        return await send_response(update, context, text, markup)
+        return await send_or_edit_response(update, context, text, markup)
         
     if await check_cooldown(update, context, user_id): return
     
@@ -500,7 +497,7 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
         f"<b>ᴛɪᴍᴇ: <code>{CONFIG.riddle_timeout}s</code> | ʀᴇᴡᴀʀᴅ: <code>50</code> ᴄᴏɪɴs + <code>1</code> ᴛᴏᴋᴇɴ</b>\n"
         f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜᴍʙᴇʀ</b></i>"
     )
-    sent = await send_response(update, context, text)
+    sent = await send_or_edit_response(update, context, text)
     msg_id = sent.message_id if sent else (update.callback_query.message.message_id if update.callback_query else 0)
     
     riddle_data = PendingRiddle(answer, time.time() + CONFIG.riddle_timeout, msg_id, update.effective_chat.id, question)
@@ -579,7 +576,7 @@ async def games_menu(update: Update, context: CallbackContext):
         f"<b>ᴅᴀʀᴛs • ᴄᴏɴᴛʀᴀᴄᴛ</b>\n"
         f"<b>ʀɪᴅᴅʟᴇ</b>"
     )
-    await send_response(update, context, text, GameUI.menu())
+    await send_or_edit_response(update, context, text, GameUI.menu())
 
 
 async def game_stats(update: Update, context: CallbackContext):
@@ -588,7 +585,7 @@ async def game_stats(update: Update, context: CallbackContext):
     stats = game_state.stats.get(user_id, {})
     
     if not stats:
-        return await send_response(update, context, "<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
+        return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
 
     stat_lines = [f"• {game.upper()}: {count} ᴘʟᴀʏ(s)" for game, count in stats.items()]
     stats_str = "\n".join(stat_lines)
@@ -604,7 +601,7 @@ async def game_stats(update: Update, context: CallbackContext):
         f"<b>ᴄᴜʀʀᴇɴᴛ ʙᴀʟᴀɴᴄᴇ: <code>{bal:,}</code> ᴄᴏɪɴs</b>\n"
         f"<b>ᴄᴜʀʀᴇɴᴛ ᴛᴏᴋᴇɴs: <code>{tok:,}</code></b>"
     )
-    await send_response(update, context, text)
+    await send_or_edit_response(update, context, text)
 
 
 # --- CALLBACK QUERY HANDLER ---
@@ -648,7 +645,8 @@ async def games_callback(update: Update, context: CallbackContext):
         
         cmd = parts[2]
         
-        # 🔥 FIX: Puraana spam rokne wala behavior. Sirf Usage explain karega bina bet lagaye
+        # 🔥 YAHAN FIX KIYA HAI: Empty args jayenge jisse Usage explain function call hoga
+        # Aur "send_or_edit_response" function usi message ko edit karke wahan Usage print kar dega.
         parsed_args = []
 
         handlers = {
