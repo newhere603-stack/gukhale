@@ -4,8 +4,8 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from shivu import application, user_collection
 
 # --- CONFIGURATION ---
-OWNER_ID = 8420981179
-LOG_GROUP_ID = -1003110990230 
+OWNER_ID = 7657218453
+LOG_GROUP_ID = -1003893927065 
 
 # --- UNICODE SMALL CAPS STYLE ---
 class Style:
