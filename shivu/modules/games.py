@@ -200,7 +200,7 @@ class GameLogic:
 
     @staticmethod
     def dice_roll(choice: str, amount: int) -> GameResult:
-        won = random.random() < 0.48
+        won = random.random() < 0.10
         if won:
             dice = random.choice([1, 3, 5] if choice == 'odd' else [2, 4, 6])
         else:
