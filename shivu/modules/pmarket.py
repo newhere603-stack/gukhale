@@ -651,7 +651,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     
     owner_id = int(parts[-1])
     if user_id != owner_id:
-        await query.answer(f"{E_WARN} {sc('you cannot interact with this menu! please open your own market via')} /pmarket", show_alert=True)
+        await query.answer(f"{sc('you cannot interact with this menu!\nplease open your own market via')} /pmarket", show_alert=True)
         return
 
     action = parts[0]
@@ -876,7 +876,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
         if not item:
-            await query.answer(f"{E_WARN} {sc('this item is no longer on the market.')}", show_alert=True)
+            await query.answer(f"{sc('this item is no longer on the market.')}", show_alert=True)
         else:
             char = item['character']
             await asyncio.gather(
@@ -894,7 +894,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             )
             await send_market_log(context, "📉 CHARACTER DELISTED", log_details)
 
-            await query.answer(f"{E_TICK} {sc('successfully removed and returned to inventory!')}", show_alert=True)
+            await query.answer(f"{sc('successfully removed and returned to inventory!')}", show_alert=True)
         
         cursor = market_collection.find({'seller_id': user_id}).limit(50)
         listings = await cursor.to_list(length=50)
@@ -1111,7 +1111,7 @@ async def exchange_start_t2c(update: Update, context: CallbackContext):
     owner_id = int(parts[-1])
     
     if query.from_user.id != owner_id:
-        await query.answer(f"{E_WARN} {sc('you cannot interact with this menu!')}", show_alert=True)
+        await query.answer(f"{sc('you cannot interact with this menu!')}", show_alert=True)
         return ConversationHandler.END
         
     await clear_existing_states(context)
@@ -1138,7 +1138,7 @@ async def exchange_start_c2t(update: Update, context: CallbackContext):
     owner_id = int(parts[-1])
     
     if query.from_user.id != owner_id:
-        await query.answer(f"{E_WARN} {sc('you cannot interact with this menu!')}", show_alert=True)
+        await query.answer(f"{sc('you cannot interact with this menu!')}", show_alert=True)
         return ConversationHandler.END
         
     await clear_existing_states(context)
@@ -1282,7 +1282,7 @@ application.add_handler(sell_conv, group=-1)
 application.add_handler(exchange_conv, group=-2)
 application.add_handler(buy_conv, group=-3) 
 
-application.add_handler(CommandHandler(["pmarket", "shop"], pmarket_command, block=False), group=0)
+application.add_handler(CommandHandler(["pmarket", "exchange", "shop"], pmarket_command, block=False), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd, block=False), group=0)
 application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd, block=False), group=0)
 application.add_handler(CommandHandler("forcedelist", force_delist_cmd, block=False), group=0)
