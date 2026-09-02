@@ -57,7 +57,7 @@ async def send_market_log(context: CallbackContext, action: str, details: str):
     )
     try:
         await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_msg, parse_mode='HTML')
-    except Exception as e:
+    except Exception:
         pass
 
 # 🔥 HELPER: SEND BUY LOGS TO THE NEW GROUP
@@ -74,7 +74,7 @@ async def send_buy_log(context: CallbackContext, action: str, user, details: str
     )
     try:
         await context.bot.send_message(chat_id=BUY_LOG_GROUP_ID, text=log_msg, parse_mode='HTML')
-    except Exception as e:
+    except Exception:
         pass
 
 # --- HELPER: GET DAILY LIMIT INFO ---
@@ -196,9 +196,14 @@ def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
 
 async def update_menu(query, text, keyboard):
+    bot = query.message.get_bot()
     if query.message.photo or query.message.video:
-        await query.message.delete()
-        await query.message.reply_html(text, reply_markup=keyboard)
+        chat_id = query.message.chat_id
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode='HTML')
     else:
         await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
 
@@ -250,7 +255,7 @@ async def toggle_exchange_cmd(update: Update, context: CallbackContext):
 async def set_exchange_limit_cmd(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID: return
     if not context.args or not context.args[0].isdigit():
-        return await update.message.reply_text(f"{E_WARN} <b>{sc('invalid format.')}</b>\n{sc('usage:')} <code>/set_exchange_limit <amount></code>", parse_mode="HTML")
+        return await update.message.reply_text(f"{E_WARN} <b>{sc('invalid format.')}</b>\n{sc('usage:')} /set_exchange_limit <amount>", parse_mode="HTML")
     new_limit = int(context.args[0])
     await bot_settings_collection.update_one({'_id': 'pmarket_settings'}, {'$set': {'daily_token_limit': new_limit}}, upsert=True)
     await update.message.reply_html(f"{E_TICK} <b>{sc('daily exchange limit has been updated to')} <code>{new_limit}</code> {sc('tokens!')}</b>")
@@ -258,7 +263,7 @@ async def set_exchange_limit_cmd(update: Update, context: CallbackContext):
 async def force_delist_cmd(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID: return
     if not context.args:
-        return await update.message.reply_text(f"{E_WARN} <b>{sc('invalid format.')}</b>\n{sc('usage:')} <code>/forcedelist <character_id></code>", parse_mode="HTML")
+        return await update.message.reply_text(f"{E_WARN} <b>{sc('invalid format.')}</b>\n{sc('usage:')} /forcedelist <character_id>", parse_mode="HTML")
         
     char_id = context.args[0]
     query = {'$or': [{'character.id': char_id}, {'character.id': int(char_id) if char_id.isdigit() else char_id}]}
@@ -270,7 +275,6 @@ async def force_delist_cmd(update: Update, context: CallbackContext):
     for item in listings:
         seller_id, char = item['seller_id'], item['character']
         market_ids.append(item['_id'])
-        tasks.append(user_collection.update_one({'id': seller_id}, {'$push': {'characters': char}}))
         count += 1
         seller_mention = f"<a href='tg://user?id={seller_id}'>{seller_id}</a>"
         log_details = (
@@ -283,7 +287,7 @@ async def force_delist_cmd(update: Update, context: CallbackContext):
     
     await asyncio.gather(*tasks)
     await market_collection.delete_many({'_id': {'$in': market_ids}})
-    await update.message.reply_html(f"{E_TICK} <b>{sc('successfully removed')} <code>{count}</code> {sc('listing(s) for character id')} <code>{char_id}</code> {sc('and returned to their owners.')}</b>")
+    await update.message.reply_html(f"{E_TICK} <b>{sc('successfully removed')} <code>{count}</code> {sc('listing(s) for character id')} <code>{char_id}</code>.</b>")
 
 # ========================
 # RARITY TOGGLES COMMANDS
@@ -291,7 +295,7 @@ async def force_delist_cmd(update: Update, context: CallbackContext):
 async def mrarity_on_cmd(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID: return
     if not context.args:
-        return await update.message.reply_html(f"<b>{E_WARN} {sc('please provide a rarity name. example:')} <code>/mrarity_on common</code></b>")
+        return await update.message.reply_html(f"<b>{E_WARN} {sc('please provide a rarity name. example:')} /mrarity_on common</b>")
     r = " ".join(context.args).lower()
     await bot_settings_collection.update_one({'_id': 'market_rarity_settings'}, {'$set': {f'enabled.{r}': True}}, upsert=True)
     await update.message.reply_html(f"<b>{E_TICK} {sc(r)} {sc('rarity is now enabled for purchase!')}</b>")
@@ -299,7 +303,7 @@ async def mrarity_on_cmd(update: Update, context: CallbackContext):
 async def mrarity_off_cmd(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID: return
     if not context.args:
-        return await update.message.reply_html(f"<b>{E_WARN} {sc('please provide a rarity name. example:')} <code>/mrarity_off common</code></b>")
+        return await update.message.reply_html(f"<b>{E_WARN} {sc('please provide a rarity name. example:')} /mrarity_off common</b>")
     r = " ".join(context.args).lower()
     await bot_settings_collection.update_one({'_id': 'market_rarity_settings'}, {'$set': {f'enabled.{r}': False}}, upsert=True)
     await update.message.reply_html(f"<b>{E_CROSS} {sc(r)} {sc('rarity is now disabled for purchase.')}</b>")
@@ -310,7 +314,7 @@ async def mrarity_off_cmd(update: Update, context: CallbackContext):
 async def buy_command_pm(update: Update, context: CallbackContext):
     if update.effective_chat.type != "private":
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("buy here"), url=f"https://t.me/{context.bot.username}?start=buy_tokens")]])
-        await update.message.reply_html(f"<b>{E_WARN} {sc('this command only works in pm (private messages). click below to buy.')}</b>", reply_markup=kb)
+        await update.message.reply_html(f"<b>{E_WARN} {sc('this command only works in pm (private messages).\nclick below to buy.')}</b>", reply_markup=kb)
         return ConversationHandler.END
     return await start_buy_menu(update, context)
 
@@ -484,7 +488,7 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
     qr_msg_id = context.user_data.get('qr_msg_id')
     if qr_msg_id:
         try: await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=qr_msg_id)
-        except: pass
+        except Exception: pass
 
     photo_id = update.message.photo[-1].file_id
     order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
@@ -743,7 +747,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     elif action == "pm_v":
         market_id = parts[1]
         order = parts[2]
-        # parts[3] is already parsed as user_id above in owner_id check
         
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
@@ -799,7 +802,11 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_s:{rarity_key}:{order}:{user_id}")]
         ])
 
-        await query.message.delete()
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+
         msg = await context.bot.send_photo(
             chat_id=query.message.chat_id,
             photo=display_char.get('img_url', 'https://files.catbox.moe/0qjgih.png'), 
@@ -836,15 +843,39 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await query.answer(f"⚠️ {sc('insufficient funds! you need')} {price:,} {sc('balance.')}", show_alert=True)
             return
 
+        # 🔥 SMART LAZY-DELETE SYSTEM: Check seller's inventory BEFORE buying 🔥
+        seller_doc = await user_collection.find_one({'id': seller_id})
+        seller_chars = seller_doc.get('characters', []) if seller_doc else []
+        
+        char_found_idx = -1
+        for i, c in enumerate(seller_chars):
+            if str(c.get('id')) == str(char.get('id')):
+                char_found_idx = i
+                break
+                
+        if char_found_idx == -1:
+            # Revert buyer's money
+            await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': price}})
+            # Delete invalid listing
+            await market_collection.delete_one({'_id': ObjectId(market_id)})
+            await query.answer(f"⚠️ {sc('the seller no longer owns this character! listing has been automatically removed.')}", show_alert=True)
+            return
+
+        # Everything is valid, delete from market collection
         deleted_item = await market_collection.find_one_and_delete({'_id': ObjectId(market_id)})
         
         if not deleted_item:
+            # Edge case handling if someone bought at exactly same millisecond
             await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': price}})
             await query.answer(f"⚠️ {sc('too late! this character has already been bought by someone else.')}", show_alert=True)
             return
 
+        # Remove EXACTLY ONE copy from seller's collection
+        del seller_chars[char_found_idx]
+
         await asyncio.gather(
             user_collection.update_one({'id': user_id}, {'$push': {'characters': char}}),
+            user_collection.update_one({'id': seller_id}, {'$set': {'characters': seller_chars}}),
             eco_collection.update_one({'id': seller_id}, {'$inc': {'balance': price}})
         )
 
@@ -895,10 +926,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await query.answer(f"⚠️ {sc('this item is no longer on the market.')}", show_alert=True)
         else:
             char = item['character']
-            await asyncio.gather(
-                user_collection.update_one({'id': user_id}, {'$push': {'characters': char}}),
-                market_collection.delete_one({'_id': ObjectId(market_id)})
-            )
+            await market_collection.delete_one({'_id': ObjectId(market_id)})
             
             user_name = update.effective_user.first_name
             seller_mention = f"<a href='tg://user?id={user_id}'>{html.escape(user_name)}</a>"
@@ -906,11 +934,11 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             log_details = (
                 f"👤 <b>Sᴇʟʟᴇʀ:</b> {seller_mention}\n"
                 f"🎭 <b>Cʜᴀʀᴀᴄᴛᴇʀ:</b> {char.get('name')} (<code>{char.get('id')}</code>)\n"
-                f"{E_CROSS} <b>Aᴄᴛɪᴏɴ:</b> Rᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ."
+                f"❌ <b>Aᴄᴛɪᴏɴ:</b> Rᴇᴍᴏᴠᴇᴅ ғʀᴏᴍ ᴍᴀʀᴋᴇᴛ."
             )
             await send_market_log(context, "📉 CHARACTER DELISTED", log_details)
 
-            await query.answer(f"✅ {sc('successfully removed and returned to inventory!')}", show_alert=True)
+            await query.answer(f"✅ {sc('successfully removed from market!')}", show_alert=True)
         
         cursor = market_collection.find({'seller_id': user_id}).limit(50)
         listings = await cursor.to_list(length=50)
@@ -990,7 +1018,7 @@ async def cancel_process(update: Update, context: CallbackContext):
     qr_msg_id = context.user_data.get('qr_msg_id')
     if qr_msg_id:
         try: await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=qr_msg_id)
-        except: pass
+        except Exception: pass
 
     await clear_existing_states(context)
     await update.message.reply_text(f"<b>{E_CROSS} {sc('process cancelled.')}</b>", parse_mode='HTML')
@@ -1002,7 +1030,7 @@ async def timeout_process(update: Update, context: CallbackContext):
         try:
             chat_id = update.effective_chat.id if update.effective_chat else update.callback_query.message.chat_id
             await context.bot.delete_message(chat_id=chat_id, message_id=qr_msg_id)
-        except: pass
+        except Exception: pass
 
     await clear_existing_states(context)
     
@@ -1041,7 +1069,6 @@ async def sell_start(update: Update, context: CallbackContext):
     )
     return WAITING_FOR_CHARACTER_ID
 
-# 🔥 SELL MENU KA BHI ID LOGIC FIX 🔥
 async def ask_character_id(update: Update, context: CallbackContext):
     if not update.message or not update.message.text: return WAITING_FOR_CHARACTER_ID
     user_id = update.message.from_user.id
@@ -1095,19 +1122,29 @@ async def ask_price(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b>{sc('session expired. please start again via')} /pmarket</b>", parse_mode='HTML')
         return ConversationHandler.END
 
-    char_id_val = character['id']
+    char_id_val = str(character['id'])
     live_char = await get_live_character_doc(char_id_val)
     final_character = live_char if live_char else character
 
+    # 🔥 DUPLICATE LISTING LOGIC CHECK 🔥
     user_doc = await user_collection.find_one({'id': user_id})
+    owned_count = 0
     if user_doc and 'characters' in user_doc:
-        chars_list = user_doc['characters']
-        for i, c in enumerate(chars_list):
-            if str(c.get('id')) == str(char_id_val):
-                del chars_list[i]
-                break
-        await user_collection.update_one({'id': user_id}, {'$set': {'characters': chars_list}})
+        for c in user_doc['characters']:
+            if str(c.get('id')) == char_id_val:
+                owned_count += 1
+                
+    listed_count = await market_collection.count_documents({
+        'seller_id': user_id, 
+        '$or': [{'character.id': char_id_val}, {'character.id': int(char_id_val) if char_id_val.isdigit() else char_id_val}]
+    })
+    
+    if listed_count >= owned_count:
+        await update.message.reply_text(f"⚠️ <b>{sc('you have already listed all your copies of this character on the market!')}</b>", parse_mode='HTML')
+        await clear_existing_states(context)
+        return ConversationHandler.END
 
+    # Add to market BUT NOT remove from inventory (Lazy sync logic)
     await market_collection.insert_one({'seller_id': user_id, 'price': price, 'character': final_character})
 
     user_name = update.message.from_user.first_name
