@@ -337,9 +337,13 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
 
         target_frequency = chat_frequency_cache[chat_id]
 
+        # 🔥 HEROKU LIVE LOGGING ADDED HERE (Logs exactly kitne messages bache hain aur konsi chat mein)
+        LOGGER.info(f"[LIVE LOG] Chat ID: {chat_id} | Message Count: {message_counts[chat_id]} / {target_frequency}")
+
         if message_counts[chat_id] >= target_frequency and not currently_spawning.get(chat_id):
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
+            LOGGER.info(f"[SPAWN TRIGGERED] Target reached in Chat ID: {chat_id}. Starting send_image function...")
             asyncio.create_task(send_image(update, context))
 
 async def send_image(update: Update, context: CallbackContext) -> None:
@@ -347,8 +351,10 @@ async def send_image(update: Update, context: CallbackContext) -> None:
     chat_id_str = str(chat_id)
 
     try:
+        LOGGER.info(f"[SPAWN PROCESS] Fetching character details for Chat ID: {chat_id}")
         all_characters = await get_cached_characters()
         if not all_characters:
+            LOGGER.warning(f"[SPAWN FAILED] Database me koi character nahi mila ya cache khali hai. Chat ID: {chat_id}")
             return
 
         sent_characters.setdefault(chat_id, [])
@@ -359,14 +365,20 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         allowed = [c for c in available if await is_character_allowed(c, chat_id)]
 
         if not allowed:
+            LOGGER.warning(f"[SPAWN FAILED] Koi allowed character nahi mila (maybe sab rarities disabled hain). Chat ID: {chat_id}")
             return
 
         character = random.choice(allowed)
         sent_characters[chat_id].append(character['id'])
 
         caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴘᴘᴇᴀʀᴇᴅ! <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji>\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
+        
+        # 🔥 Sending Media log
+        LOGGER.info(f"[SPAWN ATTEMPT] Sending media for '{character.get('name')}' in Chat ID: {chat_id}")
         spawn_msg = await _send_media(context, chat_id, character, caption)
         
+        LOGGER.info(f"[SPAWN SUCCESS] Character '{character.get('name')}' successfully spawned in Chat ID: {chat_id} (Message ID: {spawn_msg.message_id})")
+
         asyncio.create_task(auto_delete_msg(context, chat_id, spawn_msg.message_id, 1800))
 
         username = update.effective_chat.username
@@ -389,7 +401,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         asyncio.create_task(despawn_character(chat_id, spawn_msg.message_id, character, context))
 
     except Exception as e:
-        LOGGER.error(f"Send Image Error: {e}")
+        LOGGER.error(f"[SPAWN ERROR] Failed to spawn character in Chat ID: {chat_id}. Error: {e}")
     finally:
         currently_spawning[chat_id_str] = False
 
