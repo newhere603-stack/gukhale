@@ -314,7 +314,7 @@ async def mrarity_off_cmd(update: Update, context: CallbackContext):
 async def buy_command_pm(update: Update, context: CallbackContext):
     if update.effective_chat.type != "private":
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("buy here"), url=f"https://t.me/{context.bot.username}?start=buy_tokens")]])
-        await update.message.reply_html(f"<b>{E_WARN} {sc('this command only works in pm (private messages).\nclick below to buy.')}</b>", reply_markup=kb)
+        await update.message.reply_html(f"<b>{E_WARN} {sc('this command only works in pm (private messages).')}\n{sc('click below to buy.')}</b>", reply_markup=kb)
         return ConversationHandler.END
     return await start_buy_menu(update, context)
 
