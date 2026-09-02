@@ -189,7 +189,7 @@ class GameLogic:
 
     @staticmethod
     def coinflip(guess: str, amount: int) -> GameResult:
-        won = random.random() < 0.48
+        won = random.random() < 0.10
         outcome = guess if won else ('tails' if guess == 'heads' else 'heads')
         
         if won:
