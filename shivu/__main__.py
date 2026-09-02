@@ -79,12 +79,8 @@ async def auto_delete_msg(context, chat_id, message_id, delay: int):
     except Exception:
         pass
 
-# 🔥 NAYA SINGLE UNIFIED CACHE
 disabled_rarities_cache = set()
-
 group_settings_cache = {}  
-# Note: chat_frequency_cache hata diya hai taaki /changetime turant apply ho jaye
-
 locks, message_counts = {}, {}
 sent_characters = {}
 
@@ -97,7 +93,6 @@ currently_spawning = {}
 _cached_characters = []
 _last_cache_time = 0
 
-# --- Anti-Spam variables ---
 user_message_times = {}
 blocked_users = {}
 
@@ -258,14 +253,13 @@ async def _send_media(context, chat_id, character, caption):
     return await context.bot.send_photo(chat_id=chat_id, photo=character.get('img_url'),
                                          caption=caption, parse_mode='HTML')
 
-# 🔥 Bot ki Yaddasht Load Karne Ka Engine
+# 🔥 THE FIX IS HERE! Force Clear Old Memory Bug
 async def load_spawns_and_counts(bot):
     global message_counts, active_spawns_cache
     
     try:
         counts = await chat_message_counts_collection.find({}).to_list(length=None)
         for doc in counts:
-            # Bug fix: Ensure it loads as integer to match chat IDs
             message_counts[int(doc['chat_id'])] = doc.get('count', 0)
         LOGGER.info(f"⚡ [YADDASHT RESTORED] Message Counts loaded for {len(message_counts)} chats.")
         
@@ -279,11 +273,12 @@ async def load_spawns_and_counts(bot):
             chat_id = int(spawn['chat_id'])
             active_spawns_cache[chat_id] = spawn
             
-            spawn_time = spawn.get('spawn_time', now)
+            # 🔥 Agar koi purani waifu fassi hogi to spawn_time '0' manegi
+            spawn_time = spawn.get('spawn_time', 0) 
             time_left = DESPAWN_TIME - (now - spawn_time)
             
             if time_left < 0:
-                time_left = 5 
+                time_left = 2 # 2 second me delete kar dega taaki stuck na ho!
                 
             asyncio.create_task(despawn_character(chat_id, spawn['message_id'], spawn['character'], DummyContext(bot), delay=time_left))
             
@@ -294,7 +289,6 @@ async def load_spawns_and_counts(bot):
 async def despawn_character(chat_id, message_id, character, context, delay=DESPAWN_TIME):
     await asyncio.sleep(delay)
     try:
-        # 🔥 BUG FIX: Pehle cache se nikalna zaroori hai warna hamesha ke liye stuck ho jayega!
         active_spawns_cache.pop(chat_id, None) 
         
         active_spawn = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': message_id})
@@ -342,16 +336,15 @@ async def despawn_character(chat_id, message_id, character, context, delay=DESPA
         currently_spawning.pop(chat_id, None)
 
 async def message_counter(update: Update, context: CallbackContext) -> None:
-    if update.effective_chat.type not in ('group', 'supergroup'):
+    if not update.effective_chat or update.effective_chat.type not in ('group', 'supergroup'):
         return
     if not update.message and not update.edited_message:
         return
 
+    chat_id = update.effective_chat.id 
+
     if await check_and_handle_flood(update, context):
         return
-
-    # Bug fix: Har jagah integer use hoga warna string vs int lafda karta hai DB me
-    chat_id = update.effective_chat.id 
     
     locks.setdefault(chat_id, asyncio.Lock())
 
@@ -360,20 +353,24 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
             return
             
         if chat_id not in message_counts:
-            doc = await chat_message_counts_collection.find_one({'chat_id': chat_id})
-            message_counts[chat_id] = doc.get('count', 0) if doc else 0
+            try:
+                doc = await chat_message_counts_collection.find_one({'chat_id': chat_id})
+                message_counts[chat_id] = doc.get('count', 0) if doc else 0
+            except Exception:
+                message_counts[chat_id] = 0
 
         message_counts[chat_id] += 1
         
-        # Persistent Memory Saving (Backstage me bina lagg ke)
         asyncio.create_task(chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': message_counts[chat_id]}}, upsert=True))
         
-        # 🔥 BUG FIX: Cache hata diya, ab sidha DB se live check hoga /changetime turant kaam karega
-        chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
-        if not chat_data:
-            chat_data = await user_totals_collection.find_one({'chat_id': str(chat_id)})
-        
-        target_frequency = chat_data.get('message_frequency', MESSAGE_FREQUENCY) if chat_data else MESSAGE_FREQUENCY
+        try:
+            chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
+            if not chat_data:
+                chat_data = await user_totals_collection.find_one({'chat_id': str(chat_id)})
+            
+            target_frequency = chat_data.get('message_frequency', MESSAGE_FREQUENCY) if chat_data else MESSAGE_FREQUENCY
+        except Exception:
+            target_frequency = MESSAGE_FREQUENCY
 
         LOGGER.info(f"[LIVE LOG] Chat ID: {chat_id} | Message Count: {message_counts[chat_id]} / {target_frequency}")
 
@@ -381,10 +378,9 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
             
-            # Resetting DB count
             asyncio.create_task(chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': 0}}, upsert=True))
             
-            LOGGER.info(f"[SPAWN TRIGGERED] Target reached in Chat ID: {chat_id}. Starting send_image function...")
+            LOGGER.info(f"[SPAWN TRIGGERED] Target reached in Chat ID: {chat_id}. Starting send_image...")
             asyncio.create_task(send_image(update, context))
 
 async def send_image(update: Update, context: CallbackContext) -> None:
@@ -503,7 +499,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("ᴠɪᴇᴡ sᴘᴀᴡɴ ᴍᴇssᴀɢᴇ", url=active_spawn['message_link'])]])
                 return await update.message.reply_html('<b>ᴘʟᴇᴀsᴇ ᴡʀɪᴛᴇ ᴀ ᴄᴏʀʀᴇᴄᴛ ɴᴀᴍᴇ..</b>', reply_markup=kb)
 
-            # 🔥 Yahan se bhi cache udana zaroori hai successful grab ke baad
             active_spawns_cache.pop(chat_id, None)
 
             grabbed = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': active_spawn['message_id']})
