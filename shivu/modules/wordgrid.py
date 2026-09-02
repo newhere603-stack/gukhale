@@ -625,7 +625,7 @@ def get_grid_top_keyboard(state):
     time_f = state["time"]
 
     global_btn = "ɢʟᴏʙᴀʟ ⎋" if scope == "global" else "ɢʟᴏʙᴀʟ"
-    chat_btn = "ᴛʜɪs ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴛʜɪs ᴄʜᴀᴛ"
+    chat_btn = "ᴄʜᴀᴛ ⎋" if scope == "chat" else "ᴄʜᴀᴛ"
     today_btn = "ᴛᴏᴅᴀʏ ⎋" if time_f == "today" else "ᴛᴏᴅᴀʏ"
     week_btn = "ᴡᴇᴇᴋ ⎋" if time_f == "week" else "ᴡᴇᴇᴋ"
     month_btn = "ᴍᴏɴᴛʜ ⎋" if time_f == "month" else "ᴍᴏɴᴛʜ"
