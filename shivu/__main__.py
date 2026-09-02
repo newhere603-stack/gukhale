@@ -47,6 +47,7 @@ top_global_groups_collection = db['top_global_groups']
 bot_settings_collection = db['bot_settings'] # 🔥 Persistent Settings ke liye
 group_settings_collection = db['group_settings_db']
 spawns_collection = db['active_spawns_db']
+chat_message_counts_collection = db['chat_message_counts_db'] # 🔥 Naya DB Bot ki Yaddasht (Memory) ke liye
 
 MESSAGE_FREQUENCY = 70
 DESPAWN_TIME = 300  # (300 seconds)
@@ -106,7 +107,6 @@ async def check_and_handle_flood(update: Update, context: CallbackContext) -> bo
         
     user_id = user.id
     
-    # 🔥 FIX: Owner ya Sudo users ko test karte time block na kare
     if is_authorized(user_id):
         return False
 
@@ -143,6 +143,7 @@ async def setup_database_indexes():
         await eco_collection.create_index("id", unique=True, background=True)
         await group_user_totals_collection.create_index([("user_id", 1), ("group_id", 1)], background=True)
         await spawns_collection.create_index("chat_id", unique=True, background=True)
+        await chat_message_counts_collection.create_index("chat_id", unique=True, background=True)
         LOGGER.info("⚡ Database Indexes Verified/Created Successfully!")
     except Exception as e:
         if "IndexKeySpecsConflict" not in str(e):
@@ -153,7 +154,6 @@ async def setup_database_indexes():
 async def get_cached_characters():
     global _cached_characters, _last_cache_time
     current_time = time.time()
-    # 🔥 FIX: Agar DB khali return kare to empty cache store na kare
     if not _cached_characters or (current_time - _last_cache_time) > 300:
         fetched_chars = await collection.find({'auction_exclusive': {'$ne': True}}).to_list(length=None)
         if fetched_chars:
@@ -167,7 +167,6 @@ for module_name in ALL_MODULES:
     except Exception:
         LOGGER.exception(f"Failed loading module {module_name}")
 
-# 🔥 MEGA FIX: Rarity ko detect karne ka foolproof logic
 def get_base_rarity(rarity_str):
     if not isinstance(rarity_str, str) or not rarity_str:
         return "common"
@@ -258,8 +257,40 @@ async def _send_media(context, chat_id, character, caption):
     return await context.bot.send_photo(chat_id=chat_id, photo=character.get('img_url'),
                                          caption=caption, parse_mode='HTML')
 
-async def despawn_character(chat_id, message_id, character, context):
-    await asyncio.sleep(DESPAWN_TIME)
+# 🔥 Bot ki Yaddasht Load Karne Ka Engine (Restart hone par Memory wapas aayegi)
+async def load_spawns_and_counts(bot):
+    global message_counts, active_spawns_cache
+    
+    try:
+        counts = await chat_message_counts_collection.find({}).to_list(length=None)
+        for doc in counts:
+            message_counts[str(doc['chat_id'])] = doc.get('count', 0)
+        LOGGER.info(f"⚡ [YADDASHT RESTORED] Message Counts loaded for {len(message_counts)} chats.")
+        
+        class DummyContext:
+            def __init__(self, bot_instance):
+                self.bot = bot_instance
+                
+        spawns = await spawns_collection.find({}).to_list(length=None)
+        now = time.time()
+        for spawn in spawns:
+            chat_id = spawn['chat_id']
+            active_spawns_cache[chat_id] = spawn
+            
+            spawn_time = spawn.get('spawn_time', now)
+            time_left = DESPAWN_TIME - (now - spawn_time)
+            
+            if time_left < 0:
+                time_left = 5 
+                
+            asyncio.create_task(despawn_character(chat_id, spawn['message_id'], spawn['character'], DummyContext(bot), delay=time_left))
+            
+        LOGGER.info(f"⚡ [YADDASHT RESTORED] Loaded {len(active_spawns_cache)} Active Spawns.")
+    except Exception as e:
+        LOGGER.error(f"Memory restore failed: {e}")
+
+async def despawn_character(chat_id, message_id, character, context, delay=DESPAWN_TIME):
+    await asyncio.sleep(delay)
     try:
         active_spawn = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': message_id})
         
@@ -320,11 +351,18 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     locks.setdefault(chat_id, asyncio.Lock())
 
     async with locks[chat_id]:
-        # 🔥 FIX: Agar waifu already spawn ho rakhi hai group me toh message count waste na ho
         if int(chat_id) in active_spawns_cache:
             return
             
-        message_counts[chat_id] = message_counts.get(chat_id, 0) + 1
+        # 🔥 Yaddasht Load for new unseen chats directly from DB backup
+        if chat_id not in message_counts:
+            doc = await chat_message_counts_collection.find_one({'chat_id': chat_id})
+            message_counts[chat_id] = doc.get('count', 0) if doc else 0
+
+        message_counts[chat_id] += 1
+        
+        # 🔥 Persistent Memory Saving (Backstage me bina lagg ke)
+        asyncio.create_task(chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': message_counts[chat_id]}}, upsert=True))
         
         if chat_id not in chat_frequency_cache:
             try:
@@ -337,12 +375,14 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
 
         target_frequency = chat_frequency_cache[chat_id]
 
-        # 🔥 HEROKU LIVE LOGGING ADDED HERE (Logs exactly kitne messages bache hain aur konsi chat mein)
         LOGGER.info(f"[LIVE LOG] Chat ID: {chat_id} | Message Count: {message_counts[chat_id]} / {target_frequency}")
 
         if message_counts[chat_id] >= target_frequency and not currently_spawning.get(chat_id):
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
+            # Resetting DB count
+            asyncio.create_task(chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': 0}}, upsert=True))
+            
             LOGGER.info(f"[SPAWN TRIGGERED] Target reached in Chat ID: {chat_id}. Starting send_image function...")
             asyncio.create_task(send_image(update, context))
 
@@ -373,7 +413,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
 
         caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴘᴘᴇᴀʀᴇᴅ! <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji>\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
         
-        # 🔥 Sending Media log
         LOGGER.info(f"[SPAWN ATTEMPT] Sending media for '{character.get('name')}' in Chat ID: {chat_id}")
         spawn_msg = await _send_media(context, chat_id, character, caption)
         
@@ -665,8 +704,11 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
 async def main():
     try:
         await setup_database_indexes()
-        
         await load_rarity_status()
+        
+        # 🔥 Yaddasht system initiate ho gaya
+        await load_spawns_and_counts(application.bot)
+        
         await shivuu.start()
 
         application.add_handler(CommandHandler(["grab", "g"], guess, block=False))
