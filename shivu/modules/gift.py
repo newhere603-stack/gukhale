@@ -332,8 +332,8 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
             
     full_text = " ".join(text_parts).lower() # Case-insensitive check
     
-    # "support our mission" likha mila toh instantly delete
-    if "Donate 💖" in full_text:
+    # "donate 💝" likha mila toh instantly delete karega (admin ho ya normal user)
+    if "donate 💝" in full_text:
         try:
             await msg.delete()
         except Exception as e:
