@@ -195,7 +195,7 @@ async def wordseek_leaderboard(update: Update, context: CallbackContext, edit=Fa
         name = u.get('first_name', 'Unknown')
         link = mention_html(uid, name)
         
-        rows.append(f"<b>{i}. {link} - {gold_val:,} <tg-emoji emoji-id=\"6332287240470798249\">🪙</tg-emoji></b>")
+        rows.append(f"<b>{i}. {link} - {gold_val:,} <tg-emoji emoji-id=\"6077872623604213802\">🪙</tg-emoji></b>")
 
     rows_text = "\n".join(rows)
     text = (
