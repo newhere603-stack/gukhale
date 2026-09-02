@@ -37,6 +37,14 @@ bot_settings_collection = db['bot_settings']
 def get_ist_now():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
+# --- HELPER: AUTO DELETE MESSAGE LATER ---
+async def delete_message_later(bot, chat_id, message_id, delay):
+    await asyncio.sleep(delay)
+    try:
+        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
+
 # --- HELPER: SEND LOGS TO LOG GROUP ---
 async def send_market_log(context: CallbackContext, action: str, details: str):
     ist_now = get_ist_now()
@@ -195,7 +203,7 @@ async def update_menu(query, text, keyboard):
         await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
 
 async def clear_existing_states(context: CallbackContext):
-    keys = ['sell_owner_id', 'sell_character', 'exc_owner_id', 'exc_type', 'buy_prompt_active', 'buy_product', 'buy_char_id', 'buy_amount', 'buy_price', 'qr_msg_id']
+    keys = ['sell_owner_id', 'sell_character', 'sell_active', 'sell_step', 'exc_owner_id', 'exc_type', 'buy_prompt_active', 'buy_product', 'buy_char_id', 'buy_amount', 'buy_price', 'qr_msg_id']
     for k in keys:
         context.user_data.pop(k, None)
 
@@ -344,7 +352,7 @@ async def buy_product_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
     if context.user_data.get('buy_prompt_active'):
-        await query.answer(f"{E_WARN} {sc('you are already in the process! please send the required info or type /cancel.')}", show_alert=True)
+        await query.answer(f"⚠️ {sc('you are already in the process! please send the required info or type')} /cancel.", show_alert=True)
         if context.user_data.get('buy_product') == 'char' and not context.user_data.get('buy_char_id'):
             return WAITING_FOR_BUY_CHAR_ID
         return WAITING_FOR_BUY_AMOUNT
@@ -545,14 +553,14 @@ async def cancel_buy_callback(update: Update, context: CallbackContext):
 async def admin_buy_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     if query.data == "ignore": return await query.answer()
-    if query.from_user.id != OWNER_ID: return await query.answer(f"{E_WARN} {sc('only owner can approve this!')}", show_alert=True)
+    if query.from_user.id != OWNER_ID: return await query.answer(f"⚠️ {sc('only owner can approve this!')}", show_alert=True)
 
     data = query.data.split(':')
     action = data[0]
     order_id = data[-1]
     
     order = await bot_settings_collection.find_one({'_id': f"buy_{order_id}"})
-    if not order: return await query.answer("⚠️ ᴏʀᴅᴇʀ ᴅᴀᴛᴀ ɴᴏᴛ ғᴏᴜɴᴅ!", show_alert=True)
+    if not order: return await query.answer("⚠️ Order data not found!", show_alert=True)
     target_user_id = order['user_id']
     
     if action == "b_can":
@@ -651,7 +659,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     
     owner_id = int(parts[-1])
     if user_id != owner_id:
-        await query.answer(f"{sc('you cannot interact with this menu!\nplease open your own market via')} /pmarket", show_alert=True)
+        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}\n{sc('please open your own market via')} /pmarket", show_alert=True)
         return
 
     action = parts[0]
@@ -714,7 +722,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         market_items = await cursor.to_list(length=10)
 
         if not market_items:
-            await query.answer(sc("no characters are currently for sale in this rarity!"), show_alert=True)
+            await query.answer(f"⚠️ {sc('no characters are currently for sale in this rarity!')}", show_alert=True)
             return
 
         keyboard = []
@@ -725,7 +733,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             market_id = str(item['_id'])
             
             btn_text = f"{db_emoji} {sc(char_name)} - 💸 {price:,}"
-            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_v:{market_id}:{user_id}")])
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_v:{market_id}:{order}:{user_id}")])
         
         sort_text = sc("low to high") if order == "asc" else sc("high to low")
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_r:{rarity_key}:{user_id}")])
@@ -734,10 +742,13 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
     elif action == "pm_v":
         market_id = parts[1]
+        order = parts[2]
+        # parts[3] is already parsed as user_id above in owner_id check
+        
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
         if not item:
-            await query.answer(sc("oops! this character has already been sold or removed!"), show_alert=True)
+            await query.answer(f"❌ {sc('oops! this character has already been sold or removed!')}", show_alert=True)
             return
 
         char = item['character']
@@ -773,6 +784,8 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                     name = r_name
                     break
 
+        rarity_key = get_normalized_rarity(char_rarity_str)
+
         caption = (
             f"<b>{prem_emoji} {sc(display_char.get('name', 'Unknown'))}</b>\n\n"
             f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ:</b> {sc(display_char.get('anime', 'Unknown'))}\n"
@@ -783,24 +796,27 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(sc("🛒 buy now"), callback_data=f"pm_buy:{market_id}:{user_id}")],
-            [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_b:{user_id}")]
+            [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_s:{rarity_key}:{order}:{user_id}")]
         ])
 
         await query.message.delete()
-        await context.bot.send_photo(
+        msg = await context.bot.send_photo(
             chat_id=query.message.chat_id,
             photo=display_char.get('img_url', 'https://files.catbox.moe/0qjgih.png'), 
             caption=caption,
             reply_markup=keyboard,
             parse_mode='HTML'
         )
+        
+        # Auto delete exactly after 20 minutes (1200 seconds) silently
+        asyncio.create_task(delete_message_later(context.bot, msg.chat_id, msg.message_id, 1200))
 
     elif action == "pm_buy":
         market_id = parts[1]
         
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         if not item:
-            await query.answer(sc("too late! this character has already been bought by someone else."), show_alert=True)
+            await query.answer(f"⚠️ {sc('too late! this character has already been bought by someone else.')}", show_alert=True)
             return
 
         price = item['price']
@@ -808,7 +824,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         char = item['character']
         
         if seller_id == user_id:
-            await query.answer(sc("you cannot buy your own character!"), show_alert=True)
+            await query.answer(f"⚠️ {sc('you cannot buy your own character!')}", show_alert=True)
             return
 
         eco_buyer = await eco_collection.find_one_and_update(
@@ -817,14 +833,14 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         )
 
         if not eco_buyer:
-            await query.answer(f"{sc('insufficient funds! you need')} {E_MONEY} {price:,} {sc('balance.')}", show_alert=True)
+            await query.answer(f"⚠️ {sc('insufficient funds! you need')} {price:,} {sc('balance.')}", show_alert=True)
             return
 
         deleted_item = await market_collection.find_one_and_delete({'_id': ObjectId(market_id)})
         
         if not deleted_item:
             await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': price}})
-            await query.answer(sc("too late! this character has already been bought by someone else."), show_alert=True)
+            await query.answer(f"⚠️ {sc('too late! this character has already been bought by someone else.')}", show_alert=True)
             return
 
         await asyncio.gather(
@@ -876,7 +892,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
         if not item:
-            await query.answer(f"{sc('this item is no longer on the market.')}", show_alert=True)
+            await query.answer(f"⚠️ {sc('this item is no longer on the market.')}", show_alert=True)
         else:
             char = item['character']
             await asyncio.gather(
@@ -894,7 +910,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             )
             await send_market_log(context, "📉 CHARACTER DELISTED", log_details)
 
-            await query.answer(f"{sc('successfully removed and returned to inventory!')}", show_alert=True)
+            await query.answer(f"✅ {sc('successfully removed and returned to inventory!')}", show_alert=True)
         
         cursor = market_collection.find({'seller_id': user_id}).limit(50)
         listings = await cursor.to_list(length=50)
@@ -918,7 +934,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         if user_id != OWNER_ID:
             if amount + used_today > global_limit:
                 available = max(0, global_limit - used_today)
-                await query.answer(f"{E_WARN} {sc('daily limit reached! you can only exchange')} {available} {sc('more tokens today.')}", show_alert=True)
+                await query.answer(f"⚠️ {sc('daily limit reached! you can only exchange')} {available} {sc('more tokens today.')}", show_alert=True)
                 return
 
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_exc_menu:{user_id}")]])
@@ -933,7 +949,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                 {'$inc': {'tokens': -amount, 'balance': coins_to_add}}
             )
             if not eco_user:
-                await query.answer(f"{E_WARN} {sc('you do not have enough tokens anymore!')}", show_alert=True)
+                await query.answer(f"⚠️ {sc('you do not have enough tokens anymore!')}", show_alert=True)
                 return
                 
             msg = f"<b>{E_TICK} {sc('successfully exchanged')} <code>{amount}</code> {sc('tokens into')} <code>{coins_to_add:,}</code> {sc('coins!')}</b>"
@@ -947,7 +963,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                 {'$inc': {'balance': -coins_to_deduct, 'tokens': amount}}
             )
             if not eco_user:
-                await query.answer(f"{E_WARN} {sc('you do not have enough coins anymore!')}", show_alert=True)
+                await query.answer(f"⚠️ {sc('you do not have enough coins anymore!')}", show_alert=True)
                 return
             
             msg = f"<b>{E_TICK} {sc('successfully spent')} <code>{coins_to_deduct:,}</code> {sc('coins to buy')} <code>{amount}</code> {sc('tokens!')}</b>"
@@ -990,7 +1006,7 @@ async def timeout_process(update: Update, context: CallbackContext):
 
     await clear_existing_states(context)
     
-    msg = f"<b>{E_TIME} {sc('session expired due to inactivity (60s timeout). please start again.')}</b>"
+    msg = f"<b>{E_TIME} {sc('session expired due to inactivity. please start again.')}</b>"
     if update.message:
         await update.message.reply_text(msg, parse_mode='HTML')
     elif update.callback_query and update.callback_query.message:
@@ -1005,15 +1021,22 @@ async def sell_start(update: Update, context: CallbackContext):
     owner_id = int(parts[-1])
     
     if query.from_user.id != owner_id:
-        await query.answer(f"{E_WARN} {sc('you cannot interact with this menu!')}", show_alert=True)
+        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}", show_alert=True)
         return ConversationHandler.END
+        
+    if context.user_data.get('sell_active'):
+        await query.answer(f"⚠️ {sc('already started your process! complete it or type')} /cancel {sc('first.')}", show_alert=True)
+        return context.user_data.get('sell_step', WAITING_FOR_CHARACTER_ID)
         
     await clear_existing_states(context)
     await query.answer()
+    
     context.user_data['sell_owner_id'] = owner_id
+    context.user_data['sell_active'] = True
+    context.user_data['sell_step'] = WAITING_FOR_CHARACTER_ID
 
     await query.message.reply_text(
-        f"{E_MONEY} <b>{sc('send the character id you want to sell:')}</b>\n\n({sc('type /cancel to abort the process')})",
+        f"{E_MONEY} <b>{sc('send the character id you want to sell:')}</b>\n\n({sc('type')} /cancel {sc('to abort the process')})",
         parse_mode="HTML"
     )
     return WAITING_FOR_CHARACTER_ID
@@ -1042,6 +1065,8 @@ async def ask_character_id(update: Update, context: CallbackContext):
         return WAITING_FOR_CHARACTER_ID
 
     context.user_data['sell_character'] = character
+    context.user_data['sell_step'] = WAITING_FOR_PRICE
+    
     await update.message.reply_text(
         f"{E_TICK} <b>{sc('character found! now send price')}</b>\n\n"
         f"{sc('selected:')} <b>{sc(character.get('name'))}</b>\n"
@@ -1067,7 +1092,7 @@ async def ask_price(update: Update, context: CallbackContext):
 
     character = context.user_data.get('sell_character')
     if not character:
-        await update.message.reply_text(f"<b>{sc('session expired. please start again via /pmarket')}</b>", parse_mode='HTML')
+        await update.message.reply_text(f"<b>{sc('session expired. please start again via')} /pmarket</b>", parse_mode='HTML')
         return ConversationHandler.END
 
     char_id_val = character['id']
@@ -1111,7 +1136,7 @@ async def exchange_start_t2c(update: Update, context: CallbackContext):
     owner_id = int(parts[-1])
     
     if query.from_user.id != owner_id:
-        await query.answer(f"{sc('you cannot interact with this menu!')}", show_alert=True)
+        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}", show_alert=True)
         return ConversationHandler.END
         
     await clear_existing_states(context)
@@ -1127,7 +1152,7 @@ async def exchange_start_t2c(update: Update, context: CallbackContext):
         f"<i>{sc('1 token = 2,500 coins.')}</i>\n"
         f"<b>{sc('you have:')}</b> <code>{tokens:,}</code> {sc('tokens')}\n\n"
         f"({sc('enter the number of tokens, e.g. type')} <b>1</b> {sc('to get 2500 coins')})\n"
-        f"({sc('type /cancel to abort the process')})",
+        f"({sc('type')} /cancel {sc('to abort the process')})",
         parse_mode="HTML"
     )
     return WAITING_FOR_EXCHANGE_AMOUNT
@@ -1138,7 +1163,7 @@ async def exchange_start_c2t(update: Update, context: CallbackContext):
     owner_id = int(parts[-1])
     
     if query.from_user.id != owner_id:
-        await query.answer(f"{sc('you cannot interact with this menu!')}", show_alert=True)
+        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}", show_alert=True)
         return ConversationHandler.END
         
     await clear_existing_states(context)
@@ -1154,7 +1179,7 @@ async def exchange_start_c2t(update: Update, context: CallbackContext):
         f"<i>{sc('2,500 coins = 1 token.')}</i>\n"
         f"<b>{sc('you have:')}</b> <code>{coins:,}</code> {sc('coins')}\n\n"
         f"({sc('enter the number of tokens, e.g. type')} <b>1</b> {sc('to spend 2500 coins')})\n"
-        f"({sc('type /cancel to abort the process')})",
+        f"({sc('type')} /cancel {sc('to abort the process')})",
         parse_mode="HTML"
     )
     return WAITING_FOR_EXCHANGE_AMOUNT
