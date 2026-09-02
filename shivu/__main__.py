@@ -350,7 +350,8 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
         spawn_time = spawn_info.get('spawn_time', 0)
         if time.time() - spawn_time > DESPAWN_TIME:
             active_spawns_cache.pop(chat_id, None)
-            asyncio.create_task(spawns_collection.delete_one({'chat_id': chat_id}))
+            # FIX: Await ki jagah pe create_task tha jo error de raha tha
+            await spawns_collection.delete_one({'chat_id': chat_id})
             LOGGER.info(f"Ghost waifu cleared forcefully in Chat ID: {chat_id}")
         else:
             return # Waifu active hai sahi se, isliye message nahi ginega
@@ -373,7 +374,8 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
 
         message_counts[chat_id] += 1
         
-        asyncio.create_task(chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': message_counts[chat_id]}}, upsert=True))
+        # FIX: Await lagaya taaki crash na ho
+        await chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': message_counts[chat_id]}}, upsert=True)
         
         try:
             chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
@@ -390,7 +392,8 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
             
-            asyncio.create_task(chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': 0}}, upsert=True))
+            # FIX: Yahan bhi await use hoga
+            await chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': 0}}, upsert=True)
             
             LOGGER.info(f"[SPAWN TRIGGERED] Target reached in Chat ID: {chat_id}. Starting send_image...")
             asyncio.create_task(send_image(update, context))
