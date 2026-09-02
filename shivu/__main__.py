@@ -253,7 +253,6 @@ async def _send_media(context, chat_id, character, caption):
     return await context.bot.send_photo(chat_id=chat_id, photo=character.get('img_url'),
                                          caption=caption, parse_mode='HTML')
 
-# 🔥 THE FIX IS HERE! Force Clear Old Memory Bug
 async def load_spawns_and_counts(bot):
     global message_counts, active_spawns_cache
     
@@ -273,12 +272,11 @@ async def load_spawns_and_counts(bot):
             chat_id = int(spawn['chat_id'])
             active_spawns_cache[chat_id] = spawn
             
-            # 🔥 Agar koi purani waifu fassi hogi to spawn_time '0' manegi
             spawn_time = spawn.get('spawn_time', 0) 
             time_left = DESPAWN_TIME - (now - spawn_time)
             
             if time_left < 0:
-                time_left = 2 # 2 second me delete kar dega taaki stuck na ho!
+                time_left = 2 
                 
             asyncio.create_task(despawn_character(chat_id, spawn['message_id'], spawn['character'], DummyContext(bot), delay=time_left))
             
@@ -345,16 +343,30 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
 
     if await check_and_handle_flood(update, context):
         return
-    
+
+    # 🔥 Ghost Waifu Failsafe Engine (Agar error se character fass gaya hai memory me)
+    if chat_id in active_spawns_cache:
+        spawn_info = active_spawns_cache[chat_id]
+        spawn_time = spawn_info.get('spawn_time', 0)
+        if time.time() - spawn_time > DESPAWN_TIME:
+            active_spawns_cache.pop(chat_id, None)
+            asyncio.create_task(spawns_collection.delete_one({'chat_id': chat_id}))
+            LOGGER.info(f"Ghost waifu cleared forcefully in Chat ID: {chat_id}")
+        else:
+            return # Waifu active hai sahi se, isliye message nahi ginega
+
     locks.setdefault(chat_id, asyncio.Lock())
 
     async with locks[chat_id]:
+        # Double check in case cleared instantly
         if chat_id in active_spawns_cache:
             return
             
         if chat_id not in message_counts:
             try:
                 doc = await chat_message_counts_collection.find_one({'chat_id': chat_id})
+                if not doc:
+                    doc = await chat_message_counts_collection.find_one({'chat_id': str(chat_id)})
                 message_counts[chat_id] = doc.get('count', 0) if doc else 0
             except Exception:
                 message_counts[chat_id] = 0
@@ -703,7 +715,6 @@ async def main():
         await setup_database_indexes()
         await load_rarity_status()
         
-        # 🔥 Yaddasht system initiate
         await load_spawns_and_counts(application.bot)
         
         await shivuu.start()
@@ -716,7 +727,8 @@ async def main():
         application.add_handler(CommandHandler(["rarity_off"], rarity_off_cmd, block=False))
         application.add_handler(CommandHandler(["name"], name_cmd, block=False))
 
-        application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, message_counter, block=False), group=-99)
+        # 🔥 FIX: Priority super high set kar di (-999) taaki koi module message aage rok na paye
+        application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, message_counter, block=False), group=-999)
 
         await application.initialize()
         await application.start()
