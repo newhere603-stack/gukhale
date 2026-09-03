@@ -1,11 +1,13 @@
 import asyncio
+import time
 from html import escape
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CallbackContext, CallbackQueryHandler, CommandHandler
 from shivu import LOGGER, application, user_collection, db
 
-# Global collection image fetch ke liye
+# Global collections
 collection = db['anime_characters_lol']
+delete_collection = db['auto_delete_queue'] # Nayi collection auto-delete ki yaddasht ke liye
 
 def to_small_caps(text: str) -> str:
     if not text: return ""
@@ -19,13 +21,71 @@ async def get_user_data(user_id: int):
 async def update_user_fav(user_id: int, character: dict):
     return await user_collection.update_one({"id": user_id}, {"$set": {"favorites": character}}, upsert=True)
 
+# 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
+_worker_started = False
+
+async def background_delete_worker(bot):
+    """Background worker jo restart hone par bhi messages ko delete karega"""
+    try:
+        await delete_collection.create_index("delete_at")
+    except Exception:
+        pass
+        
+    while True:
+        try:
+            now = time.time()
+            cursor = delete_collection.find({'delete_at': {'$lte': now}})
+            async for doc in cursor:
+                try:
+                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                except Exception:
+                    pass 
+                finally:
+                    await delete_collection.delete_one({'_id': doc['_id']})
+        except Exception:
+            pass
+        await asyncio.sleep(30) # Har 30 second me scan karega
+
+async def schedule_auto_delete(message, delay_seconds: int = 1200):
+    """Message ko delete queue aur memory dono me dalne ka function"""
+    if not message: return
+        
+    global _worker_started
+    if not _worker_started:
+        _worker_started = True
+        asyncio.create_task(background_delete_worker(message.get_bot()))
+
+    chat_id = message.chat.id
+    message_id = message.message_id
+    delete_at = time.time() + delay_seconds
+
+    # Database me save karega taaki bot bhule nahi
+    await delete_collection.insert_one({
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'delete_at': delete_at
+    })
+
+    # Memory me fast execution ke liye (agar bot restart na hua ho to)
+    async def memory_delete():
+        await asyncio.sleep(delay_seconds)
+        try:
+            await message.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
+            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
+        except Exception:
+            pass
+
+    asyncio.create_task(memory_delete())
+
 # 1. /fav Command Handler
 async def fav(update: Update, context: CallbackContext) -> None:
     if not update.effective_user or not update.message: return
     user_id = update.effective_user.id
 
     if not context.args:
-        return await update.message.reply_text(f"<b>{to_small_caps('PLEASE PROVIDE A CHARACTER ID. EXAMPLE: /FAV 1')}</b>", parse_mode="HTML")
+        msg = await update.message.reply_text(f"<b>{to_small_caps('PLEASE PROVIDE A CHARACTER ID. EXAMPLE: /FAV 1')}</b>", parse_mode="HTML")
+        await schedule_auto_delete(msg)
+        return
 
     character_id = str(context.args[0]).strip()
     req_id_clean = character_id.lstrip('0') or '0'
@@ -33,7 +93,9 @@ async def fav(update: Update, context: CallbackContext) -> None:
     try:
         user = await get_user_data(user_id)
         if not user or "characters" not in user or not isinstance(user["characters"], list):
-            return await update.message.reply_text(f"<b>{to_small_caps('YOU HAVE NO CHARACTERS IN YOUR COLLECTION!')}</b>", parse_mode="HTML")
+            msg = await update.message.reply_text(f"<b>{to_small_caps('YOU HAVE NO CHARACTERS IN YOUR COLLECTION!')}</b>", parse_mode="HTML")
+            await schedule_auto_delete(msg)
+            return
 
         character = None
         for c in user.get("characters", []):
@@ -43,7 +105,9 @@ async def fav(update: Update, context: CallbackContext) -> None:
                     break
 
         if not character:
-            return await update.message.reply_text(f"<b>{to_small_caps('CHARACTER NOT FOUND IN YOUR COLLECTION!')}</b>", parse_mode="HTML")
+            msg = await update.message.reply_text(f"<b>{to_small_caps('CHARACTER NOT FOUND IN YOUR COLLECTION!')}</b>", parse_mode="HTML")
+            await schedule_auto_delete(msg)
+            return
 
         # Original image ke liye DB fetch
         q_ids = [character_id, req_id_clean]
@@ -65,17 +129,21 @@ async def fav(update: Update, context: CallbackContext) -> None:
         caption = f"<b>{to_small_caps('ARE YOU SURE YOU WANT TO MAKE THIS WAIFU YOUR FAVOURITE?')}</b>\n\n⤿ <b>{escape(to_small_caps(char_name))}</b> ↷\n(<b>{escape(to_small_caps(anime_name))}</b>)"
         media_url = character.get("img_url")
 
+        sent_message = None
         if not media_url:
-            return await update.message.reply_text(text=caption + f"\n\n<b>⚠️ {to_small_caps('IMAGE NOT FOUND IN DATABASE')}</b>", reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML")
-
-        if character.get("is_video", False):
-            await update.message.reply_video(video=media_url, caption=caption, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML", supports_streaming=True)
+            sent_message = await update.message.reply_text(text=caption + f"\n\n<b>⚠️ {to_small_caps('IMAGE NOT FOUND IN DATABASE')}</b>", reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML")
+        elif character.get("is_video", False):
+            sent_message = await update.message.reply_video(video=media_url, caption=caption, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML", supports_streaming=True)
         else:
-            await update.message.reply_photo(photo=media_url, caption=caption, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML")
+            sent_message = await update.message.reply_photo(photo=media_url, caption=caption, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML")
+
+        # Command complete hone ke baad delete queue me bhej diya
+        await schedule_auto_delete(sent_message)
 
     except Exception as e:
         LOGGER.error(f"Fav Command Error: {e}")
-        await update.message.reply_text(f"<b>{to_small_caps('AN INTERNAL ERROR OCCURRED.')}</b>", parse_mode="HTML")
+        msg = await update.message.reply_text(f"<b>{to_small_caps('AN INTERNAL ERROR OCCURRED.')}</b>", parse_mode="HTML")
+        await schedule_auto_delete(msg)
 
 # 2. Callback Query Handler
 async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
@@ -124,14 +192,28 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
 
             await update_user_fav(req_user_id, character)
             await query.answer(to_small_caps("DONE! MADE IT YOUR FAVOURITE"), show_alert=True)
-            if query.message: await query.message.delete()
+            
+            # Message delete hone pe database se bhi pending auto-delete hata dega
+            if query.message: 
+                try:
+                    await query.message.delete()
+                    await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
+                except Exception:
+                    pass
 
         elif action == "fvx":
             req_user_id = int(parts[1])
             if query.from_user.id != req_user_id:
                 return await query.answer(to_small_caps("THIS IS NOT YOUR REQUEST!"), show_alert=True)
             await query.answer(to_small_caps("CANCELLED!"), show_alert=True)
-            if query.message: await query.message.delete()
+            
+            # Same yahan bhi, cancel karne par directly delete and DB se clear hoga
+            if query.message:
+                try:
+                    await query.message.delete()
+                    await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
+                except Exception:
+                    pass
 
     except Exception as e:
         LOGGER.error(f"Fav Callback Error: {e}")
