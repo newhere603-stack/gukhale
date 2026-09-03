@@ -142,7 +142,7 @@ async def tpay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pt_n_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
+        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"6109593993627050230\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -193,7 +193,7 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
             "sᴇɴᴅᴇʀ ɪᴅ": f"<code>{sender_id}</code>",
             "ʀᴇᴄᴇɪᴠᴇʀ": f"<b><a href='tg://user?id={receiver_id}'>{receiver_name}</a></b>",
             "ʀᴇᴄᴇɪᴠᴇʀ ɪᴅ": f"<code>{receiver_id}</code>",
-            "ᴀᴍᴏᴜɴᴛ": f"<b><tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ</b>"
+            "ᴀᴍᴏᴜɴᴛ": f"<b><tg-emoji emoji-id=\"6109593993627050230\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ</b>"
         }
         await send_log(context, create_log_message("˹ ᴛᴏᴋᴇɴs ᴛʀᴀɴsғᴇʀʀᴇᴅ ˼ 💠", log_data))
 
