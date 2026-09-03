@@ -22,13 +22,7 @@ MAX_BET_LIMIT = 1000000
 class GameConfig:
     cooldown: int = 5
     riddle_timeout: int = 15
-    # Sabhi win rates 2% kam hain
     stour_entry_fee: int = 300
-    stour_success_rate: float = 0.08       
-    basket_base_win_rate: float = 0.18      
-    dart_bullseye_rate: float = 0.08        
-    dart_hit_rate: float = 0.18             
-    gamble_win_rate: float = 0.18           
     
     coinflip_multiplier: int = 2
     dice_multiplier: int = 2
@@ -110,7 +104,6 @@ class UserDB:
 
     @staticmethod
     async def get(user_id: int) -> Optional[dict]:
-        # Exact unique ID matching for flawless balance checks
         try:
             return await user_collection.find_one({
                 '$or': [
@@ -180,6 +173,13 @@ class GameUI:
 
 class GameLogic:
     @staticmethod
+    def _get_win_chance(amount: int) -> float:
+        # 🔥 Bet 10k se zyada toh 10%, warna 45% chance
+        if amount > 10000:
+            return 0.10
+        return 0.45
+
+    @staticmethod
     def _get_random_rewards() -> tuple[int, int]:
         chance = random.random()
         if chance < 0.80:
@@ -189,7 +189,7 @@ class GameLogic:
 
     @staticmethod
     def coinflip(guess: str, amount: int) -> GameResult:
-        won = random.random() < 0.10
+        won = random.random() < GameLogic._get_win_chance(amount)
         outcome = guess if won else ('tails' if guess == 'heads' else 'heads')
         
         if won:
@@ -200,7 +200,7 @@ class GameLogic:
 
     @staticmethod
     def dice_roll(choice: str, amount: int) -> GameResult:
-        won = random.random() < 0.10
+        won = random.random() < GameLogic._get_win_chance(amount)
         if won:
             dice = random.choice([1, 3, 5] if choice == 'odd' else [2, 4, 6])
         else:
@@ -217,7 +217,7 @@ class GameLogic:
 
     @staticmethod
     def gamble(pick: str, amount: int) -> GameResult:
-        won = random.random() < CONFIG.gamble_win_rate
+        won = random.random() < GameLogic._get_win_chance(amount)
         if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.gamble_multiplier
@@ -228,8 +228,7 @@ class GameLogic:
 
     @staticmethod
     def basketball(amount: int) -> GameResult:
-        win_chance = min(0.6, CONFIG.basket_base_win_rate + math.log1p(amount) / 50)
-        won = random.random() < win_chance
+        won = random.random() < GameLogic._get_win_chance(amount)
         if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.basket_multiplier
@@ -238,20 +237,26 @@ class GameLogic:
 
     @staticmethod
     def darts(amount: int) -> GameResult:
+        win_chance = GameLogic._get_win_chance(amount)
         roll = random.random()
-        if roll < CONFIG.dart_bullseye_rate:
+        
+        bullseye_threshold = win_chance * 0.30  # Win chance ka 30% hissa Bullseye ke liye
+        
+        if roll < bullseye_threshold:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dart_bullseye_multiplier
             return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʙᴜʟʟsᴇʏᴇ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome='<tg-emoji emoji-id="5350460637182993292">🎯</tg-emoji> ʙᴜʟʟsᴇʏᴇ')
-        elif roll < (CONFIG.dart_bullseye_rate + CONFIG.dart_hit_rate):
+        elif roll < win_chance:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dart_hit_multiplier
             return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ɢᴏᴏᴅ ʜɪᴛ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="ᴛᴀʀɢᴇᴛ ʜɪᴛ")
+            
         return GameResult(False, 0, message=f"ᴍɪssᴇᴅ! ʏᴏᴜ ʟᴏsᴛ {amount:,} ᴄᴏɪɴs", display_outcome="ᴍɪss")
 
     @staticmethod
     def contract() -> GameResult:
-        if random.random() < CONFIG.stour_success_rate:
+        won = random.random() < GameLogic._get_win_chance(CONFIG.stour_entry_fee)
+        if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             reward = random.randint(100, 600)
             return GameResult(True, reward, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ᴄᴏɴᴛʀᴀᴄᴛ ᴄᴏᴍᴘʟᴇᴛᴇᴅ! ʏᴏᴜ ᴇᴀʀɴᴇᴅ {reward:,} ᴄᴏɪɴs")
@@ -265,8 +270,6 @@ class GameLogic:
         return f"{a} {op} {b}", str(ans)
 
 
-# 🔥 FIX: Ye function pehle jaisa wapas kar diya gaya hai.
-# Jab button dabega to usi message ko edit karega bina naya msg bheje.
 async def send_or_edit_response(update: Update, context: CallbackContext, text: str, markup=None):
     if update.callback_query:
         try:
@@ -275,7 +278,6 @@ async def send_or_edit_response(update: Update, context: CallbackContext, text: 
         except Exception:
             pass
     
-    # Nayi game command lagane par naya message jayega
     msg = update.callback_query.message if update.callback_query else update.message
     if msg:
         return await msg.reply_text(text, reply_markup=markup, parse_mode="HTML")
@@ -331,7 +333,6 @@ async def process_game(update: Update, context: CallbackContext, user: dict, gam
     
     _, target_field = await UserDB.get_balance_and_field(user)
     
-    # Exact document match via _id to ensure no wrong user is updated
     query = {'_id': user['_id']}
     if net_coins < 0:
         query[target_field] = {'$gte': abs(net_coins)}
@@ -645,8 +646,6 @@ async def games_callback(update: Update, context: CallbackContext):
         
         cmd = parts[2]
         
-        # 🔥 YAHAN FIX KIYA HAI: Empty args jayenge jisse Usage explain function call hoga
-        # Aur "send_or_edit_response" function usi message ko edit karke wahan Usage print kar dega.
         parsed_args = []
 
         handlers = {
@@ -669,6 +668,5 @@ application.add_handler(CommandHandler("riddle", riddle, block=False))
 application.add_handler(CommandHandler("games", games_menu, block=False))
 application.add_handler(CommandHandler("gamestats", game_stats, block=False))
 
-# group=1 ensures riddle answer handler gets precedence
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer), group=1)
 application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:", block=False))
