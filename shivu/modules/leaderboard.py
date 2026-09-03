@@ -128,7 +128,7 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile", icon_custom_emoji_id="5217822164362739968"), InlineKeyboardButton("ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens", icon_custom_emoji_id="6109593993627050230")],
         [InlineKeyboardButton("ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal", icon_custom_emoji_id="5472030678633684592")],
-        [InlineKeyboardButton("ᴄᴛᴏᴘ", callback_data="lb_chars", icon_custom_emoji_id="6093434630147415641"), InlineKeyboardButton("ɢᴛᴏᴘ", callback_data="lb_gtop", icon_custom_emoji_id="5449885771420934013")],
+        [InlineKeyboardButton("ᴄᴛᴏᴘ", callback_data="lb_chars", icon_custom_emoji_id="6093434630147415641"), InlineKeyboardButton("ɢᴛᴏᴘ", callback_data="lb_gtop", icon_custom_emoji_id="5449850741667668411")],
     ])
     await send_or_edit(update, context, text, kb, edit)
 
