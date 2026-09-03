@@ -1,4 +1,5 @@
 import asyncio
+import math
 import random
 import traceback
 import logging
@@ -362,6 +363,7 @@ def get_tic_board(game):
             val = board[i+j]
             text = val if val != EMPTY else EMPTY
             cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
+            # Text contains normal standard emojis which perfectly render on inline buttons
             row.append(InlineKeyboardButton(text, callback_data=cb_data))
         keyboard.append(row)
     return InlineKeyboardMarkup(keyboard)
@@ -417,6 +419,7 @@ async def tic_callback(update: Update, context: CallbackContext):
             time_passed = (now - play_again_cooldowns[user_id]).total_seconds()
             if time_passed < 10:
                 remaining = int(10 - time_passed)
+                # Used Standard String & Emoji in Alert
                 await query.answer(sc(f"Please wait {remaining} seconds before playing again!"), show_alert=True)
                 return
         
@@ -599,7 +602,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
                 text = "💣" if board[idx] == 'mine' else "💸"
             else:
                 # 🔥 EXACT FIX FOR MISSING BUTTON PROBLEM (White Box)
-                text = "⬜" 
+                text = "ㅤㅤ" 
             
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
             row.append(InlineKeyboardButton(text, callback_data=cb_data))
@@ -609,6 +612,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
         mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
         win_amount = int(game['bet'] * mult)
         btn_text = f"{sc('Cash Out')} ({mult}x | 💸 {win_amount})"
+        # Button pe string + standard emoji
         keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout")])
         
     return InlineKeyboardMarkup(keyboard)
@@ -617,8 +621,12 @@ async def start_mines(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if not context.args or not context.args[0].isdigit():
-        # 🟢 NORMAL FONT FOR COMMANDS
-        msg = f"<b>⚠️ Usage: /mines [bet] [mines(optional)]\n<i>Example: /mines 20 3</i></b>"
+        # 🔥 UPDATED COMMAND SUGGESTION STYLE HERE
+        msg = (
+            f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
+            f"<code>/mines &lt;bet&gt; [mines(optional)]</code>\n"
+            f"<i><b>{sc('Example')}: /mines 20 3</b></i>"
+        )
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
         
@@ -639,7 +647,7 @@ async def start_mines(update: Update, context: CallbackContext):
         {'$inc': {'balance': -bet}}
     )
     if not eco_user:
-        await update.message.reply_text(f"<b>{sc('You do not have enough coins!')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {sc('You do not have enough coins!')}</b>", parse_mode=ParseMode.HTML)
         return
 
     board = ['mine'] * mines_count + ['safe'] * (25 - mines_count)
@@ -730,7 +738,7 @@ async def mines_callback(update: Update, context: CallbackContext):
             return
 
         if data == "mines_cashout":
-            # ⚡ FAST RESPONSE & NORMAL FONT
+            # ⚡ FAST RESPONSE & NORMAL FONT (Query answers can't parse HTML/Premium Emoji anyway)
             await query.answer("Cashed out! 💸", show_alert=False) 
             
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -843,8 +851,13 @@ async def drarity_on(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        # 🟢 NORMAL FONT FOR COMMANDS
-        await update.message.reply_text("<b>⚠️ Usage: /drarity_on [rarity_name]\n<i>Example: /drarity_on common</i></b>", parse_mode=ParseMode.HTML)
+        # 🔥 UPDATED COMMAND SUGGESTION STYLE HERE
+        msg = (
+            f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
+            f"<code>/drarity_on &lt;rarity_name&gt;</code>\n"
+            f"<i><b>{sc('Example')}: /drarity_on common</b></i>"
+        )
+        await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
         
     target_rarity = " ".join(context.args).lower()
@@ -853,17 +866,22 @@ async def drarity_on(update: Update, context: CallbackContext):
     if target_rarity not in current_allowed:
         current_allowed.append(target_rarity)
         await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': current_allowed}}, upsert=True)
-        await update.message.reply_text(f"<b>✅ {sc('Successfully ENABLED')} '{target_rarity}' {sc('in swaifu!')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> {sc('Successfully ENABLED')} '{target_rarity}' {sc('in swaifu!')}</b>", parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(f"<b>⚠️ '{target_rarity}' {sc('is already enabled.')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> '{target_rarity}' {sc('is already enabled.')}</b>", parse_mode=ParseMode.HTML)
 
 async def drarity_off(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
         return
         
     if not context.args:
-        # 🟢 NORMAL FONT FOR COMMANDS
-        await update.message.reply_text("<b>⚠️ Usage: /drarity_off [rarity_name]\n<i>Example: /drarity_off common</i></b>", parse_mode=ParseMode.HTML)
+        # 🔥 UPDATED COMMAND SUGGESTION STYLE HERE
+        msg = (
+            f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
+            f"<code>/drarity_off &lt;rarity_name&gt;</code>\n"
+            f"<i><b>{sc('Example')}: /drarity_off common</b></i>"
+        )
+        await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
         
     target_rarity = " ".join(context.args).lower()
@@ -872,9 +890,9 @@ async def drarity_off(update: Update, context: CallbackContext):
     if target_rarity in current_allowed:
         current_allowed.remove(target_rarity)
         await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': current_allowed}}, upsert=True)
-        await update.message.reply_text(f"<b>🚫 {sc('Successfully DISABLED')} '{target_rarity}' {sc('in swaifu!')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> {sc('Successfully DISABLED')} '{target_rarity}' {sc('in swaifu!')}</b>", parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(f"<b>⚠️ '{target_rarity}' {sc('is already disabled or not in the list.')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> '{target_rarity}' {sc('is already disabled or not in the list.')}</b>", parse_mode=ParseMode.HTML)
 
 
 # ==========================================
