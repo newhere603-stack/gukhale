@@ -15,6 +15,7 @@ from shivu.Database.db import eco_collection
 # Asli collections yahan set ki hain
 collection = db['anime_characters_lol']
 bot_settings_collection = db['bot_settings'] # 🔥 Persistent Settings ke liye
+delete_collection = db['auto_delete_queue'] # 🔥 Yaddasht ke liye nayi collection
 
 # ---------------- CUSTOM RARITIES ----------------
 RARITIES = {
@@ -53,13 +54,61 @@ def get_base_rarity(rarity_str):
             return key
     return rarity_str
 
-# 🔥 SILENT AUTO-DELETE HELPER
-async def auto_delete_msg(message, delay: int):
-    await asyncio.sleep(delay)
+# 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
+_worker_started = False
+
+async def background_delete_worker(bot):
+    """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
     try:
-        await message.delete()
+        await delete_collection.create_index("delete_at")
     except Exception:
         pass
+        
+    while True:
+        try:
+            now = time.time()
+            cursor = delete_collection.find({'delete_at': {'$lte': now}})
+            async for doc in cursor:
+                try:
+                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                except Exception:
+                    pass 
+                finally:
+                    await delete_collection.delete_one({'_id': doc['_id']})
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+async def auto_delete_msg(message, delay: int):
+    """Message ko database aur memory memory queue dono me daalta hai"""
+    if not message: return
+        
+    global _worker_started
+    if not _worker_started:
+        _worker_started = True
+        asyncio.create_task(background_delete_worker(message.get_bot()))
+
+    chat_id = message.chat.id
+    message_id = message.message_id
+    delete_at = time.time() + delay
+
+    # MongoDB me save karega taki bot crash/restart hone par mission na bhule
+    await delete_collection.insert_one({
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'delete_at': delete_at
+    })
+
+    # Memory worker taaki smoothly delete ho jaye agar bot chalu rahe to
+    async def memory_delete():
+        await asyncio.sleep(delay)
+        try:
+            await message.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
+            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
+        except Exception:
+            pass
+
+    asyncio.create_task(memory_delete())
 
 # 🔥 SMART MEDIA SENDER FOR FILE IDs & URLs (Photos + Videos)
 async def send_media_smart(context, chat_id, media, caption, reply_to_msg_id=None):
@@ -402,7 +451,7 @@ async def dice_marry(update: Update, context: CallbackContext):
             text = random.choice(DICE_REJECT_TEXTS)
             try:
                 rej_msg = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
-                asyncio.create_task(auto_delete_msg(rej_msg, 1800)) # 30 mins me delete
+                await auto_delete_msg(rej_msg, 1800) # 30 mins me delete
             except Exception:
                 pass
             return
@@ -428,12 +477,12 @@ async def dice_marry(update: Update, context: CallbackContext):
         
         try:
             win_msg = await send_media_smart(context, chat_id, char["img_url"], caption, msg_id)
-            asyncio.create_task(auto_delete_msg(win_msg, 1200)) # Win image 20 mins me delete
+            await auto_delete_msg(win_msg, 1200) # Win image 20 mins me delete
         except Exception as e:
             LOGGER.error(f"Error sending dice win photo, fallback to text: {e}")
             try:
                 win_msg = await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode="HTML", reply_to_message_id=msg_id)
-                asyncio.create_task(auto_delete_msg(win_msg, 1200))
+                await auto_delete_msg(win_msg, 1200)
             except Exception:
                 pass
                 
@@ -539,7 +588,7 @@ async def propose(update: Update, context: CallbackContext):
                 reject_text,
                 msg_id
             )
-            asyncio.create_task(auto_delete_msg(rej_msg, 1800)) # 30 mins me delete
+            await auto_delete_msg(rej_msg, 1800) # 30 mins me delete
         except Exception as e:
             LOGGER.error(f"Reject photo failed, falling back to text: {e}")
             try:
@@ -549,7 +598,7 @@ async def propose(update: Update, context: CallbackContext):
                     parse_mode="HTML", 
                     reply_to_message_id=msg_id
                 )
-                asyncio.create_task(auto_delete_msg(rej_msg, 1800))
+                await auto_delete_msg(rej_msg, 1800)
             except Exception:
                 pass
         return
@@ -581,12 +630,12 @@ async def propose(update: Update, context: CallbackContext):
     
     try:
         win_msg = await send_media_smart(context, chat_id, char["img_url"], caption, msg_id)
-        asyncio.create_task(auto_delete_msg(win_msg, 1200)) # Win image 20 mins me delete
+        await auto_delete_msg(win_msg, 1200) # Win image 20 mins me delete
     except Exception as e:
         LOGGER.error(f"Error sending propose win photo, fallback to text: {e}")
         try:
             win_msg = await context.bot.send_message(chat_id=chat_id, text=caption, parse_mode="HTML", reply_to_message_id=msg_id)
-            asyncio.create_task(auto_delete_msg(win_msg, 1200))
+            await auto_delete_msg(win_msg, 1200)
         except Exception:
             pass
             
