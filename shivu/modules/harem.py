@@ -1,6 +1,7 @@
 import asyncio
 import random
 import math
+import time
 from html import escape
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
@@ -9,6 +10,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import TelegramError
 from shivu import db, application, LOGGER
+
+# Nayi collection auto-delete memory ke liye (Taaki bot yaddasht na bhule)
+delete_collection = db['auto_delete_queue']
 
 # --- SMALL CAPS CONVERTER HELPERS ---
 SMALL_CAPS_TRANS = str.maketrans(
@@ -20,6 +24,63 @@ def to_small_caps(text: str) -> str:
     if not text:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
+
+# 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
+_worker_started = False
+
+async def background_delete_worker(bot):
+    """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
+    try:
+        await delete_collection.create_index("delete_at")
+    except Exception:
+        pass
+        
+    while True:
+        try:
+            now = time.time()
+            cursor = delete_collection.find({'delete_at': {'$lte': now}})
+            async for doc in cursor:
+                try:
+                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                except Exception:
+                    pass 
+                finally:
+                    await delete_collection.delete_one({'_id': doc['_id']})
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+async def schedule_auto_delete(message, delay_seconds: int = 1200):
+    """Message ko database aur memory queue dono me daalta hai"""
+    if not message: return
+        
+    global _worker_started
+    if not _worker_started:
+        _worker_started = True
+        asyncio.create_task(background_delete_worker(message.get_bot()))
+
+    chat_id = message.chat.id
+    message_id = message.message_id
+    delete_at = time.time() + delay_seconds
+
+    # MongoDB me save karega taki bot crash/restart hone par mission na bhule
+    await delete_collection.insert_one({
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'delete_at': delete_at
+    })
+
+    # Memory worker taaki smoothly delete ho jaye agar bot chalu rahe to
+    async def memory_delete():
+        await asyncio.sleep(delay_seconds)
+        try:
+            await message.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
+            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
+        except Exception:
+            pass
+
+    asyncio.create_task(memory_delete())
+
 
 # 🔥 UNIFIED RARITY DICTIONARY
 RARITIES = {
@@ -341,10 +402,9 @@ class HaremHandler:
             filter_mode=user.get('hmode', 'default')
         )
 
+    # Naya method jo permanent auto delete task schedule karega
     async def _auto_delete_message(self, message, delay_seconds: int = 1200):
-        await asyncio.sleep(delay_seconds)
-        try: await message.delete()
-        except Exception: pass 
+        await schedule_auto_delete(message, delay_seconds)
 
     async def update_live_data_all(self, characters: List[Character]):
         if not characters: return
