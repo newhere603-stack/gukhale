@@ -335,7 +335,7 @@ PREMIUM_P2 = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
 
 SYMBOL_P1 = '🟢'
 SYMBOL_P2 = '🔴'
-EMPTY = 'ㅤㅤ'
+EMPTY = 'ㅤ'
 
 def get_tic_board(game):
     if game['status'] == 'waiting':
