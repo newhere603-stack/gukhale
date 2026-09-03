@@ -153,7 +153,6 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
 
     asyncio.create_task(memory_delete())
 
-
 def can_claim_today(last_claim_utc) -> bool:
     if not last_claim_utc:
         return True
@@ -173,7 +172,6 @@ def can_claim_today(last_claim_utc) -> bool:
         
     return last_claim_ist < reset_threshold
 
-# Helper function to get allowed rarities from Database
 async def get_allowed_rarities():
     config = await settings_collection.find_one({'setting': 'swaifu_rarities'})
     if config and 'allowed' in config:
@@ -192,7 +190,8 @@ async def swaifu(update: Update, context: CallbackContext):
     
     try:
         raw_first_name = update.effective_user.first_name or "User"
-        safe_first_name = html.escape(sc(raw_first_name))
+        # NORMAL FONT for username
+        safe_first_name = html.escape(raw_first_name)
         now_utc = datetime.now(timezone.utc)
         user_data = await user_collection.find_one({'id': user_id})
         
@@ -375,7 +374,8 @@ def check_win(board):
 
 async def start_tic(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    safe_name = html.escape(sc(update.effective_user.first_name or "User"))
+    # NORMAL FONT for username
+    safe_name = html.escape(update.effective_user.first_name or "User")
 
     game = {
         'player_1_id': user_id,
@@ -424,7 +424,8 @@ async def tic_callback(update: Update, context: CallbackContext):
         
         await query.answer(sc("New game started below!")) 
         play_again_cooldowns[user_id] = now
-        safe_name = html.escape(sc(query.from_user.first_name or "User"))
+        # NORMAL FONT
+        safe_name = html.escape(query.from_user.first_name or "User")
 
         game = {
             'player_1_id': user_id,
@@ -479,7 +480,8 @@ async def tic_callback(update: Update, context: CallbackContext):
 
             await query.answer(sc("✅ You have joined the game!")) 
             game['player_2_id'] = user_id
-            game['player_2_name'] = html.escape(sc(query.from_user.first_name or "User"))
+            # NORMAL FONT
+            game['player_2_name'] = html.escape(query.from_user.first_name or "User")
             game['status'] = 'playing'
 
             text = (
@@ -488,10 +490,15 @@ async def tic_callback(update: Update, context: CallbackContext):
                 f"{PREMIUM_P2} <b>{game['player_2_name']}</b>\n\n"
                 f"{PREMIUM_TURN} <b>{sc('Turn')}: {game['player_1_name']} ({PREMIUM_P1})</b>"
             )
+            
+            # 🔥 FAST UI UPDATE
+            try:
+                await query.edit_message_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+            except Exception: pass
+            
             game_data = game.copy()
             game_data.pop('_id', None)
-            await tic_collection.update_one({'key': key}, {'$set': game_data})
-            await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+            asyncio.create_task(tic_collection.update_one({'key': key}, {'$set': game_data}))
             return
 
         if data.startswith("tic_move_"):
@@ -542,9 +549,14 @@ async def tic_callback(update: Update, context: CallbackContext):
                     )
 
                 replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{sc('Play Again')} ⟳", callback_data="tic_play_again")]])
-                await tic_collection.delete_one({'key': key})
+                
+                # 🔥 FAST UI UPDATE
+                try:
+                    await query.edit_message_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
+                except Exception: pass
+                
+                asyncio.create_task(tic_collection.delete_one({'key': key}))
                 tic_locks.pop(key, None) 
-                await query.message.edit_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
                 return
 
             if user_id == game['player_1_id']:
@@ -558,14 +570,15 @@ async def tic_callback(update: Update, context: CallbackContext):
                 f"{PREMIUM_P2} <b>{game['player_2_name']}</b>\n\n"
                 f"{PREMIUM_TURN} <b>{sc('Turn')}: {next_turn_name} ({next_symbol})</b>"
             )
+            
+            # 🔥 FAST UI UPDATE
+            try:
+                await query.edit_message_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+            except Exception: pass
+            
             game_data = game.copy()
             game_data.pop('_id', None)
-            await tic_collection.update_one({'key': key}, {'$set': game_data})
-            
-            try:
-                await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
-            except BadRequest:
-                pass
+            asyncio.create_task(tic_collection.update_one({'key': key}, {'$set': game_data}))
 
 
 # ==========================================
@@ -624,7 +637,8 @@ async def start_mines(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if not context.args or not context.args[0].isdigit():
-        msg = f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {sc('Usage: /mines [bet] [mines(optional)]')}\n<i>{sc('Example: /mines 20 3')}</i></b>"
+        # NORMAL FONT for commands
+        msg = f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {sc('Usage:')} /mines [bet] [mines(optional)]\n<i>{sc('Example:')} /mines 20 3</i></b>"
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
         
@@ -653,7 +667,8 @@ async def start_mines(update: Update, context: CallbackContext):
 
     game = {
         'user_id': user_id,
-        'user_name': html.escape(sc(update.effective_user.first_name or "User")),
+        # NORMAL FONT
+        'user_name': html.escape(update.effective_user.first_name or "User"),
         'bet': bet,
         'board': board,
         'revealed': [False] * 25,
@@ -700,7 +715,7 @@ async def start_mines(update: Update, context: CallbackContext):
     log_data = {
         sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{game['user_name']}</a></b>",
         sc("ɪᴅ"): f"<code>{user_id}</code>",
-        sc("ᴄʜᴀᴛ"): f"<b>{html.escape(sc(chat_title))}</b>",
+        sc("ᴄʜᴀᴛ"): f"<b>{html.escape(chat_title)}</b>",
         sc("ᴄʜᴀᴛ ɪᴅ"): f"<code>{update.effective_chat.id}</code>",
         sc("ʙᴇᴛ"): f"<b>{bet} ᴄᴏɪɴs</b>",
         sc("ᴍɪɴᴇs"): f"<b>{mines_count}</b>",
@@ -739,13 +754,12 @@ async def mines_callback(update: Update, context: CallbackContext):
             return
 
         if data == "mines_cashout":
-            await query.answer(sc("Processing cashout... 💸"), show_alert=False) 
+            # ⚡ FAST RESPONSE
+            await query.answer("Cashed out! 💸", show_alert=False) 
             
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
             win_amount = int(game['bet'] * mult)
-            
             game['status'] = 'cashed_out'
-            await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
             
             text = (
                 f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('Cashed Out!')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n\n"
@@ -755,41 +769,49 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<b>{sc('Final Board')}:</b>"
             )
             
-            await mines_collection.delete_one({'key': key}) 
-            mines_locks.pop(key, None) 
+            # 🔥 FAST UI UPDATE
+            try:
+                await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+            except Exception: pass
             
-            await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
+            asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
+            asyncio.create_task(mines_collection.delete_one({'key': key}))
+            mines_locks.pop(key, None) 
             return
 
         if data.startswith("mines_click_"):
             idx = int(data.split("_")[2])
             if game['revealed'][idx]:
-                await query.answer(sc("Already clicked!"), show_alert=False)
+                await query.answer("Already clicked!", show_alert=False)
                 return
 
             if game['board'][idx] == 'mine':
-                # ⚡ FAST RESPONSE: Answer query immediately!
-                await query.answer(sc("BOOM! You lost the bet. 💥"), show_alert=True) 
+                # ⚡ FAST RESPONSE: NORMAL FONT FOR BOOM
+                await query.answer("BOOM! You lost the bet. 💥", show_alert=True) 
                 
                 game['status'] = 'busted'
                 game['revealed'][idx] = True
                 
+                # NORMAL FONT FOR BOOM
                 text = (
-                    f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
+                    f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> BOOM! {sc('You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found before boom')}:</b> {game['found']}\n\n"
                     f"<b>{sc('Final Board')}:</b>"
                 )
                 
-                await mines_collection.delete_one({'key': key}) 
-                mines_locks.pop(key, None) 
+                # 🔥 FAST UI UPDATE
+                try:
+                    await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                except Exception: pass
                 
-                await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
+                asyncio.create_task(mines_collection.delete_one({'key': key}))
+                mines_locks.pop(key, None) 
                 return
                 
             else:
-                # ⚡ FAST RESPONSE: Answer query immediately!
-                await query.answer(sc("Safe! 💸"), show_alert=False) 
+                # ⚡ FAST RESPONSE: Normal font for Safe
+                await query.answer("Safe! 💸", show_alert=False) 
                 
                 game['revealed'][idx] = True
                 game['found'] += 1
@@ -798,7 +820,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                 
                 if game['found'] == (25 - game['mines_count']):
                     game['status'] = 'cashed_out'
-                    await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}})
                     
                     text = (
                         f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {sc('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
@@ -807,11 +828,15 @@ async def mines_callback(update: Update, context: CallbackContext):
                         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
                         f"<b>{sc('Final Board')}:</b>"
                     )
-                        
-                    await mines_collection.delete_one({'key': key}) 
-                    mines_locks.pop(key, None) 
                     
-                    await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
+                    # 🔥 FAST UI UPDATE
+                    try:
+                        await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                    except Exception: pass
+                        
+                    asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
+                    asyncio.create_task(mines_collection.delete_one({'key': key}))
+                    mines_locks.pop(key, None) 
                     return
 
                 text = (
@@ -823,11 +848,14 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
                 )
                 
+                # 🔥 FAST UI UPDATE
+                try:
+                    await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
+                except Exception: pass
+                
                 game_data = game.copy()
                 game_data.pop('_id', None)
-                await mines_collection.update_one({'key': key}, {'$set': game_data}) 
-                
-                await safe_edit_mines_board(query, text, get_mines_keyboard(game))
+                asyncio.create_task(mines_collection.update_one({'key': key}, {'$set': game_data}))
 
 
 # ==========================================
@@ -839,7 +867,8 @@ async def drarity_on(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        await update.message.reply_text(f"<b>⚠️ {sc('Usage: /drarity_on [rarity_name]')}\n<i>{sc('Example: /drarity_on common')}</i></b>", parse_mode=ParseMode.HTML)
+        # NORMAL FONT for command
+        await update.message.reply_text(f"<b>⚠️ {sc('Usage:')} /drarity_on [rarity_name]\n<i>{sc('Example:')} /drarity_on common</i></b>", parse_mode=ParseMode.HTML)
         return
         
     target_rarity = " ".join(context.args).lower()
@@ -848,16 +877,17 @@ async def drarity_on(update: Update, context: CallbackContext):
     if target_rarity not in current_allowed:
         current_allowed.append(target_rarity)
         await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': current_allowed}}, upsert=True)
-        await update.message.reply_text(f"<b>✅ {sc(f'Successfully ENABLED {target_rarity} in swaifu!')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>✅ {sc('Successfully ENABLED')} '{target_rarity}' {sc('in swaifu!')}</b>", parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(f"<b>⚠️ {sc(f'{target_rarity} is already enabled.')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>⚠️ '{target_rarity}' {sc('is already enabled.')}</b>", parse_mode=ParseMode.HTML)
 
 async def drarity_off(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
         return
         
     if not context.args:
-        await update.message.reply_text(f"<b>⚠️ {sc('Usage: /drarity_off [rarity_name]')}\n<i>{sc('Example: /drarity_off common')}</i></b>", parse_mode=ParseMode.HTML)
+        # NORMAL FONT for command
+        await update.message.reply_text(f"<b>⚠️ {sc('Usage:')} /drarity_off [rarity_name]\n<i>{sc('Example:')} /drarity_off common</i></b>", parse_mode=ParseMode.HTML)
         return
         
     target_rarity = " ".join(context.args).lower()
@@ -866,9 +896,9 @@ async def drarity_off(update: Update, context: CallbackContext):
     if target_rarity in current_allowed:
         current_allowed.remove(target_rarity)
         await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': current_allowed}}, upsert=True)
-        await update.message.reply_text(f"<b>🚫 {sc(f'Successfully DISABLED {target_rarity} in swaifu!')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>🚫 {sc('Successfully DISABLED')} '{target_rarity}' {sc('in swaifu!')}</b>", parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(f"<b>⚠️ {sc(f'{target_rarity} is already disabled or not in the list.')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>⚠️ '{target_rarity}' {sc('is already disabled or not in the list.')}</b>", parse_mode=ParseMode.HTML)
 
 
 # ==========================================
