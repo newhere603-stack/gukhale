@@ -173,22 +173,24 @@ class GameUI:
 
 class GameLogic:
     @staticmethod
-    def _get_win_chance(amount: int) -> float:
+    def is_win(amount: int) -> bool:
+        # 🔥 Exact 1 to 100 RNG check. No floating point weirdness.
+        roll = random.randint(1, 100)
         if amount > 10000:
-            return 0.10
-        return 0.50
+            return roll <= 10  # Exact 10% chance
+        return roll <= 50      # Exact 50% chance
 
     @staticmethod
     def _get_random_rewards() -> tuple[int, int]:
-        chance = random.random()
-        if chance < 0.80:
+        chance = random.randint(1, 100)
+        if chance <= 80:
             return random.randint(50, 150), 0
         else:
             return 0, 1
 
     @staticmethod
     def coinflip(guess: str, amount: int) -> GameResult:
-        won = random.random() < GameLogic._get_win_chance(amount)
+        won = GameLogic.is_win(amount)
         outcome = guess if won else ('tails' if guess == 'heads' else 'heads')
         
         if won:
@@ -199,7 +201,7 @@ class GameLogic:
 
     @staticmethod
     def dice_roll(choice: str, amount: int) -> GameResult:
-        won = random.random() < GameLogic._get_win_chance(amount)
+        won = GameLogic.is_win(amount)
         if won:
             dice = random.choice([1, 3, 5] if choice == 'odd' else [2, 4, 6])
         else:
@@ -216,7 +218,7 @@ class GameLogic:
 
     @staticmethod
     def gamble(pick: str, amount: int) -> GameResult:
-        won = random.random() < GameLogic._get_win_chance(amount)
+        won = GameLogic.is_win(amount)
         if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.gamble_multiplier
@@ -227,7 +229,7 @@ class GameLogic:
 
     @staticmethod
     def basketball(amount: int) -> GameResult:
-        won = random.random() < GameLogic._get_win_chance(amount)
+        won = GameLogic.is_win(amount)
         if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.basket_multiplier
@@ -236,16 +238,21 @@ class GameLogic:
 
     @staticmethod
     def darts(amount: int) -> GameResult:
-        win_chance = GameLogic._get_win_chance(amount)
-        roll = random.random()
+        roll = random.randint(1, 100)
         
-        bullseye_threshold = win_chance * 0.30 
-        
-        if roll < bullseye_threshold:
+        # Bullseye aur normal hit ke chances ko % mein divide kar diya properly
+        if amount > 10000:
+            bullseye_chance = 3
+            hit_chance = 10
+        else:
+            bullseye_chance = 15
+            hit_chance = 50
+            
+        if roll <= bullseye_chance:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dart_bullseye_multiplier
             return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ʙᴜʟʟsᴇʏᴇ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome='<tg-emoji emoji-id="5350460637182993292">🎯</tg-emoji> ʙᴜʟʟsᴇʏᴇ')
-        elif roll < win_chance:
+        elif roll <= hit_chance:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             win = amount * CONFIG.dart_hit_multiplier
             return GameResult(True, win, bonus_coins=bonus_c, tokens_gained=bonus_t, message=f"ɢᴏᴏᴅ ʜɪᴛ! ʏᴏᴜ ᴡᴏɴ {win:,} ᴄᴏɪɴs", display_outcome="ᴛᴀʀɢᴇᴛ ʜɪᴛ")
@@ -254,7 +261,7 @@ class GameLogic:
 
     @staticmethod
     def contract() -> GameResult:
-        won = random.random() < GameLogic._get_win_chance(CONFIG.stour_entry_fee)
+        won = GameLogic.is_win(CONFIG.stour_entry_fee)
         if won:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
             reward = random.randint(100, 600)
