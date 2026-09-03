@@ -1,5 +1,6 @@
 import asyncio
 import traceback
+import time
 from html import escape
 from datetime import datetime, timezone
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
@@ -13,7 +14,10 @@ try:
 except ImportError:
     def clear_char_cache(cid): pass 
 
-from shivu import LOGGER, application, user_collection, collection
+from shivu import LOGGER, application, user_collection, collection, db
+
+# Nayi collection auto-delete memory ke liye
+delete_collection = db['auto_delete_queue']
 
 # --- CONFIGURATION ---
 LOG_CHANNEL_ID = -1003893927065 
@@ -73,13 +77,59 @@ async def reply_media_message(message, media_url, caption, reply_markup=None):
         LOGGER.error(f"Media reply failed: {e}")
         return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
-# 🔥 20 Minutes Auto-Delete Helper
-async def auto_delete_message(message, delay=1200):
-    await asyncio.sleep(delay)
+# 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
+_worker_started = False
+
+async def background_delete_worker(bot):
+    """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
     try:
-        await message.delete()
+        await delete_collection.create_index("delete_at")
     except Exception:
         pass
+        
+    while True:
+        try:
+            now = time.time()
+            cursor = delete_collection.find({'delete_at': {'$lte': now}})
+            async for doc in cursor:
+                try:
+                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                except Exception:
+                    pass 
+                finally:
+                    await delete_collection.delete_one({'_id': doc['_id']})
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+async def schedule_auto_delete(message, delay_seconds: int = 1200):
+    """Message ko database aur memory memory queue dono me daalta hai"""
+    if not message: return
+        
+    global _worker_started
+    if not _worker_started:
+        _worker_started = True
+        asyncio.create_task(background_delete_worker(message.get_bot()))
+
+    chat_id = message.chat.id
+    message_id = message.message_id
+    delete_at = time.time() + delay_seconds
+
+    await delete_collection.insert_one({
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'delete_at': delete_at
+    })
+
+    async def memory_delete():
+        await asyncio.sleep(delay_seconds)
+        try:
+            await message.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
+            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
+        except Exception:
+            pass
+
+    asyncio.create_task(memory_delete())
 
 async def cleanup_pending_gift(sender_id: int, sent_msg=None):
     if sender_id in gift_tasks:
@@ -90,6 +140,7 @@ async def cleanup_pending_gift(sender_id: int, sent_msg=None):
         if sent_msg:
             try:
                 await sent_msg.delete()
+                await delete_collection.delete_one({'chat_id': sent_msg.chat.id, 'message_id': sent_msg.message_id})
             except Exception:
                 pass
         pending_gifts.pop(sender_id, None)
@@ -114,31 +165,45 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         sender_id = msg.from_user.id
 
         if not msg.reply_to_message:
-            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("please reply to a user to send a gift.")}', parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("please reply to a user to send a gift.")}', parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(sent_msg)
+            return
 
         receiver = msg.reply_to_message.from_user
         if sender_id == receiver.id or receiver.is_bot:
-            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("invalid user for gift.")}', parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("invalid user for gift.")}', parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(sent_msg)
+            return
 
         if len(context.args) != 1:
-            return await msg.reply_text(f'<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> {bold_sc("usage:")} <code>/gift &lt;id&gt;</code>', parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> {bold_sc("usage:")} <code>/gift &lt;id&gt;</code>', parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(sent_msg)
+            return
 
         char_id = str(context.args[0])
         
         if sender_id in pending_gifts:
-            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(sent_msg)
+            return
         
         if not await check_receiver_inventory_size(receiver.id):
             inv_text = f"receiver inventory is full (max {MAX_INVENTORY_SIZE})."
-            return await msg.reply_text(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(sent_msg)
+            return
 
         sender_data = await user_collection.find_one({'id': sender_id})
         if not sender_data:
-            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(sent_msg)
+            return
         
         owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == char_id), None)
         if not owned_char:
-            return await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(sent_msg)
+            return
         
         global_char = await collection.find_one({'$or': [{'id': char_id}, {'id': int(char_id) if char_id.isdigit() else None}]})
         if not global_char:
@@ -169,8 +234,7 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         
         if sent_msg: 
             pending_gifts[sender_id]['message_id'] = sent_msg.message_id
-            # 🔥 Start 20 mins auto-delete task for the UI
-            asyncio.create_task(auto_delete_message(sent_msg, 1200))
+            await schedule_auto_delete(sent_msg) # Post 20 minute me permanently delete ho jayega
         
         async def expire():
             await asyncio.sleep(GIFT_TIMEOUT)
@@ -179,7 +243,8 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         gift_tasks[sender_id] = asyncio.create_task(expire())
     except Exception as e:
         LOGGER.error(f"Error in handle_gift_command: {e}\n{traceback.format_exc()}")
-        await update.message.reply_text("❌ An error occurred while processing the gift command.")
+        sent_msg = await update.message.reply_text("❌ An error occurred while processing the gift command.")
+        await schedule_auto_delete(sent_msg)
 
 async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -205,13 +270,14 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
 
     if not gift_data:
         if query.message:
-            try: await query.message.delete()
+            try: 
+                await query.message.delete()
+                await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
             except: pass
         return await query.answer(to_small_caps("⏰ request expired."), show_alert=True)
 
     char, receiver_id, receiver_name = gift_data['character'], gift_data['receiver_id'], gift_data['receiver_name']
     char_id_str = str(char.get('id'))
-    char_id_int = int(char_id_str) if char_id_str.isdigit() else None
 
     if action == "gift_z":
         if query.message:
@@ -260,10 +326,8 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                         'created_at': datetime.now(timezone.utc), 'last_active': datetime.now(timezone.utc)
                     })
                 
-                try:
-                    clear_char_cache(owned_char['id'])
-                except Exception:
-                    pass
+                try: clear_char_cache(owned_char['id'])
+                except: pass
                 
                 final_caption = (
                     f'<tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji> <b>{to_small_caps("gift successful")}</b> <tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji>\n'
@@ -275,10 +339,8 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                     f"<b><i>{to_small_caps('✓ character added to recipient harem.')}</i></b>"
                 )
                 if query.message:
-                    try:
-                        await query.edit_message_caption(caption=final_caption, parse_mode=ParseMode.HTML)
-                    except Exception:
-                        pass
+                    try: await query.edit_message_caption(caption=final_caption, parse_mode=ParseMode.HTML)
+                    except: pass
                 
                 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 log_msg = (
@@ -300,7 +362,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
         
         except Exception as e:
-            LOGGER.error(f"Callback gift_z error: {e}\n{traceback.format_exc()}")
+            LOGGER.error(f"Callback gift_z error: {e}")
             if query.message:
                 try: await query.message.delete()
                 except: pass
@@ -308,42 +370,47 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
     
     elif action == "gift_v":
         if query.message:
-            try: await query.message.delete()
+            try: 
+                await query.message.delete()
+                await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
             except: pass
 
-
-# 🔥 SUPER INSTANT SPAM DELETE (Har type ke message ko cover karega)
+# 🔥 SUPER INSTANT SPAM DELETE (Ab Invoice & Buttons ko bhi padhega!)
 async def instant_delete_spam(update: Update, context: CallbackContext):
     msg = update.effective_message
     if not msg: 
         return
         
-    # Text, Captions aur Invoice Details ko combine karke check karega
     text_parts = []
-    if msg.text: 
-        text_parts.append(msg.text)
-    if msg.caption: 
-        text_parts.append(msg.caption)
-    if msg.invoice: 
-        if msg.invoice.title:
-            text_parts.append(msg.invoice.title)
-        if msg.invoice.description:
-            text_parts.append(msg.invoice.description)
-            
-    full_text = " ".join(text_parts).lower() # Case-insensitive check
     
-    # "donate 💝" likha mila toh instantly delete karega (admin ho ya normal user)
-    if "donate 💝" in full_text:
+    # Normal text and captions
+    if msg.text: text_parts.append(msg.text)
+    if msg.caption: text_parts.append(msg.caption)
+    
+    # Telegram Invoices ka data pakadne ke liye (Jaise image mein "Donate 💝" hai)
+    if msg.invoice:
+        if msg.invoice.title: text_parts.append(msg.invoice.title)
+        if msg.invoice.description: text_parts.append(msg.invoice.description)
+        
+    # Agar message ke sath buttons hain (Jaise "Pay ⭐️ 10"), usko bhi read karega
+    if msg.reply_markup and msg.reply_markup.inline_keyboard:
+        for row in msg.reply_markup.inline_keyboard:
+            for button in row:
+                if button.text: text_parts.append(button.text)
+                
+    full_text = " ".join(text_parts).lower() 
+    
+    # Ab chahe text ho ya Invoice, ye definitely pakad lega!
+    if "donate 💝" in full_text or "support our mission" in full_text or "every donation makes a difference" in full_text:
         try:
             await msg.delete()
         except Exception as e:
-            # Agar permissions nahi hai, to log me error chhod dega
-            LOGGER.error(f"Spam message mila par delete nahi hua! Reason: {e}")
+            LOGGER.error(f"Spam delete failed (Check if bot is admin!): {e}")
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):'))
-# Group -99 rakha hai taaki sabse pehle yahi chale
+# Group -99 rakha hai taaki message aate hi sabse pehle ye chalu ho
 application.add_handler(MessageHandler(filters.ALL, instant_delete_spam), group=-99)
 
 async def cleanup_stale_gifts():
