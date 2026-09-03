@@ -126,9 +126,9 @@ def back_close_buttons(refresh_cb, extra_row=None):
 async def tops_menu(update: Update, context: CallbackContext, edit=False):
     text = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>𝗦𝗘𝗟𝗘𝗖𝗧 𝗧𝗛𝗘 𝗧𝗢𝗣 𝗟𝗜𝗦𝗧</b> <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>"
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("👤 ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile"), InlineKeyboardButton("💠 ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens")],
-        [InlineKeyboardButton("💸 ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal")],
-        [InlineKeyboardButton("🧧 ᴄᴛᴏᴘ", callback_data="lb_chars"), InlineKeyboardButton("🌱 ɢᴛᴏᴘ", callback_data="lb_gtop")],
+        [InlineKeyboardButton("ᴘʀᴏꜰɪʟᴇ", callback_data="lb_profile", icon_custom_emoji_id="5217822164362739968"), InlineKeyboardButton("ᴛᴏᴋᴇɴꜱ", callback_data="lb_tokens", icon_custom_emoji_id="6109593993627050230")],
+        [InlineKeyboardButton("ʙᴀʟᴀɴᴄᴇ", callback_data="lb_bal", icon_custom_emoji_id="5472030678633684592")],
+        [InlineKeyboardButton("ᴄᴛᴏᴘ", callback_data="lb_chars", icon_custom_emoji_id="6093434630147415641"), InlineKeyboardButton("ɢᴛᴏᴘ", callback_data="lb_gtop", icon_custom_emoji_id="5449885771420934013")],
     ])
     await send_or_edit(update, context, text, kb, edit)
 
@@ -283,7 +283,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
     )
 
     profile_kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🧧 ᴄᴛᴏᴘ", callback_data="lb_chars"), InlineKeyboardButton("💸 ʙᴛᴏᴘ", callback_data="lb_bal")],
+        [InlineKeyboardButton("ᴄᴛᴏᴘ", callback_data="lb_chars", icon_custom_emoji_id="6093434630147415641"), InlineKeyboardButton("ʙᴛᴏᴘ", callback_data="lb_bal", icon_custom_emoji_id="5472030678633684592")],
         [InlineKeyboardButton("⟳", callback_data="lb_refresh_profile"), InlineKeyboardButton("⋞", callback_data="lb_menu")],
         [InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="lb_close")]
     ])
