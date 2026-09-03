@@ -17,7 +17,7 @@ from shivu.Database.db import eco_collection
 E_TICK = '<tg-emoji emoji-id="6105024010985152856">✅</tg-emoji>'
 E_CROSS = '<tg-emoji emoji-id="6105159401239225894">❌</tg-emoji>'
 E_WARN = '<tg-emoji emoji-id="6105189427355589893">⚠️</tg-emoji>'
-E_EXC = '<tg-emoji emoji-id="5402186569006210455">💱</tg-emoji>'
+E_EXC = '<tg-emoji emoji-id="5377336227533969892">💱</tg-emoji>'
 E_WAIT = '<tg-emoji emoji-id="6104853200135791744">⏳</tg-emoji>'
 E_PARTY = '<tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji>'
 E_INF = '<tg-emoji emoji-id="6105158430576616482">♾</tg-emoji>'
