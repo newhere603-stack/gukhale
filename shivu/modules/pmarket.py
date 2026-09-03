@@ -3,6 +3,7 @@ import html
 import uuid
 import re
 import math
+import time
 from datetime import datetime, timedelta
 from bson import ObjectId
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
@@ -32,18 +33,65 @@ OWNER_ID = 7657218453
 user_collection = db['user_collection_lmaoooo'] 
 market_collection = db['market_collection'] 
 bot_settings_collection = db['bot_settings'] 
+delete_collection = db['auto_delete_queue'] # 🔥 Yaddasht ke liye nayi collection
 
 # --- HELPER: GET INDIAN STANDARD TIME (IST) ---
 def get_ist_now():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
-# --- HELPER: AUTO DELETE MESSAGE LATER ---
-async def delete_message_later(bot, chat_id, message_id, delay):
-    await asyncio.sleep(delay)
+# 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
+_worker_started = False
+
+async def background_delete_worker(bot):
+    """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
     try:
-        await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        await delete_collection.create_index("delete_at")
     except Exception:
         pass
+        
+    while True:
+        try:
+            now = time.time()
+            cursor = delete_collection.find({'delete_at': {'$lte': now}})
+            async for doc in cursor:
+                try:
+                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                except Exception:
+                    pass 
+                finally:
+                    await delete_collection.delete_one({'_id': doc['_id']})
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+# --- HELPER: AUTO DELETE MESSAGE LATER ---
+async def delete_message_later(bot, chat_id, message_id, delay):
+    if not bot or not chat_id or not message_id: return
+        
+    global _worker_started
+    if not _worker_started:
+        _worker_started = True
+        asyncio.create_task(background_delete_worker(bot))
+
+    delete_at = time.time() + delay
+
+    # MongoDB me save karega taki bot crash/restart hone par mission na bhule
+    await delete_collection.insert_one({
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'delete_at': delete_at
+    })
+
+    # Memory worker taaki smoothly delete ho jaye agar bot chalu rahe to
+    async def memory_delete():
+        await asyncio.sleep(delay)
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
+        except Exception:
+            pass
+
+    asyncio.create_task(memory_delete())
 
 # --- HELPER: SEND LOGS TO LOG GROUP ---
 async def send_market_log(context: CallbackContext, action: str, details: str):
