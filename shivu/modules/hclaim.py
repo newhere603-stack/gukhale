@@ -335,7 +335,7 @@ PREMIUM_P2 = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
 
 SYMBOL_P1 = '🟢'
 SYMBOL_P2 = '🔴'
-EMPTY = '⠀'  # Braille Pattern Blank for perfectly tiny square buttons
+EMPTY = '\u200b'  # 🔥 ZERO-WIDTH SPACE: Button height/width badhega nahi, ekdum perfect chhota box banega!
 
 def get_tic_board(game):
     if game['status'] == 'waiting':
@@ -351,11 +351,11 @@ def get_tic_board(game):
             cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
             
             if val == SYMBOL_P1:
-                row.append(InlineKeyboardButton("⠀", callback_data=cb_data, icon_custom_emoji_id="6093865707424980866"))
+                row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data, icon_custom_emoji_id="6093865707424980866"))
             elif val == SYMBOL_P2:
-                row.append(InlineKeyboardButton("⠀", callback_data=cb_data, icon_custom_emoji_id="6093741664474504699"))
+                row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data, icon_custom_emoji_id="6093741664474504699"))
             else:
-                row.append(InlineKeyboardButton("⠀", callback_data=cb_data))
+                row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data))
         keyboard.append(row)
     return InlineKeyboardMarkup(keyboard)
 
@@ -585,11 +585,11 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             
             if show_all or revealed[idx]:
                 if board[idx] == 'mine':
-                    row.append(InlineKeyboardButton("⠀", callback_data=cb_data, icon_custom_emoji_id="5469654973308476699"))
+                    row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5469654973308476699"))
                 else:
-                    row.append(InlineKeyboardButton("⠀", callback_data=cb_data, icon_custom_emoji_id="5472030678633684592"))
+                    row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5472030678633684592"))
             else:
-                row.append(InlineKeyboardButton("⠀", callback_data=cb_data))
+                row.append(InlineKeyboardButton("\u200b", callback_data=cb_data))
         keyboard.append(row)
     
     if game['status'] == 'playing' and game['found'] > 0:
