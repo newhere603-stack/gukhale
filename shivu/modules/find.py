@@ -3,6 +3,7 @@ import random
 import traceback
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo, InputMediaAnimation
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
@@ -14,6 +15,7 @@ from shivu.Database.db import eco_collection
 
 # 🔥 Sahi anime database collection
 collection = db['anime_characters_lol'] 
+delete_collection = db['auto_delete_queue'] # 🔥 Yaddasht ke liye nayi collection
 
 try:
     auction_collection = db['auctions']
@@ -113,11 +115,62 @@ def get_media_info(char_doc):
     if not img_url:
         return None, InputMediaPhoto, 'url'
         
-    # Agar ye file_id (string) video ka hai to is_video database check se detect hoga
     if is_video or str(img_url).lower().endswith(('.mp4', '.gif')):
         return img_url, InputMediaVideo, 'video'
     else:
         return img_url, InputMediaPhoto, 'photo'
+
+# 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
+_worker_started = False
+
+async def background_delete_worker(bot):
+    try:
+        await delete_collection.create_index("delete_at")
+    except Exception:
+        pass
+        
+    while True:
+        try:
+            now = time.time()
+            cursor = delete_collection.find({'delete_at': {'$lte': now}})
+            async for doc in cursor:
+                try:
+                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                except Exception:
+                    pass 
+                finally:
+                    await delete_collection.delete_one({'_id': doc['_id']})
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+async def schedule_auto_delete(message, delay_seconds: int = 1200):
+    if not message: return
+        
+    global _worker_started
+    if not _worker_started:
+        _worker_started = True
+        asyncio.create_task(background_delete_worker(message.get_bot()))
+
+    chat_id = message.chat.id
+    message_id = message.message_id
+    delete_at = time.time() + delay_seconds
+
+    await delete_collection.insert_one({
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'delete_at': delete_at
+    })
+
+    async def memory_delete():
+        await asyncio.sleep(delay_seconds)
+        try:
+            await message.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
+            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
+        except Exception:
+            pass
+
+    asyncio.create_task(memory_delete())
 
 
 # --- Set Price & Toggle Command (Owner Only) ---
@@ -212,7 +265,6 @@ async def load_user_deals(user_id):
         search_ids.append(cid)
         if cid.isdigit(): search_ids.append(int(cid))
         
-    # Full object merging to prevent Marketplace Crashes
     db_chars = await collection.find({'id': {'$in': search_ids}}).to_list(length=None)
     db_char_map = {str(c['id']): c for c in db_chars}
 
@@ -250,7 +302,6 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     char = chars[index]
     user_id = user['id'] 
     
-    # Live Live Sync (1ms fetch to get latest name/image if admin updated it)
     search_ids = [str(char.get('id'))]
     if str(char.get('id')).isdigit():
         search_ids.append(int(char.get('id')))
@@ -262,7 +313,6 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
     r_emoji, r_name = get_rarity_emoji_and_name(char.get('rarity', 'Unknown'))
     status_text = f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('SOLD')}" if char.get('is_sold') else f"<tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> {bold_sc('AVAILABLE')}"
 
-    # Safe variable getters
     orig_price = char.get('mp_orig', 50000)
     sale_price = char.get('mp_sale', 50000)
     disc_perc = char.get('mp_disc', 10)
@@ -307,7 +357,6 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
                         if "message is not modified" in str(e).lower():
                             msg = update_obj.message
                         else:
-                            # Fallback if photo->video switch fails
                             try:
                                 msg = await update_obj.edit_message_media(
                                     media=InputMediaPhoto(media=media_source, caption=caption, parse_mode='HTML'), 
@@ -340,13 +389,7 @@ async def render_mp_message(update_obj, user, index, is_edit=False):
             
     # Auto-Delete Logic for new MP message
     if not is_edit and msg:
-        async def auto_delete():
-            await asyncio.sleep(1200) # 20 mins
-            try:
-                await msg.delete()
-            except Exception:
-                pass
-        asyncio.create_task(auto_delete())
+        await schedule_auto_delete(msg, 1200)
             
     if msg and img_url:
         update_data = {}
@@ -461,13 +504,7 @@ async def render_auction_ui(update_obj, active_auc, user_id, add_amount=1000, is
             msg = await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode='HTML')
 
     if not is_edit and msg:
-        async def auto_delete():
-            await asyncio.sleep(1200) # 20 mins
-            try:
-                await msg.delete()
-            except Exception:
-                pass
-        asyncio.create_task(auto_delete())
+        await schedule_auto_delete(msg, 1200)
         
     if msg and img_url:
         update_data = {}
