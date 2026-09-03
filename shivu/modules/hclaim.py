@@ -6,7 +6,7 @@ import re
 import time
 import html
 from datetime import datetime, timedelta, timezone
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo, InputMediaAnimation
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.constants import ParseMode
 from telegram.error import RetryAfter, BadRequest
@@ -66,24 +66,14 @@ def get_rarity_key(rarity_str):
             return key
     return None
 
-# 🔥 Original "Invisible" Small Caps Dictionary Mapping restored!
+# 🔥 Aapka Original "Invisible" Small Caps Function
 def to_small_caps(text: str) -> str:
     if not text:
         return "ᴜɴᴋɴᴏᴡɴ"
-    mapping = {
-        'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
-        'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
-        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
-        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 
-        'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
-        'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
-        'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 
-        'Q': 'ǫ', 'R': 'ʀ', 'S': 'ꜱ', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 
-        'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ', '0': '0', '1': '1',
-        '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7',
-        '8': '8', '9': '9'
-    }
-    return "".join(mapping.get(c, c) for c in str(text))
+    normal = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    small = "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
+    tr = str.maketrans(normal, small)
+    return str(text).translate(tr)
 
 sc = to_small_caps
 
@@ -109,7 +99,7 @@ async def send_log(context: CallbackContext, text: str):
         logger.error(f"Log error: {e}")
 
 # ==========================================
-# 🧠 PERMANENT AUTO DELETE SYSTEM (YADDASHT)
+# 🧠 PERMANENT AUTO DELETE SYSTEM (YADDASHT) - SIRF SWAIFU KE LIYE
 # ==========================================
 _worker_started = False
 
@@ -134,7 +124,7 @@ async def background_delete_worker(bot):
             pass
         await asyncio.sleep(30)
 
-async def schedule_auto_delete(message, delay_seconds: int = 1200):
+async def silent_auto_delete(message, delay_seconds: int = 1200):
     if not message: return
         
     global _worker_started
@@ -163,6 +153,7 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
             pass
 
     asyncio.create_task(memory_delete())
+
 
 def can_claim_today(last_claim_utc) -> bool:
     if not last_claim_utc:
@@ -201,7 +192,7 @@ async def swaifu(update: Update, context: CallbackContext):
     
     try:
         raw_first_name = update.effective_user.first_name or "User"
-        # NORMAL FONT for username
+        # 🟢 Normal font for Username! No small caps
         safe_first_name = html.escape(raw_first_name)
         now_utc = datetime.now(timezone.utc)
         user_data = await user_collection.find_one({'id': user_id})
@@ -263,13 +254,13 @@ async def swaifu(update: Update, context: CallbackContext):
             else:
                 sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
             
-            # 🔥 PERMANENT AUTO-DELETE APPLIED (20 mins)
-            await schedule_auto_delete(sent_msg, 1200)
+            # 🔥 SWAIFU PERMANENT AUTO-DELETE (20 Mins)
+            asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
 
         except Exception as img_err:
             logger.warning(f"Image send failed: {img_err}")
             sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
-            await schedule_auto_delete(sent_msg, 1200)
+            asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
 
         log_data = {
             sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
@@ -327,7 +318,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         log_data = {
             sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
             sc("ɪᴅ"): f"<code>{user_id}</code>",
-            sc("ʀᴇᴡᴀʀᴅ"): f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {coins_won:,} {sc('ᴄᴏɪɴs')}</b>"
+            sc("ʀᴇᴡᴀʀᴅ"): f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {coins_won:,} ᴄᴏɪɴs</b>"
         }
         asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴅᴀɪʟʏ ᴄʟᴀɪᴍ sᴜᴄᴄᴇssғᴜʟ')} ˼ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>", log_data)))
 
@@ -339,7 +330,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 
 
 # ==========================================
-# TIC-TAC-TOE GAME HANDLERS
+# 🎮 TIC-TAC-TOE GAME HANDLERS
 # ==========================================
 
 PREMIUM_GAME = '<tg-emoji emoji-id="6311820827952162567">🎮</tg-emoji>'
@@ -350,7 +341,7 @@ PREMIUM_WIN  = '<tg-emoji emoji-id="6053140037250323814">🏆</tg-emoji>'
 PREMIUM_DRAW = '<tg-emoji emoji-id="6053383162464050605">🤝</tg-emoji>'
 PREMIUM_CRY  = '<tg-emoji emoji-id="5922641759518593935">😭</tg-emoji>'
 
-# 🔥 TIK-TAC-TOE EMOJI SETUP
+# 🔥 TIK-TAC-TOE EMOJI SETUP (X replaced by Premium Red & Green)
 PREMIUM_P1 = '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>' 
 PREMIUM_P2 = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
 
@@ -369,7 +360,7 @@ def get_tic_board(game):
         row = []
         for j in range(3):
             val = board[i+j]
-            text = val if val != " " else "⬜"
+            text = val if val != EMPTY else EMPTY
             cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
             row.append(InlineKeyboardButton(text, callback_data=cb_data))
         keyboard.append(row)
@@ -378,33 +369,31 @@ def get_tic_board(game):
 def check_win(board):
     win_combos = [(0,1,2), (3,4,5), (6,7,8), (0,3,6), (1,4,7), (2,5,8), (0,4,8), (2,4,6)]
     for a, b, c in win_combos:
-        if board[a] == board[b] == board[c] and board[a] != " ":
+        if board[a] == board[b] == board[c] and board[a] != EMPTY:
             return board[a]
-    if " " not in board: return "Draw"
+    if EMPTY not in board: return "Draw"
     return None
 
 async def start_tic(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    # NORMAL FONT for username
+    # 🟢 Normal Font For Username
     safe_name = html.escape(update.effective_user.first_name or "User")
 
     game = {
         'player_1_id': user_id,
         'player_1_name': safe_name,
         'player_1_sym': SYMBOL_P1,
-        'player_1_tg_sym': PREMIUM_P1,
         'player_2_id': None,
         'player_2_name': None,
         'player_2_sym': SYMBOL_P2,
-        'player_2_tg_sym': PREMIUM_P2,
-        'board': [" "] * 9,
+        'board': [EMPTY] * 9,
         'turn': user_id,
         'status': 'waiting'
     }
 
     text = (
-        f"{PREMIUM_GAME} <b>{sc('Tic-Tac-Toe Game Started!')}</b>\n\n"
-        f"{PREMIUM_USER} <b>{sc('Player')} 1 ({PREMIUM_P1}): {game['player_1_name']}</b>\n\n"
+        f"{PREMIUM_GAME} <b>{sc('Tic-Tac-Toe')}</b>\n\n"
+        f"{PREMIUM_USER} <b>{PREMIUM_P1} : {game['player_1_name']}</b>\n\n"
         f"{PREMIUM_WAIT} <i><b>{sc('Waiting for Player 2 to join...')}</b></i>"
     )
 
@@ -412,8 +401,6 @@ async def start_tic(update: Update, context: CallbackContext):
     key = f"{update.effective_chat.id}_{msg.message_id}"
     game['key'] = key
     await tic_collection.insert_one(game)
-    
-    await schedule_auto_delete(msg, 600) # Game times out in 10 mins
 
 async def tic_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -435,26 +422,24 @@ async def tic_callback(update: Update, context: CallbackContext):
         
         await query.answer(sc("New game started below!")) 
         play_again_cooldowns[user_id] = now
-        # NORMAL FONT for username
+        # 🟢 Normal Font For Username
         safe_name = html.escape(query.from_user.first_name or "User")
 
         game = {
             'player_1_id': user_id,
             'player_1_name': safe_name,
             'player_1_sym': SYMBOL_P1,
-            'player_1_tg_sym': PREMIUM_P1,
             'player_2_id': None,
             'player_2_name': None,
             'player_2_sym': SYMBOL_P2,
-            'player_2_tg_sym': PREMIUM_P2,
-            'board': [" "] * 9,
+            'board': [EMPTY] * 9,
             'turn': user_id,
             'status': 'waiting'
         }
 
         text = (
-            f"{PREMIUM_GAME} <b>{sc('Tic-Tac-Toe Game Started!')}</b>\n\n"
-            f"{PREMIUM_USER} <b>{sc('Player')} 1 ({PREMIUM_P1}): {game['player_1_name']}</b>\n\n"
+            f"{PREMIUM_GAME} <b>{sc('Tic-Tac-Toe')}</b>\n\n"
+            f"{PREMIUM_USER} <b>{PREMIUM_P1} : {game['player_1_name']}</b>\n\n"
             f"{PREMIUM_WAIT} <i><b>{sc('Waiting for Player 2 to join...')}</b></i>"
         )
 
@@ -466,8 +451,6 @@ async def tic_callback(update: Update, context: CallbackContext):
         )
         game['key'] = f"{msg.chat_id}_{msg.message_id}"
         await tic_collection.insert_one(game)
-        
-        await schedule_auto_delete(msg, 600)
         return
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
@@ -491,7 +474,7 @@ async def tic_callback(update: Update, context: CallbackContext):
 
             await query.answer(sc("✅ You have joined the game!")) 
             game['player_2_id'] = user_id
-            # NORMAL FONT for username
+            # 🟢 Normal Font For Username
             game['player_2_name'] = html.escape(query.from_user.first_name or "User")
             game['status'] = 'playing'
 
@@ -524,7 +507,7 @@ async def tic_callback(update: Update, context: CallbackContext):
                 return
 
             index = int(data.split("_")[2])
-            if game['board'][index] != " ":
+            if game['board'][index] != EMPTY:
                 await query.answer(sc("This box is already filled!"), show_alert=True)
                 return
 
@@ -593,23 +576,8 @@ async def tic_callback(update: Update, context: CallbackContext):
 
 
 # ==========================================
-# MINES GAME HANDLERS
+# 💣 MINES GAME HANDLERS
 # ==========================================
-
-async def safe_edit_mines_board(query, text, keyboard):
-    try:
-        await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
-    except RetryAfter as e:
-        logger.warning(f"FloodWait in mines: sleeping {e.retry_after}s to update board safely.")
-        await asyncio.sleep(e.retry_after)
-        try:
-            await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
-        except Exception:
-            pass
-    except BadRequest:
-        pass
-    except Exception:
-        pass
 
 def get_mines_multiplier(found_cash: int, mines: int, total: int = 25) -> float:
     if found_cash == 0 or found_cash > (total - mines): return 1.00
@@ -630,7 +598,8 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             if show_all or revealed[idx]:
                 text = "💣" if board[idx] == 'mine' else "💸"
             else:
-                text = "ㅤㅤ" 
+                # 🔥 EXACT FIX FOR MISSING BUTTON PROBLEM (White Box)
+                text = "⬜" 
             
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
             row.append(InlineKeyboardButton(text, callback_data=cb_data))
@@ -648,8 +617,8 @@ async def start_mines(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if not context.args or not context.args[0].isdigit():
-        # NORMAL FONT for commands
-        msg = f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {sc('Usage:')} /mines [bet] [mines(optional)]\n<i>{sc('Example:')} /mines 20 3</i></b>"
+        # 🟢 NORMAL FONT FOR COMMANDS
+        msg = f"<b>⚠️ Usage: /mines [bet] [mines(optional)]\n<i>Example: /mines 20 3</i></b>"
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
         
@@ -678,7 +647,7 @@ async def start_mines(update: Update, context: CallbackContext):
 
     game = {
         'user_id': user_id,
-        # NORMAL FONT for username
+        # 🟢 NORMAL FONT FOR USERNAME
         'user_name': html.escape(update.effective_user.first_name or "User"),
         'bet': bet,
         'board': board,
@@ -702,10 +671,6 @@ async def start_mines(update: Update, context: CallbackContext):
         msg = await update.message.reply_photo(
             photo=photo_url, caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML
         )
-        
-        # 🔥 Yaddasht Schedule for Mines Game (10 mins)
-        await schedule_auto_delete(msg, 600)
-        
     except Exception as e:
         logger.error(f"Failed to send photo: {e}")
         await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': bet}})
@@ -716,7 +681,7 @@ async def start_mines(update: Update, context: CallbackContext):
     game['key'] = key
     await mines_collection.insert_one(game)
 
-    chat_title = update.effective_chat.title if update.effective_chat.title else "ᴘʀɪᴠᴀᴛᴇ ᴄʜᴀᴛ"
+    chat_title = update.effective_chat.title if update.effective_chat.title else "Private Chat"
     
     board_grid = ""
     for i in range(0, 25, 5):
@@ -765,7 +730,7 @@ async def mines_callback(update: Update, context: CallbackContext):
             return
 
         if data == "mines_cashout":
-            # ⚡ FAST RESPONSE (Normal font for popup)
+            # ⚡ FAST RESPONSE & NORMAL FONT
             await query.answer("Cashed out! 💸", show_alert=False) 
             
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -780,8 +745,10 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<b>{sc('Final Board')}:</b>"
             )
             
-            # 🔥 USING SAFE EDIT
-            await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
+            # 🔥 FAST UI UPDATE
+            try:
+                await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+            except Exception: pass
             
             asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
             asyncio.create_task(mines_collection.delete_one({'key': key}))
@@ -795,13 +762,13 @@ async def mines_callback(update: Update, context: CallbackContext):
                 return
 
             if game['board'][idx] == 'mine':
-                # ⚡ FAST RESPONSE: NORMAL FONT FOR BOOM POPUP
+                # ⚡ FAST RESPONSE & NORMAL FONT BOOM
                 await query.answer("BOOM! You lost the bet. 💥", show_alert=True) 
                 
                 game['status'] = 'busted'
                 game['revealed'][idx] = True
                 
-                # NORMAL FONT FOR "BOOM!" text
+                # NORMAL FONT BOOM
                 text = (
                     f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> BOOM! {sc('You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
@@ -809,15 +776,17 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<b>{sc('Final Board')}:</b>"
                 )
                 
-                # 🔥 USING SAFE EDIT
-                await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
+                # 🔥 FAST UI UPDATE
+                try:
+                    await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                except Exception: pass
                 
                 asyncio.create_task(mines_collection.delete_one({'key': key}))
                 mines_locks.pop(key, None) 
                 return
                 
             else:
-                # ⚡ FAST RESPONSE: Normal font for Safe popup
+                # ⚡ FAST RESPONSE & NORMAL FONT SAFE
                 await query.answer("Safe! 💸", show_alert=False) 
                 
                 game['revealed'][idx] = True
@@ -836,8 +805,10 @@ async def mines_callback(update: Update, context: CallbackContext):
                         f"<b>{sc('Final Board')}:</b>"
                     )
                     
-                    # 🔥 USING SAFE EDIT
-                    await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
+                    # 🔥 FAST UI UPDATE
+                    try:
+                        await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                    except Exception: pass
                         
                     asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
                     asyncio.create_task(mines_collection.delete_one({'key': key}))
@@ -853,8 +824,10 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
                 )
                 
-                # 🔥 USING SAFE EDIT
-                await safe_edit_mines_board(query, text, get_mines_keyboard(game))
+                # 🔥 FAST UI UPDATE
+                try:
+                    await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
+                except Exception: pass
                 
                 game_data = game.copy()
                 game_data.pop('_id', None)
@@ -862,7 +835,7 @@ async def mines_callback(update: Update, context: CallbackContext):
 
 
 # ==========================================
-# ADMIN RARITY TOGGLE HANDLERS
+# 👑 ADMIN RARITY TOGGLE HANDLERS
 # ==========================================
 
 async def drarity_on(update: Update, context: CallbackContext):
@@ -870,8 +843,8 @@ async def drarity_on(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        # NORMAL FONT for commands
-        await update.message.reply_text(f"<b>⚠️ {sc('Usage:')} /drarity_on [rarity_name]\n<i>{sc('Example:')} /drarity_on common</i></b>", parse_mode=ParseMode.HTML)
+        # 🟢 NORMAL FONT FOR COMMANDS
+        await update.message.reply_text("<b>⚠️ Usage: /drarity_on [rarity_name]\n<i>Example: /drarity_on common</i></b>", parse_mode=ParseMode.HTML)
         return
         
     target_rarity = " ".join(context.args).lower()
@@ -889,8 +862,8 @@ async def drarity_off(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        # NORMAL FONT for commands
-        await update.message.reply_text(f"<b>⚠️ {sc('Usage:')} /drarity_off [rarity_name]\n<i>{sc('Example:')} /drarity_off common</i></b>", parse_mode=ParseMode.HTML)
+        # 🟢 NORMAL FONT FOR COMMANDS
+        await update.message.reply_text("<b>⚠️ Usage: /drarity_off [rarity_name]\n<i>Example: /drarity_off common</i></b>", parse_mode=ParseMode.HTML)
         return
         
     target_rarity = " ".join(context.args).lower()
@@ -905,7 +878,7 @@ async def drarity_off(update: Update, context: CallbackContext):
 
 
 # ==========================================
-# Acts Handler Registration
+# 🛑 HANDLER REGISTRATIONS
 # ==========================================
 application.add_handler(CommandHandler("swaifu", swaifu, block=False))
 application.add_handler(CommandHandler("claim", daily_claim_coins, block=False))
