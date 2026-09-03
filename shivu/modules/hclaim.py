@@ -579,7 +579,6 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             if show_all or revealed[idx]:
                 text = "💣" if board[idx] == 'mine' else "💸"
             else:
-                # 🔥 Invisible character used instead of white box
                 text = "ㅤㅤ" 
             
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
@@ -699,7 +698,7 @@ async def mines_callback(update: Update, context: CallbackContext):
         mines_locks[key] = asyncio.Lock()
         
     async with mines_locks[key]:
-        # 🔥 FETCH FRESH DATA FROM DB TO AVOID RACE CONDITIONS ON FAST CLICKS
+        # 🔥 FETCH LATEST GAME STATE FROM DB
         game = await mines_collection.find_one({'key': key})
         
         if not game:
@@ -740,7 +739,7 @@ async def mines_callback(update: Update, context: CallbackContext):
         if data.startswith("mines_click_"):
             idx = int(data.split("_")[2])
             
-            # 🔥 PREVENT DOUBLE CLICK GLITCH ON ALREADY REVEALED TILES
+            # 🔥 PREVENT DOUBLE CLICK GLITCH
             if game['revealed'][idx]:
                 await query.answer(sc("Already clicked!"), show_alert=False)
                 return
@@ -752,7 +751,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                 game['revealed'][idx] = True
                 
                 text = (
-                    f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> BOOM! {sc('You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
+                    f"<tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> <b>{sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found before boom')}:</b> {game['found']}\n\n"
                     f"<b>{sc('Final Board')}:</b>"
@@ -769,10 +768,19 @@ async def mines_callback(update: Update, context: CallbackContext):
             else:
                 await query.answer("Safe! 💸", show_alert=False) 
                 
-                game['revealed'][idx] = True
+                # 🔥 FIX: UPDATE REVEALED LIST IN-PLACE AND PUSH DIRECTLY TO DB TO PERSIST STATE
+                revealed_list = game['revealed']
+                revealed_list[idx] = True
+                
                 game['found'] += 1
                 mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
                 win_amount = int(game['bet'] * mult)
+                
+                # 🔥 ATOMIC UPDATE TO MONGODB SO NO STATE IS LOST ON RAPID CLICKS
+                await mines_collection.update_one(
+                    {'key': key}, 
+                    {'$set': {'revealed': revealed_list, 'found': game['found']}}
+                )
                 
                 if game['found'] == (25 - game['mines_count']):
                     game['status'] = 'cashed_out'
@@ -806,10 +814,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                 try:
                     await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
                 except Exception: pass
-                
-                game_data = game.copy()
-                game_data.pop('_id', None)
-                asyncio.create_task(mines_collection.update_one({'key': key}, {'$set': game_data}))
 
 
 # ==========================================
