@@ -7,7 +7,7 @@ from shivu import LOGGER, application, user_collection, db
 
 # Global collections
 collection = db['anime_characters_lol']
-delete_collection = db['auto_delete_queue'] # Nayi collection auto-delete ki yaddasht ke liye
+delete_collection = db['auto_delete_queue']
 
 def to_small_caps(text: str) -> str:
     if not text: return ""
@@ -25,7 +25,6 @@ async def update_user_fav(user_id: int, character: dict):
 _worker_started = False
 
 async def background_delete_worker(bot):
-    """Background worker jo restart hone par bhi messages ko delete karega"""
     try:
         await delete_collection.create_index("delete_at")
     except Exception:
@@ -44,10 +43,9 @@ async def background_delete_worker(bot):
                     await delete_collection.delete_one({'_id': doc['_id']})
         except Exception:
             pass
-        await asyncio.sleep(30) # Har 30 second me scan karega
+        await asyncio.sleep(30)
 
 async def schedule_auto_delete(message, delay_seconds: int = 1200):
-    """Message ko delete queue aur memory dono me dalne ka function"""
     if not message: return
         
     global _worker_started
@@ -59,14 +57,12 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
     message_id = message.message_id
     delete_at = time.time() + delay_seconds
 
-    # Database me save karega taaki bot bhule nahi
     await delete_collection.insert_one({
         'chat_id': chat_id,
         'message_id': message_id,
         'delete_at': delete_at
     })
 
-    # Memory me fast execution ke liye (agar bot restart na hua ho to)
     async def memory_delete():
         await asyncio.sleep(delay_seconds)
         try:
@@ -109,7 +105,6 @@ async def fav(update: Update, context: CallbackContext) -> None:
             await schedule_auto_delete(msg)
             return
 
-        # Original image ke liye DB fetch
         q_ids = [character_id, req_id_clean]
         if req_id_clean.isdigit():
             val = int(req_id_clean)
@@ -122,7 +117,7 @@ async def fav(update: Update, context: CallbackContext) -> None:
             character['name'] = global_char.get('name', character.get('name'))
             character['anime'] = global_char.get('anime', character.get('anime'))
 
-        # Premium Custom Emoji ke sath buttons
+        # Premium Custom Emoji ID ke sath buttons
         buttons = [
             [
                 InlineKeyboardButton(
@@ -152,7 +147,6 @@ async def fav(update: Update, context: CallbackContext) -> None:
         else:
             sent_message = await update.message.reply_photo(photo=media_url, caption=caption, reply_markup=InlineKeyboardMarkup(buttons), parse_mode="HTML")
 
-        # Command complete hone ke baad delete queue me bhej diya
         await schedule_auto_delete(sent_message)
 
     except Exception as e:
@@ -208,7 +202,6 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
             await update_user_fav(req_user_id, character)
             await query.answer(to_small_caps("DONE! MADE IT YOUR FAVOURITE"), show_alert=True)
             
-            # Message delete hone pe database se bhi pending auto-delete hata dega
             if query.message: 
                 try:
                     await query.message.delete()
@@ -222,7 +215,6 @@ async def handle_fav_callback(update: Update, context: CallbackContext) -> None:
                 return await query.answer(to_small_caps("THIS IS NOT YOUR REQUEST!"), show_alert=True)
             await query.answer(to_small_caps("CANCELLED!"), show_alert=True)
             
-            # Same yahan bhi, cancel karne par directly delete and DB se clear hoga
             if query.message:
                 try:
                     await query.message.delete()
