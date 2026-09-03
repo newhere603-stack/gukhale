@@ -67,7 +67,6 @@ def get_rarity_key(rarity_str):
             return key
     return None
 
-# 🔥 Aapka Original "Invisible" Small Caps Function
 def to_small_caps(text: str) -> str:
     if not text:
         return "ᴜɴᴋɴᴏᴡɴ"
@@ -99,9 +98,6 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         logger.error(f"Log error: {e}")
 
-# ==========================================
-# 🧠 PERMANENT AUTO DELETE SYSTEM (YADDASHT) - SIRF SWAIFU KE LIYE
-# ==========================================
 _worker_started = False
 
 async def background_delete_worker(bot):
@@ -137,14 +133,12 @@ async def silent_auto_delete(message, delay_seconds: int = 1200):
     message_id = message.message_id
     delete_at = time.time() + delay_seconds
 
-    # MongoDB me save hoga (Yaddasht)
     await delete_collection.insert_one({
         'chat_id': chat_id,
         'message_id': message_id,
         'delete_at': delete_at
     })
 
-    # Turant delete ke liye memory task
     async def memory_delete():
         await asyncio.sleep(delay_seconds)
         try:
@@ -181,10 +175,6 @@ async def get_allowed_rarities():
         return config['allowed']
     return ["celestial", "exclusive", "legendary", "sweet", "special edition", "rare", "common"]
 
-# ==========================================
-# SWAIFU & CLAIM HANDLERS
-# ==========================================
-
 async def swaifu(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     if user_id in active_claims:
@@ -193,7 +183,6 @@ async def swaifu(update: Update, context: CallbackContext):
     
     try:
         raw_first_name = update.effective_user.first_name or "User"
-        # 🟢 Normal font for Username! No small caps
         safe_first_name = html.escape(raw_first_name)
         now_utc = datetime.now(timezone.utc)
         user_data = await user_collection.find_one({'id': user_id})
@@ -255,7 +244,6 @@ async def swaifu(update: Update, context: CallbackContext):
             else:
                 sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
             
-            # 🔥 SWAIFU PERMANENT AUTO-DELETE (20 Mins)
             asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
 
         except Exception as img_err:
@@ -342,13 +330,12 @@ PREMIUM_WIN  = '<tg-emoji emoji-id="6053140037250323814">🏆</tg-emoji>'
 PREMIUM_DRAW = '<tg-emoji emoji-id="6053383162464050605">🤝</tg-emoji>'
 PREMIUM_CRY  = '<tg-emoji emoji-id="5922641759518593935">😭</tg-emoji>'
 
-# 🔥 TIK-TAC-TOE EMOJI SETUP (X replaced by Premium Red & Green)
 PREMIUM_P1 = '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>' 
 PREMIUM_P2 = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
 
 SYMBOL_P1 = '🟢'
 SYMBOL_P2 = '🔴'
-EMPTY = '⬜'
+EMPTY = 'ㅤㅤ'
 
 def get_tic_board(game):
     if game['status'] == 'waiting':
@@ -363,7 +350,6 @@ def get_tic_board(game):
             val = board[i+j]
             text = val if val != EMPTY else EMPTY
             cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
-            # Text contains normal standard emojis which perfectly render on inline buttons
             row.append(InlineKeyboardButton(text, callback_data=cb_data))
         keyboard.append(row)
     return InlineKeyboardMarkup(keyboard)
@@ -378,7 +364,6 @@ def check_win(board):
 
 async def start_tic(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    # 🟢 Normal Font For Username
     safe_name = html.escape(update.effective_user.first_name or "User")
 
     game = {
@@ -419,13 +404,11 @@ async def tic_callback(update: Update, context: CallbackContext):
             time_passed = (now - play_again_cooldowns[user_id]).total_seconds()
             if time_passed < 10:
                 remaining = int(10 - time_passed)
-                # Used Standard String & Emoji in Alert
                 await query.answer(sc(f"Please wait {remaining} seconds before playing again!"), show_alert=True)
                 return
         
         await query.answer(sc("New game started below!")) 
         play_again_cooldowns[user_id] = now
-        # 🟢 Normal Font For Username
         safe_name = html.escape(query.from_user.first_name or "User")
 
         game = {
@@ -477,7 +460,6 @@ async def tic_callback(update: Update, context: CallbackContext):
 
             await query.answer(sc("✅ You have joined the game!")) 
             game['player_2_id'] = user_id
-            # 🟢 Normal Font For Username
             game['player_2_name'] = html.escape(query.from_user.first_name or "User")
             game['status'] = 'playing'
 
@@ -488,7 +470,6 @@ async def tic_callback(update: Update, context: CallbackContext):
                 f"{PREMIUM_TURN} <b>{sc('Turn')}: {game['player_1_name']} ({PREMIUM_P1})</b>"
             )
             
-            # 🔥 FAST UI UPDATE
             try:
                 await query.edit_message_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
             except Exception: pass
@@ -514,7 +495,6 @@ async def tic_callback(update: Update, context: CallbackContext):
                 await query.answer(sc("This box is already filled!"), show_alert=True)
                 return
 
-            # ⚡ FAST RESPONSE
             await query.answer() 
             
             symbol = game['player_1_sym'] if user_id == game['player_1_id'] else game['player_2_sym']
@@ -547,7 +527,6 @@ async def tic_callback(update: Update, context: CallbackContext):
 
                 replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{sc('Play Again')} ⟳", callback_data="tic_play_again")]])
                 
-                # 🔥 FAST UI UPDATE
                 try:
                     await query.edit_message_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
                 except Exception: pass
@@ -568,7 +547,6 @@ async def tic_callback(update: Update, context: CallbackContext):
                 f"{PREMIUM_TURN} <b>{sc('Turn')}: {next_turn_name} ({next_symbol})</b>"
             )
             
-            # 🔥 FAST UI UPDATE
             try:
                 await query.edit_message_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
             except Exception: pass
@@ -601,7 +579,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             if show_all or revealed[idx]:
                 text = "💣" if board[idx] == 'mine' else "💸"
             else:
-                # 🔥 EXACT FIX FOR MISSING BUTTON PROBLEM (White Box)
+                # 🔥 Invisible character used instead of white box
                 text = "ㅤㅤ" 
             
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
@@ -612,7 +590,6 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
         mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
         win_amount = int(game['bet'] * mult)
         btn_text = f"{sc('Cash Out')} ({mult}x | 💸 {win_amount})"
-        # Button pe string + standard emoji
         keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout")])
         
     return InlineKeyboardMarkup(keyboard)
@@ -621,7 +598,6 @@ async def start_mines(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     if not context.args or not context.args[0].isdigit():
-        # 🔥 UPDATED COMMAND SUGGESTION STYLE HERE
         msg = (
             f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
             f"<code>/mines &lt;bet&gt; [mines(optional)]</code>\n"
@@ -655,7 +631,6 @@ async def start_mines(update: Update, context: CallbackContext):
 
     game = {
         'user_id': user_id,
-        # 🟢 NORMAL FONT FOR USERNAME
         'user_name': html.escape(update.effective_user.first_name or "User"),
         'bet': bet,
         'board': board,
@@ -724,6 +699,7 @@ async def mines_callback(update: Update, context: CallbackContext):
         mines_locks[key] = asyncio.Lock()
         
     async with mines_locks[key]:
+        # 🔥 FETCH FRESH DATA FROM DB TO AVOID RACE CONDITIONS ON FAST CLICKS
         game = await mines_collection.find_one({'key': key})
         
         if not game:
@@ -738,7 +714,6 @@ async def mines_callback(update: Update, context: CallbackContext):
             return
 
         if data == "mines_cashout":
-            # ⚡ FAST RESPONSE & NORMAL FONT (Query answers can't parse HTML/Premium Emoji anyway)
             await query.answer("Cashed out! 💸", show_alert=False) 
             
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -753,7 +728,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<b>{sc('Final Board')}:</b>"
             )
             
-            # 🔥 FAST UI UPDATE
             try:
                 await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
             except Exception: pass
@@ -765,18 +739,18 @@ async def mines_callback(update: Update, context: CallbackContext):
 
         if data.startswith("mines_click_"):
             idx = int(data.split("_")[2])
+            
+            # 🔥 PREVENT DOUBLE CLICK GLITCH ON ALREADY REVEALED TILES
             if game['revealed'][idx]:
                 await query.answer(sc("Already clicked!"), show_alert=False)
                 return
 
             if game['board'][idx] == 'mine':
-                # ⚡ FAST RESPONSE & NORMAL FONT BOOM
                 await query.answer("BOOM! You lost the bet. 💥", show_alert=True) 
                 
                 game['status'] = 'busted'
                 game['revealed'][idx] = True
                 
-                # NORMAL FONT BOOM
                 text = (
                     f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> BOOM! {sc('You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
@@ -784,7 +758,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<b>{sc('Final Board')}:</b>"
                 )
                 
-                # 🔥 FAST UI UPDATE
                 try:
                     await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
                 except Exception: pass
@@ -794,7 +767,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                 return
                 
             else:
-                # ⚡ FAST RESPONSE & NORMAL FONT SAFE
                 await query.answer("Safe! 💸", show_alert=False) 
                 
                 game['revealed'][idx] = True
@@ -813,7 +785,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                         f"<b>{sc('Final Board')}:</b>"
                     )
                     
-                    # 🔥 FAST UI UPDATE
                     try:
                         await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
                     except Exception: pass
@@ -832,7 +803,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
                 )
                 
-                # 🔥 FAST UI UPDATE
                 try:
                     await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
                 except Exception: pass
@@ -851,7 +821,6 @@ async def drarity_on(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        # 🔥 UPDATED COMMAND SUGGESTION STYLE HERE
         msg = (
             f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
             f"<code>/drarity_on &lt;rarity_name&gt;</code>\n"
@@ -875,7 +844,6 @@ async def drarity_off(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        # 🔥 UPDATED COMMAND SUGGESTION STYLE HERE
         msg = (
             f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
             f"<code>/drarity_off &lt;rarity_name&gt;</code>\n"
