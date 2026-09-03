@@ -122,7 +122,22 @@ async def fav(update: Update, context: CallbackContext) -> None:
             character['name'] = global_char.get('name', character.get('name'))
             character['anime'] = global_char.get('anime', character.get('anime'))
 
-        buttons = [[InlineKeyboardButton("🟢 ʏᴇs", callback_data=f"fvc_{user_id}_{character_id}"), InlineKeyboardButton("🔴 ɴᴏ", callback_data=f"fvx_{user_id}")]]
+        # Premium Custom Emoji ke sath buttons
+        buttons = [
+            [
+                InlineKeyboardButton(
+                    text=to_small_caps("ʏᴇs"), 
+                    callback_data=f"fvc_{user_id}_{character_id}",
+                    icon_custom_emoji_id="6093865707424980866"
+                ), 
+                InlineKeyboardButton(
+                    text=to_small_caps("ɴᴏ"), 
+                    callback_data=f"fvx_{user_id}",
+                    icon_custom_emoji_id="6093741664474504699"
+                )
+            ]
+        ]
+        
         char_name = str(character.get("name", "Unknown"))
         anime_name = str(character.get("anime", "Unknown"))
         
