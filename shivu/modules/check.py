@@ -1,6 +1,7 @@
 import asyncio
 import random
 import math
+import time
 from html import escape
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple
@@ -14,6 +15,8 @@ from telegram.error import TelegramError
 from shivu import application, db, user_collection
 
 collection = db['anime_characters_lol']
+# Nayi collection jisme delete hone wale messages save rahenge (Taki restart par bhule na)
+delete_collection = db['auto_delete_queue']
 
 # --- OWNER OR SUDO CHECK ---
 OWNER_ID = 7657218453
@@ -26,7 +29,7 @@ def is_authorized(user_id):
 # 🔥 Faster Updates: Caches tuned for speed
 char_cache = TTLCache(maxsize=2000, ttl=60)
 anime_cache = TTLCache(maxsize=1000, ttl=60)
-user_cache = TTLCache(maxsize=2000, ttl=60) # Increased maxsize slightly for caching owners
+user_cache = TTLCache(maxsize=2000, ttl=60)
 
 USERS_PER_PAGE = 10
 
@@ -77,12 +80,10 @@ def get_base_rarity(rarity_str: str) -> str:
         return "common"
     r_lower = rarity_str.lower().strip()
     
-    # 1. Exact Match Check
     for key, (_, _, name) in RARITIES.items():
         if key == r_lower or name.lower() == r_lower:
             return key
 
-    # 2. Substring Match Check
     for key, (db_emoji, _, name) in RARITIES.items():
         if key in r_lower or name.lower() in r_lower or db_emoji in r_lower:
             return key
@@ -129,13 +130,65 @@ def rarity_parts(rarity) -> Tuple[str, str]:
     _, tg_emoji, name = RARITIES[base_key]
     return tg_emoji, name
 
-async def silent_auto_delete(message, delay_seconds: int = 1200):
-    """Silently deletes a message after a specified number of seconds."""
-    await asyncio.sleep(delay_seconds)
+# 🔥 NEVER FORGET DATABASE WORKER FOR DELETING MESSAGES
+_worker_started = False
+
+async def background_delete_worker(bot):
+    """Ye worker background me chalega aur database me check karega konsa message delete karna hai"""
     try:
-        await message.delete()
+        await delete_collection.create_index("delete_at") # Index banaya fast searching ke liye
     except Exception:
-        pass # Silently ignore if already deleted or bot lacks permission
+        pass
+        
+    while True:
+        try:
+            now = time.time()
+            # Jo time cross ho chuka hai, un messages ko fetch karo
+            cursor = delete_collection.find({'delete_at': {'$lte': now}})
+            async for doc in cursor:
+                try:
+                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                except Exception:
+                    pass # Silently ignore agar message pehle hi delete ho chuka ho
+                finally:
+                    # Hamesha database se nikal do taaki bar-bar check na kare
+                    await delete_collection.delete_one({'_id': doc['_id']})
+        except Exception as e:
+            pass
+        await asyncio.sleep(30) # Har 30 second me check karega (fast memory optimization)
+
+async def schedule_auto_delete(message, delay_seconds: int = 1200):
+    """Saves message to DB for guaranteed deletion even after restart."""
+    if not message:
+        return
+        
+    global _worker_started
+    if not _worker_started:
+        _worker_started = True
+        # Background loop chalu karo agar nahi chal raha to
+        asyncio.create_task(background_delete_worker(message.get_bot()))
+
+    chat_id = message.chat.id
+    message_id = message.message_id
+    delete_at = time.time() + delay_seconds
+
+    # Database me save karo (Taki restart par bhule na)
+    await delete_collection.insert_one({
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'delete_at': delete_at
+    })
+
+    # Memory mein bhi task bana do taaki bot chal raha ho toh smoothly fast delete ho
+    async def memory_delete():
+        await asyncio.sleep(delay_seconds)
+        try:
+            await message.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
+            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
+        except Exception:
+            pass
+
+    asyncio.create_task(memory_delete())
 
 async def get_char(cid: str) -> Optional[Char]:
     ncid = normalize_id(cid)
@@ -172,7 +225,6 @@ async def global_count(cid: str) -> int:
     user_cache[key] = n
     return n
 
-# 🔥 MEGA FIX: Aggregation Pipeline for SUPER FAST owner fetching
 async def get_owners(cid: str) -> List[Dict]:
     ncid = normalize_id(cid)
     key = f"o_{ncid}"
@@ -269,7 +321,6 @@ def pagination_kb(cid: str, page: int, total: int, back=False) -> InlineKeyboard
             if row: kb.append(row)
         kb.append([InlineKeyboardButton(to_small_caps("⟲ back to info"), callback_data=f"back_{cid}")])
     else:
-        # User jab "owners" dabaayega sirf tab owners load honge!
         kb.append([InlineKeyboardButton(to_small_caps("owners"), callback_data=f"owners_{cid}_0")])
     return InlineKeyboardMarkup(kb)
 
@@ -312,52 +363,51 @@ async def send_media(update: Update, char: Char, caption: str, kb=None) -> None:
         )
         
     if sent_message:
-        asyncio.create_task(silent_auto_delete(sent_message))
+        await schedule_auto_delete(sent_message)
 
-# 🔥 CHECK CHARACTER COMMAND (AB OWNERS FETCH NAHI KAREGA = EXTREMELY FAST)
+# 🔥 CHECK CHARACTER COMMAND (Usage Fixed & Auto-Delete Persistent)
 async def check_character(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/check <id></code>", parse_mode=ParseMode.HTML)
-        asyncio.create_task(silent_auto_delete(msg))
+        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/check id</code>", parse_mode=ParseMode.HTML)
+        await schedule_auto_delete(msg)
         return
     
     char = await get_char(context.args[0])
     if not char:
-        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('character not found in database!')}", parse_mode=ParseMode.HTML)
-        asyncio.create_task(silent_auto_delete(msg))
+        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {bold_sc('character not found in database!')}", parse_mode=ParseMode.HTML)
+        await schedule_auto_delete(msg)
         return
     
     gcount = await global_count(char.id)
-    # Owners block removed from here! Fast load now!
     await send_media(update, char, card_caption(char, gcount), pagination_kb(char.id, 0, 1, back=False))
 
 # 🔥 FIND ANIME COMMAND
 async def find_anime(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/anime <name></code>", parse_mode=ParseMode.HTML)
-        asyncio.create_task(silent_auto_delete(msg))
+        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {bold_sc('usage:')} <code>/anime name</code>", parse_mode=ParseMode.HTML)
+        await schedule_auto_delete(msg)
         return
         
     name = ' '.join(context.args)
     chars = await find_by_anime(name)
     if not chars:
-        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6323595854456298870\">⚠️</tg-emoji> {bold_sc('no characters found from')} <b><i>{to_small_caps(escape(name))}</i></b>", parse_mode=ParseMode.HTML)
-        asyncio.create_task(silent_auto_delete(msg))
+        msg = await update.message.reply_text(f"<tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {bold_sc('no characters found from')} <b><i>{to_small_caps(escape(name))}</i></b>", parse_mode=ParseMode.HTML)
+        await schedule_auto_delete(msg)
         return
         
     r = process_search(chars)
     text, _ = find_caption(name, r, 0, True)
     msg = await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-    asyncio.create_task(silent_auto_delete(msg))
+    await schedule_auto_delete(msg)
 
-# 🔥 GET ID COMMAND
+# 🔥 GET ID COMMAND (Admin Only - Completely Silent For Normal Users)
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_user.id != OWNER_ID:
-        return 
+    if not is_authorized(update.effective_user.id):
+        return # Normal user try karega to koi bhi reply nahi aayega, direct return ho jayega.
 
     if not update.message or not update.message.reply_to_message:
         msg = await update.message.reply_text(f"⚠️ {bold_sc('error: reply to a high-quality photo or video with')} <code>/getid</code>.", parse_mode=ParseMode.HTML)
-        asyncio.create_task(silent_auto_delete(msg))
+        await schedule_auto_delete(msg)
         return
 
     reply_msg = update.message.reply_to_message
@@ -377,30 +427,29 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         msg = await update.message.reply_text(f"⚠️ {bold_sc('invalid media: this is not a proper photo or video.')}", parse_mode=ParseMode.HTML)
         
     if msg:
-        asyncio.create_task(silent_auto_delete(msg))
+        await schedule_auto_delete(msg)
 
-# 🔥 FIX RARITY COMMAND
+# 🔥 FIX RARITY COMMAND (Admin Only - Completely Silent For Normal Users)
 async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         requester_id = update.effective_user.id
         if not is_authorized(requester_id):
-            return 
+            return # Normal users ke liye completely ignore marega.
 
         if not context.args:
             msg = await update.message.reply_text(f"<b>⚠️ {to_small_caps('usage:')}</b> <code>/fixrarity [char_id]</code>", parse_mode=ParseMode.HTML)
-            asyncio.create_task(silent_auto_delete(msg))
+            await schedule_auto_delete(msg)
             return
 
         char_id_input = str(context.args[0])
         
-        # 🔥 USE NEW POWERFUL MATCHER
         search_ids = get_search_ids(char_id_input)
 
         global_char = await collection.find_one({'id': {'$in': search_ids}})
         
         if not global_char:
             msg = await update.message.reply_text(f"<b>❌ {to_small_caps('character id')} <code>{char_id_input}</code> {to_small_caps('not found in database!')}</b>", parse_mode=ParseMode.HTML)
-            asyncio.create_task(silent_auto_delete(msg))
+            await schedule_auto_delete(msg)
             return
 
         current_rarity = global_char.get('rarity', 'Unknown')
@@ -438,13 +487,13 @@ async def fixrarity_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"━━━━━━━━━━━━━━━━━━━━"
         )
         msg = await update.message.reply_text(success_msg, parse_mode=ParseMode.HTML)
-        asyncio.create_task(silent_auto_delete(msg))
+        await schedule_auto_delete(msg)
 
     except Exception as e:
         msg = await update.message.reply_text(f"<b>⚠️ {to_small_caps('error:')}</b> <code>{escape(str(e))}</code>", parse_mode=ParseMode.HTML)
-        asyncio.create_task(silent_auto_delete(msg))
+        await schedule_auto_delete(msg)
 
-# 🔥 PAGINATION HANDLERS (Owners fetch ab yahan hoga)
+# 🔥 PAGINATION HANDLERS
 async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
@@ -455,12 +504,11 @@ async def handle_owners_pagination(update: Update, context: ContextTypes.DEFAULT
     if not char:
         return await q.answer(to_small_caps("character not found"), show_alert=True)
         
-    owners = await get_owners(cid) # Fast aggregation used!
+    owners = await get_owners(cid) 
     gcount = await global_count(cid)
     
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
     
-    # FIX APPLIED HERE: Replaced cmd_owners_caption with owners_caption
     await q.edit_message_caption(
         caption=owners_caption(char, owners, page, gcount), 
         reply_markup=pagination_kb(cid, page, total_pages, back=True),
@@ -477,7 +525,6 @@ async def handle_back_to_card(update: Update, context: ContextTypes.DEFAULT_TYPE
         return await q.answer(to_small_caps("character not found"), show_alert=True)
         
     gcount = await global_count(cid)
-    # Owners block removed from here! Fast load now!
     
     await q.edit_message_caption(
         caption=card_caption(char, gcount),
