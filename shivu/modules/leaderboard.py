@@ -277,7 +277,7 @@ async def my_profile(update: Update, context: CallbackContext, edit=False):
         f"└ <b>{sc('progress')} :</b> <code>{progress_bar}</code> <b>{completion_pct}%</b>\n\n"
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> <b>{sc('vault & wallet')}</b>\n"
         f"├ <b>{sc('balance')} :</b> <b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {balance:,}</b>\n"
-        f"└ <b>{sc('tokens')} :</b> <b><tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {tokens:,}</b>\n"
+        f"└ <b>{sc('tokens')} :</b> <b><tg-emoji emoji-id=\"6109593993627050230\">💠</tg-emoji> {tokens:,}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<i><b>{sc('keep grabbing to reach top 10!')}</b></i>"
     )
