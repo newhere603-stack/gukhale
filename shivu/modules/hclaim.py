@@ -66,13 +66,24 @@ def get_rarity_key(rarity_str):
             return key
     return None
 
+# 🔥 Original "Invisible" Small Caps Dictionary Mapping restored!
 def to_small_caps(text: str) -> str:
     if not text:
         return "ᴜɴᴋɴᴏᴡɴ"
-    normal = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
-    small = "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ1234567890"
-    tr = str.maketrans(normal, small)
-    return str(text).translate(tr)
+    mapping = {
+        'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
+        'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
+        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
+        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 
+        'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
+        'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
+        'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 
+        'Q': 'ǫ', 'R': 'ʀ', 'S': 'ꜱ', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 
+        'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ', '0': '0', '1': '1',
+        '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7',
+        '8': '8', '9': '9'
+    }
+    return "".join(mapping.get(c, c) for c in str(text))
 
 sc = to_small_caps
 
@@ -358,7 +369,7 @@ def get_tic_board(game):
         row = []
         for j in range(3):
             val = board[i+j]
-            text = val if val != " " else "⬜️"
+            text = val if val != " " else "⬜"
             cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
             row.append(InlineKeyboardButton(text, callback_data=cb_data))
         keyboard.append(row)
@@ -424,7 +435,7 @@ async def tic_callback(update: Update, context: CallbackContext):
         
         await query.answer(sc("New game started below!")) 
         play_again_cooldowns[user_id] = now
-        # NORMAL FONT
+        # NORMAL FONT for username
         safe_name = html.escape(query.from_user.first_name or "User")
 
         game = {
@@ -480,7 +491,7 @@ async def tic_callback(update: Update, context: CallbackContext):
 
             await query.answer(sc("✅ You have joined the game!")) 
             game['player_2_id'] = user_id
-            # NORMAL FONT
+            # NORMAL FONT for username
             game['player_2_name'] = html.escape(query.from_user.first_name or "User")
             game['status'] = 'playing'
 
@@ -593,7 +604,7 @@ async def safe_edit_mines_board(query, text, keyboard):
         await asyncio.sleep(e.retry_after)
         try:
             await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
-        except Exception as ex:
+        except Exception:
             pass
     except BadRequest:
         pass
@@ -667,7 +678,7 @@ async def start_mines(update: Update, context: CallbackContext):
 
     game = {
         'user_id': user_id,
-        # NORMAL FONT
+        # NORMAL FONT for username
         'user_name': html.escape(update.effective_user.first_name or "User"),
         'bet': bet,
         'board': board,
@@ -754,7 +765,7 @@ async def mines_callback(update: Update, context: CallbackContext):
             return
 
         if data == "mines_cashout":
-            # ⚡ FAST RESPONSE
+            # ⚡ FAST RESPONSE (Normal font for popup)
             await query.answer("Cashed out! 💸", show_alert=False) 
             
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -769,10 +780,8 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<b>{sc('Final Board')}:</b>"
             )
             
-            # 🔥 FAST UI UPDATE
-            try:
-                await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-            except Exception: pass
+            # 🔥 USING SAFE EDIT
+            await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
             
             asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
             asyncio.create_task(mines_collection.delete_one({'key': key}))
@@ -782,17 +791,17 @@ async def mines_callback(update: Update, context: CallbackContext):
         if data.startswith("mines_click_"):
             idx = int(data.split("_")[2])
             if game['revealed'][idx]:
-                await query.answer("Already clicked!", show_alert=False)
+                await query.answer(sc("Already clicked!"), show_alert=False)
                 return
 
             if game['board'][idx] == 'mine':
-                # ⚡ FAST RESPONSE: NORMAL FONT FOR BOOM
+                # ⚡ FAST RESPONSE: NORMAL FONT FOR BOOM POPUP
                 await query.answer("BOOM! You lost the bet. 💥", show_alert=True) 
                 
                 game['status'] = 'busted'
                 game['revealed'][idx] = True
                 
-                # NORMAL FONT FOR BOOM
+                # NORMAL FONT FOR "BOOM!" text
                 text = (
                     f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> BOOM! {sc('You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
@@ -800,17 +809,15 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<b>{sc('Final Board')}:</b>"
                 )
                 
-                # 🔥 FAST UI UPDATE
-                try:
-                    await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-                except Exception: pass
+                # 🔥 USING SAFE EDIT
+                await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
                 
                 asyncio.create_task(mines_collection.delete_one({'key': key}))
                 mines_locks.pop(key, None) 
                 return
                 
             else:
-                # ⚡ FAST RESPONSE: Normal font for Safe
+                # ⚡ FAST RESPONSE: Normal font for Safe popup
                 await query.answer("Safe! 💸", show_alert=False) 
                 
                 game['revealed'][idx] = True
@@ -829,10 +836,8 @@ async def mines_callback(update: Update, context: CallbackContext):
                         f"<b>{sc('Final Board')}:</b>"
                     )
                     
-                    # 🔥 FAST UI UPDATE
-                    try:
-                        await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
-                    except Exception: pass
+                    # 🔥 USING SAFE EDIT
+                    await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
                         
                     asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
                     asyncio.create_task(mines_collection.delete_one({'key': key}))
@@ -848,10 +853,8 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
                 )
                 
-                # 🔥 FAST UI UPDATE
-                try:
-                    await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
-                except Exception: pass
+                # 🔥 USING SAFE EDIT
+                await safe_edit_mines_board(query, text, get_mines_keyboard(game))
                 
                 game_data = game.copy()
                 game_data.pop('_id', None)
@@ -867,7 +870,7 @@ async def drarity_on(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        # NORMAL FONT for command
+        # NORMAL FONT for commands
         await update.message.reply_text(f"<b>⚠️ {sc('Usage:')} /drarity_on [rarity_name]\n<i>{sc('Example:')} /drarity_on common</i></b>", parse_mode=ParseMode.HTML)
         return
         
@@ -886,7 +889,7 @@ async def drarity_off(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        # NORMAL FONT for command
+        # NORMAL FONT for commands
         await update.message.reply_text(f"<b>⚠️ {sc('Usage:')} /drarity_off [rarity_name]\n<i>{sc('Example:')} /drarity_off common</i></b>", parse_mode=ParseMode.HTML)
         return
         
