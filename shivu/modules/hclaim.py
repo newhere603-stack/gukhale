@@ -348,9 +348,14 @@ def get_tic_board(game):
         row = []
         for j in range(3):
             val = board[i+j]
-            text = val if val != EMPTY else EMPTY
             cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
-            row.append(InlineKeyboardButton(text, callback_data=cb_data))
+            
+            if val == SYMBOL_P1:
+                row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data, icon_custom_emoji_id="6093865707424980866"))
+            elif val == SYMBOL_P2:
+                row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data, icon_custom_emoji_id="6093741664474504699"))
+            else:
+                row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data))
         keyboard.append(row)
     return InlineKeyboardMarkup(keyboard)
 
@@ -576,20 +581,22 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
         row = []
         for j in range(5):
             idx = i + j
-            if show_all or revealed[idx]:
-                text = "💣" if board[idx] == 'mine' else "💸"
-            else:
-                text = "ㅤㅤ" 
-            
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
-            row.append(InlineKeyboardButton(text, callback_data=cb_data))
+            
+            if show_all or revealed[idx]:
+                if board[idx] == 'mine':
+                    row.append(InlineKeyboardButton("ㅤ", callback_data=cb_data, icon_custom_emoji_id="5469654973308476699"))
+                else:
+                    row.append(InlineKeyboardButton("ㅤ", callback_data=cb_data, icon_custom_emoji_id="5472030678633684592"))
+            else:
+                row.append(InlineKeyboardButton("ㅤㅤ", callback_data=cb_data))
         keyboard.append(row)
     
     if game['status'] == 'playing' and game['found'] > 0:
         mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
         win_amount = int(game['bet'] * mult)
-        btn_text = f"{sc('Cash Out')} ({mult}x | 💸 {win_amount})"
-        keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout")])
+        btn_text = f"{sc('Cash Out')} ({mult}x | {win_amount})"
+        keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout", icon_custom_emoji_id="5472030678633684592")])
         
     return InlineKeyboardMarkup(keyboard)
 
