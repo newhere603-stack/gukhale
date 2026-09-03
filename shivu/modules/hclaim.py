@@ -1,13 +1,15 @@
-import random
-import html
-import logging
-import math
 import asyncio
+import random
+import traceback
+import logging
+import re
+import time
+import html
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.constants import ParseMode
-from telegram.error import RetryAfter, BadRequest # Added this for handling Rate Limits
+from telegram.error import RetryAfter, BadRequest
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,6 +23,9 @@ collection = db['anime_characters_lol']
 tic_collection = db['tic_games']
 mines_collection = db['mines_games']
 settings_collection = db['bot_settings'] # Settings collection for rarity toggles
+
+# 🔥 Nayi collection Yaddasht (Auto-Delete) ke liye
+delete_collection = db['auto_delete_queue']
 
 LOG_GROUP_ID = -1003893927065
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -90,13 +95,62 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         logger.error(f"Log error: {e}")
 
-# 🔥 NEW SILENT AUTO DELETE FUNCTION
-async def silent_auto_delete(message, delay_seconds: int = 1200):
-    await asyncio.sleep(delay_seconds)
+# ==========================================
+# 🧠 PERMANENT AUTO DELETE SYSTEM (YADDASHT)
+# ==========================================
+_worker_started = False
+
+async def background_delete_worker(bot):
     try:
-        await message.delete()
+        await delete_collection.create_index("delete_at")
     except Exception:
         pass
+        
+    while True:
+        try:
+            now = time.time()
+            cursor = delete_collection.find({'delete_at': {'$lte': now}})
+            async for doc in cursor:
+                try:
+                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                except Exception:
+                    pass 
+                finally:
+                    await delete_collection.delete_one({'_id': doc['_id']})
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+async def schedule_auto_delete(message, delay_seconds: int = 1200):
+    if not message: return
+        
+    global _worker_started
+    if not _worker_started:
+        _worker_started = True
+        asyncio.create_task(background_delete_worker(message.get_bot()))
+
+    chat_id = message.chat.id
+    message_id = message.message_id
+    delete_at = time.time() + delay_seconds
+
+    # MongoDB me save hoga (Yaddasht)
+    await delete_collection.insert_one({
+        'chat_id': chat_id,
+        'message_id': message_id,
+        'delete_at': delete_at
+    })
+
+    # Turant delete ke liye memory task
+    async def memory_delete():
+        await asyncio.sleep(delay_seconds)
+        try:
+            await message.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
+            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
+        except Exception:
+            pass
+
+    asyncio.create_task(memory_delete())
+
 
 def can_claim_today(last_claim_utc) -> bool:
     if not last_claim_utc:
@@ -197,14 +251,13 @@ async def swaifu(update: Update, context: CallbackContext):
             else:
                 sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
             
-            # 🔥 20 MINUTE AUTO DELETE TASK ADDED HERE
-            asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
+            # 🔥 PERMANENT AUTO-DELETE APPLIED (20 mins)
+            await schedule_auto_delete(sent_msg, 1200)
 
         except Exception as img_err:
             logger.warning(f"Image send failed: {img_err}")
             sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
-            # 🔥 AUTO DELETE FOR FALLBACK MESSAGE TOO
-            asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
+            await schedule_auto_delete(sent_msg, 1200)
 
         log_data = {
             "ᴜsᴇʀ": f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
@@ -280,12 +333,19 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
 PREMIUM_GAME = '<tg-emoji emoji-id="6311820827952162567">🎮</tg-emoji>'
 PREMIUM_USER = '<tg-emoji emoji-id="6104892988712820269">👤</tg-emoji>'
 PREMIUM_WAIT = '<tg-emoji emoji-id="6161365177225712754">⏳</tg-emoji>'
-PREMIUM_O    = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
-PREMIUM_X    = '<tg-emoji emoji-id="5465665476971471368">❌</tg-emoji>'
 PREMIUM_TURN = '<tg-emoji emoji-id="6102908426059258223">👉</tg-emoji>'
 PREMIUM_WIN  = '<tg-emoji emoji-id="6053140037250323814">🏆</tg-emoji>'
 PREMIUM_DRAW = '<tg-emoji emoji-id="6053383162464050605">🤝</tg-emoji>'
 PREMIUM_CRY  = '<tg-emoji emoji-id="5922641759518593935">😭</tg-emoji>'
+
+# 🔥 TIK-TAC-TOE EMOJI SETUP (X replaced by Green, O by Red)
+# Text me render hone ke liye Premium
+PREMIUM_P1 = '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>' 
+PREMIUM_P2 = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
+
+# Buttons me render hone ke liye Normal Emoji (Kyunki inline buttons me HTML kaam nahi karta)
+SYMBOL_P1 = '🟢'
+SYMBOL_P2 = '🔴'
 
 def get_tic_board(game):
     if game['status'] == 'waiting':
@@ -319,12 +379,12 @@ async def start_tic(update: Update, context: CallbackContext):
     game = {
         'player_1_id': user_id,
         'player_1_name': safe_name,
-        'player_1_sym': '🔴',
-        'player_1_tg_sym': PREMIUM_O,
+        'player_1_sym': SYMBOL_P1,
+        'player_1_tg_sym': PREMIUM_P1,
         'player_2_id': None,
         'player_2_name': None,
-        'player_2_sym': '❌',
-        'player_2_tg_sym': PREMIUM_X,
+        'player_2_sym': SYMBOL_P2,
+        'player_2_tg_sym': PREMIUM_P2,
         'board': [" "] * 9,
         'turn': user_id,
         'status': 'waiting'
@@ -332,7 +392,7 @@ async def start_tic(update: Update, context: CallbackContext):
 
     text = (
         f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe Game Started!')}</b>\n\n"
-        f"{PREMIUM_USER} <b>Player 1 ({PREMIUM_O}): {game['player_1_name']}</b>\n\n"
+        f"{PREMIUM_USER} <b>Player 1 ({PREMIUM_P1}): {game['player_1_name']}</b>\n\n"
         f"{PREMIUM_WAIT} <i><b>{to_small_caps('Waiting for Player 2 to join...')}</b></i>"
     )
 
@@ -340,12 +400,16 @@ async def start_tic(update: Update, context: CallbackContext):
     key = f"{update.effective_chat.id}_{msg.message_id}"
     game['key'] = key
     await tic_collection.insert_one(game)
+    
+    # 🔥 Auto Delete Memory Setup
+    await schedule_auto_delete(msg, 600) # Game times out in 10 mins
 
 async def tic_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
     
+    # ⚡ FAST RESPONSE: Ignoring already played moves
     if data == "tic_ignore":
         await query.answer()
         return
@@ -366,12 +430,12 @@ async def tic_callback(update: Update, context: CallbackContext):
         game = {
             'player_1_id': user_id,
             'player_1_name': safe_name,
-            'player_1_sym': '🔴',
-            'player_1_tg_sym': PREMIUM_O,
+            'player_1_sym': SYMBOL_P1,
+            'player_1_tg_sym': PREMIUM_P1,
             'player_2_id': None,
             'player_2_name': None,
-            'player_2_sym': '❌',
-            'player_2_tg_sym': PREMIUM_X,
+            'player_2_sym': SYMBOL_P2,
+            'player_2_tg_sym': PREMIUM_P2,
             'board': [" "] * 9,
             'turn': user_id,
             'status': 'waiting'
@@ -379,7 +443,7 @@ async def tic_callback(update: Update, context: CallbackContext):
 
         text = (
             f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe Game Started!')}</b>\n\n"
-            f"{PREMIUM_USER} <b>Player 1 ({PREMIUM_O}): {game['player_1_name']}</b>\n\n"
+            f"{PREMIUM_USER} <b>Player 1 ({PREMIUM_P1}): {game['player_1_name']}</b>\n\n"
             f"{PREMIUM_WAIT} <i><b>{to_small_caps('Waiting for Player 2 to join...')}</b></i>"
         )
 
@@ -391,6 +455,8 @@ async def tic_callback(update: Update, context: CallbackContext):
         )
         game['key'] = f"{msg.chat_id}_{msg.message_id}"
         await tic_collection.insert_one(game)
+        
+        await schedule_auto_delete(msg, 600)
         return
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
@@ -419,9 +485,9 @@ async def tic_callback(update: Update, context: CallbackContext):
 
             text = (
                 f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-                f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
-                f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
-                f"{PREMIUM_TURN} <b>Turn: {game['player_1_name']} ({PREMIUM_O})</b>"
+                f"{PREMIUM_P1} <b>{game['player_1_name']}</b>\n"
+                f"{PREMIUM_P2} <b>{game['player_2_name']}</b>\n\n"
+                f"{PREMIUM_TURN} <b>Turn: {game['player_1_name']} ({PREMIUM_P1})</b>"
             )
             game_data = game.copy()
             game_data.pop('_id', None)
@@ -445,6 +511,7 @@ async def tic_callback(update: Update, context: CallbackContext):
                 await query.answer(to_small_caps("This box is already filled!"), show_alert=True)
                 return
 
+            # ⚡ FAST RESPONSE: Instant Click Answer
             await query.answer() 
             
             symbol = game['player_1_sym'] if user_id == game['player_1_id'] else game['player_2_sym']
@@ -456,17 +523,17 @@ async def tic_callback(update: Update, context: CallbackContext):
                 if winner == "Draw":
                     text = (
                         f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-                        f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
-                        f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
+                        f"{PREMIUM_P1} <b>{game['player_1_name']}</b>\n"
+                        f"{PREMIUM_P2} <b>{game['player_2_name']}</b>\n\n"
                         f"{PREMIUM_DRAW} <b>{to_small_caps('Game Draw! Well played both.')}</b>"
                     )
                 else:
                     if winner == game['player_1_sym']:
                         win_name, lose_name = game['player_1_name'], game['player_2_name']
-                        win_sym, lose_sym = PREMIUM_O, PREMIUM_X
+                        win_sym, lose_sym = PREMIUM_P1, PREMIUM_P2
                     else:
                         win_name, lose_name = game['player_2_name'], game['player_1_name']
-                        win_sym, lose_sym = PREMIUM_X, PREMIUM_O
+                        win_sym, lose_sym = PREMIUM_P2, PREMIUM_P1
 
                     text = (
                         f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
@@ -482,27 +549,30 @@ async def tic_callback(update: Update, context: CallbackContext):
                 return
 
             if user_id == game['player_1_id']:
-                game['turn'], next_turn_name, next_symbol = game['player_2_id'], game['player_2_name'], PREMIUM_X
+                game['turn'], next_turn_name, next_symbol = game['player_2_id'], game['player_2_name'], PREMIUM_P2
             else:
-                game['turn'], next_turn_name, next_symbol = game['player_1_id'], game['player_1_name'], PREMIUM_O
+                game['turn'], next_turn_name, next_symbol = game['player_1_id'], game['player_1_name'], PREMIUM_P1
 
             text = (
                 f"{PREMIUM_GAME} <b>{to_small_caps('Tic-Tac-Toe')}</b>\n\n"
-                f"{PREMIUM_O} <b>{game['player_1_name']}</b>\n"
-                f"{PREMIUM_X} <b>{game['player_2_name']}</b>\n\n"
+                f"{PREMIUM_P1} <b>{game['player_1_name']}</b>\n"
+                f"{PREMIUM_P2} <b>{game['player_2_name']}</b>\n\n"
                 f"{PREMIUM_TURN} <b>Turn: {next_turn_name} ({next_symbol})</b>"
             )
             game_data = game.copy()
             game_data.pop('_id', None)
             await tic_collection.update_one({'key': key}, {'$set': game_data})
-            await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+            
+            try:
+                await query.message.edit_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
+            except BadRequest:
+                pass
 
 
 # ==========================================
 # MINES GAME HANDLERS
 # ==========================================
 
-# SAFE EDIT HELPER: Rate Limit aur Glitch se bachne ke liye naya function
 async def safe_edit_mines_board(query, text, keyboard):
     try:
         await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
@@ -512,12 +582,11 @@ async def safe_edit_mines_board(query, text, keyboard):
         try:
             await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
         except Exception as ex:
-            logger.error(f"Retry edit failed: {ex}")
-    except BadRequest as e:
-        if "Message is not modified" not in str(e):
-            logger.error(f"BadRequest in edit: {e}")
-    except Exception as e:
-        logger.error(f"Error updating mines board: {e}")
+            pass
+    except BadRequest:
+        pass
+    except Exception:
+        pass
 
 def get_mines_multiplier(found_cash: int, mines: int, total: int = 25) -> float:
     if found_cash == 0 or found_cash > (total - mines): return 1.00
@@ -608,6 +677,10 @@ async def start_mines(update: Update, context: CallbackContext):
         msg = await update.message.reply_photo(
             photo=photo_url, caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML
         )
+        
+        # 🔥 Yaddasht Schedule for Mines Game (10 mins)
+        await schedule_auto_delete(msg, 600)
+        
     except Exception as e:
         logger.error(f"Failed to send photo: {e}")
         await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': bet}})
@@ -656,7 +729,6 @@ async def mines_callback(update: Update, context: CallbackContext):
         game = await mines_collection.find_one({'key': key})
         
         if not game:
-            # Agar multiple fast click kiye hain, toh blank answer karo taaki main popup hide na ho!
             await query.answer() 
             return
             
@@ -685,7 +757,6 @@ async def mines_callback(update: Update, context: CallbackContext):
             await mines_collection.delete_one({'key': key}) 
             mines_locks.pop(key, None) 
             
-            # Answer query pehle, taaki loading ghoome nahi, uske baad message edit hoga gracefully
             await query.answer(f"Cashed out {win_amount} coins! 💸", show_alert=False) 
             await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
             return
@@ -710,7 +781,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                 await mines_collection.delete_one({'key': key}) 
                 mines_locks.pop(key, None) 
                 
-                # Turant user ko batao ki boom hua (before any rate-limit delay)!
                 await query.answer("BOOM! You lost the bet. 💥", show_alert=True) 
                 await safe_edit_mines_board(query, text, get_mines_keyboard(game, show_all=True))
                 return
@@ -803,11 +873,15 @@ async def drarity_off(update: Update, context: CallbackContext):
 # ==========================================
 application.add_handler(CommandHandler("swaifu", swaifu, block=False))
 application.add_handler(CommandHandler("claim", daily_claim_coins, block=False))
-application.add_handler(CommandHandler("tic", start_tic, block=False))
+
+# 🎮 TIC TAC TOE HANDLERS
+application.add_handler(CommandHandler(["tic", "tictactoe"], start_tic, block=False))
 application.add_handler(CallbackQueryHandler(tic_callback, pattern="^tic_", block=False))
+
+# 💣 MINES HANDLERS
 application.add_handler(CommandHandler("mines", start_mines, block=False))
 application.add_handler(CallbackQueryHandler(mines_callback, pattern="^mines_", block=False))
 
-# Register Admin Handlers
+# 👑 ADMIN HANDLERS
 application.add_handler(CommandHandler("drarity_on", drarity_on, block=False))
 application.add_handler(CommandHandler("drarity_off", drarity_off, block=False))
