@@ -174,10 +174,9 @@ class GameUI:
 class GameLogic:
     @staticmethod
     def _get_win_chance(amount: int) -> float:
-        # 🔥 Bet 10k se zyada toh 10%, warna 45% chance
         if amount > 10000:
             return 0.10
-        return 0.45
+        return 0.50
 
     @staticmethod
     def _get_random_rewards() -> tuple[int, int]:
@@ -240,7 +239,7 @@ class GameLogic:
         win_chance = GameLogic._get_win_chance(amount)
         roll = random.random()
         
-        bullseye_threshold = win_chance * 0.30  # Win chance ka 30% hissa Bullseye ke liye
+        bullseye_threshold = win_chance * 0.30 
         
         if roll < bullseye_threshold:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
