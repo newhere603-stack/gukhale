@@ -49,7 +49,7 @@ MAIN_KEYBOARD = InlineKeyboardMarkup([
     ],
 ])
 
-FORCE_SUB_TEXT = "<tg-emoji emoji-id=\"5291873529464122510\">🔓</tg-emoji> <b>ʟᴇᴛ's ɢᴏ ʙᴀʙʏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴜsᴇ ᴍᴇ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
+FORCE_SUB_TEXT = "<tg-emoji emoji-id=\"5291873529464122510\">🔓</tg-emoji> <b>ʟᴇᴛ's ɢᴏ ʙᴀʙʏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇs ᴛᴏ ᴜsᴇ ᴍᴇ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
 FORCE_SUB_KEYBOARD = InlineKeyboardMarkup([
     [
         InlineKeyboardButton(
@@ -489,10 +489,10 @@ async def bot_added_to_group_handler(update: Update, context: ContextTypes.DEFAU
         try:
             await context.bot.send_message(
                 chat_id=result.chat.id,
-                text="<b>⚠️ ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ ᴡɪᴛʜ ғᴜʟʟ ʀɪɢʜᴛs ᴛᴏ ᴜsᴇ ᴍᴇ!</b>",
+                text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ!</b>",
                 parse_mode=ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ 👑", url=ADMIN_RIGHTS_LINK)]
+                    [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ", url=ADMIN_RIGHTS_LINK)]
                 ])
             )
         except Exception as e:
