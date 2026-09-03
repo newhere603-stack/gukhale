@@ -266,15 +266,15 @@ async def get_pmarket_keyboard(user_id, bot_username=""):
     
     keyboard = []
     if exchange_enabled:
-        keyboard.append([InlineKeyboardButton("💱 ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}")])
+        keyboard.append([InlineKeyboardButton("ᴇxᴄʜᴀɴɢᴇ", callback_data=f"pm_exc_menu:{user_id}", icon_custom_emoji_id="5377336227533969892")])
     
     keyboard.append([
-        InlineKeyboardButton("🛒 ʙᴜʏ", callback_data=f"pm_b:{user_id}"),
-        InlineKeyboardButton("💸 sᴇʟʟ", callback_data=f"pm_sm:{user_id}")
+        InlineKeyboardButton("ʙᴜʏ", callback_data=f"pm_b:{user_id}", icon_custom_emoji_id="5312361253610475399"),
+        InlineKeyboardButton("sᴇʟʟ", callback_data=f"pm_sm:{user_id}", icon_custom_emoji_id="5472030678633684592")
     ])
     
     if bot_username:
-        keyboard.append([InlineKeyboardButton("💳 ʙᴜʏ ᴛᴏᴋᴇɴs/ᴄᴏɪɴs", url=f"https://t.me/{bot_username}?start=buy_tokens")])
+        keyboard.append([InlineKeyboardButton("ʙᴜʏ ᴛᴏᴋᴇɴs/ᴄᴏɪɴs", url=f"https://t.me/{bot_username}?start=buy_tokens", icon_custom_emoji_id="5445353829304387411")])
         
     return InlineKeyboardMarkup(keyboard)
 
