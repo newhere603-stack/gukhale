@@ -6,7 +6,7 @@ import math
 import time
 from datetime import datetime, timedelta
 from bson import ObjectId
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update, InputMediaPhoto
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update, InputMediaPhoto, InputMediaVideo, InputMediaAnimation
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, TypeHandler
 from shivu import application, db
 
@@ -237,16 +237,33 @@ def get_normalized_rarity(rarity_str):
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
 
-# 🔥 UPDATE MENU: In-Place Editing to Stop Spam 
+# 🔥 UPDATE MENU: In-Place Editing to Stop Spam (Video Fix Included)
 async def update_menu(query, text, keyboard, change_media=False, photo_url=SHOP_IMG):
     try:
         if change_media:
-            await query.edit_message_media(
-                media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
-                reply_markup=keyboard
-            )
+            media_str = str(photo_url).lower()
+            
+            # Detect whether the media is a video/animation or a photo
+            if media_str.endswith(('.mp4', '.mkv', '.webm')):
+                media_obj = InputMediaVideo(media=photo_url, caption=text, parse_mode='HTML')
+            elif media_str.endswith('.gif'):
+                media_obj = InputMediaAnimation(media=photo_url, caption=text, parse_mode='HTML')
+            else:
+                media_obj = InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML')
+                
+            try:
+                await query.edit_message_media(media=media_obj, reply_markup=keyboard)
+            except Exception as e:
+                # Agar telegram bole galat media type (kyuki image extension nahi tha ya raw video file_id de di)
+                if "wrong type" in str(e).lower() or "wrong remote file identifier" in str(e).lower():
+                    try:
+                        fallback_media = InputMediaVideo(media=photo_url, caption=text, parse_mode='HTML')
+                        await query.edit_message_media(media=fallback_media, reply_markup=keyboard)
+                    except:
+                        pass
         else:
-            if query.message.photo:
+            # Edit caption works for photo, video, animation, and docs
+            if query.message.photo or query.message.video or query.message.animation or query.message.document:
                 await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode='HTML')
             else:
                 await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
@@ -1119,6 +1136,22 @@ async def timeout_process(update: Update, context: CallbackContext):
 
 
 # --- 1. SELL CONVERSATION ---
+sell_conv = ConversationHandler(
+    name="pmarket_sell_conv", # Persistence ke liye
+    persistent=True,          # Restart par states bachane ke liye
+    entry_points=[CallbackQueryHandler(sell_start, pattern=r"^pm_start_s:")],
+    states={
+        WAITING_FOR_CHARACTER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_character_id)],
+        WAITING_FOR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_price)],
+        ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
+    },
+    fallbacks=[CommandHandler("cancel", cancel_process)],
+    conversation_timeout=60,
+    allow_reentry=True,
+    per_user=True,
+    per_chat=True,
+)
+
 async def sell_start(update: Update, context: CallbackContext):
     query = update.callback_query
     parts = query.data.split(':')
@@ -1273,6 +1306,24 @@ async def ask_price(update: Update, context: CallbackContext):
 
 
 # --- 2. EXCHANGE CONVERSATION (T2C and C2T) ---
+exchange_conv = ConversationHandler(
+    name="pmarket_exchange_conv", # Persistence ke liye
+    persistent=True,              # Restart par states bachane ke liye
+    entry_points=[
+        CallbackQueryHandler(exchange_start_t2c, pattern=r"^pm_start_exc_t2c:"),
+        CallbackQueryHandler(exchange_start_c2t, pattern=r"^pm_start_exc_c2t:")
+    ],
+    states={
+        WAITING_FOR_EXCHANGE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_exchange_amount)],
+        ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
+    },
+    fallbacks=[CommandHandler("cancel", cancel_process)],
+    conversation_timeout=60,
+    allow_reentry=True,
+    per_user=True,
+    per_chat=True,
+)
+
 async def exchange_start_t2c(update: Update, context: CallbackContext):
     query = update.callback_query
     parts = query.data.split(':')
@@ -1397,38 +1448,9 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     await clear_existing_states(context)
     return ConversationHandler.END
 
-
-sell_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(sell_start, pattern=r"^pm_start_s:")],
-    states={
-        WAITING_FOR_CHARACTER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_character_id)],
-        WAITING_FOR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_price)],
-        ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
-    },
-    fallbacks=[CommandHandler("cancel", cancel_process)],
-    conversation_timeout=60,
-    allow_reentry=True,
-    per_user=True,
-    per_chat=True,
-)
-
-exchange_conv = ConversationHandler(
-    entry_points=[
-        CallbackQueryHandler(exchange_start_t2c, pattern=r"^pm_start_exc_t2c:"),
-        CallbackQueryHandler(exchange_start_c2t, pattern=r"^pm_start_exc_c2t:")
-    ],
-    states={
-        WAITING_FOR_EXCHANGE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_exchange_amount)],
-        ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
-    },
-    fallbacks=[CommandHandler("cancel", cancel_process)],
-    conversation_timeout=60,
-    allow_reentry=True,
-    per_user=True,
-    per_chat=True,
-)
-
 buy_conv = ConversationHandler(
+    name="pmarket_buy_conv", # Persistence ke liye
+    persistent=True,         # Restart par states bachane ke liye
     entry_points=[
         MessageHandler(filters.Regex(r'^/start buy_tokens$'), start_buy_menu),
         CommandHandler("buy", buy_command_pm)
