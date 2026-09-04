@@ -237,38 +237,49 @@ def get_normalized_rarity(rarity_str):
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
 
-# 🔥 UPDATE MENU: In-Place Editing to Stop Spam (Video Fix Included)
-async def update_menu(query, text, keyboard, change_media=False, photo_url=SHOP_IMG):
+# 🔥 UPDATE MENU: In-Place Editing to Stop Spam (Ultra-Robust Video Fix)
+async def update_menu(query, text, keyboard, change_media=False, photo_url=SHOP_IMG, is_video=False):
     try:
         if change_media:
             media_str = str(photo_url).lower()
             
-            # Detect whether the media is a video/animation or a photo
-            if media_str.endswith(('.mp4', '.mkv', '.webm')):
-                media_obj = InputMediaVideo(media=photo_url, caption=text, parse_mode='HTML')
+            # Agar file video hai (DB flag se ya extension se)
+            if is_video or media_str.endswith(('.mp4', '.mkv', '.webm')):
+                try:
+                    await query.edit_message_media(media=InputMediaVideo(media=photo_url, caption=text, parse_mode='HTML'), reply_markup=keyboard)
+                except Exception:
+                    await query.edit_message_media(media=InputMediaAnimation(media=photo_url, caption=text, parse_mode='HTML'), reply_markup=keyboard)
+            
+            # Agar file GIF hai
             elif media_str.endswith('.gif'):
-                media_obj = InputMediaAnimation(media=photo_url, caption=text, parse_mode='HTML')
+                try:
+                    await query.edit_message_media(media=InputMediaAnimation(media=photo_url, caption=text, parse_mode='HTML'), reply_markup=keyboard)
+                except Exception:
+                    await query.edit_message_media(media=InputMediaVideo(media=photo_url, caption=text, parse_mode='HTML'), reply_markup=keyboard)
+            
+            # By Default Photo try karo, fail hua to Video/Animation (Taki video ke raw file_id bhi work karein)
             else:
-                media_obj = InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML')
-                
-            try:
-                await query.edit_message_media(media=media_obj, reply_markup=keyboard)
-            except Exception as e:
-                # Agar telegram bole galat media type (kyuki image extension nahi tha ya raw video file_id de di)
-                if "wrong type" in str(e).lower() or "wrong remote file identifier" in str(e).lower():
+                try:
+                    await query.edit_message_media(media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'), reply_markup=keyboard)
+                except Exception:
                     try:
-                        fallback_media = InputMediaVideo(media=photo_url, caption=text, parse_mode='HTML')
-                        await query.edit_message_media(media=fallback_media, reply_markup=keyboard)
-                    except:
-                        pass
+                        await query.edit_message_media(media=InputMediaVideo(media=photo_url, caption=text, parse_mode='HTML'), reply_markup=keyboard)
+                    except Exception:
+                        await query.edit_message_media(media=InputMediaAnimation(media=photo_url, caption=text, parse_mode='HTML'), reply_markup=keyboard)
         else:
-            # Edit caption works for photo, video, animation, and docs
+            # Agar media change nahi karna sirf caption badalna hai
             if query.message.photo or query.message.video or query.message.animation or query.message.document:
                 await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode='HTML')
             else:
                 await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
     except Exception:
         pass
+    finally:
+        # 🔥 Ye lazmi chalna chahiye, warna user ke paas button loading ghoomta rah jayega
+        try:
+            await query.answer()
+        except:
+            pass
 
 async def clear_existing_states(context: CallbackContext):
     keys = ['sell_owner_id', 'sell_character', 'sell_active', 'sell_step', 'exc_owner_id', 'exc_type', 'buy_prompt_active', 'buy_product', 'buy_char_id', 'buy_amount', 'buy_price', 'qr_msg_id']
@@ -889,13 +900,17 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_s_back:{rarity_key}:{order}:{user_id}")] # Back button with specialized return command
         ])
 
+        # 🔥 FIX: is_video flag database se pull kar liya hai
+        is_video = display_char.get('is_video', False)
+
         # Replace standard shop image with Character image
         await update_menu(
             query, 
             caption, 
             keyboard, 
             change_media=True, 
-            photo_url=display_char.get('img_url', 'https://files.catbox.moe/0qjgih.png')
+            photo_url=display_char.get('img_url', 'https://files.catbox.moe/0qjgih.png'),
+            is_video=is_video
         )
 
     elif action == "pm_buy":
@@ -1094,7 +1109,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
 
 # ========================
-# CONVERSATION HANDLERS (No Spam Editing)
+# CONVERSATION HANDLERS
 # ========================
 async def cancel_process(update: Update, context: CallbackContext):
     qr_msg_id = context.user_data.get('qr_msg_id')
@@ -1288,7 +1303,6 @@ async def ask_price(update: Update, context: CallbackContext):
     await clear_existing_states(context)
     return ConversationHandler.END
 
-# 🔥 SELL CONVERSATION HANDLER (Ab functions ke niche hai)
 sell_conv = ConversationHandler(
     name="pmarket_sell_conv", 
     persistent=True,          
@@ -1304,6 +1318,7 @@ sell_conv = ConversationHandler(
     per_user=True,
     per_chat=True,
 )
+
 
 # --- 2. EXCHANGE CONVERSATION (T2C and C2T) ---
 async def exchange_start_t2c(update: Update, context: CallbackContext):
@@ -1430,7 +1445,6 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     await clear_existing_states(context)
     return ConversationHandler.END
 
-# 🔥 EXCHANGE CONVERSATION HANDLER (Ab functions ke niche hai)
 exchange_conv = ConversationHandler(
     name="pmarket_exchange_conv", 
     persistent=True,              
@@ -1448,6 +1462,7 @@ exchange_conv = ConversationHandler(
     per_user=True,
     per_chat=True,
 )
+
 
 buy_conv = ConversationHandler(
     name="pmarket_buy_conv", 
