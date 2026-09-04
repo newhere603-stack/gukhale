@@ -1,7 +1,7 @@
-import logging  # 🔥 FIX: 'Import' ka 'I' small kar diya hai, warna bot turant crash ho jata
+import logging  # 🔥 FIX: 'import' ka 'i' small kar diya hai
 import os
 from pyrogram import Client 
-from telegram.ext import Application
+from telegram.ext import Application, PicklePersistence
 from motor.motor_asyncio import AsyncIOMotorClient
 
 logging.basicConfig(
@@ -32,7 +32,10 @@ OWNER_ID = Config.OWNER_ID
 JOINLOGS = "-1003893927065"
 LEAVELOGS = "-1003893927065"
 
-application = Application.builder().token(TOKEN).build()
+# 🔥 YADDASHT (PERSISTENCE) SETUP: Restart hone par session aur menu states bachane ke liye
+persistence = PicklePersistence(filepath="bot_persistence_data.pickle")
+application = Application.builder().token(TOKEN).persistence(persistence).build()
+
 shivuu = Client("Shivu", api_id=api_id, api_hash=api_hash, bot_token=TOKEN)
 
 # ==========================================
