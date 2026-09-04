@@ -6,7 +6,7 @@ import math
 import time
 from datetime import datetime, timedelta
 from bson import ObjectId
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update, InputMediaPhoto
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, TypeHandler
 from shivu import application, db
 
@@ -28,12 +28,13 @@ E_TIME = '<tg-emoji emoji-id="6307488052059053932">🕐</tg-emoji>'
 LOG_GROUP_ID = -1003893927065
 BUY_LOG_GROUP_ID = -1003757326893  
 OWNER_ID = 7657218453
+SHOP_IMG = "https://files.catbox.moe/qormfi.png" # 🔥 Global Shop Image
 
 # --- DATABASE COLLECTIONS ---
 user_collection = db['user_collection_lmaoooo'] 
 market_collection = db['market_collection'] 
 bot_settings_collection = db['bot_settings'] 
-delete_collection = db['auto_delete_queue'] # 🔥 Yaddasht ke liye nayi collection
+delete_collection = db['auto_delete_queue']
 
 # --- HELPER: GET INDIAN STANDARD TIME (IST) ---
 def get_ist_now():
@@ -43,7 +44,6 @@ def get_ist_now():
 _worker_started = False
 
 async def background_delete_worker(bot):
-    """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
     try:
         await delete_collection.create_index("delete_at")
     except Exception:
@@ -64,7 +64,6 @@ async def background_delete_worker(bot):
             pass
         await asyncio.sleep(30)
 
-# --- HELPER: AUTO DELETE MESSAGE LATER ---
 async def delete_message_later(bot, chat_id, message_id, delay):
     if not bot or not chat_id or not message_id: return
         
@@ -75,14 +74,12 @@ async def delete_message_later(bot, chat_id, message_id, delay):
 
     delete_at = time.time() + delay
 
-    # MongoDB me save karega taki bot crash/restart hone par mission na bhule
     await delete_collection.insert_one({
         'chat_id': chat_id,
         'message_id': message_id,
         'delete_at': delete_at
     })
 
-    # Memory worker taaki smoothly delete ho jaye agar bot chalu rahe to
     async def memory_delete():
         await asyncio.sleep(delay)
         try:
@@ -108,7 +105,6 @@ async def send_market_log(context: CallbackContext, action: str, details: str):
     except Exception:
         pass
 
-# 🔥 HELPER: SEND BUY LOGS TO THE NEW GROUP
 async def send_buy_log(context: CallbackContext, action: str, user, details: str):
     ist_now = get_ist_now()
     user_mention = f"<a href='tg://user?id={user.id}'>{html.escape(user.first_name)}</a> (<code>{user.id}</code>)"
@@ -125,7 +121,6 @@ async def send_buy_log(context: CallbackContext, action: str, user, details: str
     except Exception:
         pass
 
-# --- HELPER: GET DAILY LIMIT INFO ---
 async def get_token_limit_info(user_id):
     settings = await bot_settings_collection.find_one({'_id': 'pmarket_settings'})
     global_limit = settings.get('daily_token_limit', 70) if settings else 70
@@ -144,7 +139,6 @@ async def get_token_limit_info(user_id):
     return global_limit, used_today, today_str
 
 
-# 🔥 HELPER TO GET LIVE CHARACTER (1, 01, 001 SAB MATCH HOGA)
 async def get_live_character_doc(char_id):
     if char_id is None:
         return None
@@ -243,17 +237,21 @@ def get_normalized_rarity(rarity_str):
 def chunk(items: list, size: int) -> list:
     return [items[i:i + size] for i in range(0, len(items), size)]
 
-async def update_menu(query, text, keyboard):
-    bot = query.message.get_bot()
-    if query.message.photo or query.message.video:
-        chat_id = query.message.chat_id
-        try:
-            await query.message.delete()
-        except Exception:
-            pass
-        await bot.send_message(chat_id=chat_id, text=text, reply_markup=keyboard, parse_mode='HTML')
-    else:
-        await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+# 🔥 UPDATE MENU: In-Place Editing to Stop Spam 
+async def update_menu(query, text, keyboard, change_media=False, photo_url=SHOP_IMG):
+    try:
+        if change_media:
+            await query.edit_message_media(
+                media=InputMediaPhoto(media=photo_url, caption=text, parse_mode='HTML'),
+                reply_markup=keyboard
+            )
+        else:
+            if query.message.photo:
+                await query.message.edit_caption(caption=text, reply_markup=keyboard, parse_mode='HTML')
+            else:
+                await query.message.edit_text(text, reply_markup=keyboard, parse_mode='HTML')
+    except Exception:
+        pass
 
 async def clear_existing_states(context: CallbackContext):
     keys = ['sell_owner_id', 'sell_character', 'sell_active', 'sell_step', 'exc_owner_id', 'exc_type', 'buy_prompt_active', 'buy_product', 'buy_char_id', 'buy_amount', 'buy_price', 'qr_msg_id']
@@ -286,12 +284,13 @@ async def pmarket_command(update: Update, context: CallbackContext):
     bot_username = context.bot.username
     keyboard = await get_pmarket_keyboard(user_id, bot_username)
     
-    await update.message.reply_photo(
-        photo="https://files.catbox.moe/qormfi.png",
+    msg = await update.message.reply_photo(
+        photo=SHOP_IMG,
         caption="<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>",
         reply_markup=keyboard,
         parse_mode='HTML'
     )
+    context.user_data['shop_msg_id'] = msg.message_id
 
 async def toggle_exchange_cmd(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID: return
@@ -362,7 +361,12 @@ async def mrarity_off_cmd(update: Update, context: CallbackContext):
 async def buy_command_pm(update: Update, context: CallbackContext):
     if update.effective_chat.type != "private":
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("buy here"), url=f"https://t.me/{context.bot.username}?start=buy_tokens", icon_custom_emoji_id="5445353829304387411")]])
-        await update.message.reply_html(f"<b>{E_TICK} {sc('this command only works in private messages.')}\n{sc('click below to buy.')}</b>", reply_markup=kb)
+        await update.message.reply_photo(
+            photo=SHOP_IMG, 
+            caption=f"<b>{E_WARN} {sc('this command only works in private messages.')}\n{sc('click below to buy.')}</b>", 
+            reply_markup=kb, 
+            parse_mode='HTML'
+        )
         return ConversationHandler.END
     return await start_buy_menu(update, context)
 
@@ -518,7 +522,7 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
         f"<b>{E_WAIT} {sc('please send the payment screenshot below to confirm your order.')}</b>"
     )
     
-    # 🔥 Pyaara sa change yahan: QR Code wale step me "back" uda diya, ab bas cancel hai 🔥
+    # 🔥 QR Code wale step me ONLY cancel button 🔥
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="5260342697075416641")]
     ])
@@ -711,6 +715,9 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     parts = data.split(':')
     user_id = query.from_user.id
     
+    # 🔥 Track Active Menu ID So Prompt Conversations Replace It Without Spamming 🔥
+    context.user_data['shop_msg_id'] = query.message.message_id
+    
     owner_id = int(parts[-1])
     if user_id != owner_id:
         await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}\n{sc('please open your own via')} /shop", show_alert=True)
@@ -735,19 +742,8 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         keyboard = await get_pmarket_keyboard(user_id, bot_username)
         caption = f"<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>{sc('choose an option to proceed.')}</i>"
         
-        # 🔥 Yahan image ke sath main menu aayega jab koi back button press karega shop me 🔥
-        try:
-            await query.message.delete()
-        except Exception:
-            pass
-            
-        await context.bot.send_photo(
-            chat_id=query.message.chat_id,
-            photo="https://files.catbox.moe/qormfi.png",
-            caption=caption,
-            reply_markup=keyboard,
-            parse_mode='HTML'
-        )
+        # Soft transition: forcefully ensures main menu has original image (just in case they came from pm_v)
+        await update_menu(query, caption, keyboard, change_media=True, photo_url=SHOP_IMG)
 
     elif action == "pm_exc_menu":
         global_limit, used_today, _ = await get_token_limit_info(user_id)
@@ -772,7 +768,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         _, prem_emoji, name = RARITIES.get(rarity_key, RARITIES["common"])
         await update_menu(query, f"<b>{prem_emoji} {sc(name)} {sc('characters')}</b>\n\n<i>{sc('how do you want to sort them?')}</i>", keyboard)
 
-    elif action == "pm_s":
+    elif action == "pm_s" or action == "pm_s_back":
         rarity_key = parts[1]
         order = parts[2]
         sort_order = 1 if order == "asc" else -1
@@ -814,7 +810,9 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         sort_text = sc("low to high") if order == "asc" else sc("high to low")
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_r:{rarity_key}:{user_id}")])
 
-        await update_menu(query, f"<b>{prem_emoji} {sc('characters for sale')}</b>\n\n<i>{sc('sorted by price (')} {sort_text} {sc(')')}</i>", InlineKeyboardMarkup(keyboard))
+        # If they returned from viewing a character, forcefully revert back to SHOP_IMG
+        change_media = (action == "pm_s_back")
+        await update_menu(query, f"<b>{prem_emoji} {sc('characters for sale')}</b>\n\n<i>{sc('sorted by price (')} {sort_text} {sc(')')}</i>", InlineKeyboardMarkup(keyboard), change_media=change_media)
 
     elif action == "pm_v":
         market_id = parts[1]
@@ -871,24 +869,17 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(sc("buy now"), callback_data=f"pm_buy:{market_id}:{user_id}", icon_custom_emoji_id="5312361253610475399")],
-            [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_s:{rarity_key}:{order}:{user_id}")]
+            [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_s_back:{rarity_key}:{order}:{user_id}")] # Back button with specialized return command
         ])
 
-        try:
-            await query.message.delete()
-        except Exception:
-            pass
-
-        msg = await context.bot.send_photo(
-            chat_id=query.message.chat_id,
-            photo=display_char.get('img_url', 'https://files.catbox.moe/0qjgih.png'), 
-            caption=caption,
-            reply_markup=keyboard,
-            parse_mode='HTML'
+        # Replace standard shop image with Character image
+        await update_menu(
+            query, 
+            caption, 
+            keyboard, 
+            change_media=True, 
+            photo_url=display_char.get('img_url', 'https://files.catbox.moe/0qjgih.png')
         )
-        
-        # Auto delete exactly after 20 minutes (1200 seconds) silently
-        asyncio.create_task(delete_message_later(context.bot, msg.chat_id, msg.message_id, 1200))
 
     elif action == "pm_buy":
         market_id = parts[1]
@@ -967,9 +958,11 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         )
         await send_market_log(context, "🛒 CHARACTER SOLD", log_details)
 
-        await query.message.edit_caption(
-            caption=f"<b>{E_PARTY} {sc('congratulations! you successfully bought')} {sc(char.get('name'))} {sc('for')} {E_MONEY} {price:,}.</b>",
-            parse_mode='HTML'
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back to shop"), callback_data=f"pm_m:{user_id}")]])
+        await update_menu(
+            query,
+            f"<b>{E_PARTY} {sc('congratulations! you successfully bought')} {sc(char.get('name'))} {sc('for')} {E_MONEY} {price:,}.</b>",
+            kb
         )
 
     elif action == "pm_sm":
@@ -1084,7 +1077,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
 
 # ========================
-# CONVERSATION HANDLERS
+# CONVERSATION HANDLERS (No Spam Editing)
 # ========================
 async def cancel_process(update: Update, context: CallbackContext):
     qr_msg_id = context.user_data.get('qr_msg_id')
@@ -1092,25 +1085,36 @@ async def cancel_process(update: Update, context: CallbackContext):
         try: await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=qr_msg_id)
         except Exception: pass
 
+    # Cancel in shop message (Without creating new messages)
+    shop_msg_id = context.user_data.get('shop_msg_id')
+    if shop_msg_id:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back to shop"), callback_data=f"pm_m:{update.effective_user.id}")]])
+        try: await context.bot.edit_message_caption(chat_id=update.effective_chat.id, message_id=shop_msg_id, caption=f"<b>{E_CROSS} {sc('process cancelled.')}</b>", reply_markup=kb, parse_mode='HTML')
+        except Exception: pass
+
+    # Clean their /cancel message so chat stays neat
+    if update.message:
+        try: await update.message.delete()
+        except: pass
+
     await clear_existing_states(context)
-    await update.message.reply_text(f"<b>{E_CROSS} {sc('process cancelled.')}</b>", parse_mode='HTML')
     return ConversationHandler.END
 
 async def timeout_process(update: Update, context: CallbackContext):
     qr_msg_id = context.user_data.get('qr_msg_id')
+    chat_id = update.effective_chat.id if update.effective_chat else update.callback_query.message.chat_id
     if qr_msg_id:
         try:
-            chat_id = update.effective_chat.id if update.effective_chat else update.callback_query.message.chat_id
             await context.bot.delete_message(chat_id=chat_id, message_id=qr_msg_id)
         except Exception: pass
 
+    shop_msg_id = context.user_data.get('shop_msg_id')
+    if shop_msg_id:
+        try: 
+            await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{E_TIME} {sc('session expired due to inactivity. please start again.')}</b>", parse_mode='HTML')
+        except Exception: pass
+
     await clear_existing_states(context)
-    
-    msg = f"<b>{E_TIME} {sc('session expired due to inactivity. please start again.')}</b>"
-    if update.message:
-        await update.message.reply_text(msg, parse_mode='HTML')
-    elif update.callback_query and update.callback_query.message:
-        await update.callback_query.message.reply_text(msg, parse_mode='HTML')
     return ConversationHandler.END
 
 
@@ -1134,11 +1138,12 @@ async def sell_start(update: Update, context: CallbackContext):
     context.user_data['sell_owner_id'] = owner_id
     context.user_data['sell_active'] = True
     context.user_data['sell_step'] = WAITING_FOR_CHARACTER_ID
+    context.user_data['shop_msg_id'] = query.message.message_id
 
-    await query.message.reply_text(
-        f"{E_MONEY} <b>{sc('send the character id you want to sell:')}</b>\n\n({sc('type')} /cancel {sc('to abort the process')})",
-        parse_mode="HTML"
-    )
+    text = f"{E_MONEY} <b>{sc('send the character id you want to sell:')}</b>\n\n({sc('type')} /cancel {sc('to abort the process')})"
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_sm:{owner_id}")]])
+    await update_menu(query, text, kb)
+    
     return WAITING_FOR_CHARACTER_ID
 
 async def ask_character_id(update: Update, context: CallbackContext):
@@ -1146,11 +1151,21 @@ async def ask_character_id(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     expected_owner = context.user_data.get('sell_owner_id')
     if expected_owner and user_id != expected_owner: return WAITING_FOR_CHARACTER_ID
-
+    
+    shop_msg_id = context.user_data.get('shop_msg_id')
+    chat_id = update.effective_chat.id
+    
     char_id = update.message.text.strip()
+    try: await update.message.delete() # 🧹 Clear user input immediately
+    except: pass
+
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_sm:{user_id}")]])
     user_data = await user_collection.find_one({'id': user_id})
     
     if not user_data or 'characters' not in user_data:
+        if shop_msg_id:
+            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"⚠️ <b>{sc('character not found in your inventory! try again.')}</b>", reply_markup=back_kb, parse_mode='HTML')
+            except: pass
         return WAITING_FOR_CHARACTER_ID
 
     character = None
@@ -1161,17 +1176,19 @@ async def ask_character_id(update: Update, context: CallbackContext):
             break
             
     if not character:
+        if shop_msg_id:
+            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"⚠️ <b>{sc('character not found in your inventory! try again.')}</b>", reply_markup=back_kb, parse_mode='HTML')
+            except: pass
         return WAITING_FOR_CHARACTER_ID
 
     context.user_data['sell_character'] = character
     context.user_data['sell_step'] = WAITING_FOR_PRICE
     
-    await update.message.reply_text(
-        f"{E_TICK} <b>{sc('character found! now send price')}</b>\n\n"
-        f"{sc('selected:')} <b>{sc(character.get('name'))}</b>\n"
-        f"<i>{sc('enter the price (in')} {E_MONEY}{sc(') you want to sell it for.')}</i>",
-        parse_mode='HTML'
-    )
+    text = f"{E_TICK} <b>{sc('character found! now send price')}</b>\n\n{sc('selected:')} <b>{sc(character.get('name'))}</b>\n<i>{sc('enter the price (in')} {E_MONEY}{sc(') you want to sell it for.')}</i>"
+    if shop_msg_id:
+        try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=text, reply_markup=back_kb, parse_mode='HTML')
+        except: pass
+
     return WAITING_FOR_PRICE
 
 async def ask_price(update: Update, context: CallbackContext):
@@ -1180,18 +1197,31 @@ async def ask_price(update: Update, context: CallbackContext):
     expected_owner = context.user_data.get('sell_owner_id')
     if expected_owner and user_id != expected_owner: return WAITING_FOR_PRICE
 
+    shop_msg_id = context.user_data.get('shop_msg_id')
+    chat_id = update.effective_chat.id
+    
     price_text = update.message.text.strip()
+    try: await update.message.delete() # 🧹 Clear user input immediately
+    except: pass
+
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_sm:{user_id}")]])
+
     if not price_text.isdigit() or int(price_text) <= 0:
+        if shop_msg_id:
+            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"⚠️ <b>{sc('invalid price! enter a positive number.')}</b>", reply_markup=back_kb, parse_mode='HTML')
+            except: pass
         return WAITING_FOR_PRICE
 
     price = int(price_text)
     if price > 1000000:
-        await update.message.reply_text(f"<b>{E_WARN} {sc('maximum price limit is 1,000,000 coins. please enter a lower amount.')}</b>", parse_mode='HTML')
+        if shop_msg_id:
+            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{E_WARN} {sc('maximum price limit is 1,000,000 coins. please enter a lower amount.')}</b>", reply_markup=back_kb, parse_mode='HTML')
+            except: pass
         return WAITING_FOR_PRICE
 
     character = context.user_data.get('sell_character')
     if not character:
-        await update.message.reply_text(f"<b>{sc('session expired. please start again via')} /pmarket</b>", parse_mode='HTML')
+        await clear_existing_states(context)
         return ConversationHandler.END
 
     char_id_val = str(character['id'])
@@ -1212,7 +1242,9 @@ async def ask_price(update: Update, context: CallbackContext):
     })
     
     if listed_count >= owned_count:
-        await update.message.reply_text(f"⚠️ <b>{sc('you have already listed all your copies of this character on the market!')}</b>", parse_mode='HTML')
+        if shop_msg_id:
+            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"⚠️ <b>{sc('you have already listed all your copies of this character on the market!')}</b>", reply_markup=back_kb, parse_mode='HTML')
+            except: pass
         await clear_existing_states(context)
         return ConversationHandler.END
 
@@ -1229,12 +1261,14 @@ async def ask_price(update: Update, context: CallbackContext):
     )
     await send_market_log(context, "📈 CHARACTER LISTED", log_details)
 
-    await clear_existing_states(context)
+    main_kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back to shop"), callback_data=f"pm_m:{user_id}")]])
+    text = f"<b>{E_PARTY} {sc(final_character.get('name'))} {sc('has been successfully listed on the market for')} {E_MONEY} {price:,}!</b>"
     
-    await update.message.reply_text(
-        f"<b>{E_PARTY} {sc(final_character.get('name'))} {sc('has been successfully listed on the market for')} {E_MONEY} {price:,}!</b>",
-        parse_mode='HTML'
-    )
+    if shop_msg_id:
+        try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=text, reply_markup=main_kb, parse_mode='HTML')
+        except: pass
+
+    await clear_existing_states(context)
     return ConversationHandler.END
 
 
@@ -1252,18 +1286,20 @@ async def exchange_start_t2c(update: Update, context: CallbackContext):
     await query.answer()
     context.user_data['exc_owner_id'] = owner_id
     context.user_data['exc_type'] = 't2c'
+    context.user_data['shop_msg_id'] = query.message.message_id
     
     user = await eco_collection.find_one({'id': owner_id})
     tokens = user.get('tokens', 0) if user else 0
 
-    await query.message.reply_text(
+    text = (
         f"<b>{E_EXC} {sc('how many tokens do you want to sell for coins?')}</b>\n\n"
         f"<i>{sc('1 token = 2,500 coins.')}</i>\n"
         f"<b>{sc('you have:')}</b> <code>{tokens:,}</code> {sc('tokens')}\n\n"
         f"({sc('enter the number of tokens, e.g. type')} <b>1</b> {sc('to get 2500 coins')})\n"
-        f"({sc('type')} /cancel {sc('to abort the process')})",
-        parse_mode="HTML"
+        f"({sc('type')} /cancel {sc('to abort the process')})"
     )
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_exc_menu:{owner_id}")]])
+    await update_menu(query, text, kb)
     return WAITING_FOR_EXCHANGE_AMOUNT
 
 async def exchange_start_c2t(update: Update, context: CallbackContext):
@@ -1279,18 +1315,20 @@ async def exchange_start_c2t(update: Update, context: CallbackContext):
     await query.answer()
     context.user_data['exc_owner_id'] = owner_id
     context.user_data['exc_type'] = 'c2t'
+    context.user_data['shop_msg_id'] = query.message.message_id
     
     user = await eco_collection.find_one({'id': owner_id})
     coins = user.get('balance', 0) if user else 0
 
-    await query.message.reply_text(
+    text = (
         f"<b>{E_EXC} {sc('how many tokens do you want to buy with coins?')}</b>\n\n"
         f"<i>{sc('2,500 coins = 1 token.')}</i>\n"
         f"<b>{sc('you have:')}</b> <code>{coins:,}</code> {sc('coins')}\n\n"
         f"({sc('enter the number of tokens, e.g. type')} <b>1</b> {sc('to spend 2500 coins')})\n"
-        f"({sc('type')} /cancel {sc('to abort the process')})",
-        parse_mode="HTML"
+        f"({sc('type')} /cancel {sc('to abort the process')})"
     )
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_exc_menu:{owner_id}")]])
+    await update_menu(query, text, kb)
     return WAITING_FOR_EXCHANGE_AMOUNT
 
 async def ask_exchange_amount(update: Update, context: CallbackContext):
@@ -1300,8 +1338,19 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     exc_type = context.user_data.get('exc_type')
     if expected_owner and user_id != expected_owner: return WAITING_FOR_EXCHANGE_AMOUNT
 
+    shop_msg_id = context.user_data.get('shop_msg_id')
+    chat_id = update.effective_chat.id
+
     amount_text = update.message.text.strip()
+    try: await update.message.delete() # 🧹 Clear user input immediately
+    except: pass
+
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_exc_menu:{user_id}")]])
+
     if not amount_text.isdigit() or int(amount_text) <= 0:
+        if shop_msg_id:
+            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"⚠️ <b>{sc('invalid amount! please enter a number.')}</b>\n\n{sc('try again or click back.')}", reply_markup=back_kb, parse_mode='HTML')
+            except: pass
         return WAITING_FOR_EXCHANGE_AMOUNT
 
     amount = int(amount_text)
@@ -1309,12 +1358,9 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     if user_id != OWNER_ID:
         if amount + used_today > global_limit:
             available = max(0, global_limit - used_today)
-            await update.message.reply_text(
-                f"{E_WARN} <b>{sc('daily limit exceeded!')}</b>\n"
-                f"{sc('you can only exchange')} <code>{global_limit}</code> {sc('tokens per day.')}\n"
-                f"{sc('you have')} <code>{available}</code> {sc('tokens left for today.')}", 
-                parse_mode='HTML'
-            )
+            if shop_msg_id:
+                try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"{E_WARN} <b>{sc('daily limit exceeded!')}</b>\n{sc('you can only exchange')} <code>{global_limit}</code> {sc('tokens per day.')}\n{sc('you have')} <code>{available}</code> {sc('tokens left for today.')}", reply_markup=back_kb, parse_mode='HTML')
+                except: pass
             return WAITING_FOR_EXCHANGE_AMOUNT
 
     user = await eco_collection.find_one({'id': user_id})
@@ -1323,7 +1369,9 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     
     if exc_type == 't2c':
         if amount > tokens:
-            await update.message.reply_text(f"<b>{sc('you do not have enough tokens! you only have')} <code>{tokens:,}</code> {sc('tokens.')}</b>", parse_mode='HTML')
+            if shop_msg_id:
+                try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{sc('you do not have enough tokens! you only have')} <code>{tokens:,}</code> {sc('tokens.')}</b>", reply_markup=back_kb, parse_mode='HTML')
+                except: pass
             return WAITING_FOR_EXCHANGE_AMOUNT
         total_coins = amount * 2500
         text_msg = f"<i>{sc('are you sure you want to exchange')} <code>{amount}</code> {sc('tokens to get')} <code>{total_coins:,}</code> {sc('coins?')}</i>"
@@ -1331,7 +1379,9 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     elif exc_type == 'c2t':
         cost = amount * 2500
         if cost > coins:
-            await update.message.reply_text(f"<b>{sc('you do not have enough coins! you only have')} <code>{coins:,}</code> {sc('coins.')}</b>\n<i>({sc('you need')} <code>{cost:,}</code> {sc('coins to buy')} <code>{amount}</code> {sc('tokens')})</i>", parse_mode='HTML')
+            if shop_msg_id:
+                try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{sc('you do not have enough coins! you only have')} <code>{coins:,}</code> {sc('coins.')}</b>\n<i>({sc('you need')} <code>{cost:,}</code> {sc('coins to buy')} <code>{amount}</code> {sc('tokens')})</i>", reply_markup=back_kb, parse_mode='HTML')
+                except: pass
             return WAITING_FOR_EXCHANGE_AMOUNT
         text_msg = f"<i>{sc('are you sure you want to spend')} <code>{cost:,}</code> {sc('coins to get')} <code>{amount}</code> {sc('tokens?')}</i>"
         
@@ -1340,11 +1390,9 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
         [InlineKeyboardButton(sc("cancel"), callback_data=f"pm_exc_menu:{user_id}", icon_custom_emoji_id="6105159401239225894")]
     ])
     
-    await update.message.reply_text(
-        f"<b>{sc('confirm exchange')}</b>\n\n{text_msg}",
-        reply_markup=keyboard,
-        parse_mode='HTML'
-    )
+    if shop_msg_id:
+        try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{sc('confirm exchange')}</b>\n\n{text_msg}", reply_markup=keyboard, parse_mode='HTML')
+        except: pass
     
     await clear_existing_states(context)
     return ConversationHandler.END
@@ -1423,7 +1471,7 @@ application.add_handler(CommandHandler("forcedelist", force_delist_cmd, block=Fa
 application.add_handler(CommandHandler("mrarity_on", mrarity_on_cmd, block=False), group=0)
 application.add_handler(CommandHandler("mrarity_off", mrarity_off_cmd, block=False), group=0)
 
-application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):', block=False), group=0)
+application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|pm_b|pm_r|pm_s|pm_s_back|pm_v|pm_buy|pm_sm|pm_delist|pm_exc_conf|pm_exc_menu):', block=False), group=0)
 
 # Global Callback handler for admin confirm/cancel/adjust 
 application.add_handler(CallbackQueryHandler(admin_buy_callback, pattern='^(b_adj|b_cnf|b_can|ignore)', block=False), group=0)
