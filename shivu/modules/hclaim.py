@@ -586,7 +586,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             
             if show_all or revealed[idx]:
                 if board[idx] == 'mine':
-                    # 🔥 Jaha user ne bomb click kiya waha BLAST emoji aayega
+                    # 🔥 Jaha user ne bomb click kiya waha BLAST emoji (💥) aayega
                     if idx == boom_idx:
                         row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5276032951342088188"))
                     else:
@@ -597,7 +597,6 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
                 row.append(InlineKeyboardButton("\u200b", callback_data=cb_data))
         keyboard.append(row)
     
-    # 🔥 Bottom Button: Iski wajah se layout patla nahi hoga aur hamesha full width maintain karega
     if game['status'] == 'playing':
         if game['found'] > 0:
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -660,22 +659,25 @@ async def start_mines(update: Update, context: CallbackContext):
         'boom_idx': -1 
     }
 
-    # 🔥 100% ORIGINAL TEXT. Layout modified to strictly match the screenshot (Title -> Blockquote -> Instructions below)
-    text = (
-        f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Started!')}</b>\n"
-        f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {bet}\n"
+    # 🔥 100% ORIGINAL TEXT (No blockquotes used on the text itself)
+    original_text = (
+        f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n\n"
+        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {bet}\n"
         f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{sc('Mines')}:</b> {mines_count}\n"
-        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Tiles')}:</b> 25</blockquote>\n"
-        f"{sc('Click a tile to reveal it. Find')} <tg-emoji emoji-id=\"5472030678633684592\">💎</tg-emoji> {sc('to increase your multiplier. Avoid')} <tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji>!"
+        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found')}:</b> 0\n"
+        f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{sc('Multiplier')}:</b> 1.00x\n\n"
+        f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bet}"
     )
 
     photo_url = "https://files.catbox.moe/ewtw4l.png"
     
+    # 🔥 INVISIBLE LINK HACK to make it an Article/Rich formatting post without share button
+    article_text = f"<a href='{photo_url}'>&#8203;</a>\n" + original_text
+
     try:
-        # 🔥 Wapas REPLY_PHOTO use kiya jisse Image FULL-SCREEN aaye.
-        msg = await update.message.reply_photo(
-            photo=photo_url, 
-            caption=text, 
+        # Message ab reply_text ke through Article format me aayega!
+        msg = await update.message.reply_text(
+            text=article_text, 
             reply_markup=get_mines_keyboard(game), 
             parse_mode=ParseMode.HTML
         )
@@ -698,7 +700,7 @@ async def start_mines(update: Update, context: CallbackContext):
     log_data = {
         sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{game['user_name']}</a></b>",
         sc("ɪᴅ"): f"<code>{user_id}</code>",
-        sc("ᴄʜᴀᴛ"): f"<b>{html.escape(chat_title)}</b>",
+        sc("ᴄʜᴀ transactions"): f"<b>{html.escape(chat_title)}</b>",
         sc("ᴄʜᴀᴛ ɪᴅ"): f"<code>{update.effective_chat.id}</code>",
         sc("ʙᴇᴛ"): f"<b>{bet} ᴄᴏɪɴs</b>",
         sc("ᴍɪɴᴇs"): f"<b>{mines_count}</b>",
@@ -734,6 +736,8 @@ async def mines_callback(update: Update, context: CallbackContext):
         if game['status'] != 'playing':
             await query.answer(sc("This game is already over!"), show_alert=True)
             return
+            
+        photo_url = "https://files.catbox.moe/ewtw4l.png"
 
         if data == "mines_cashout":
             await query.answer("Cashed out! 💸", show_alert=False) 
@@ -742,17 +746,18 @@ async def mines_callback(update: Update, context: CallbackContext):
             win_amount = int(game['bet'] * mult)
             game['status'] = 'cashed_out'
             
-            text = (
-                f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('Cashed Out!')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n"
-                f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
+            original_text = (
+                f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('Cashed Out!')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n\n"
+                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
                 f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{sc('Final Multiplier')}:</b> {mult}x\n"
-                f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}</blockquote>\n"
+                f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
                 f"<b>{sc('Final Board')}:</b>"
             )
+            article_text = f"<a href='{photo_url}'>&#8203;</a>\n" + original_text
             
             try:
-                await query.edit_message_caption(
-                    caption=text, 
+                await query.edit_message_text(
+                    text=article_text, 
                     reply_markup=get_mines_keyboard(game, show_all=True), 
                     parse_mode=ParseMode.HTML
                 )
@@ -777,16 +782,17 @@ async def mines_callback(update: Update, context: CallbackContext):
                 game['revealed'][idx] = True
                 game['boom_idx'] = idx # 🔥 RECORD THE MINE THAT BLEW UP
                 
-                text = (
-                    f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n"
-                    f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
-                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found before boom')}:</b> {game['found']}</blockquote>\n"
+                original_text = (
+                    f"<tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> <b>{sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found before boom')}:</b> {game['found']}\n\n"
                     f"<b>{sc('Final Board')}:</b>"
                 )
+                article_text = f"<a href='{photo_url}'>&#8203;</a>\n" + original_text
                 
                 try:
-                    await query.edit_message_caption(
-                        caption=text, 
+                    await query.edit_message_text(
+                        text=article_text, 
                         reply_markup=get_mines_keyboard(game, show_all=True), 
                         parse_mode=ParseMode.HTML
                     )
@@ -814,17 +820,18 @@ async def mines_callback(update: Update, context: CallbackContext):
                 if game['found'] == (25 - game['mines_count']):
                     game['status'] = 'cashed_out'
                     
-                    text = (
-                        f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {sc('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n"
-                        f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
+                    original_text = (
+                        f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {sc('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
+                        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
                         f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{sc('Final Multiplier')}:</b> {mult}x\n"
-                        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}</blockquote>\n"
+                        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
                         f"<b>{sc('Final Board')}:</b>"
                     )
+                    article_text = f"<a href='{photo_url}'>&#8203;</a>\n" + original_text
                     
                     try:
-                        await query.edit_message_caption(
-                            caption=text, 
+                        await query.edit_message_text(
+                            text=article_text, 
                             reply_markup=get_mines_keyboard(game, show_all=True), 
                             parse_mode=ParseMode.HTML
                         )
@@ -835,19 +842,19 @@ async def mines_callback(update: Update, context: CallbackContext):
                     mines_locks.pop(key, None) 
                     return
 
-                text = (
-                    f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n"
-                    f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {game.get('bet', 0)}\n"
+                original_text = (
+                    f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {game.get('bet', 0)}\n"
                     f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{sc('Mines')}:</b> {game['mines_count']}\n"
-                    f"<tg-emoji emoji-id=\"5472030678633684592\">💎</tg-emoji> <b>{sc('Found')}:</b> {game['found']}\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found')}:</b> {game['found']}\n"
                     f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{sc('Multiplier')}:</b> {mult}x\n\n"
-                    f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}</blockquote>\n"
-                    f"{sc('Click a tile to reveal it. Find')} <tg-emoji emoji-id=\"5472030678633684592\">💎</tg-emoji> {sc('to increase your multiplier. Avoid')} <tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji>!"
+                    f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
                 )
+                article_text = f"<a href='{photo_url}'>&#8203;</a>\n" + original_text
                 
                 try:
-                    await query.edit_message_caption(
-                        caption=text, 
+                    await query.edit_message_text(
+                        text=article_text, 
                         reply_markup=get_mines_keyboard(game), 
                         parse_mode=ParseMode.HTML
                     )
