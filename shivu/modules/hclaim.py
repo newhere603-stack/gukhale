@@ -335,7 +335,7 @@ PREMIUM_P2 = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
 
 SYMBOL_P1 = '🟢'
 SYMBOL_P2 = '🔴'
-EMPTY = '\u200b'  # 🔥 ZERO-WIDTH SPACE: Button height/width badhega nahi, ekdum perfect chhota box banega!
+EMPTY = '\u200b'
 
 def get_tic_board(game):
     if game['status'] == 'waiting':
@@ -576,7 +576,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
     keyboard = []
     board = game['board']
     revealed = game['revealed']
-    boom_idx = game.get('boom_idx', -1) # Taki hume pata rahe kis bomb pe click hua hai
+    boom_idx = game.get('boom_idx', -1) 
     
     for i in range(0, 25, 5):
         row = []
@@ -590,7 +590,6 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
                     if idx == boom_idx:
                         row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5276032951342088188"))
                     else:
-                        # Baaki chhupe hue bombs ke liye normal bomb 💣 emoji dikhao
                         row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5469654973308476699"))
                 else:
                     row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5472030678633684592"))
@@ -650,9 +649,10 @@ async def start_mines(update: Update, context: CallbackContext):
         'status': 'playing',
         'found': 0,
         'mines_count': mines_count,
-        'boom_idx': -1 # Default value
+        'boom_idx': -1 
     }
 
+    # 🔥 EXACT ORIGINAL TEXT
     text = (
         f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n"
         f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {bet}\n"
@@ -663,14 +663,29 @@ async def start_mines(update: Update, context: CallbackContext):
     )
 
     photo_url = "https://files.catbox.moe/ewtw4l.png"
+    
     try:
-        msg = await update.message.reply_photo(
-            photo=photo_url, caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML
+        # 🔥 Telegram "Article" Rich Formatting Hack! (reply_text instead of reply_photo)
+        from telegram import LinkPreviewOptions
+        msg = await update.message.reply_text(
+            text=text,
+            reply_markup=get_mines_keyboard(game),
+            parse_mode=ParseMode.HTML,
+            link_preview_options=LinkPreviewOptions(url=photo_url, prefer_large_media=True, show_above_text=True)
+        )
+    except ImportError:
+        # Backward compatibility fallback
+        text_with_link = f"<a href='{photo_url}'>&#8203;</a>\n" + text
+        msg = await update.message.reply_text(
+            text=text_with_link,
+            reply_markup=get_mines_keyboard(game),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=False
         )
     except Exception as e:
-        logger.error(f"Failed to send photo: {e}")
+        logger.error(f"Failed to start game: {e}")
         await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': bet}})
-        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {sc('Error loading image. Your bet has been refunded.')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {sc('Error loading game. Your bet has been refunded.')}</b>", parse_mode=ParseMode.HTML)
         return
 
     key = f"{update.effective_chat.id}_{msg.message_id}"
@@ -678,7 +693,6 @@ async def start_mines(update: Update, context: CallbackContext):
     await mines_collection.insert_one(game)
 
     chat_title = update.effective_chat.title if update.effective_chat.title else "Private Chat"
-    
     board_grid = ""
     for i in range(0, 25, 5):
         row = board[i:i+5]
@@ -693,7 +707,6 @@ async def start_mines(update: Update, context: CallbackContext):
         sc("ᴍɪɴᴇs"): f"<b>{mines_count}</b>",
         sc("ʙᴏᴀʀᴅ ʟᴀʏᴏᴜᴛ"): f"\n{board_grid}"
     }
-    
     asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴍɪɴᴇs ɢᴀᴍᴇ ʟᴀʏᴏᴜᴛ')} ˼ 💣", log_data)))
 
 
@@ -712,7 +725,6 @@ async def mines_callback(update: Update, context: CallbackContext):
         mines_locks[key] = asyncio.Lock()
         
     async with mines_locks[key]:
-        # 🔥 FETCH LATEST GAME STATE FROM DB
         game = await mines_collection.find_one({'key': key})
         
         if not game:
@@ -725,6 +737,8 @@ async def mines_callback(update: Update, context: CallbackContext):
         if game['status'] != 'playing':
             await query.answer(sc("This game is already over!"), show_alert=True)
             return
+
+        photo_url = "https://files.catbox.moe/ewtw4l.png"
 
         if data == "mines_cashout":
             await query.answer("Cashed out! 💸", show_alert=False) 
@@ -742,7 +756,13 @@ async def mines_callback(update: Update, context: CallbackContext):
             )
             
             try:
-                await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                from telegram import LinkPreviewOptions
+                await query.edit_message_text(
+                    text=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML,
+                    link_preview_options=LinkPreviewOptions(url=photo_url, prefer_large_media=True, show_above_text=True)
+                )
+            except ImportError:
+                await query.edit_message_text(text=f"<a href='{photo_url}'>&#8203;</a>\n" + text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML, disable_web_page_preview=False)
             except Exception: pass
             
             asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
@@ -753,7 +773,6 @@ async def mines_callback(update: Update, context: CallbackContext):
         if data.startswith("mines_click_"):
             idx = int(data.split("_")[2])
             
-            # 🔥 PREVENT DOUBLE CLICK GLITCH
             if game['revealed'][idx]:
                 await query.answer(sc("Already clicked!"), show_alert=False)
                 return
@@ -773,7 +792,13 @@ async def mines_callback(update: Update, context: CallbackContext):
                 )
                 
                 try:
-                    await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                    from telegram import LinkPreviewOptions
+                    await query.edit_message_text(
+                        text=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML,
+                        link_preview_options=LinkPreviewOptions(url=photo_url, prefer_large_media=True, show_above_text=True)
+                    )
+                except ImportError:
+                    await query.edit_message_text(text=f"<a href='{photo_url}'>&#8203;</a>\n" + text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML, disable_web_page_preview=False)
                 except Exception: pass
                 
                 asyncio.create_task(mines_collection.delete_one({'key': key}))
@@ -783,7 +808,6 @@ async def mines_callback(update: Update, context: CallbackContext):
             else:
                 await query.answer("Safe! 💸", show_alert=False) 
                 
-                # 🔥 FIX: UPDATE REVEALED LIST IN-PLACE AND PUSH DIRECTLY TO DB TO PERSIST STATE
                 revealed_list = game['revealed']
                 revealed_list[idx] = True
                 
@@ -791,7 +815,6 @@ async def mines_callback(update: Update, context: CallbackContext):
                 mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
                 win_amount = int(game['bet'] * mult)
                 
-                # 🔥 ATOMIC UPDATE TO MONGODB SO NO STATE IS LOST ON RAPID CLICKS
                 await mines_collection.update_one(
                     {'key': key}, 
                     {'$set': {'revealed': revealed_list, 'found': game['found']}}
@@ -809,7 +832,13 @@ async def mines_callback(update: Update, context: CallbackContext):
                     )
                     
                     try:
-                        await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML)
+                        from telegram import LinkPreviewOptions
+                        await query.edit_message_text(
+                            text=text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML,
+                            link_preview_options=LinkPreviewOptions(url=photo_url, prefer_large_media=True, show_above_text=True)
+                        )
+                    except ImportError:
+                        await query.edit_message_text(text=f"<a href='{photo_url}'>&#8203;</a>\n" + text, reply_markup=get_mines_keyboard(game, show_all=True), parse_mode=ParseMode.HTML, disable_web_page_preview=False)
                     except Exception: pass
                         
                     asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
@@ -827,7 +856,13 @@ async def mines_callback(update: Update, context: CallbackContext):
                 )
                 
                 try:
-                    await query.edit_message_caption(caption=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML)
+                    from telegram import LinkPreviewOptions
+                    await query.edit_message_text(
+                        text=text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML,
+                        link_preview_options=LinkPreviewOptions(url=photo_url, prefer_large_media=True, show_above_text=True)
+                    )
+                except ImportError:
+                    await query.edit_message_text(text=f"<a href='{photo_url}'>&#8203;</a>\n" + text, reply_markup=get_mines_keyboard(game), parse_mode=ParseMode.HTML, disable_web_page_preview=False)
                 except Exception: pass
 
 
