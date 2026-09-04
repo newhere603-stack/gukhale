@@ -605,7 +605,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             btn_text = f"{sc('Cash Out')} ({mult}x | {win_amount})"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout", icon_custom_emoji_id="5472030678633684592")])
         else:
-            keyboard.append([InlineKeyboardButton(sc("Find 1 more gem to cash out"), callback_data="mines_ignore")])
+            keyboard.append([InlineKeyboardButton(sc("Find coins to cash out"), callback_data="mines_ignore")])
     elif game['status'] == 'busted':
         keyboard.append([InlineKeyboardButton(sc("Game Over - Busted!"), callback_data="mines_ignore", icon_custom_emoji_id="5276032951342088188")])
     elif game['status'] == 'cashed_out':
