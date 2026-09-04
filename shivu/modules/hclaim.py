@@ -647,15 +647,14 @@ async def start_mines(update: Update, context: CallbackContext):
         'mines_count': mines_count
     }
 
-    # 🔥 EXACT ORIGINAL TEXT with Blockquote added, and Invisible Space Padding to fix "patla" UI issue
+    # 🔥 COMPLETELY ORIGINAL TEXT. JUST WRAPPED IN BLOCKQUOTE.
     text = (
         f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n"
         f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {bet}\n"
         f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{sc('Mines')}:</b> {mines_count}\n"
         f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found')}:</b> 0\n"
         f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{sc('Multiplier')}:</b> 1.00x\n\n"
-        f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bet}</blockquote>\n"
-        f"{'\u3164' * 25}"
+        f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bet}</blockquote>"
     )
 
     photo_url = "https://files.catbox.moe/ewtw4l.png"
@@ -734,8 +733,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
                 f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{sc('Final Multiplier')}:</b> {mult}x\n"
                 f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
-                f"<b>{sc('Final Board')}:</b></blockquote>\n"
-                f"{'\u3164' * 25}"
+                f"<b>{sc('Final Board')}:</b></blockquote>"
             )
             
             try:
@@ -762,11 +760,10 @@ async def mines_callback(update: Update, context: CallbackContext):
                 game['revealed'][idx] = True
                 
                 text = (
-                    f"<tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> <b>{sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n"
+                    f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n"
                     f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found before boom')}:</b> {game['found']}\n\n"
-                    f"<b>{sc('Final Board')}:</b></blockquote>\n"
-                    f"{'\u3164' * 25}"
+                    f"<b>{sc('Final Board')}:</b></blockquote>"
                 )
                 
                 try:
@@ -802,8 +799,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                         f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
                         f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{sc('Final Multiplier')}:</b> {mult}x\n"
                         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
-                        f"<b>{sc('Final Board')}:</b></blockquote>\n"
-                        f"{'\u3164' * 25}"
+                        f"<b>{sc('Final Board')}:</b></blockquote>"
                     )
                     
                     try:
@@ -821,8 +817,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{sc('Mines')}:</b> {game['mines_count']}\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found')}:</b> {game['found']}\n"
                     f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{sc('Multiplier')}:</b> {mult}x\n\n"
-                    f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}</blockquote>\n"
-                    f"{'\u3164' * 25}"
+                    f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}</blockquote>"
                 )
                 
                 try:
