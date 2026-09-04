@@ -576,8 +576,8 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
     keyboard = []
     board = game['board']
     revealed = game['revealed']
+    boom_idx = game.get('boom_idx', -1) # Taki hume pata rahe kis bomb pe click hua hai
     
-    # Generate 5x5 grid with premium emojis exactly as your original code had
     for i in range(0, 25, 5):
         row = []
         for j in range(5):
@@ -586,7 +586,12 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             
             if show_all or revealed[idx]:
                 if board[idx] == 'mine':
-                    row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5469654973308476699"))
+                    # 🔥 Agar yahi wo bomb hai jo click hua tha, toh BLAST 💥 wala premium emoji dikhao
+                    if idx == boom_idx:
+                        row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5276032951342088188"))
+                    else:
+                        # Baaki chhupe hue bombs ke liye normal bomb 💣 emoji dikhao
+                        row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5469654973308476699"))
                 else:
                     row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5472030678633684592"))
             else:
@@ -644,10 +649,10 @@ async def start_mines(update: Update, context: CallbackContext):
         'revealed': [False] * 25,
         'status': 'playing',
         'found': 0,
-        'mines_count': mines_count
+        'mines_count': mines_count,
+        'boom_idx': -1 # Default value
     }
 
-    # 🔥 COMPLETELY ORIGINAL TEXT. JUST WRAPPED IN BLOCKQUOTE.
     text = (
         f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n"
         f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {bet}\n"
@@ -758,6 +763,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                 
                 game['status'] = 'busted'
                 game['revealed'][idx] = True
+                game['boom_idx'] = idx # 🔥 RECORD THE MINE THAT BLEW UP!
                 
                 text = (
                     f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n"
