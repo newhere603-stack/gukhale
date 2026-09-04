@@ -1136,22 +1136,6 @@ async def timeout_process(update: Update, context: CallbackContext):
 
 
 # --- 1. SELL CONVERSATION ---
-sell_conv = ConversationHandler(
-    name="pmarket_sell_conv", # Persistence ke liye
-    persistent=True,          # Restart par states bachane ke liye
-    entry_points=[CallbackQueryHandler(sell_start, pattern=r"^pm_start_s:")],
-    states={
-        WAITING_FOR_CHARACTER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_character_id)],
-        WAITING_FOR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_price)],
-        ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
-    },
-    fallbacks=[CommandHandler("cancel", cancel_process)],
-    conversation_timeout=60,
-    allow_reentry=True,
-    per_user=True,
-    per_chat=True,
-)
-
 async def sell_start(update: Update, context: CallbackContext):
     query = update.callback_query
     parts = query.data.split(':')
@@ -1304,17 +1288,14 @@ async def ask_price(update: Update, context: CallbackContext):
     await clear_existing_states(context)
     return ConversationHandler.END
 
-
-# --- 2. EXCHANGE CONVERSATION (T2C and C2T) ---
-exchange_conv = ConversationHandler(
-    name="pmarket_exchange_conv", # Persistence ke liye
-    persistent=True,              # Restart par states bachane ke liye
-    entry_points=[
-        CallbackQueryHandler(exchange_start_t2c, pattern=r"^pm_start_exc_t2c:"),
-        CallbackQueryHandler(exchange_start_c2t, pattern=r"^pm_start_exc_c2t:")
-    ],
+# 🔥 SELL CONVERSATION HANDLER (Ab functions ke niche hai)
+sell_conv = ConversationHandler(
+    name="pmarket_sell_conv", 
+    persistent=True,          
+    entry_points=[CallbackQueryHandler(sell_start, pattern=r"^pm_start_s:")],
     states={
-        WAITING_FOR_EXCHANGE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_exchange_amount)],
+        WAITING_FOR_CHARACTER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_character_id)],
+        WAITING_FOR_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_price)],
         ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
     },
     fallbacks=[CommandHandler("cancel", cancel_process)],
@@ -1324,6 +1305,7 @@ exchange_conv = ConversationHandler(
     per_chat=True,
 )
 
+# --- 2. EXCHANGE CONVERSATION (T2C and C2T) ---
 async def exchange_start_t2c(update: Update, context: CallbackContext):
     query = update.callback_query
     parts = query.data.split(':')
@@ -1448,9 +1430,28 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     await clear_existing_states(context)
     return ConversationHandler.END
 
+# 🔥 EXCHANGE CONVERSATION HANDLER (Ab functions ke niche hai)
+exchange_conv = ConversationHandler(
+    name="pmarket_exchange_conv", 
+    persistent=True,              
+    entry_points=[
+        CallbackQueryHandler(exchange_start_t2c, pattern=r"^pm_start_exc_t2c:"),
+        CallbackQueryHandler(exchange_start_c2t, pattern=r"^pm_start_exc_c2t:")
+    ],
+    states={
+        WAITING_FOR_EXCHANGE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_exchange_amount)],
+        ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
+    },
+    fallbacks=[CommandHandler("cancel", cancel_process)],
+    conversation_timeout=60,
+    allow_reentry=True,
+    per_user=True,
+    per_chat=True,
+)
+
 buy_conv = ConversationHandler(
-    name="pmarket_buy_conv", # Persistence ke liye
-    persistent=True,         # Restart par states bachane ke liye
+    name="pmarket_buy_conv", 
+    persistent=True,         
     entry_points=[
         MessageHandler(filters.Regex(r'^/start buy_tokens$'), start_buy_menu),
         CommandHandler("buy", buy_command_pm)
