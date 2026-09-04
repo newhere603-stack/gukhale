@@ -48,6 +48,7 @@ bot_settings_collection = db['bot_settings'] # 🔥 Persistent Settings ke liye
 group_settings_collection = db['group_settings_db']
 spawns_collection = db['active_spawns_db']
 chat_message_counts_collection = db['chat_message_counts_db'] # 🔥 Naya DB Bot ki Yaddasht (Memory) ke liye
+pending_deletes_collection = db['pending_deletes_db'] # 🔥 Naya DB Auto-delete memory ke liye
 
 MESSAGE_FREQUENCY = 70
 DESPAWN_TIME = 300  # (300 seconds)
@@ -71,13 +72,31 @@ RARITIES = {
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Cosmic"),
 }
 
-# 🔥 SILENT AUTO-DELETE HELPER
-async def auto_delete_msg(context, chat_id, message_id, delay: int):
+# 🔥 SILENT AUTO-DELETE HELPER (Now with DB Memory!)
+async def auto_delete_msg(context, chat_id, message_id, delay: float, db_id=None):
+    if db_id is None:
+        try:
+            doc = await pending_deletes_collection.insert_one({
+                'chat_id': chat_id,
+                'message_id': message_id,
+                'delete_at': time.time() + delay
+            })
+            db_id = doc.inserted_id
+        except Exception:
+            pass
+
     await asyncio.sleep(delay)
+    
     try:
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception:
         pass
+    finally:
+        if db_id:
+            try:
+                await pending_deletes_collection.delete_one({'_id': db_id})
+            except Exception:
+                pass
 
 disabled_rarities_cache = set()
 group_settings_cache = {}  
@@ -140,6 +159,7 @@ async def setup_database_indexes():
         await group_user_totals_collection.create_index([("user_id", 1), ("group_id", 1)], background=True)
         await spawns_collection.create_index("chat_id", unique=True, background=True)
         await chat_message_counts_collection.create_index("chat_id", unique=True, background=True)
+        await pending_deletes_collection.create_index("delete_at", background=True)
         LOGGER.info("⚡ Database Indexes Verified/Created Successfully!")
     except Exception as e:
         if "IndexKeySpecsConflict" not in str(e):
@@ -253,6 +273,26 @@ async def _send_media(context, chat_id, character, caption):
     return await context.bot.send_photo(chat_id=chat_id, photo=character.get('img_url'),
                                          caption=caption, parse_mode='HTML')
 
+# 🔥 RESTORE AUTO-DELETES ON STARTUP
+async def load_pending_deletes(bot):
+    try:
+        class DummyContext:
+            def __init__(self, bot_instance):
+                self.bot = bot_instance
+        context = DummyContext(bot)
+        
+        now = time.time()
+        pending = await pending_deletes_collection.find({}).to_list(length=None)
+        
+        for doc in pending:
+            time_left = doc.get('delete_at', now) - now
+            if time_left < 0:
+                time_left = 0
+            asyncio.create_task(auto_delete_msg(context, doc['chat_id'], doc['message_id'], time_left, doc['_id']))
+        LOGGER.info(f"⚡ [YADDASHT RESTORED] Loaded {len(pending)} pending auto-deletes.")
+    except Exception as e:
+        LOGGER.error(f"Memory restore failed for auto-deletes: {e}")
+
 async def load_spawns_and_counts(bot):
     global message_counts, active_spawns_cache
     
@@ -319,15 +359,10 @@ async def despawn_character(chat_id, message_id, character, context, delay=DESPA
         )
         missed_msg = await _send_media(context, chat_id, character, caption)
         
-        asyncio.create_task(auto_delete_msg(context, chat_id, missed_msg.message_id, 1200))
-        
         should_delete_miss = await get_group_setting(chat_id, 'miss_delete', False)
-        if should_delete_miss:
-            await asyncio.sleep(10)
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=missed_msg.message_id)
-            except BadRequest:
-                pass
+        delete_delay = 10 if should_delete_miss else 1200
+        asyncio.create_task(auto_delete_msg(context, chat_id, missed_msg.message_id, delete_delay))
+        
     except Exception as e:
         LOGGER.error(f"despawn_character failed for chat={chat_id}: {e}")
     finally:
@@ -344,22 +379,20 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     if await check_and_handle_flood(update, context):
         return
 
-    # 🔥 Ghost Waifu Failsafe Engine (Agar error se character fass gaya hai memory me)
+    # 🔥 Ghost Waifu Failsafe Engine
     if chat_id in active_spawns_cache:
         spawn_info = active_spawns_cache[chat_id]
         spawn_time = spawn_info.get('spawn_time', 0)
         if time.time() - spawn_time > DESPAWN_TIME:
             active_spawns_cache.pop(chat_id, None)
-            # FIX: Await ki jagah pe create_task tha jo error de raha tha
             await spawns_collection.delete_one({'chat_id': chat_id})
             LOGGER.info(f"Ghost waifu cleared forcefully in Chat ID: {chat_id}")
         else:
-            return # Waifu active hai sahi se, isliye message nahi ginega
+            return
 
     locks.setdefault(chat_id, asyncio.Lock())
 
     async with locks[chat_id]:
-        # Double check in case cleared instantly
         if chat_id in active_spawns_cache:
             return
             
@@ -374,7 +407,6 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
 
         message_counts[chat_id] += 1
         
-        # FIX: Await lagaya taaki crash na ho
         await chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': message_counts[chat_id]}}, upsert=True)
         
         try:
@@ -392,7 +424,6 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
             
-            # FIX: Yahan bhi await use hoga
             await chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': 0}}, upsert=True)
             
             LOGGER.info(f"[SPAWN TRIGGERED] Target reached in Chat ID: {chat_id}. Starting send_image...")
@@ -560,7 +591,7 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 f"<tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> 𝗧𝗜𝗠𝗘 𝗧𝗔𝗞𝗘𝗡:<code> {formatted_time}</code>"
             )
             
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("✨ ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}")]])
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("ʜᴀʀᴇᴍ", switch_inline_query_current_chat=f"collection.{user_id}", icon_custom_emoji_id="6093637923834438402")]])
             
             await update.message.reply_text(success_message, parse_mode='HTML', reply_markup=kb)
 
@@ -727,6 +758,7 @@ async def main():
         await load_rarity_status()
         
         await load_spawns_and_counts(application.bot)
+        await load_pending_deletes(application.bot)
         
         await shivuu.start()
 
