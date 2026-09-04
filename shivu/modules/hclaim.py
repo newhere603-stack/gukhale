@@ -350,10 +350,11 @@ def get_tic_board(game):
             val = board[i+j]
             cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
             
+            # 🔥 Fixed Custom Emoji bug here (Replaced invalid icon_custom_emoji_id with standard emoji string)
             if val == SYMBOL_P1:
-                row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data, icon_custom_emoji_id="6093865707424980866"))
+                row.append(InlineKeyboardButton("🟢", callback_data=cb_data))
             elif val == SYMBOL_P2:
-                row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data, icon_custom_emoji_id="6093741664474504699"))
+                row.append(InlineKeyboardButton("🔴", callback_data=cb_data))
             else:
                 row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data))
         keyboard.append(row)
@@ -584,32 +585,33 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             idx = i + j
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
             
+            # 🔥 Fix: Removed invalid `icon_custom_emoji_id` from buttons which caused silent exceptions
+            # replaced with stable strings so the UI perfectly updates!
             if show_all or revealed[idx]:
                 if board[idx] == 'mine':
-                    # 🔥 Jaha user ne bomb click kiya waha BLAST emoji (💥) aayega
                     if idx == boom_idx:
-                        row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5276032951342088188"))
+                        row.append(InlineKeyboardButton("💥", callback_data=cb_data))
                     else:
-                        row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5469654973308476699"))
+                        row.append(InlineKeyboardButton("💣", callback_data=cb_data))
                 else:
-                    row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5472030678633684592"))
+                    row.append(InlineKeyboardButton("💸", callback_data=cb_data))
             else:
                 row.append(InlineKeyboardButton("\u200b", callback_data=cb_data))
         keyboard.append(row)
     
-    # 🔥 Bottom Button: Taaki layout patla na ho aur 5x5 keys full screen chaudi aayen
+    # 🔥 Bottom Button fix
     if game['status'] == 'playing':
         if game['found'] > 0:
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
             win_amount = int(game['bet'] * mult)
-            btn_text = f"{sc('Cash Out')} ({mult}x | {win_amount})"
-            keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout", icon_custom_emoji_id="5472030678633684592")])
+            btn_text = f"💸 {sc('Cash Out')} ({mult}x | {win_amount})"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout")])
         else:
             keyboard.append([InlineKeyboardButton(sc("Find coins to cash out"), callback_data="mines_ignore")])
     elif game['status'] == 'busted':
-        keyboard.append([InlineKeyboardButton(sc("Game Over - Busted!"), callback_data="mines_ignore", icon_custom_emoji_id="5276032951342088188")])
+        keyboard.append([InlineKeyboardButton("💥 " + sc("Game Over - Busted!"), callback_data="mines_ignore")])
     elif game['status'] == 'cashed_out':
-        keyboard.append([InlineKeyboardButton(sc("Game Over - Cashed Out!"), callback_data="mines_ignore", icon_custom_emoji_id="6053140037250323814")])
+        keyboard.append([InlineKeyboardButton("🏆 " + sc("Game Over - Cashed Out!"), callback_data="mines_ignore")])
         
     return InlineKeyboardMarkup(keyboard)
 
@@ -660,8 +662,6 @@ async def start_mines(update: Update, context: CallbackContext):
         'boom_idx': -1 
     }
 
-    # 🔥 100% ORIGINAL TEXT (Jo tumne sabse pehle diya tha). 
-    # Beech mein blockquote lagaya hai taaki Screenshot 1000023099_2.jpg jaisi formatting aaye!
     text = (
         f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n"
         f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {bet}\n"
@@ -674,7 +674,6 @@ async def start_mines(update: Update, context: CallbackContext):
     photo_url = "https://files.catbox.moe/ewtw4l.png"
     
     try:
-        # 🔥 WAPAS NORMAL REPLY_PHOTO METHOD (Taki photo Full Screen aaye)
         msg = await update.message.reply_photo(
             photo=photo_url, 
             caption=text, 
@@ -753,13 +752,13 @@ async def mines_callback(update: Update, context: CallbackContext):
             )
             
             try:
-                # 🔥 Wapas EDIT_MESSAGE_CAPTION (kyunki normal photo message hai)
                 await query.edit_message_caption(
                     caption=text, 
                     reply_markup=get_mines_keyboard(game, show_all=True), 
                     parse_mode=ParseMode.HTML
                 )
-            except Exception: pass
+            except Exception as e: 
+                logger.error(f"Error updating cashout UI: {e}")
             
             asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
             asyncio.create_task(mines_collection.delete_one({'key': key}))
@@ -778,7 +777,7 @@ async def mines_callback(update: Update, context: CallbackContext):
                 
                 game['status'] = 'busted'
                 game['revealed'][idx] = True
-                game['boom_idx'] = idx # 🔥 RECORD THE MINE THAT BLEW UP
+                game['boom_idx'] = idx 
                 
                 text = (
                     f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n"
@@ -793,7 +792,8 @@ async def mines_callback(update: Update, context: CallbackContext):
                         reply_markup=get_mines_keyboard(game, show_all=True), 
                         parse_mode=ParseMode.HTML
                     )
-                except Exception: pass
+                except Exception as e: 
+                    logger.error(f"Error updating busted UI: {e}")
                 
                 asyncio.create_task(mines_collection.delete_one({'key': key}))
                 mines_locks.pop(key, None) 
@@ -831,7 +831,8 @@ async def mines_callback(update: Update, context: CallbackContext):
                             reply_markup=get_mines_keyboard(game, show_all=True), 
                             parse_mode=ParseMode.HTML
                         )
-                    except Exception: pass
+                    except Exception as e: 
+                        logger.error(f"Error updating perfect UI: {e}")
                         
                     asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
                     asyncio.create_task(mines_collection.delete_one({'key': key}))
@@ -853,7 +854,8 @@ async def mines_callback(update: Update, context: CallbackContext):
                         reply_markup=get_mines_keyboard(game), 
                         parse_mode=ParseMode.HTML
                     )
-                except Exception: pass
+                except Exception as e: 
+                    logger.error(f"Error updating playing UI: {e}")
 
 
 # ==========================================
@@ -920,7 +922,3 @@ application.add_handler(CallbackQueryHandler(tic_callback, pattern="^tic_", bloc
 # 💣 MINES HANDLERS
 application.add_handler(CommandHandler("mines", start_mines, block=False))
 application.add_handler(CallbackQueryHandler(mines_callback, pattern="^mines_", block=False))
-
-# 👑 ADMIN HANDLERS
-application.add_handler(CommandHandler("drarity_on", drarity_on, block=False))
-application.add_handler(CommandHandler("drarity_off", drarity_off, block=False))
