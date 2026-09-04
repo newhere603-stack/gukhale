@@ -577,12 +577,14 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
     board = game['board']
     revealed = game['revealed']
     
+    # Generate 5x5 grid with proper empty state mapping
     for i in range(0, 25, 5):
         row = []
         for j in range(5):
             idx = i + j
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
             
+            # 🔥 Custom Emoji restored to icon_custom_emoji_id
             if show_all or revealed[idx]:
                 if board[idx] == 'mine':
                     row.append(InlineKeyboardButton("\u200b", callback_data=cb_data, icon_custom_emoji_id="5469654973308476699"))
@@ -592,11 +594,21 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
                 row.append(InlineKeyboardButton("\u200b", callback_data=cb_data))
         keyboard.append(row)
     
-    if game['status'] == 'playing' and game['found'] > 0:
-        mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
-        win_amount = int(game['bet'] * mult)
-        btn_text = f"{sc('Cash Out')} ({mult}x | {win_amount})"
-        keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout", icon_custom_emoji_id="5472030678633684592")])
+    # 🔥 The MAGIC trick to prevent Keyboard overflow!
+    # Hamesha ek full width bottom button do jisse message bubble expand rahe aur custom emoji bahar na nikle.
+    if game['status'] == 'playing':
+        if game['found'] > 0:
+            mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
+            win_amount = int(game['bet'] * mult)
+            btn_text = f"{sc('Cash Out')} ({mult}x | {win_amount})"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data="mines_cashout", icon_custom_emoji_id="5472030678633684592")])
+        else:
+            # Agar start hua hai to fake button dikhao wide space cover karne ke liye
+            keyboard.append([InlineKeyboardButton(sc("Find 1 more gem to cash out"), callback_data="mines_ignore")])
+    elif game['status'] == 'busted':
+        keyboard.append([InlineKeyboardButton(sc("Game Over - Busted!"), callback_data="mines_ignore", icon_custom_emoji_id="5276032951342088188")])
+    elif game['status'] == 'cashed_out':
+        keyboard.append([InlineKeyboardButton(sc("Game Over - Cashed Out!"), callback_data="mines_ignore", icon_custom_emoji_id="6053140037250323814")])
         
     return InlineKeyboardMarkup(keyboard)
 
@@ -646,13 +658,13 @@ async def start_mines(update: Update, context: CallbackContext):
         'mines_count': mines_count
     }
 
+    # 🔥 Telegram Rich Formatting - Blockquote implementation like Screenshot!
     text = (
-        f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n\n"
-        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {bet}\n"
+        f"<b>{sc('Mines Game Started!')}</b>\n"
+        f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💰</tg-emoji> <b>{sc('Bet')}:</b> {bet}\n"
         f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{sc('Mines')}:</b> {mines_count}\n"
-        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found')}:</b> 0\n"
-        f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{sc('Multiplier')}:</b> 1.00x\n\n"
-        f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {bet}"
+        f"<tg-emoji emoji-id=\"6093741664474504699\">❓</tg-emoji> <b>{sc('Tiles')}:</b> 25</blockquote>\n"
+        f"{sc('Click a tile to reveal it. Find')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('to increase your multiplier. Avoid')} <tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji>!"
     )
 
     photo_url = "https://files.catbox.moe/ewtw4l.png"
@@ -727,11 +739,10 @@ async def mines_callback(update: Update, context: CallbackContext):
             game['status'] = 'cashed_out'
             
             text = (
-                f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('Cashed Out!')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n\n"
-                f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
+                f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('Cashed Out!')}</b>\n"
+                f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
                 f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{sc('Final Multiplier')}:</b> {mult}x\n"
-                f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
-                f"<b>{sc('Final Board')}:</b>"
+                f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins')}</blockquote>"
             )
             
             try:
@@ -758,10 +769,9 @@ async def mines_callback(update: Update, context: CallbackContext):
                 game['revealed'][idx] = True
                 
                 text = (
-                    f"<tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> <b>{sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n\n"
-                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
-                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found before boom')}:</b> {game['found']}\n\n"
-                    f"<b>{sc('Final Board')}:</b>"
+                    f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {sc('BOOM! You hit a mine!')}</b>\n"
+                    f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💎</tg-emoji> <b>{sc('Found before boom')}:</b> {game['found']}</blockquote>"
                 )
                 
                 try:
@@ -793,11 +803,10 @@ async def mines_callback(update: Update, context: CallbackContext):
                     game['status'] = 'cashed_out'
                     
                     text = (
-                        f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {sc('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n\n"
-                        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
+                        f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {sc('PERFECT GAME!')}</b>\n"
+                        f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
                         f"<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> <b>{sc('Final Multiplier')}:</b> {mult}x\n"
-                        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
-                        f"<b>{sc('Final Board')}:</b>"
+                        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins')}</blockquote>"
                     )
                     
                     try:
@@ -810,12 +819,13 @@ async def mines_callback(update: Update, context: CallbackContext):
                     return
 
                 text = (
-                    f"<b><tg-emoji emoji-id=\"6091632796877463207\">🧩</tg-emoji> {sc('Mines Game Active!')}</b>\n\n"
-                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {game.get('bet', 0)}\n"
+                    f"<b>{sc('Mines Game Active!')}</b>\n"
+                    f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Bet')}:</b> {game.get('bet', 0)}\n"
                     f"<tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji> <b>{sc('Mines')}:</b> {game['mines_count']}\n"
-                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found')}:</b> {game['found']}\n"
-                    f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{sc('Multiplier')}:</b> {mult}x\n\n"
-                    f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💎</tg-emoji> <b>{sc('Found')}:</b> {game['found']}\n"
+                    f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{sc('Multiplier')}:</b> {mult}x\n"
+                    f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Potential Winnings')}:</b> {win_amount}</blockquote>\n"
+                    f"{sc('Click a tile to reveal it. Find')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('to increase your multiplier. Avoid')} <tg-emoji emoji-id=\"5469654973308476699\">💣</tg-emoji>!"
                 )
                 
                 try:
