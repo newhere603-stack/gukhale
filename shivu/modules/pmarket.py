@@ -378,9 +378,9 @@ async def start_buy_menu(update: Update, context: CallbackContext):
         f"<b>{sc('select the product you want to buy:')}</b>"
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(sc("tokens"), callback_data="buy_prod_t", icon_custom_emoji_id="5377336227533969892"), InlineKeyboardButton(sc("coins"), callback_data="buy_prod_c", icon_custom_emoji_id="5472030678633684592")],
-        [InlineKeyboardButton(sc("characters"), callback_data="buy_prod_char")],
-        [InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="6105159401239225894")]
+        [InlineKeyboardButton(sc("tokens"), callback_data="buy_prod_t", icon_custom_emoji_id="6109593993627050230"), InlineKeyboardButton(sc("coins"), callback_data="buy_prod_c", icon_custom_emoji_id="5472030678633684592")],
+        [InlineKeyboardButton(sc("characters"), callback_data="buy_prod_char", icon_custom_emoji_id="6093434630147415641")],
+        [InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="5260342697075416641")]
     ])
 
     if update.callback_query: 
@@ -427,7 +427,7 @@ async def buy_product_callback(update: Update, context: CallbackContext):
 
     await send_buy_log(context, "📦 SELECTED", query.from_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Sᴇʟᴇᴄᴛᴇᴅ <b>{query.data}</b>")
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton(sc("back"), callback_data="buy_back"), InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="6105159401239225894")]
+        [InlineKeyboardButton(sc("back"), callback_data="buy_back", icon_custom_emoji_id="5258236805890710909"), InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="5260342697075416641")]
     ])
     await query.message.edit_text(text, reply_markup=kb, parse_mode='HTML')
     return next_state
@@ -459,7 +459,7 @@ async def ask_buy_char_id(update: Update, context: CallbackContext):
     min_qty = max(1, math.ceil(37500 / coin_price))
 
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton(sc("back"), callback_data="buy_back"), InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="6105159401239225894")]
+        [InlineKeyboardButton(sc("back"), callback_data="buy_back", icon_custom_emoji_id="5258236805890710909"), InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="5260342697075416641")]
     ])
     await update.message.reply_html(
         f"<b>{E_TICK} {sc('character found:')} {sc(live_char.get('name'))}</b>\n"
@@ -518,7 +518,7 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
         f"<b>{E_WAIT} {sc('please send the payment screenshot below to confirm your order.')}</b>"
     )
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton(sc("back"), callback_data="buy_back"), InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="6105159401239225894")]
+        [InlineKeyboardButton(sc("back"), callback_data="buy_back", icon_custom_emoji_id="5258236805890710909"), InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="5260342697075416641")]
     ])
 
     msg = await context.bot.send_photo(
@@ -578,7 +578,7 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
             InlineKeyboardButton("❯", callback_data=f"b_adj:+1:{order_id}")
         ],
         [InlineKeyboardButton("ᴄᴏɴғɪʀᴍ", callback_data=f"b_cnf:{order_id}", icon_custom_emoji_id="6105024010985152856")],
-        [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}", icon_custom_emoji_id="6105159401239225894")]
+        [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}", icon_custom_emoji_id="5260342697075416641")]
     ])
     
     await context.bot.send_photo(chat_id=BUY_LOG_GROUP_ID, photo=photo_id, caption=admin_text, reply_markup=kb, parse_mode='HTML')
@@ -655,7 +655,7 @@ async def admin_buy_callback(update: Update, context: CallbackContext):
                 InlineKeyboardButton("❯", callback_data=f"b_adj:+1:{order_id}")
             ],
             [InlineKeyboardButton("ᴄᴏɴғɪʀᴍ", callback_data=f"b_cnf:{order_id}", icon_custom_emoji_id="6105024010985152856")],
-            [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}", icon_custom_emoji_id="6105159401239225894")]
+            [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"b_can:{order_id}", icon_custom_emoji_id="5260342697075416641")]
         ])
         if query.message.caption_html != new_caption:
             await query.edit_message_caption(caption=new_caption, reply_markup=kb, parse_mode='HTML')
@@ -711,7 +711,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     
     owner_id = int(parts[-1])
     if user_id != owner_id:
-        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}\n{sc('please open your own market via')} /pmarket", show_alert=True)
+        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}\n{sc('please open your own via')} /shop", show_alert=True)
         return
 
     action = parts[0]
@@ -739,7 +739,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(sc("get coins"), callback_data=f"pm_start_exc_t2c:{user_id}", icon_custom_emoji_id="5472030678633684592"),
-             InlineKeyboardButton(sc("get token"), callback_data=f"pm_start_exc_c2t:{user_id}", icon_custom_emoji_id="5377336227533969892")],
+             InlineKeyboardButton(sc("get token"), callback_data=f"pm_start_exc_c2t:{user_id}", icon_custom_emoji_id="6109593993627050230")],
             [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_m:{user_id}")]
         ])
         await update_menu(query, f"<b>{E_EXC} {sc('exchange menu')}</b>\n\n<i>{sc('daily limit:')} {limit_text}</i>\n<i>{sc('what would you like to do?')}</i>", keyboard)
