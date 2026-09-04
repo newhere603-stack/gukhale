@@ -286,9 +286,9 @@ async def pmarket_command(update: Update, context: CallbackContext):
     bot_username = context.bot.username
     keyboard = await get_pmarket_keyboard(user_id, bot_username)
     
-    await update.message.reply_text(
-        "<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n"
-        "<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>",
+    await update.message.reply_photo(
+        photo="https://files.catbox.moe/qormfi.png",
+        caption="<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>ᴄʜᴏᴏsᴇ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.</i>",
         reply_markup=keyboard,
         parse_mode='HTML'
     )
@@ -517,8 +517,10 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
         f"<b>{sc('pay inr to the following upi or qr in the image:')}</b>\n<b>UPI</b> <code>sasuke72@ptyes</code>\n\n"
         f"<b>{E_WAIT} {sc('please send the payment screenshot below to confirm your order.')}</b>"
     )
+    
+    # 🔥 Pyaara sa change yahan: QR Code wale step me "back" uda diya, ab bas cancel hai 🔥
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton(sc("back"), callback_data="buy_back", icon_custom_emoji_id="5258236805890710909"), InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="5260342697075416641")]
+        [InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="5260342697075416641")]
     ])
 
     msg = await context.bot.send_photo(
@@ -731,7 +733,21 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     elif action == "pm_m":
         bot_username = context.bot.username
         keyboard = await get_pmarket_keyboard(user_id, bot_username)
-        await update_menu(query, f"<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>{sc('choose an option to proceed.')}</i>", keyboard)
+        caption = f"<b><tg-emoji emoji-id=\"5278702045883292456\">🛍</tg-emoji> P2P ᴍᴀʀᴋᴇᴛᴘʟᴀᴄᴇ</b>\n\n<i>{sc('choose an option to proceed.')}</i>"
+        
+        # 🔥 Yahan image ke sath main menu aayega jab koi back button press karega shop me 🔥
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+            
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo="https://files.catbox.moe/qormfi.png",
+            caption=caption,
+            reply_markup=keyboard,
+            parse_mode='HTML'
+        )
 
     elif action == "pm_exc_menu":
         global_limit, used_today, _ = await get_token_limit_info(user_id)
