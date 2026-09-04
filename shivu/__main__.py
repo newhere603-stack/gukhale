@@ -423,7 +423,15 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         character = random.choice(allowed)
         sent_characters[chat_id].append(character['id'])
 
-        caption = "<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴘᴘᴇᴀʀᴇᴅ! <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji>\nᴜsᴇ /grab (ɴᴀᴍᴇ) ᴛᴏ ᴄʟᴀɪᴍ ɪᴛ <tg-emoji emoji-id=\"6091214879379692751\">❤️‍🔥</tg-emoji></b>"
+        # Fetch actual emoji dynamically based on rarity
+        rarity_str = character.get('rarity', '🟢 Common')
+        r_key = get_base_rarity(rarity_str)
+        if r_key and r_key in RARITIES:
+            _, r_display_emoji, r_name = RARITIES[r_key]
+        else:
+            r_display_emoji = rarity_str.split(' ')[0] if isinstance(rarity_str, str) and ' ' in rarity_str else '🟢'
+
+        caption = f"<b>{r_display_emoji} ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀʀʀɪᴠᴇᴅ!\nᴄʟᴀɪᴍ ᴛʜᴇᴍ ᴡɪᴛʜ /grab <code>ɴᴀᴍᴇ</code></b>"
         
         LOGGER.info(f"[SPAWN ATTEMPT] Sending media for '{character.get('name')}' in Chat ID: {chat_id}")
         spawn_msg = await _send_media(context, chat_id, character, caption)
