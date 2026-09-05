@@ -29,6 +29,7 @@ LOG_GROUP_ID = -1003893927065
 BUY_LOG_GROUP_ID = -1003757326893  
 OWNER_ID = 7657218453
 SHOP_IMG = "https://files.catbox.moe/qormfi.png" # 🔥 Global Shop Image
+SHOP_AUTO_DELETE_SECONDS = 20 * 60  # 20 minutes
 
 # --- DATABASE COLLECTIONS ---
 user_collection = db['user_collection_lmaoooo'] 
@@ -40,15 +41,16 @@ delete_collection = db['auto_delete_queue']
 def get_ist_now():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
-# 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
+# 🔥 PERMANENT AUTO DELETE SYSTEM (MongoDB-backed, survives bot restarts) 🔥
 _worker_started = False
 
 async def background_delete_worker(bot):
     try:
         await delete_collection.create_index("delete_at")
+        await delete_collection.create_index([("chat_id", 1), ("message_id", 1)])
     except Exception:
         pass
-        
+
     while True:
         try:
             now = time.time()
@@ -57,38 +59,45 @@ async def background_delete_worker(bot):
                 try:
                     await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
                 except Exception:
-                    pass 
+                    pass
                 finally:
                     await delete_collection.delete_one({'_id': doc['_id']})
         except Exception:
             pass
-        await asyncio.sleep(30)
+        await asyncio.sleep(10)
 
-async def delete_message_later(bot, chat_id, message_id, delay):
-    if not bot or not chat_id or not message_id: return
-        
+async def ensure_delete_worker(bot):
     global _worker_started
+    if not bot:
+        return
     if not _worker_started:
         _worker_started = True
         asyncio.create_task(background_delete_worker(bot))
 
+async def delete_message_later(bot, chat_id, message_id, delay=SHOP_AUTO_DELETE_SECONDS):
+    """Schedule a message to be deleted. Stored in MongoDB so a bot restart
+    continues the countdown instead of forgetting it."""
+    if not bot or not chat_id or not message_id:
+        return
+
+    await ensure_delete_worker(bot)
+
     delete_at = time.time() + delay
+    try:
+        await delete_collection.update_one(
+            {'chat_id': chat_id, 'message_id': message_id},
+            {'$set': {
+                'chat_id': chat_id,
+                'message_id': message_id,
+                'delete_at': delete_at
+            }},
+            upsert=True
+        )
+    except Exception:
+        pass
 
-    await delete_collection.insert_one({
-        'chat_id': chat_id,
-        'message_id': message_id,
-        'delete_at': delete_at
-    })
-
-    async def memory_delete():
-        await asyncio.sleep(delay)
-        try:
-            await bot.delete_message(chat_id=chat_id, message_id=message_id)
-            await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
-        except Exception:
-            pass
-
-    asyncio.create_task(memory_delete())
+async def schedule_shop_autodelete(bot, chat_id, message_id):
+    await delete_message_later(bot, chat_id, message_id, SHOP_AUTO_DELETE_SECONDS)
 
 # --- HELPER: SEND LOGS TO LOG GROUP ---
 async def send_market_log(context: CallbackContext, action: str, details: str):
@@ -280,11 +289,85 @@ async def update_menu(query, text, keyboard, change_media=False, photo_url=SHOP_
             await query.answer()
         except:
             pass
+        # Keep the 20-min auto-delete alive on this shop message (survives restart)
+        try:
+            bot = None
+            try:
+                bot = query.get_bot()
+            except Exception:
+                bot = None
+            if bot is None and query.message is not None:
+                try:
+                    bot = query.message.get_bot()
+                except Exception:
+                    bot = None
+            if bot and query.message:
+                await schedule_shop_autodelete(bot, query.message.chat_id, query.message.message_id)
+        except Exception:
+            pass
 
 async def clear_existing_states(context: CallbackContext):
     keys = ['sell_owner_id', 'sell_character', 'sell_active', 'sell_step', 'exc_owner_id', 'exc_type', 'buy_prompt_active', 'buy_product', 'buy_char_id', 'buy_amount', 'buy_price', 'qr_msg_id']
     for k in keys:
         context.user_data.pop(k, None)
+
+# --- BUY SESSION PERSISTENCE (survives bot restarts) ---
+BUY_SESSION_KEYS = [
+    'buy_order_id', 'buy_product', 'buy_char_id', 'buy_char_name',
+    'buy_char_rarity', 'buy_amount', 'buy_price', 'buy_prompt_active',
+    'qr_msg_id', 'shop_msg_id', 'buy_chat_id'
+]
+
+def _buy_session_id(user_id):
+    return f'buy_session_{user_id}'
+
+async def save_buy_session(user_id, context: CallbackContext, state):
+    if not user_id:
+        return
+    data = {k: context.user_data.get(k) for k in BUY_SESSION_KEYS}
+    data['state'] = state
+    data['user_id'] = user_id
+    data['updated_at'] = time.time()
+    try:
+        await bot_settings_collection.update_one(
+            {'_id': _buy_session_id(user_id)},
+            {'$set': data},
+            upsert=True
+        )
+    except Exception:
+        pass
+
+async def load_buy_session(user_id):
+    if not user_id:
+        return None
+    try:
+        return await bot_settings_collection.find_one({'_id': _buy_session_id(user_id)})
+    except Exception:
+        return None
+
+async def clear_buy_session(user_id):
+    if not user_id:
+        return
+    try:
+        await bot_settings_collection.delete_one({'_id': _buy_session_id(user_id)})
+    except Exception:
+        pass
+
+def apply_buy_session(context: CallbackContext, session):
+    if not session:
+        return
+    for k in BUY_SESSION_KEYS:
+        if session.get(k) is not None:
+            context.user_data[k] = session[k]
+
+async def ensure_buy_user_data(context: CallbackContext, user_id):
+    if context.user_data.get('buy_order_id'):
+        return True
+    session = await load_buy_session(user_id)
+    if not session:
+        return False
+    apply_buy_session(context, session)
+    return True
 
 async def get_pmarket_keyboard(user_id, bot_username=""):
     settings = await bot_settings_collection.find_one({'_id': 'pmarket_settings'})
@@ -319,6 +402,7 @@ async def pmarket_command(update: Update, context: CallbackContext):
         parse_mode='HTML'
     )
     context.user_data['shop_msg_id'] = msg.message_id
+    await schedule_shop_autodelete(context.bot, update.effective_chat.id, msg.message_id)
 
 async def toggle_exchange_cmd(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID: return
@@ -408,6 +492,8 @@ async def start_buy_menu(update: Update, context: CallbackContext):
 
     order_id = uuid.uuid4().hex[:8]
     context.user_data['buy_order_id'] = order_id
+    if update.effective_chat:
+        context.user_data['buy_chat_id'] = update.effective_chat.id
 
     text = (
         f"<b>{E_TICK} {sc('order session created successfully!')}</b>\n"
@@ -426,7 +512,8 @@ async def start_buy_menu(update: Update, context: CallbackContext):
     else:
         await update.message.reply_html(text, reply_markup=keyboard)
         await send_buy_log(context, "🚀 STARTED", update.effective_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Iɴɪᴛɪᴀᴛᴇᴅ Bᴜʏ Mᴇɴᴜ")
-        
+
+    await save_buy_session(update.effective_user.id, context, WAITING_FOR_BUY_PRODUCT)
     return WAITING_FOR_BUY_PRODUCT
 
 async def buy_back_callback(update: Update, context: CallbackContext):
@@ -439,6 +526,10 @@ async def buy_back_callback(update: Update, context: CallbackContext):
 
 async def buy_product_callback(update: Update, context: CallbackContext):
     query = update.callback_query
+    await ensure_buy_user_data(context, query.from_user.id)
+    if not context.user_data.get('buy_order_id'):
+        await query.answer()
+        return ConversationHandler.END
     
     if context.user_data.get('buy_prompt_active'):
         await query.answer(f"{sc('you are already in the process! please send the required info or type')} /cancel.", show_alert=True)
@@ -449,6 +540,8 @@ async def buy_product_callback(update: Update, context: CallbackContext):
     await query.answer()
     context.user_data['buy_prompt_active'] = True
     context.user_data['buy_product'] = query.data.replace('buy_prod_', '')
+    if query.message:
+        context.user_data['buy_chat_id'] = query.message.chat_id
 
     order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
     
@@ -461,15 +554,19 @@ async def buy_product_callback(update: Update, context: CallbackContext):
     elif query.data == "buy_prod_char":
         text = f"<b>{sc('send the character id you want to buy:')}</b>\n<i>({sc('the bot will auto-detect its rarity and price it accordingly.')})</i>"
         next_state = WAITING_FOR_BUY_CHAR_ID
+    else:
+        return ConversationHandler.END
 
     await send_buy_log(context, "📦 SELECTED", query.from_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Sᴇʟᴇᴄᴛᴇᴅ <b>{query.data}</b>")
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton(sc("back"), callback_data="buy_back", icon_custom_emoji_id="5258236805890710909"), InlineKeyboardButton(sc("cancel"), callback_data="buy_cancel", icon_custom_emoji_id="5260342697075416641")]
     ])
     await query.message.edit_text(text, reply_markup=kb, parse_mode='HTML')
+    await save_buy_session(query.from_user.id, context, next_state)
     return next_state
 
 async def ask_buy_char_id(update: Update, context: CallbackContext):
+    await ensure_buy_user_data(context, update.message.from_user.id)
     text = update.message.text.strip()
     if not text: return WAITING_FOR_BUY_CHAR_ID
 
@@ -505,9 +602,11 @@ async def ask_buy_char_id(update: Update, context: CallbackContext):
         f"<i>({sc('note: minimum purchase value is 5 inr / 37,500 coins')})</i>",
         reply_markup=kb
     )
+    await save_buy_session(update.message.from_user.id, context, WAITING_FOR_BUY_AMOUNT)
     return WAITING_FOR_BUY_AMOUNT
 
 async def ask_buy_amount(update: Update, context: CallbackContext):
+    await ensure_buy_user_data(context, update.message.from_user.id)
     text = update.message.text.strip()
     if not text.isdigit() or int(text) <= 0: return WAITING_FOR_BUY_AMOUNT
     
@@ -566,11 +665,19 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
         caption=caption, reply_markup=kb, parse_mode='HTML'
     )
     context.user_data['qr_msg_id'] = msg.message_id
+    await save_buy_session(update.message.from_user.id, context, WAITING_FOR_BUY_SCREENSHOT)
     return WAITING_FOR_BUY_SCREENSHOT
 
 async def receive_buy_screenshot(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     if not update.message.photo: return WAITING_FOR_BUY_SCREENSHOT
+
+    await ensure_buy_user_data(context, user_id)
+    if not context.user_data.get('buy_order_id') or context.user_data.get('buy_amount') is None:
+        session = await load_buy_session(user_id)
+        if not session or session.get('state') != WAITING_FOR_BUY_SCREENSHOT:
+            return WAITING_FOR_BUY_SCREENSHOT
+        apply_buy_session(context, session)
 
     qr_msg_id = context.user_data.get('qr_msg_id')
     if qr_msg_id:
@@ -623,12 +730,14 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
     await context.bot.send_photo(chat_id=BUY_LOG_GROUP_ID, photo=photo_id, caption=admin_text, reply_markup=kb, parse_mode='HTML')
     await update.message.reply_html(f"<b>{E_TICK} {sc('your payment screenshot has been sent to the admin. please wait for confirmation. items will be added to your wallet shortly.')}</b>")
 
+    await clear_buy_session(user_id)
     context.user_data.clear()
     return ConversationHandler.END
 
 async def cancel_buy_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()
+    await ensure_buy_user_data(context, query.from_user.id)
     
     if query.message.photo: 
         await query.message.delete()
@@ -638,6 +747,7 @@ async def cancel_buy_callback(update: Update, context: CallbackContext):
         
     order_id = context.user_data.get('buy_order_id', 'UNKNOWN')
     await send_buy_log(context, "❌ CANCELLED", query.from_user, f"🆔 <b>ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n💬 <b>Aᴄᴛɪᴏɴ:</b> Usᴇʀ ᴄᴀɴᴄᴇʟʟᴇᴅ ᴛʜᴇ ᴘʀᴏᴄᴇss")
+    await clear_buy_session(query.from_user.id)
     context.user_data.clear()
     return ConversationHandler.END
 
@@ -1134,6 +1244,14 @@ async def cancel_process(update: Update, context: CallbackContext):
         try: await update.message.delete()
         except: pass
 
+    if update.effective_user and (
+        context.user_data.get('buy_order_id')
+        or context.user_data.get('buy_prompt_active')
+        or context.user_data.get('qr_msg_id')
+        or context.user_data.get('buy_product')
+    ):
+        await clear_buy_session(update.effective_user.id)
+
     await clear_existing_states(context)
     return ConversationHandler.END
 
@@ -1395,18 +1513,16 @@ async def ask_exchange_amount(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
 
     amount_text = update.message.text.strip()
+    # Sirf pure numbers accept karo. Koi bhi extra text ho to poora message ignore.
+    if not re.fullmatch(r'\d+', amount_text) or int(amount_text) <= 0:
+        return WAITING_FOR_EXCHANGE_AMOUNT
+
     try: await update.message.delete() # 🧹 Clear user input immediately
     except: pass
 
+    amount = int(amount_text)
     back_kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_exc_menu:{user_id}")]])
 
-    if not amount_text.isdigit() or int(amount_text) <= 0:
-        if shop_msg_id:
-            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"⚠️ <b>{sc('invalid amount! please enter a number.')}</b>\n\n{sc('try again or click back.')}", reply_markup=back_kb, parse_mode='HTML')
-            except: pass
-        return WAITING_FOR_EXCHANGE_AMOUNT
-
-    amount = int(amount_text)
     global_limit, used_today, _ = await get_token_limit_info(user_id)
     if user_id != OWNER_ID:
         if amount + used_today > global_limit:
@@ -1458,7 +1574,7 @@ exchange_conv = ConversationHandler(
         CallbackQueryHandler(exchange_start_c2t, pattern=r"^pm_start_exc_c2t:")
     ],
     states={
-        WAITING_FOR_EXCHANGE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_exchange_amount)],
+        WAITING_FOR_EXCHANGE_AMOUNT: [MessageHandler(filters.Regex(r'^\s*\d+\s*$') & ~filters.COMMAND, ask_exchange_amount)],
         ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_process)]
     },
     fallbacks=[CommandHandler("cancel", cancel_process)],
@@ -1503,6 +1619,55 @@ buy_conv = ConversationHandler(
     per_chat=True,
 )
 
+# --- Resume real-money buy flow after a bot restart (MongoDB is source of truth) ---
+async def resume_buy_screenshot_after_restart(update: Update, context: CallbackContext):
+    if not update.message or not update.message.photo or not update.effective_user:
+        return
+    session = await load_buy_session(update.effective_user.id)
+    if not session or session.get('state') != WAITING_FOR_BUY_SCREENSHOT:
+        return
+    if session.get('buy_chat_id') and update.effective_chat and session.get('buy_chat_id') != update.effective_chat.id:
+        return
+    apply_buy_session(context, session)
+    return await receive_buy_screenshot(update, context)
+
+async def resume_buy_text_after_restart(update: Update, context: CallbackContext):
+    if not update.message or not update.message.text or not update.effective_user:
+        return
+    session = await load_buy_session(update.effective_user.id)
+    if not session:
+        return
+    if session.get('buy_chat_id') and update.effective_chat and session.get('buy_chat_id') != update.effective_chat.id:
+        return
+    state = session.get('state')
+    if state not in (WAITING_FOR_BUY_CHAR_ID, WAITING_FOR_BUY_AMOUNT):
+        return
+    apply_buy_session(context, session)
+    if state == WAITING_FOR_BUY_CHAR_ID:
+        return await ask_buy_char_id(update, context)
+    return await ask_buy_amount(update, context)
+
+async def resume_buy_cancel_cmd(update: Update, context: CallbackContext):
+    if not update.effective_user:
+        return
+    session = await load_buy_session(update.effective_user.id)
+    if not session:
+        return
+    if session.get('buy_chat_id') and update.effective_chat and session.get('buy_chat_id') != update.effective_chat.id:
+        return
+    qr_msg_id = session.get('qr_msg_id')
+    if qr_msg_id and update.effective_chat:
+        try:
+            await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=qr_msg_id)
+        except Exception:
+            pass
+    await clear_buy_session(update.effective_user.id)
+    if update.message:
+        try:
+            await update.message.reply_html(f"<b>{E_CROSS} {sc('order cancelled.')}</b>")
+        except Exception:
+            pass
+
 application.add_handler(sell_conv, group=-1)
 application.add_handler(exchange_conv, group=-2)
 application.add_handler(buy_conv, group=-3) 
@@ -1518,3 +1683,27 @@ application.add_handler(CallbackQueryHandler(pmarket_callbacks, pattern='^(pm_m|
 
 # Global Callback handler for admin confirm/cancel/adjust 
 application.add_handler(CallbackQueryHandler(admin_buy_callback, pattern='^(b_adj|b_cnf|b_can|ignore)', block=False), group=0)
+
+# After-restart fallbacks (ConversationHandler memory is gone; MongoDB session continues)
+application.add_handler(CallbackQueryHandler(buy_product_callback, pattern='^(buy_prod_t|buy_prod_c|buy_prod_char)$', block=False), group=1)
+application.add_handler(CallbackQueryHandler(buy_back_callback, pattern='^buy_back$', block=False), group=1)
+application.add_handler(CallbackQueryHandler(cancel_buy_callback, pattern='^buy_cancel$', block=False), group=1)
+application.add_handler(MessageHandler(filters.PHOTO, resume_buy_screenshot_after_restart, block=False), group=1)
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resume_buy_text_after_restart, block=False), group=1)
+application.add_handler(CommandHandler("cancel", resume_buy_cancel_cmd, block=False), group=1)
+
+# Start auto-delete worker on boot so pending 20-min deletions survive restarts
+_prev_post_init = getattr(application, "_post_init", None)
+
+async def _pmarket_post_init(app):
+    if callable(_prev_post_init):
+        try:
+            await _prev_post_init(app)
+        except Exception:
+            pass
+    await ensure_delete_worker(app.bot)
+
+try:
+    application._post_init = _pmarket_post_init
+except Exception:
+    pass
