@@ -1363,14 +1363,14 @@ async def ask_price(update: Update, context: CallbackContext):
 
     if not price_text.isdigit() or int(price_text) <= 0:
         if shop_msg_id:
-            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"⚠️ <b>{sc('invalid price! enter a positive number.')}</b>", reply_markup=back_kb, parse_mode='HTML')
+            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{sc('invalid price! enter a positive number.')}</b>", reply_markup=back_kb, parse_mode='HTML')
             except: pass
         return WAITING_FOR_PRICE
 
     price = int(price_text)
-    if price > 1000000:
+    if price > 2500000:
         if shop_msg_id:
-            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{E_WARN} {sc('maximum price limit is 1,000,000 coins. please enter a lower amount.')}</b>", reply_markup=back_kb, parse_mode='HTML')
+            try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{E_WARN} {sc('maximum price limit is 2,500,000 coins. please enter a lower amount.')}</b>", reply_markup=back_kb, parse_mode='HTML')
             except: pass
         return WAITING_FOR_PRICE
 
@@ -1450,7 +1450,7 @@ async def exchange_start_t2c(update: Update, context: CallbackContext):
     owner_id = int(parts[-1])
     
     if query.from_user.id != owner_id:
-        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}", show_alert=True)
+        await query.answer(f"{sc('you cannot interact with this menu!')}", show_alert=True)
         return ConversationHandler.END
         
     await clear_existing_states(context)
@@ -1479,7 +1479,7 @@ async def exchange_start_c2t(update: Update, context: CallbackContext):
     owner_id = int(parts[-1])
     
     if query.from_user.id != owner_id:
-        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}", show_alert=True)
+        await query.answer(f"{sc('you cannot interact with this menu!')}", show_alert=True)
         return ConversationHandler.END
         
     await clear_existing_states(context)
@@ -1672,7 +1672,7 @@ application.add_handler(sell_conv, group=-1)
 application.add_handler(exchange_conv, group=-2)
 application.add_handler(buy_conv, group=-3) 
 
-application.add_handler(CommandHandler(["pmarket", "exchange", "shop"], pmarket_command, block=False), group=0)
+application.add_handler(CommandHandler(["pmarket", "exchange", "market", "shop"], pmarket_command, block=False), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd, block=False), group=0)
 application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd, block=False), group=0)
 application.add_handler(CommandHandler("forcedelist", force_delist_cmd, block=False), group=0)
