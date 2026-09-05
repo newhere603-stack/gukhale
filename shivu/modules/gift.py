@@ -63,7 +63,7 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         LOGGER.error(f"Log failed: {e}")
 
-# 🔥 ADVANCED MEDIA HANDLER (Fixed File_id Video issue)
+# 🔥 ADVANCED MEDIA HANDLER
 async def reply_media_message(message, media_url, caption, reply_markup=None):
     if not media_url:
         return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
@@ -103,8 +103,7 @@ async def background_delete_worker(bot):
     
     try:
         await delete_collection.create_index("delete_at")
-    except Exception:
-        pass
+    except Exception: pass
         
     while True:
         try:
@@ -113,12 +112,10 @@ async def background_delete_worker(bot):
             async for doc in cursor:
                 try:
                     await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
-                except Exception:
-                    pass 
+                except Exception: pass 
                 finally:
                     await delete_collection.delete_one({'_id': doc['_id']})
-        except Exception:
-            pass
+        except Exception: pass
         await asyncio.sleep(20)
 
 async def schedule_auto_delete(message, delay_seconds: int = 1200):
@@ -132,19 +129,14 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
     message_id = message.message_id
     delete_at = time.time() + delay_seconds
 
-    await delete_collection.insert_one({
-        'chat_id': chat_id,
-        'message_id': message_id,
-        'delete_at': delete_at
-    })
+    await delete_collection.insert_one({'chat_id': chat_id, 'message_id': message_id, 'delete_at': delete_at})
 
     async def memory_delete():
         await asyncio.sleep(delay_seconds)
         try:
             await message.get_bot().delete_message(chat_id=chat_id, message_id=message_id)
             await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
-        except Exception:
-            pass
+        except Exception: pass
 
     asyncio.create_task(memory_delete())
 
@@ -158,8 +150,7 @@ async def cleanup_pending_gift(sender_id: int, sent_msg=None):
             try:
                 await sent_msg.delete()
                 await delete_collection.delete_one({'chat_id': sent_msg.chat.id, 'message_id': sent_msg.message_id})
-            except Exception:
-                pass
+            except Exception: pass
         pending_gifts.pop(sender_id, None)
 
 async def check_receiver_inventory_size(receiver_id: int) -> bool:
@@ -171,9 +162,7 @@ async def check_receiver_inventory_size(receiver_id: int) -> bool:
         if result and len(result) > 0:
             return result[0].get('characters_count', 0) < MAX_INVENTORY_SIZE
         return True
-    except Exception as e:
-        LOGGER.error(f"Inventory check error: {e}")
-        return True
+    except Exception: return True
 
 # --- HANDLERS ---
 async def handle_gift_command(update: Update, context: CallbackContext):
@@ -197,7 +186,6 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
 
-        # 🔥 Fix: Capture original ID but process it smartly
         char_id_input = str(context.args[0])
         
         if sender_id in pending_gifts:
@@ -205,23 +193,30 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
         
-        if not await check_receiver_inventory_size(receiver.id):
+        # 🔥 SUPERFAST OPTIMIZATION 1: Parallel Database Checks!
+        sender_task = asyncio.create_task(user_collection.find_one({'id': sender_id}))
+        receiver_task = asyncio.create_task(check_receiver_inventory_size(receiver.id))
+        
+        sender_data, is_receiver_valid = await asyncio.gather(sender_task, receiver_task)
+
+        if not is_receiver_valid:
             inv_text = f"receiver inventory is full (max {MAX_INVENTORY_SIZE})."
             sent_msg = await msg.reply_text(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
 
-        sender_data = await user_collection.find_one({'id': sender_id})
         if not sender_data:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
         
-        # 🔥 Fix: Smart ID matching (Supports '01' == '1', '0010' == '10')
+        # 🔥 SUPERFAST OPTIMIZATION 2: String to int check loop ke bahar kiya
+        char_id_int = int(char_id_input) if char_id_input.isdigit() else None
+        
         owned_char = None
         for c in sender_data.get('characters', []):
-            c_id = str(c.get('id'))
-            if c_id == char_id_input or (c_id.isdigit() and char_id_input.isdigit() and int(c_id) == int(char_id_input)):
+            c_id = c.get('id')
+            if str(c_id) == char_id_input or c_id == char_id_int:
                 owned_char = c
                 break
                 
@@ -230,17 +225,13 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
         
-        # 🔥 Fix: Database search condition updated for zeros issue
-        search_query = [{'id': char_id_input}]
-        if char_id_input.isdigit():
-            search_query.extend([
-                {'id': int(char_id_input)},
-                {'id': str(int(char_id_input))}
-            ])
-            
-        global_char = await collection.find_one({'$or': search_query})
-        if not global_char:
-            global_char = owned_char
+        # 🔥 SUPERFAST OPTIMIZATION 3: DB Skip Check - Agar already image mili to Global DB search poori skip!
+        global_char = owned_char
+        if 'img_url' not in global_char or 'name' not in global_char:
+            search_query = [{'id': char_id_input}]
+            if char_id_int is not None:
+                search_query.extend([{'id': char_id_int}, {'id': str(char_id_int)}])
+            global_char = await collection.find_one({'$or': search_query}) or owned_char
 
         pending_gifts[sender_id] = {
             'character': global_char, 'receiver_id': receiver.id, 'receiver_name': receiver.first_name,
@@ -282,9 +273,10 @@ async def handle_gift_command(update: Update, context: CallbackContext):
 async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
+    # 🔥 SUPERFAST OPTIMIZATION 4: Instant Feedback! Button dabate hi bot process dikhayega aur fast feel hoga.
     try:
-        await query.answer()
-    except Exception as e:
+        await query.answer(to_small_caps("🔄 processing transfer..."), show_alert=False)
+    except Exception:
         pass
     
     try:
@@ -328,7 +320,6 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             found = False
             owned_char = None
             for i, c in enumerate(user_characters):
-                # Yahan wahi ID string hogi jo pending_gifts me save hui thi
                 if str(c.get('id')) == char_id_str:
                     owned_char = c
                     del user_characters[i]
@@ -349,7 +340,9 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 return await query.answer(to_small_caps("❌ gift failed. please try again."), show_alert=True)
             
             try:
-                receiver_data = await user_collection.find_one({'id': receiver_id})
+                # 🔥 SUPERFAST OPTIMIZATION 5: Projection ka use karke Receiver array sirf check kiya, poora data nahi uthaya
+                receiver_data = await user_collection.find_one({'id': receiver_id}, projection={'_id': 1, 'characters': 1})
+                
                 if receiver_data:
                     if len(receiver_data.get('characters', [])) >= MAX_INVENTORY_SIZE:
                         raise Exception("Inventory full")
@@ -434,8 +427,7 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
     if "donate 💝" in full_text or "support our mission" in full_text or "every donation makes a difference" in full_text:
         try:
             await msg.delete()
-        except Exception as e:
-            LOGGER.error(f"Spam delete failed (Check if bot is admin!): {e}")
+        except Exception: pass
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
