@@ -22,7 +22,7 @@ delete_collection = db['auto_delete_queue']
 # --- CONFIGURATION ---
 LOG_CHANNEL_ID = -1003893927065 
 GIFT_TIMEOUT = 60
-MAX_INVENTORY_SIZE = 1000
+MAX_INVENTORY_SIZE = 1000 # Ye ab kisi kaam ka nahi hai kyuki limit hata di hai
 pending_gifts = {}
 gift_tasks = {}
 
@@ -144,17 +144,8 @@ async def cleanup_pending_gift(sender_id: int, sent_msg=None):
         pending_gifts.pop(sender_id, None)
 
 async def check_receiver_inventory_size(receiver_id: int) -> bool:
-    try:
-        result = await user_collection.aggregate([
-            {"$match": {"id": receiver_id}},
-            {"$project": {"characters_count": {"$size": {"$ifNull": ["$characters", []]}}}}
-        ]).to_list(1)
-        if result and len(result) > 0:
-            return result[0].get('characters_count', 0) < MAX_INVENTORY_SIZE
-        return True
-    except Exception as e: 
-        LOGGER.error(f"Inv check err: {e}")
-        return True
+    # Hamesha True bypass unlimited ke liye
+    return True
 
 # --- 🔥 BULK GIFT CORE LOGIC ---
 async def get_owned_char_and_global(sender_id, char_id_input_str):
@@ -201,7 +192,7 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
         
         is_receiver_valid = await check_receiver_inventory_size(receiver_user.id)
         if not is_receiver_valid:
-            inv_text = f"receiver inventory is full (max {MAX_INVENTORY_SIZE}). stopping bulk gift."
+            inv_text = f"receiver inventory is full. stopping bulk gift."
             try: stop_msg = await message_obj.reply_text(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
             except Exception: stop_msg = await message_obj.chat.send_message(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
             await schedule_auto_delete(stop_msg, 20)
@@ -284,7 +275,7 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         )
 
         if not is_receiver_valid:
-            inv_text = f"receiver inventory is full (max {MAX_INVENTORY_SIZE})."
+            inv_text = f"receiver inventory is full."
             sent_msg = await msg.reply_text(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
@@ -391,8 +382,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 receiver_data = await user_collection.find_one({'id': receiver_id}, projection={'_id': 1, 'characters': 1})
                 
                 if receiver_data:
-                    if len(receiver_data.get('characters', [])) >= MAX_INVENTORY_SIZE:
-                        raise Exception("Inventory full")
+                    # 1000 limit wala condition hata diya gaya hai
                     await user_collection.update_one({'id': receiver_id}, {'$push': {'characters': owned_char}})
                 else:
                     await user_collection.insert_one({
