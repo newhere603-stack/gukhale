@@ -22,7 +22,7 @@ delete_collection = db['auto_delete_queue']
 # --- CONFIGURATION ---
 LOG_CHANNEL_ID = -1003893927065 
 GIFT_TIMEOUT = 60
-MAX_INVENTORY_SIZE = 1000  # Adjust as needed
+MAX_INVENTORY_SIZE = 1000
 pending_gifts = {}
 gift_tasks = {}
 
@@ -79,17 +79,16 @@ async def reply_media_message(message, media_url, caption, reply_markup=None):
             return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         else:
             return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-    except Exception as e:
+    except Exception:
         try:
             if not is_video_url:
                 return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
             else:
                 return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-        except Exception as e2:
+        except Exception:
             try:
                 return await message.reply_animation(animation=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-            except Exception as e3:
-                LOGGER.error(f"Media fallback failed: {e3}")
+            except Exception:
                 return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 # 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
@@ -158,11 +157,13 @@ async def check_receiver_inventory_size(receiver_id: int) -> bool:
         result = await user_collection.aggregate([
             {"$match": {"id": receiver_id}},
             {"$project": {"characters_count": {"$size": {"$ifNull": ["$characters", []]}}}}
-        ]).to_list(length=1)
+        ]).to_list(1)
         if result and len(result) > 0:
             return result[0].get('characters_count', 0) < MAX_INVENTORY_SIZE
         return True
-    except Exception: return True
+    except Exception as e: 
+        LOGGER.error(f"Inv check err: {e}")
+        return True
 
 # --- HANDLERS ---
 async def handle_gift_command(update: Update, context: CallbackContext):
@@ -181,23 +182,24 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
 
-        if len(context.args) != 1:
+        if not context.args or len(context.args) != 1:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> {bold_sc("usage:")} <code>/gift &lt;id&gt;</code>', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
 
-        char_id_input = str(context.args[0])
+        char_id_input_str = str(context.args[0])
+        char_id_input_int = int(char_id_input_str) if char_id_input_str.isdigit() else None
         
         if sender_id in pending_gifts:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
         
-        # 🔥 SUPERFAST OPTIMIZATION 1: Parallel Database Checks!
-        sender_task = asyncio.create_task(user_collection.find_one({'id': sender_id}))
-        receiver_task = asyncio.create_task(check_receiver_inventory_size(receiver.id))
-        
-        sender_data, is_receiver_valid = await asyncio.gather(sender_task, receiver_task)
+        # Parallel DB fetch 
+        sender_data, is_receiver_valid = await asyncio.gather(
+            user_collection.find_one({'id': sender_id}),
+            check_receiver_inventory_size(receiver.id)
+        )
 
         if not is_receiver_valid:
             inv_text = f"receiver inventory is full (max {MAX_INVENTORY_SIZE})."
@@ -210,28 +212,34 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
         
-        # 🔥 SUPERFAST OPTIMIZATION 2: String to int check loop ke bahar kiya
-        char_id_int = int(char_id_input) if char_id_input.isdigit() else None
-        
+        # 🔥 Bulletproof ID Matcher
         owned_char = None
         for c in sender_data.get('characters', []):
             c_id = c.get('id')
-            if str(c_id) == char_id_input or c_id == char_id_int:
+            if str(c_id) == char_id_input_str:
                 owned_char = c
                 break
+            if char_id_input_int is not None:
+                try:
+                    if int(c_id) == char_id_input_int:
+                        owned_char = c
+                        break
+                except (ValueError, TypeError):
+                    pass
                 
         if not owned_char:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
         
-        # 🔥 SUPERFAST OPTIMIZATION 3: DB Skip Check - Agar already image mili to Global DB search poori skip!
         global_char = owned_char
         if 'img_url' not in global_char or 'name' not in global_char:
-            search_query = [{'id': char_id_input}]
-            if char_id_int is not None:
-                search_query.extend([{'id': char_id_int}, {'id': str(char_id_int)}])
-            global_char = await collection.find_one({'$or': search_query}) or owned_char
+            search_query = [{'id': char_id_input_str}]
+            if char_id_input_int is not None:
+                search_query.extend([{'id': char_id_input_int}, {'id': str(char_id_input_int)}])
+            db_char = await collection.find_one({'$or': search_query})
+            if db_char:
+                global_char = db_char
 
         pending_gifts[sender_id] = {
             'character': global_char, 'receiver_id': receiver.id, 'receiver_name': receiver.first_name,
@@ -266,14 +274,12 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         
         gift_tasks[sender_id] = asyncio.create_task(expire())
     except Exception as e:
+        # NO UGLY ERROR MESSAGES SENT TO USER ANYMORE. Only Silent Logs.
         LOGGER.error(f"Error in handle_gift_command: {e}\n{traceback.format_exc()}")
-        sent_msg = await update.message.reply_text("❌ An error occurred while processing the gift command.")
-        await schedule_auto_delete(sent_msg)
 
 async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
-    # 🔥 SUPERFAST OPTIMIZATION 4: Instant Feedback! Button dabate hi bot process dikhayega aur fast feel hoga.
     try:
         await query.answer(to_small_caps("🔄 processing transfer..."), show_alert=False)
     except Exception:
@@ -302,7 +308,10 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
         return await query.answer(to_small_caps("⏰ request expired."), show_alert=True)
 
     char, receiver_id, receiver_name = gift_data['character'], gift_data['receiver_id'], gift_data['receiver_name']
+    
+    # 🔥 Bulletproof Callback ID logic fixed here!
     char_id_str = str(char.get('id'))
+    char_id_int = int(char_id_str) if char_id_str.isdigit() else None
 
     if action == "gift_z":
         if query.message:
@@ -320,11 +329,21 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             found = False
             owned_char = None
             for i, c in enumerate(user_characters):
-                if str(c.get('id')) == char_id_str:
+                c_id = c.get('id')
+                if str(c_id) == char_id_str:
                     owned_char = c
                     del user_characters[i]
                     found = True
                     break
+                if char_id_int is not None:
+                    try:
+                        if int(c_id) == char_id_int:
+                            owned_char = c
+                            del user_characters[i]
+                            found = True
+                            break
+                    except (ValueError, TypeError):
+                        pass
             
             if not found:
                 if query.message: await query.message.delete()
@@ -340,7 +359,6 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 return await query.answer(to_small_caps("❌ gift failed. please try again."), show_alert=True)
             
             try:
-                # 🔥 SUPERFAST OPTIMIZATION 5: Projection ka use karke Receiver array sirf check kiya, poora data nahi uthaya
                 receiver_data = await user_collection.find_one({'id': receiver_id}, projection={'_id': 1, 'characters': 1})
                 
                 if receiver_data:
@@ -389,11 +407,11 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
         
         except Exception as e:
+            # NO ALERTS! Chup-chap logs me jayega.
             LOGGER.error(f"Callback gift_z error: {e}")
             if query.message:
                 try: await query.message.delete()
                 except: pass
-            await query.answer(to_small_caps("❌ an unexpected error occurred."), show_alert=True)
     
     elif action == "gift_v":
         if query.message:
@@ -410,14 +428,14 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
         
     text_parts = []
     
-    if msg.text: text_parts.append(msg.text)
-    if msg.caption: text_parts.append(msg.caption)
+    if hasattr(msg, 'text') and msg.text: text_parts.append(msg.text)
+    if hasattr(msg, 'caption') and msg.caption: text_parts.append(msg.caption)
     
-    if msg.invoice:
+    if hasattr(msg, 'invoice') and msg.invoice:
         if msg.invoice.title: text_parts.append(msg.invoice.title)
         if msg.invoice.description: text_parts.append(msg.invoice.description)
         
-    if msg.reply_markup and msg.reply_markup.inline_keyboard:
+    if hasattr(msg, 'reply_markup') and msg.reply_markup and msg.reply_markup.inline_keyboard:
         for row in msg.reply_markup.inline_keyboard:
             for button in row:
                 if button.text: text_parts.append(button.text)
