@@ -388,10 +388,15 @@ async def mrarity_off_cmd(update: Update, context: CallbackContext):
 # ========================
 async def buy_command_pm(update: Update, context: CallbackContext):
     if update.effective_chat.type != "private":
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("buy here"), url=f"https://t.me/{context.bot.username}?start=buy_tokens", icon_custom_emoji_id="5445353829304387411")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("DIRECT SHOP ACCESS"), url=f"https://t.me/{context.bot.username}?start=buy_tokens", icon_custom_emoji_id="5445353829304387411")]])
         await update.message.reply_photo(
             photo=SHOP_IMG, 
-            caption=f"<b>{E_WARN} {sc('this command only works in private messages.')}\n{sc('click below to buy.')}</b>", 
+            caption=(
+                f"<b><tg-emoji emoji-id=\"5445353829304387411\">💳</tg-emoji> {sc('DIRECT SHOP ACCESS')}</b>\n\n"
+                f"<b><tg-emoji emoji-id=\"6093400141560030185\">💎</tg-emoji> {sc('Characters Tokens Coins')}</b>\n"
+                f"<b><tg-emoji emoji-id=\"6100264379767332185\">⛈</tg-emoji> {sc('Buy instantly no tasks required!')}</b>\n\n"
+                f"<b><tg-emoji emoji-id=\"5443127283898405358\">📥</tg-emoji> {sc('Tap below to shop')}</b>"
+            ),
             reply_markup=kb, 
             parse_mode='HTML'
         )
@@ -436,7 +441,7 @@ async def buy_product_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
     if context.user_data.get('buy_prompt_active'):
-        await query.answer(f"⚠️ {sc('you are already in the process! please send the required info or type')} /cancel.", show_alert=True)
+        await query.answer(f"{sc('you are already in the process! please send the required info or type')} /cancel.", show_alert=True)
         if context.user_data.get('buy_product') == 'char' and not context.user_data.get('buy_char_id'):
             return WAITING_FOR_BUY_CHAR_ID
         return WAITING_FOR_BUY_AMOUNT
@@ -639,14 +644,14 @@ async def cancel_buy_callback(update: Update, context: CallbackContext):
 async def admin_buy_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     if query.data == "ignore": return await query.answer()
-    if query.from_user.id != OWNER_ID: return await query.answer(f"⚠️ {sc('only owner can approve this!')}", show_alert=True)
+    if query.from_user.id != OWNER_ID: return await query.answer(f"{sc('only owner can approve this!')}", show_alert=True)
 
     data = query.data.split(':')
     action = data[0]
     order_id = data[-1]
     
     order = await bot_settings_collection.find_one({'_id': f"buy_{order_id}"})
-    if not order: return await query.answer("⚠️ Order data not found!", show_alert=True)
+    if not order: return await query.answer("Order data not found!", show_alert=True)
     target_user_id = order['user_id']
     
     if action == "b_can":
@@ -748,7 +753,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
     
     owner_id = int(parts[-1])
     if user_id != owner_id:
-        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}\n{sc('please open your own via')} /shop", show_alert=True)
+        await query.answer(f"{sc('you cannot interact with this menu!')}\n{sc('please open your own via')} /shop", show_alert=True)
         return
 
     action = parts[0]
@@ -816,7 +821,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         market_items = await cursor.to_list(length=10)
 
         if not market_items:
-            await query.answer(f"⚠️ {sc('no characters are currently for sale in this rarity!')}", show_alert=True)
+            await query.answer(f"{sc('no characters are currently for sale in this rarity!')}", show_alert=True)
             return
 
         keyboard = []
@@ -849,7 +854,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
         if not item:
-            await query.answer(f"❌ {sc('oops! this character has already been sold or removed!')}", show_alert=True)
+            await query.answer(f"{sc('oops! this character has already been sold or removed!')}", show_alert=True)
             return
 
         char = item['character']
@@ -918,7 +923,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         if not item:
-            await query.answer(f"⚠️ {sc('too late! this character has already been bought by someone else.')}", show_alert=True)
+            await query.answer(f"{sc('too late! this character has already been bought by someone else.')}", show_alert=True)
             return
 
         price = item['price']
@@ -926,7 +931,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         char = item['character']
         
         if seller_id == user_id:
-            await query.answer(f"⚠️ {sc('you cannot buy your own character!')}", show_alert=True)
+            await query.answer(f"{sc('you cannot buy your own character!')}", show_alert=True)
             return
 
         eco_buyer = await eco_collection.find_one_and_update(
@@ -935,7 +940,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         )
 
         if not eco_buyer:
-            await query.answer(f"⚠️ {sc('insufficient funds! you need')} {price:,} {sc('balance.')}", show_alert=True)
+            await query.answer(f"{sc('insufficient funds! you need')} {price:,} {sc('balance.')}", show_alert=True)
             return
 
         # 🔥 SMART LAZY-DELETE SYSTEM: Check seller's inventory BEFORE buying 🔥
@@ -953,7 +958,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': price}})
             # Delete invalid listing
             await market_collection.delete_one({'_id': ObjectId(market_id)})
-            await query.answer(f"⚠️ {sc('the seller no longer owns this character! listing has been automatically removed.')}", show_alert=True)
+            await query.answer(f"{sc('the seller no longer owns this character! listing has been automatically removed.')}", show_alert=True)
             return
 
         # Everything is valid, delete from market collection
@@ -962,7 +967,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         if not deleted_item:
             # Edge case handling if someone bought at exactly same millisecond
             await eco_collection.update_one({'id': user_id}, {'$inc': {'balance': price}})
-            await query.answer(f"⚠️ {sc('too late! this character has already been bought by someone else.')}", show_alert=True)
+            await query.answer(f"{sc('too late! this character has already been bought by someone else.')}", show_alert=True)
             return
 
         # Remove EXACTLY ONE copy from seller's collection
@@ -1020,7 +1025,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         item = await market_collection.find_one({'_id': ObjectId(market_id)})
         
         if not item:
-            await query.answer(f"⚠️ {sc('this item is no longer on the market.')}", show_alert=True)
+            await query.answer(f"{sc('this item is no longer on the market.')}", show_alert=True)
         else:
             char = item['character']
             await market_collection.delete_one({'_id': ObjectId(market_id)})
@@ -1059,7 +1064,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         if user_id != OWNER_ID:
             if amount + used_today > global_limit:
                 available = max(0, global_limit - used_today)
-                await query.answer(f"⚠️ {sc('daily limit reached! you can only exchange')} {available} {sc('more tokens today.')}", show_alert=True)
+                await query.answer(f"{sc('daily limit reached! you can only exchange')} {available} {sc('more tokens today.')}", show_alert=True)
                 return
 
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_exc_menu:{user_id}")]])
@@ -1074,7 +1079,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                 {'$inc': {'tokens': -amount, 'balance': coins_to_add}}
             )
             if not eco_user:
-                await query.answer(f"⚠️ {sc('you do not have enough tokens anymore!')}", show_alert=True)
+                await query.answer(f"{sc('you do not have enough tokens anymore!')}", show_alert=True)
                 return
                 
             msg = f"<b>{E_TICK} {sc('successfully exchanged')} <code>{amount}</code> {sc('tokens into')} <code>{coins_to_add:,}</code> {sc('coins!')}</b>"
@@ -1088,7 +1093,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                 {'$inc': {'balance': -coins_to_deduct, 'tokens': amount}}
             )
             if not eco_user:
-                await query.answer(f"⚠️ {sc('you do not have enough coins anymore!')}", show_alert=True)
+                await query.answer(f"{sc('you do not have enough coins anymore!')}", show_alert=True)
                 return
             
             msg = f"<b>{E_TICK} {sc('successfully spent')} <code>{coins_to_deduct:,}</code> {sc('coins to buy')} <code>{amount}</code> {sc('tokens!')}</b>"
@@ -1157,11 +1162,11 @@ async def sell_start(update: Update, context: CallbackContext):
     owner_id = int(parts[-1])
     
     if query.from_user.id != owner_id:
-        await query.answer(f"⚠️ {sc('you cannot interact with this menu!')}", show_alert=True)
+        await query.answer(f"{sc('you cannot interact with this menu!')}", show_alert=True)
         return ConversationHandler.END
         
     if context.user_data.get('sell_active'):
-        await query.answer(f"⚠️ {sc('already started your process! complete it or type')} /cancel {sc('first.')}", show_alert=True)
+        await query.answer(f"{sc('already started your process! complete it or type')} /cancel {sc('first.')}", show_alert=True)
         return context.user_data.get('sell_step', WAITING_FOR_CHARACTER_ID)
         
     await clear_existing_states(context)
