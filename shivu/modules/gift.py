@@ -462,15 +462,16 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
         
     text_parts = []
     
-    # Safe attribute check so it doesn't crash on empty fields
+    # Normal text and captions
     if getattr(msg, 'text', None): text_parts.append(msg.text)
     if getattr(msg, 'caption', None): text_parts.append(msg.caption)
     
+    # Invoice fields (agar API se bheja gaya ho)
     if getattr(msg, 'invoice', None):
         if getattr(msg.invoice, 'title', None): text_parts.append(msg.invoice.title)
         if getattr(msg.invoice, 'description', None): text_parts.append(msg.invoice.description)
         
-    # Crash fix: Pehle check karo ki inline_keyboard exist karta hai ya nahi
+    # Buttons ka text check karne ke liye (Stars detect karne ke liye)
     reply_markup = getattr(msg, 'reply_markup', None)
     if reply_markup and hasattr(reply_markup, 'inline_keyboard'):
         for row in reply_markup.inline_keyboard:
@@ -479,17 +480,18 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
                 
     full_text = " ".join(text_parts).lower() 
     
-    # Emojis ka scene hatane ke liye sirf solid text keywords
-    spam_phrases = ["support our mission", "every donation makes a difference", "spread smiles"]
+    # Spam keywords (Pay ⭐️ aur stars button ko bhi aggressive detect karega)
+    spam_phrases = ["support our mission", "every donation makes a difference", "spread smiles", "pay ⭐️", "pay ⭐"]
     
     if any(phrase in full_text for phrase in spam_phrases):
         try: 
             await msg.delete()
         except Exception: 
-            # Fallback agar direct delete permission error de
+            # Agar direct permission deny hui toh bot id se forcefully delete ka try karega
             try:
                 await context.bot.delete_message(chat_id=msg.chat.id, message_id=msg.message_id)
             except Exception: pass
+
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
