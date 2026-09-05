@@ -80,14 +80,12 @@ async def reply_media_message(message, media_url, caption, reply_markup=None):
         else:
             return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
     except Exception as e:
-        # Fallback 1: Agar photo fail hui (Kyunki wo shayad video file_id thi)
         try:
             if not is_video_url:
                 return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
             else:
                 return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         except Exception as e2:
-            # Fallback 2: Animation / GIF
             try:
                 return await message.reply_animation(animation=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
             except Exception as e3:
@@ -98,7 +96,6 @@ async def reply_media_message(message, media_url, caption, reply_markup=None):
 _worker_started = False
 
 async def background_delete_worker(bot):
-    """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
     global _worker_started
     if _worker_started:
         return
@@ -122,10 +119,9 @@ async def background_delete_worker(bot):
                     await delete_collection.delete_one({'_id': doc['_id']})
         except Exception:
             pass
-        await asyncio.sleep(20) # Check interval 20 sec kiya taaki accurate delete ho
+        await asyncio.sleep(20)
 
 async def schedule_auto_delete(message, delay_seconds: int = 1200):
-    """Message ko database aur memory memory queue dono me daalta hai"""
     if not message: return
         
     global _worker_started
@@ -201,7 +197,8 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
 
-        char_id = str(context.args[0])
+        # 🔥 Fix: Capture original ID but process it smartly
+        char_id_input = str(context.args[0])
         
         if sender_id in pending_gifts:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
@@ -220,13 +217,28 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
         
-        owned_char = next((c for c in sender_data.get('characters', []) if str(c.get('id')) == char_id), None)
+        # 🔥 Fix: Smart ID matching (Supports '01' == '1', '0010' == '10')
+        owned_char = None
+        for c in sender_data.get('characters', []):
+            c_id = str(c.get('id'))
+            if c_id == char_id_input or (c_id.isdigit() and char_id_input.isdigit() and int(c_id) == int(char_id_input)):
+                owned_char = c
+                break
+                
         if not owned_char:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
         
-        global_char = await collection.find_one({'$or': [{'id': char_id}, {'id': int(char_id) if char_id.isdigit() else None}]})
+        # 🔥 Fix: Database search condition updated for zeros issue
+        search_query = [{'id': char_id_input}]
+        if char_id_input.isdigit():
+            search_query.extend([
+                {'id': int(char_id_input)},
+                {'id': str(int(char_id_input))}
+            ])
+            
+        global_char = await collection.find_one({'$or': search_query})
         if not global_char:
             global_char = owned_char
 
@@ -316,6 +328,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             found = False
             owned_char = None
             for i, c in enumerate(user_characters):
+                # Yahan wahi ID string hogi jo pending_gifts me save hui thi
                 if str(c.get('id')) == char_id_str:
                     owned_char = c
                     del user_characters[i]
@@ -440,7 +453,6 @@ async def cleanup_stale_gifts():
 
 async def on_bot_start():
     asyncio.create_task(cleanup_stale_gifts())
-    # Bot shuru hote hi Memory Auto-Delete background thread force start karega
     try:
         bot = application.bot
         if bot:
