@@ -674,5 +674,5 @@ application.add_handler(CommandHandler("riddle", riddle, block=False))
 application.add_handler(CommandHandler("games", games_menu, block=False))
 application.add_handler(CommandHandler("gamestats", game_stats, block=False))
 
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer), group=1)
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer), group=119)
 application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:", block=False))
