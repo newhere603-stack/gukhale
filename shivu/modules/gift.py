@@ -63,10 +63,11 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         LOGGER.error(f"Log failed: {e}")
 
-# 🔥 ADVANCED MEDIA HANDLER
+# 🔥 ADVANCED MEDIA HANDLER (Bulletproof with fallbacks)
 async def reply_media_message(message, media_url, caption, reply_markup=None):
     if not media_url:
-        return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        try: return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        except Exception: return await message.chat.send_message(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         
     is_video_url = False
     if isinstance(media_url, str):
@@ -75,33 +76,25 @@ async def reply_media_message(message, media_url, caption, reply_markup=None):
             is_video_url = True
 
     try:
-        if is_video_url:
-            return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-        else:
-            return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        if is_video_url: return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        else: return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
     except Exception:
         try:
-            if not is_video_url:
-                return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-            else:
-                return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+            if not is_video_url: return await message.chat.send_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+            else: return await message.chat.send_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         except Exception:
-            try:
-                return await message.reply_animation(animation=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-            except Exception:
-                return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+            try: return await message.chat.send_animation(animation=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+            except Exception: return await message.chat.send_message(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 # 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
 _worker_started = False
 
 async def background_delete_worker(bot):
     global _worker_started
-    if _worker_started:
-        return
+    if _worker_started: return
     _worker_started = True
     
-    try:
-        await delete_collection.create_index("delete_at")
+    try: await delete_collection.create_index("delete_at")
     except Exception: pass
         
     while True:
@@ -109,11 +102,9 @@ async def background_delete_worker(bot):
             now = time.time()
             cursor = delete_collection.find({'delete_at': {'$lte': now}})
             async for doc in cursor:
-                try:
-                    await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
+                try: await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
                 except Exception: pass 
-                finally:
-                    await delete_collection.delete_one({'_id': doc['_id']})
+                finally: await delete_collection.delete_one({'_id': doc['_id']})
         except Exception: pass
         await asyncio.sleep(20)
 
@@ -165,6 +156,97 @@ async def check_receiver_inventory_size(receiver_id: int) -> bool:
         LOGGER.error(f"Inv check err: {e}")
         return True
 
+# --- 🔥 BULK GIFT CORE LOGIC ---
+async def get_owned_char_and_global(sender_id, char_id_input_str):
+    char_id_input_int = int(char_id_input_str) if char_id_input_str.isdigit() else None
+    sender_data = await user_collection.find_one({'id': sender_id})
+    if not sender_data: return None, None
+    
+    owned_char = None
+    for c in sender_data.get('characters', []):
+        c_id = c.get('id')
+        if str(c_id) == char_id_input_str:
+            owned_char = c
+            break
+        if char_id_input_int is not None:
+            try:
+                if int(c_id) == char_id_input_int:
+                    owned_char = c
+                    break
+            except (ValueError, TypeError): pass
+            
+    if not owned_char: return None, None
+    
+    global_char = owned_char
+    if 'img_url' not in global_char or 'name' not in global_char:
+        search_query = [{'id': char_id_input_str}]
+        if char_id_input_int is not None:
+            search_query.extend([{'id': char_id_input_int}, {'id': str(char_id_input_int)}])
+        db_char = await collection.find_one({'$or': search_query})
+        if db_char: global_char = db_char
+    return owned_char, global_char
+
+async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_obj):
+    while queue:
+        next_id_str = queue.pop(0)
+        
+        owned_char, global_char = await get_owned_char_and_global(sender_id, next_id_str)
+        
+        if not owned_char:
+            warning_text = f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc(f"you dont own character id {next_id_str}, skipping...")}'
+            try: warning_msg = await message_obj.reply_text(warning_text, parse_mode=ParseMode.HTML)
+            except Exception: warning_msg = await message_obj.chat.send_message(warning_text, parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(warning_msg, 15)
+            continue
+        
+        is_receiver_valid = await check_receiver_inventory_size(receiver_user.id)
+        if not is_receiver_valid:
+            inv_text = f"receiver inventory is full (max {MAX_INVENTORY_SIZE}). stopping bulk gift."
+            try: stop_msg = await message_obj.reply_text(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
+            except Exception: stop_msg = await message_obj.chat.send_message(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(stop_msg, 20)
+            break
+        
+        pending_gifts[sender_id] = {
+            'character': global_char, 
+            'receiver_id': receiver_user.id, 
+            'receiver_name': receiver_user.first_name,
+            'receiver_user': receiver_user,
+            'message_id': None, 
+            'created_at': datetime.now(timezone.utc),
+            'queue': queue,
+            'chat_id': chat_id
+        }
+        
+        timeout_text = to_small_caps(f"confirm within {GIFT_TIMEOUT}s to send.")
+        caption = (
+            f"{Style.GIFT}\n"
+            f"{Style.LINE}\n"
+            f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_user.id}'>{escape(receiver_user.first_name)}</a>\n"
+            f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
+            f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
+            f"{Style.LINE}\n"
+            f"<b><i><tg-emoji emoji-id='5451732530048802485'>⏳</tg-emoji> {timeout_text}</i></b>"
+        )
+
+        keyboard = [[
+            InlineKeyboardButton(to_small_caps("confirm"), callback_data=f"gift_z:{sender_id}"),
+            InlineKeyboardButton(to_small_caps("cancel"), callback_data=f"gift_v:{sender_id}")
+        ]]
+
+        sent_msg = await reply_media_message(message_obj, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
+        
+        if sent_msg: 
+            pending_gifts[sender_id]['message_id'] = sent_msg.message_id
+            await schedule_auto_delete(sent_msg) 
+        
+        async def expire():
+            await asyncio.sleep(GIFT_TIMEOUT)
+            if sender_id in pending_gifts: await cleanup_pending_gift(sender_id, sent_msg)
+        
+        gift_tasks[sender_id] = asyncio.create_task(expire())
+        break # Loop yahin rukega jab tak banda confirm ya cancel nahi karta!
+
 # --- HANDLERS ---
 async def handle_gift_command(update: Update, context: CallbackContext):
     try:
@@ -182,20 +264,20 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
 
-        if not context.args or len(context.args) != 1:
-            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> {bold_sc("usage:")} <code>/gift &lt;id&gt;</code>', parse_mode=ParseMode.HTML)
+        if not context.args:
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="5422439311196834318">💡</tg-emoji> {bold_sc("usage:")} <code>/gift &lt;id1&gt; &lt;id2&gt; ...</code>', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
 
-        char_id_input_str = str(context.args[0])
-        char_id_input_int = int(char_id_input_str) if char_id_input_str.isdigit() else None
+        # Ek baari me maximum 30 gifts queue kar sakte hain
+        char_ids = [str(arg) for arg in context.args][:30] 
         
         if sender_id in pending_gifts:
-            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift is already in progress...")}', parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift process is already in progress...")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
         
-        # Parallel DB fetch 
+        # Parallel quick check
         sender_data, is_receiver_valid = await asyncio.gather(
             user_collection.find_one({'id': sender_id}),
             check_receiver_inventory_size(receiver.id)
@@ -208,88 +290,27 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             return
 
         if not sender_data:
-            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
+            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own any characters.")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
+            
+        # Bulk Gift Chain Start!
+        await trigger_next_gift(sender_id, receiver, char_ids, msg.chat.id, msg)
         
-        # 🔥 Bulletproof ID Matcher
-        owned_char = None
-        for c in sender_data.get('characters', []):
-            c_id = c.get('id')
-            if str(c_id) == char_id_input_str:
-                owned_char = c
-                break
-            if char_id_input_int is not None:
-                try:
-                    if int(c_id) == char_id_input_int:
-                        owned_char = c
-                        break
-                except (ValueError, TypeError):
-                    pass
-                
-        if not owned_char:
-            sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own this character.")}', parse_mode=ParseMode.HTML)
-            await schedule_auto_delete(sent_msg)
-            return
-        
-        global_char = owned_char
-        if 'img_url' not in global_char or 'name' not in global_char:
-            search_query = [{'id': char_id_input_str}]
-            if char_id_input_int is not None:
-                search_query.extend([{'id': char_id_input_int}, {'id': str(char_id_input_int)}])
-            db_char = await collection.find_one({'$or': search_query})
-            if db_char:
-                global_char = db_char
-
-        pending_gifts[sender_id] = {
-            'character': global_char, 'receiver_id': receiver.id, 'receiver_name': receiver.first_name,
-            'message_id': None, 'created_at': datetime.now(timezone.utc)
-        }
-
-        timeout_text = to_small_caps(f"confirm within {GIFT_TIMEOUT}s to send.")
-        caption = (
-            f"{Style.GIFT}\n"
-            f"{Style.LINE}\n"
-            f"<b>{Style.TO}</b> <a href='tg://user?id={receiver.id}'>{escape(receiver.first_name)}</a>\n"
-            f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
-            f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
-            f"{Style.LINE}\n"
-            f"<b><i><tg-emoji emoji-id='5451732530048802485'>⏳</tg-emoji> {timeout_text}</i></b>"
-        )
-
-        keyboard = [[
-            InlineKeyboardButton(to_small_caps("confirm"), callback_data=f"gift_z:{sender_id}"),
-            InlineKeyboardButton(to_small_caps("cancel"), callback_data=f"gift_v:{sender_id}")
-        ]]
-
-        sent_msg = await reply_media_message(msg, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
-        
-        if sent_msg: 
-            pending_gifts[sender_id]['message_id'] = sent_msg.message_id
-            await schedule_auto_delete(sent_msg) 
-        
-        async def expire():
-            await asyncio.sleep(GIFT_TIMEOUT)
-            if sender_id in pending_gifts: await cleanup_pending_gift(sender_id, sent_msg)
-        
-        gift_tasks[sender_id] = asyncio.create_task(expire())
     except Exception as e:
-        # NO UGLY ERROR MESSAGES SENT TO USER ANYMORE. Only Silent Logs.
+        # Silent Fail
         LOGGER.error(f"Error in handle_gift_command: {e}\n{traceback.format_exc()}")
 
 async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     
-    try:
-        await query.answer(to_small_caps("🔄 processing transfer..."), show_alert=False)
-    except Exception:
-        pass
+    try: await query.answer(to_small_caps("🔄 processing transfer..."), show_alert=False)
+    except Exception: pass
     
     try:
         action, sender_id = query.data.split(':')
         sender_id = int(sender_id)
-    except Exception:
-        return
+    except Exception: return
 
     if query.from_user.id != sender_id:
         return await query.answer(to_small_caps("⚠️ not your request!"), show_alert=True)
@@ -307,9 +328,13 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             except: pass
         return await query.answer(to_small_caps("⏰ request expired."), show_alert=True)
 
-    char, receiver_id, receiver_name = gift_data['character'], gift_data['receiver_id'], gift_data['receiver_name']
+    char = gift_data['character']
+    receiver_id = gift_data['receiver_id']
+    receiver_name = gift_data['receiver_name']
+    receiver_user = gift_data.get('receiver_user')
+    queue = gift_data.get('queue', [])
+    chat_id = gift_data.get('chat_id')
     
-    # 🔥 Bulletproof Callback ID logic fixed here!
     char_id_str = str(char.get('id'))
     char_id_int = int(char_id_str) if char_id_str.isdigit() else None
 
@@ -322,8 +347,9 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             sender_data = await user_collection.find_one({'id': sender_id})
             if not sender_data:
                 if query.message: await query.message.delete()
-                return await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
-
+                await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
+                return
+                
             user_characters = sender_data.get('characters', [])
             
             found = False
@@ -342,12 +368,15 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                             del user_characters[i]
                             found = True
                             break
-                    except (ValueError, TypeError):
-                        pass
+                    except (ValueError, TypeError): pass
             
             if not found:
                 if query.message: await query.message.delete()
-                return await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
+                await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
+                # Agar character id missing thi par aage queue bachi hai to aage badhao
+                if queue and receiver_user and query.message:
+                    await trigger_next_gift(sender_id, receiver_user, queue, chat_id, query.message)
+                return
 
             pull_result = await user_collection.update_one(
                 {'id': sender_id},
@@ -399,15 +428,20 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                     f"<b>{Style.STATUS}</b> {Style.SUCCESS}"
                 )
                 asyncio.create_task(send_log(context, log_msg))
+                
+                # 🔥 Success hone ke baad check karega ki koi aur gift pending hai ya nahi
+                if queue and receiver_user and query.message:
+                    await trigger_next_gift(sender_id, receiver_user, queue, chat_id, query.message)
                     
             except Exception as push_error:
                 LOGGER.error(f"Push error during gift: {push_error}")
                 await user_collection.update_one({'id': sender_id}, {'$push': {'characters': owned_char}})
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
+                return # Inventory full pe aage ka queue band
         
         except Exception as e:
-            # NO ALERTS! Chup-chap logs me jayega.
+            # Silent Fail
             LOGGER.error(f"Callback gift_z error: {e}")
             if query.message:
                 try: await query.message.delete()
@@ -419,12 +453,12 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 await query.message.delete()
                 await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
             except: pass
+        # Cancel dabane par aage ka queue apne aap dead ho jayega!
 
 # 🔥 SUPER INSTANT SPAM DELETE
 async def instant_delete_spam(update: Update, context: CallbackContext):
     msg = update.effective_message
-    if not msg: 
-        return
+    if not msg: return
         
     text_parts = []
     
@@ -443,8 +477,7 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
     full_text = " ".join(text_parts).lower() 
     
     if "donate 💝" in full_text or "support our mission" in full_text or "every donation makes a difference" in full_text:
-        try:
-            await msg.delete()
+        try: await msg.delete()
         except Exception: pass
 
 # --- HANDLERS REGISTRATION ---
@@ -465,8 +498,7 @@ async def on_bot_start():
     asyncio.create_task(cleanup_stale_gifts())
     try:
         bot = application.bot
-        if bot:
-            asyncio.create_task(background_delete_worker(bot))
+        if bot: asyncio.create_task(background_delete_worker(bot))
     except Exception as e:
         LOGGER.error(f"Worker Auto-start failed on boot: {e}")
 
