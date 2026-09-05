@@ -455,43 +455,45 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             except: pass
         # Cancel dabane par aage ka queue apne aap dead ho jayega!
 
-# 🔥 SUPER INSTANT SPAM DELETE
+# 🔥 SUPER INSTANT SPAM DELETE (Ab Reply scan karega!)
 async def instant_delete_spam(update: Update, context: CallbackContext):
-    msg = update.effective_message
-    if not msg: return
+    if not update.effective_message:
+        return
         
-    text_parts = []
-    
-    # Normal text and captions
-    if getattr(msg, 'text', None): text_parts.append(msg.text)
-    if getattr(msg, 'caption', None): text_parts.append(msg.caption)
-    
-    # Invoice fields (agar API se bheja gaya ho)
-    if getattr(msg, 'invoice', None):
-        if getattr(msg.invoice, 'title', None): text_parts.append(msg.invoice.title)
-        if getattr(msg.invoice, 'description', None): text_parts.append(msg.invoice.description)
+    # List mein current message or replied message dono daal diye
+    messages_to_check = [update.effective_message]
+    if update.effective_message.reply_to_message:
+        messages_to_check.append(update.effective_message.reply_to_message)
         
-    # Buttons ka text check karne ke liye (Stars detect karne ke liye)
-    reply_markup = getattr(msg, 'reply_markup', None)
-    if reply_markup and hasattr(reply_markup, 'inline_keyboard'):
-        for row in reply_markup.inline_keyboard:
-            for button in row:
-                if getattr(button, 'text', None): text_parts.append(button.text)
-                
-    full_text = " ".join(text_parts).lower() 
-    
-    # Spam keywords (Pay ⭐️ aur stars button ko bhi aggressive detect karega)
-    spam_phrases = ["support our mission", "every donation makes a difference", "spread smiles", "pay ⭐️", "pay ⭐"]
-    
-    if any(phrase in full_text for phrase in spam_phrases):
-        try: 
-            await msg.delete()
-        except Exception: 
-            # Agar direct permission deny hui toh bot id se forcefully delete ka try karega
-            try:
-                await context.bot.delete_message(chat_id=msg.chat.id, message_id=msg.message_id)
-            except Exception: pass
-
+    for m in messages_to_check:
+        text_parts = []
+        
+        if getattr(m, 'text', None): text_parts.append(m.text)
+        if getattr(m, 'caption', None): text_parts.append(m.caption)
+        
+        if getattr(m, 'invoice', None):
+            if getattr(m.invoice, 'title', None): text_parts.append(m.invoice.title)
+            if getattr(m.invoice, 'description', None): text_parts.append(m.invoice.description)
+            
+        reply_markup = getattr(m, 'reply_markup', None)
+        if reply_markup and hasattr(reply_markup, 'inline_keyboard'):
+            for row in reply_markup.inline_keyboard:
+                for button in row:
+                    if getattr(button, 'text', None): text_parts.append(button.text)
+                    
+        full_text = " ".join(text_parts).lower() 
+        
+        # Spam Keywords
+        spam_phrases = ["support our mission", "every donation makes a difference", "spread smiles", "pay ⭐️", "pay ⭐", "donate 💝"]
+        
+        # Agar text match hua, ud jayega
+        if any(phrase in full_text for phrase in spam_phrases):
+            try: 
+                await m.delete()
+            except Exception: 
+                try:
+                    await context.bot.delete_message(chat_id=m.chat.id, message_id=m.message_id)
+                except Exception: pass
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
