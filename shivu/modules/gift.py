@@ -57,31 +57,53 @@ class Style:
     LINE = "──────────────────"
     SUCCESS = "✅ " + to_small_caps("success")
 
-def is_video_url(url):
-    if not url: return False
-    url_lower = url.lower()
-    return any(url_lower.endswith(ext) for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v']) or any(pattern in url_lower for pattern in ['/video/', '/videos/', 'video=', 'v=', '.mp4?', '/stream/'])
-
 async def send_log(context: CallbackContext, text: str):
     try:
         await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=text, parse_mode=ParseMode.HTML)
     except Exception as e:
         LOGGER.error(f"Log failed: {e}")
 
+# 🔥 ADVANCED MEDIA HANDLER (Fixed File_id Video issue)
 async def reply_media_message(message, media_url, caption, reply_markup=None):
-    try:
-        if is_video_url(media_url):
-            return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-        return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-    except Exception as e:
-        LOGGER.error(f"Media reply failed: {e}")
+    if not media_url:
         return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        
+    is_video_url = False
+    if isinstance(media_url, str):
+        url_lower = media_url.lower()
+        if any(url_lower.endswith(ext) for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v']) or any(pattern in url_lower for pattern in ['/video/', '/videos/', 'video=', 'v=', '.mp4?', '/stream/']):
+            is_video_url = True
+
+    try:
+        if is_video_url:
+            return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        else:
+            return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        # Fallback 1: Agar photo fail hui (Kyunki wo shayad video file_id thi)
+        try:
+            if not is_video_url:
+                return await message.reply_video(video=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+            else:
+                return await message.reply_photo(photo=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        except Exception as e2:
+            # Fallback 2: Animation / GIF
+            try:
+                return await message.reply_animation(animation=media_url, caption=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+            except Exception as e3:
+                LOGGER.error(f"Media fallback failed: {e3}")
+                return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 # 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
 _worker_started = False
 
 async def background_delete_worker(bot):
     """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
+    global _worker_started
+    if _worker_started:
+        return
+    _worker_started = True
+    
     try:
         await delete_collection.create_index("delete_at")
     except Exception:
@@ -100,7 +122,7 @@ async def background_delete_worker(bot):
                     await delete_collection.delete_one({'_id': doc['_id']})
         except Exception:
             pass
-        await asyncio.sleep(30)
+        await asyncio.sleep(20) # Check interval 20 sec kiya taaki accurate delete ho
 
 async def schedule_auto_delete(message, delay_seconds: int = 1200):
     """Message ko database aur memory memory queue dono me daalta hai"""
@@ -108,7 +130,6 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
         
     global _worker_started
     if not _worker_started:
-        _worker_started = True
         asyncio.create_task(background_delete_worker(message.get_bot()))
 
     chat_id = message.chat.id
@@ -234,7 +255,7 @@ async def handle_gift_command(update: Update, context: CallbackContext):
         
         if sent_msg: 
             pending_gifts[sender_id]['message_id'] = sent_msg.message_id
-            await schedule_auto_delete(sent_msg) # Post 20 minute me permanently delete ho jayega
+            await schedule_auto_delete(sent_msg) 
         
         async def expire():
             await asyncio.sleep(GIFT_TIMEOUT)
@@ -375,7 +396,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
             except: pass
 
-# 🔥 SUPER INSTANT SPAM DELETE (Ab Invoice & Buttons ko bhi padhega!)
+# 🔥 SUPER INSTANT SPAM DELETE
 async def instant_delete_spam(update: Update, context: CallbackContext):
     msg = update.effective_message
     if not msg: 
@@ -383,16 +404,13 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
         
     text_parts = []
     
-    # Normal text and captions
     if msg.text: text_parts.append(msg.text)
     if msg.caption: text_parts.append(msg.caption)
     
-    # Telegram Invoices ka data pakadne ke liye (Jaise image mein "Donate 💝" hai)
     if msg.invoice:
         if msg.invoice.title: text_parts.append(msg.invoice.title)
         if msg.invoice.description: text_parts.append(msg.invoice.description)
         
-    # Agar message ke sath buttons hain (Jaise "Pay ⭐️ 10"), usko bhi read karega
     if msg.reply_markup and msg.reply_markup.inline_keyboard:
         for row in msg.reply_markup.inline_keyboard:
             for button in row:
@@ -400,7 +418,6 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
                 
     full_text = " ".join(text_parts).lower() 
     
-    # Ab chahe text ho ya Invoice, ye definitely pakad lega!
     if "donate 💝" in full_text or "support our mission" in full_text or "every donation makes a difference" in full_text:
         try:
             await msg.delete()
@@ -410,7 +427,6 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):'))
-# Group -99 rakha hai taaki message aate hi sabse pehle ye chalu ho
 application.add_handler(MessageHandler(filters.ALL, instant_delete_spam), group=-99)
 
 async def cleanup_stale_gifts():
@@ -424,6 +440,13 @@ async def cleanup_stale_gifts():
 
 async def on_bot_start():
     asyncio.create_task(cleanup_stale_gifts())
+    # Bot shuru hote hi Memory Auto-Delete background thread force start karega
+    try:
+        bot = application.bot
+        if bot:
+            asyncio.create_task(background_delete_worker(bot))
+    except Exception as e:
+        LOGGER.error(f"Worker Auto-start failed on boot: {e}")
 
 try:
     loop = asyncio.get_event_loop()
