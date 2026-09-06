@@ -166,29 +166,46 @@ async def addtask(update: Update, context: CallbackContext):
         )
         await update.message.reply_text(error_msg, parse_mode=ParseMode.HTML)
 
+
 async def tasklist(update: Update, context: CallbackContext):
+    """Admin command to list and directly delete tasks using inline buttons."""
     if update.effective_user.id != OWNER_ID:
         return
         
-    tasks = await tasks_collection.find({}).to_list(length=None)
-    
-    if not tasks:
-        await update.message.reply_text(f"<b>{sc('NO TASKS FOUND!')}</b>", parse_mode=ParseMode.HTML)
-        return
+    try:
+        # Fetching with explicit limit to avoid motor PyMongo errors
+        tasks = await tasks_collection.find({}).to_list(length=1000)
         
-    msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
-    for t in tasks:
-        msg += f"<b>{sc('NAME')}:</b> {sc(t['name'])}\n<b>{sc('ID')}:</b> <code>{t['task_id']}</code>\n\n"
+        if not tasks:
+            await update.message.reply_text(f"<b>{sc('NO TASKS FOUND!')}</b>", parse_mode=ParseMode.HTML)
+            return
+            
+        msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
+        keyboard = []
         
-    msg += f"<b><i>{sc('USE /removetask <id> TO REMOVE A TASK.')}</i></b>"
-    await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+        for t in tasks:
+            t_name = sc(t.get('name', 'UNKNOWN'))
+            t_id = t['task_id']
+            msg += f"<b>{sc('NAME')}:</b> {t_name}\n<b>{sc('ID')}:</b> <code>{t_id}</code>\n\n"
+            
+            # Delete button logic
+            keyboard.append([InlineKeyboardButton(f"🗑️ {sc('DELETE')} {t_name}", callback_data=f"deltask_{t_id}")])
+            
+        msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK.')}</i></b>"
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        LOGGER.error(f"Tasklist Error: {e}")
+        await update.message.reply_text(f"<b>⚠️ ERROR:</b> {e}", parse_mode=ParseMode.HTML)
+
 
 async def removetask(update: Update, context: CallbackContext):
+    """Manual remove command just in case."""
     if update.effective_user.id != OWNER_ID:
         return
         
     if not context.args:
-        await update.message.reply_text(f"<b>{sc('USAGE: /removetask <task_id>')}</b>\n{sc('USE /tasklist TO FIND THE EXACT ID.')}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>{sc('USAGE: /removetask <task_id>')}</b>\n{sc('USE /tasklist TO FIND OR DELETE EASILY.')}", parse_mode=ParseMode.HTML)
         return
         
     task_id = context.args[0]
@@ -236,11 +253,11 @@ async def tasks_cmd(update: Update, context: CallbackContext):
     pending_invites = user_data.get('pending_invites', 0)
     total_invites = user_data.get('total_invites', 0)
     
-    all_tasks = await tasks_collection.find({}).to_list(length=None)
+    # Safely fetch tasks
+    all_tasks = await tasks_collection.find({}).to_list(length=1000)
     
     keyboard = []
     
-    # 1. GENERATE ALL TASK BUTTONS (3 Clean Columns)
     if all_tasks:
         for task in all_tasks:
             t_id = task['task_id']
@@ -280,10 +297,8 @@ async def tasks_cmd(update: Update, context: CallbackContext):
     bot_username = context.bot.username
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     
-    # Share button
     keyboard.append([InlineKeyboardButton(f"🔗 {sc('SHARE INVITE LINK')}", url=f"https://t.me/share/url?url={invite_link}&text=Join%20this%20awesome%20bot!")])
     
-    # Clean dashboard text (No Coins Spent tracker shown as requested)
     text = (
         f"<b>📋 <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a></b>\n\n"
         f"<b><i>{sc('COMPLETE TASKS TO EARN HUGE REWARDS! DAILY TASKS RESET EVERY MIDNIGHT.')}</i></b>"
@@ -310,7 +325,7 @@ async def tasks_cmd(update: Update, context: CallbackContext):
 
 
 # ==========================================
-# 🔘 TASK VERIFICATION CALLBACK
+# 🔘 TASK VERIFICATION & ADMIN CALLBACK
 # ==========================================
 async def task_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -322,6 +337,41 @@ async def task_callback(update: Update, context: CallbackContext):
         await query.answer(sc("NO ACTION NEEDED HERE!"), show_alert=False)
         return
         
+    # --- ADMIN DELETE TASK LOGIC ---
+    if data.startswith("deltask_"):
+        if user_id != OWNER_ID:
+            await query.answer(sc("YOU ARE NOT AUTHORIZED!"), show_alert=True)
+            return
+            
+        task_id = data.replace("deltask_", "")
+        res = await tasks_collection.delete_one({'task_id': task_id})
+        
+        if res.deleted_count > 0:
+            await query.answer(sc("✅ TASK DELETED SUCCESSFULLY!"), show_alert=True)
+            try:
+                await query.message.delete()
+            except:
+                pass
+            
+            # Send updated list immediately
+            tasks = await tasks_collection.find({}).to_list(length=1000)
+            if not tasks:
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=f"<b>{sc('NO TASKS FOUND!')}</b>", parse_mode=ParseMode.HTML)
+                return
+                
+            msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
+            keyboard = []
+            for t in tasks:
+                t_name = sc(t.get('name', 'UNKNOWN'))
+                msg += f"<b>{sc('NAME')}:</b> {t_name}\n<b>{sc('ID')}:</b> <code>{t['task_id']}</code>\n\n"
+                keyboard.append([InlineKeyboardButton(f"🗑️ {sc('DELETE')} {t_name}", callback_data=f"deltask_{t['task_id']}")])
+                
+            msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK.')}</i></b>"
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+        else:
+            await query.answer(sc("❌ TASK NOT FOUND!"), show_alert=True)
+        return
+
     # --- INVITE CLAIM LOGIC ---
     if data == "claim_invites":
         user_data = await check_daily_reset(user_id)
@@ -400,7 +450,6 @@ async def task_callback(update: Update, context: CallbackContext):
             upsert=True
         )
         
-        # English Popup Message
         popup_msg = f"✅ {sc('TASK COMPLETED!')}\n{sc('YOU RECEIVED')} {task['reward']:,} 💸"
         await query.answer(popup_msg, show_alert=True)
         
@@ -425,6 +474,7 @@ async def task_callback(update: Update, context: CallbackContext):
 # ==========================================
 application.add_handler(CommandHandler("addtask", addtask, block=False))
 application.add_handler(CommandHandler("removetask", removetask, block=False))
-application.add_handler(CommandHandler("tasklist", tasklist, block=False))  # NEW COMMAND FOR ADMINS
+application.add_handler(CommandHandler("tasklist", tasklist, block=False))
 application.add_handler(CommandHandler("tasks", tasks_cmd, block=False))
-application.add_handler(CallbackQueryHandler(task_callback, pattern="^verify_task_|^task_ignore|^claim_invites", block=False))
+# Maine deltask_ callback handle ko idhar fix add kiya hai:
+application.add_handler(CallbackQueryHandler(task_callback, pattern="^verify_task_|^task_ignore|^claim_invites|^deltask_", block=False))
