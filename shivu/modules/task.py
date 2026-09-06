@@ -94,7 +94,7 @@ async def handle_referral(update: Update, context: CallbackContext):
                     )
                     
                     try:
-                        ref_msg = f"<b>{sc('🎉 SUCCESSFUL REFERRAL! A NEW USER JOINED VIA YOUR LINK.')}\n\n{sc('USE /tasks TO CLAIM YOUR REWARD OF 25,000 💸!')}</b>"
+                        ref_msg = f"<b>{sc('🎉 SUCCESSFUL REFERRAL! A NEW USER JOINED VIA YOUR LINK.')}\n\n{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF 25,000 💸!')}</b>"
                         await context.bot.send_message(chat_id=referrer_id, text=ref_msg, parse_mode=ParseMode.HTML)
                     except Exception:
                         pass
@@ -121,7 +121,7 @@ async def handle_referral(update: Update, context: CallbackContext):
         
         welcome_text = (
             f"<b>{sc('🎉 WELCOME! YOU RECEIVED 1,000 💸 FOR STARTING THE BOT!')}</b>\n"
-            f"<b>{sc('USE /tasks TO COMPLETE MISSIONS AND EARN MORE.')}</b>"
+            f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE.')}</b>"
         )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
 
@@ -204,7 +204,7 @@ async def removetask(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        await update.message.reply_text(f"<b>{sc('USAGE: /removetask <task_id>')}</b>\n{sc('USE /tasklist TO FIND OR DELETE EASILY.')}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>{sc('USAGE:')} /removetask <task_id></b>\n{sc('USE')} /tasklist {sc('TO FIND OR DELETE EASILY.')}", parse_mode=ParseMode.HTML)
         return
         
     task_id = context.args[0]
@@ -244,7 +244,6 @@ async def check_daily_reset(user_id):
 # 🔧 KEYBOARD GENERATOR HELPER
 # ==========================================
 async def build_task_keyboard(user_id, bot_username):
-    """Ye function same page pe update/edit ke liye properly markup banayega."""
     user_data = await check_daily_reset(user_id)
     
     completed_daily = user_data.get('completed_daily', [])
@@ -265,16 +264,13 @@ async def build_task_keyboard(user_id, bot_username):
             
             row = []
             
-            # COLUMN 1: Name
             if task.get('url') and not is_completed:
                 row.append(InlineKeyboardButton(name_text, url=task['url']))
             else:
                 row.append(InlineKeyboardButton(name_text, callback_data=f"ign_{user_id}"))
                 
-            # COLUMN 2: Reward
             row.append(InlineKeyboardButton(reward_text, callback_data=f"ign_{user_id}"))
             
-            # COLUMN 3: Status
             if is_completed:
                 row.append(InlineKeyboardButton("✅", callback_data=f"ign_{user_id}"))
             else:
@@ -282,7 +278,6 @@ async def build_task_keyboard(user_id, bot_username):
                 
             keyboard.append(row)
             
-    # INVITE SYSTEM ROW
     invite_claim_text = f"{sc('CLAIM')}" if pending_invites > 0 else f"{sc('CHECK')}"
     keyboard.append([
         InlineKeyboardButton(f"{sc('INVITES')}", callback_data=f"ign_{user_id}"),
@@ -290,7 +285,6 @@ async def build_task_keyboard(user_id, bot_username):
         InlineKeyboardButton(invite_claim_text, callback_data=f"ci_{user_id}")
     ])
     
-    # THEMATIC SHARE TEXT WITH IMAGE PREVIEW
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     raw_share_text = (
         f"🌸 {sc('STEP INTO THE ULTIMATE WAIFU BOT!')}\n\n"
@@ -328,7 +322,7 @@ async def tasks_cmd(update: Update, context: CallbackContext):
             caption=text,
             reply_markup=keyboard,
             parse_mode=ParseMode.HTML,
-            reply_to_message_id=update.message.message_id  # 🔥 User ki command ko reply karke bhejo
+            reply_to_message_id=update.message.message_id
         )
     except Exception as e:
         LOGGER.error(f"Task photo send error: {e}")
@@ -345,166 +339,171 @@ async def tasks_cmd(update: Update, context: CallbackContext):
 # 🔘 TASK VERIFICATION & ADMIN CALLBACK
 # ==========================================
 async def task_callback(update: Update, context: CallbackContext):
-    query = update.callback_query
-    clicker_id = query.from_user.id
-    safe_name = html.escape(query.from_user.first_name or "User")
-    data = query.data
-    
-    parts = data.split("_")
-    
-    # --- ADMIN DELETE TASK LOGIC ---
-    if data.startswith("dt_"):
-        if clicker_id != OWNER_ID:
-            await query.answer(sc("YOU ARE NOT AUTHORIZED!"), show_alert=True)
-            return
-            
-        task_id = parts[1] + "_" + parts[2]
-        res = await tasks_collection.delete_one({'task_id': task_id})
+    try:
+        query = update.callback_query
+        clicker_id = query.from_user.id
+        safe_name = html.escape(query.from_user.first_name or "User")
+        data = query.data
         
-        if res.deleted_count > 0:
-            await query.answer(sc("✅ TASK DELETED SUCCESSFULLY!"), show_alert=True)
-            try:
-                await query.message.delete()
-            except:
-                pass
-            
-            tasks = await tasks_collection.find({}).to_list(length=1000)
-            if not tasks:
-                await context.bot.send_message(chat_id=update.effective_chat.id, text=f"<b>{sc('NO TASKS FOUND!')}</b>", parse_mode=ParseMode.HTML)
+        parts = data.split("_")
+        
+        # --- ADMIN DELETE TASK LOGIC ---
+        if data.startswith("dt_"):
+            if clicker_id != OWNER_ID:
+                await query.answer(sc("YOU ARE NOT AUTHORIZED!"), show_alert=True)
                 return
                 
-            msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
-            keyboard = []
-            for t in tasks:
-                t_name = sc(t.get('name', 'UNKNOWN'))
-                msg += f"<b>{sc('NAME')}:</b> {t_name}\n<b>{sc('ID')}:</b> <code>{t['task_id']}</code>\n\n"
-                keyboard.append([InlineKeyboardButton(f"🗑️ {sc('DELETE')} {t_name}", callback_data=f"dt_{t['task_id']}")])
-                
-            msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK.')}</i></b>"
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
-        else:
-            await query.answer(sc("❌ TASK NOT FOUND!"), show_alert=True)
-        return
-
-    # --- CROSS-USER PROTECTION CHECK ---
-    if len(parts) >= 2 and parts[0] in ["ign", "ci", "vt"]:
-        owner_id = int(parts[1])
-        if clicker_id != owner_id:
-            # 🔥 Dusre user ke touch karne pe direct popup in simple english
-            await query.answer("Use /task command to open your own dashboard", show_alert=True)
-            return
-
-    # --- SILENT IGNORE ---
-    if data.startswith("ign_"):
-        await query.answer()
-        return
-
-    # --- INVITE CLAIM LOGIC (WITH ATOMIC LOCK) ---
-    if data.startswith("ci_"):
-        user_data = await user_tasks_collection.find_one({'user_id': owner_id})
-        pending = user_data.get('pending_invites', 0)
-        
-        if pending > 0:
-            # Atomic update to prevent multi-claim spam
-            update_res = await user_tasks_collection.update_one(
-                {'user_id': owner_id, 'pending_invites': pending},
-                {'$set': {'pending_invites': 0}}
-            )
+            task_id = parts[1] + "_" + parts[2]
+            res = await tasks_collection.delete_one({'task_id': task_id})
             
-            if update_res.modified_count > 0:
-                reward = pending * 25000
-                await eco_collection.update_one({'id': owner_id}, {'$inc': {'balance': reward}})
-                
-                popup_msg = f"✅ {sc('CLAIM SUCCESSFUL!')}\n{sc('YOU RECEIVED')} {reward:,} 💸 {sc('FOR')} {pending} {sc('INVITES')}"
-                await query.answer(popup_msg, show_alert=True)
-                
-                # Update Message In-Place Without Sending New Message
-                new_kb = await build_task_keyboard(owner_id, context.bot.username)
+            if res.deleted_count > 0:
+                await query.answer(sc("✅ TASK DELETED SUCCESSFULLY!"), show_alert=True)
                 try:
-                    await query.edit_message_reply_markup(reply_markup=new_kb)
-                except Exception:
+                    await query.message.delete()
+                except:
                     pass
-            else:
-                await query.answer(sc("YOU HAVE ALREADY CLAIMED THIS!"), show_alert=True)
-        else:
-            await query.answer(sc("NO PENDING INVITES TO CLAIM! SHARE YOUR LINK WITH FRIENDS."), show_alert=True)
-        return
-
-    # --- NORMAL TASK VERIFICATION (WITH ATOMIC LOCK) ---
-    if data.startswith("vt_"):
-        task_id = parts[2] + "_" + parts[3]
-        
-        task = await tasks_collection.find_one({'task_id': task_id})
-        if not task:
-            await query.answer(sc("THIS TASK IS NO LONGER AVAILABLE!"), show_alert=True)
-            return
-            
-        task_name_lower = task['name'].lower()
-        
-        # 1. CHANNEL VERIFICATION LOGIC (Strict Check)
-        if "join" in task_name_lower or "subscribe" in task_name_lower:
-            if task.get('url') and "t.me/" in task.get('url') and "+" not in task.get('url') and "joinchat" not in task.get('url'):
-                try:
-                    channel_username = "@" + task['url'].split("t.me/")[1].split("/")[0].split("?")[0]
-                    member = await context.bot.get_chat_member(chat_id=channel_username, user_id=owner_id)
+                
+                tasks = await tasks_collection.find({}).to_list(length=1000)
+                if not tasks:
+                    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"<b>{sc('NO TASKS FOUND!')}</b>", parse_mode=ParseMode.HTML)
+                    return
                     
-                    if member.status not in ['member', 'administrator', 'creator']:
-                        await query.answer(sc(f"PLEASE JOIN {channel_username} FIRST, THEN CLICK CHECK!"), show_alert=True)
+                msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
+                keyboard = []
+                for t in tasks:
+                    t_name = sc(t.get('name', 'UNKNOWN'))
+                    msg += f"<b>{sc('NAME')}:</b> {t_name}\n<b>{sc('ID')}:</b> <code>{t['task_id']}</code>\n\n"
+                    keyboard.append([InlineKeyboardButton(f"🗑️ {sc('DELETE')} {t_name}", callback_data=f"dt_{t['task_id']}")])
+                    
+                msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK.')}</i></b>"
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
+            else:
+                await query.answer(sc("❌ TASK NOT FOUND!"), show_alert=True)
+            return
+
+        # --- CROSS-USER PROTECTION CHECK ---
+        if len(parts) >= 2 and parts[0] in ["ign", "ci", "vt"]:
+            owner_id = int(parts[1])
+            if clicker_id != owner_id:
+                popup_msg = f"{sc('PLEASE USE')} /tasks {sc('COMMAND TO OPEN YOUR OWN DASHBOARD')}"
+                await query.answer(popup_msg, show_alert=True)
+                return
+
+        # --- SILENT IGNORE ---
+        if data.startswith("ign_"):
+            await query.answer()
+            return
+
+        # --- INVITE CLAIM LOGIC (WITH ATOMIC LOCK) ---
+        if data.startswith("ci_"):
+            user_data = await user_tasks_collection.find_one({'user_id': owner_id})
+            pending = user_data.get('pending_invites', 0)
+            
+            if pending > 0:
+                update_res = await user_tasks_collection.update_one(
+                    {'user_id': owner_id, 'pending_invites': pending},
+                    {'$set': {'pending_invites': 0}}
+                )
+                
+                if update_res.modified_count > 0:
+                    reward = pending * 25000
+                    await eco_collection.update_one({'id': owner_id}, {'$inc': {'balance': reward}})
+                    
+                    popup_msg = f"✅ {sc('CLAIM SUCCESSFUL!')}\n{sc('YOU RECEIVED')} {reward:,} 💸 {sc('FOR')} {pending} {sc('INVITES')}"
+                    await query.answer(popup_msg, show_alert=True)
+                    
+                    new_kb = await build_task_keyboard(owner_id, context.bot.username)
+                    try:
+                        await query.edit_message_reply_markup(reply_markup=new_kb)
+                    except Exception:
+                        pass
+                else:
+                    await query.answer(sc("YOU HAVE ALREADY CLAIMED THIS!"), show_alert=True)
+            else:
+                await query.answer(sc("NO PENDING INVITES TO CLAIM! SHARE YOUR LINK WITH FRIENDS."), show_alert=True)
+            return
+
+        # --- NORMAL TASK VERIFICATION (WITH ATOMIC LOCK) ---
+        if data.startswith("vt_"):
+            task_id = parts[2] + "_" + parts[3]
+            
+            task = await tasks_collection.find_one({'task_id': task_id})
+            if not task:
+                await query.answer(sc("THIS TASK IS NO LONGER AVAILABLE!"), show_alert=True)
+                return
+                
+            task_name_lower = task['name'].lower()
+            
+            # 1. CHANNEL VERIFICATION LOGIC (Strict Check with special text format)
+            if "join" in task_name_lower or "subscribe" in task_name_lower:
+                if task.get('url') and "t.me/" in task.get('url') and "+" not in task.get('url') and "joinchat" not in task.get('url'):
+                    try:
+                        channel_username = "@" + task['url'].split("t.me/")[1].split("/")[0].split("?")[0]
+                        member = await context.bot.get_chat_member(chat_id=channel_username, user_id=owner_id)
+                        
+                        if member.status not in ['member', 'administrator', 'creator']:
+                            # Using strictly "CHANNEL" instead of @name
+                            await query.answer(f"{sc('PLEASE JOIN THE')} {sc('CHANNEL')} {sc('FIRST, THEN CLICK CHECK!')}", show_alert=True)
+                            return
+                    except Exception as e:
+                        LOGGER.error(f"Channel Verify Error: {e}")
+                        # API Error / Not Admin -> Treat as not joined
+                        await query.answer(f"{sc('PLEASE JOIN THE')} {sc('CHANNEL')} {sc('FIRST, THEN CLICK CHECK!')}", show_alert=True)
                         return
-                except Exception as e:
-                    LOGGER.error(f"Channel Verify Error: {e}")
-                    await query.answer(sc("VERIFICATION FAILED! PLEASE MAKE SURE YOU JOINED THE CHANNEL."), show_alert=True)
+
+            # 2. SPEND TRACKER LOGIC
+            user_data = await user_tasks_collection.find_one({'user_id': owner_id})
+            if "spend" in task_name_lower:
+                # Find number in name, if not fallback to the reward amount (to fix empty number bugs)
+                nums = re.findall(r'\d+', task['name'])
+                required_spend = int(nums[0]) if nums else task['reward']
+                
+                current_spent = user_data.get('coins_spent_today', 0)
+                if current_spent < required_spend:
+                    await query.answer(f"{sc('PLEASE COMPLETE TASK FIRST! YOU SPENT')} {current_spent:,}/{required_spend:,} 💸", show_alert=True)
                     return
 
-        # 2. SPEND TRACKER LOGIC
-        user_data = await user_tasks_collection.find_one({'user_id': owner_id})
-        if "spend" in task_name_lower:
-            required_spend = 0
-            nums = re.findall(r'\d+', task['name'])
-            if nums: 
-                required_spend = int(nums[0])
+            # COMPLETE TASK
+            push_field = 'completed_daily' if task['type'] == 'daily' else 'completed_onetime'
             
-            current_spent = user_data.get('coins_spent_today', 0)
-            if current_spent < required_spend:
-                await query.answer(sc(f"YOU HAVEN'T SPENT ENOUGH COINS TODAY! (SPENT: {current_spent:,}/{required_spend:,} 💸)"), show_alert=True)
+            update_res = await user_tasks_collection.update_one(
+                {'user_id': owner_id, push_field: {'$ne': task_id}},
+                {'$push': {push_field: task_id}}
+            )
+            
+            if update_res.modified_count == 0:
+                await query.answer(sc("YOU HAVE ALREADY COMPLETED THIS TASK!"), show_alert=True)
                 return
-
-        # 🔥 COMPLETE TASK: ATOMIC UPDATE TO PREVENT MULTIPLE CLAIM SPAM
-        push_field = 'completed_daily' if task['type'] == 'daily' else 'completed_onetime'
-        
-        update_res = await user_tasks_collection.update_one(
-            {'user_id': owner_id, push_field: {'$ne': task_id}},
-            {'$push': {push_field: task_id}}
-        )
-        
-        if update_res.modified_count == 0:
-            await query.answer(sc("YOU HAVE ALREADY COMPLETED THIS TASK!"), show_alert=True)
-            return
+                
+            await eco_collection.update_one(
+                {'id': owner_id},
+                {'$inc': {'balance': task['reward']}},
+                upsert=True
+            )
             
-        # Give rewards securely
-        await eco_collection.update_one(
-            {'id': owner_id},
-            {'$inc': {'balance': task['reward']}},
-            upsert=True
-        )
-        
-        popup_msg = f"✅ {sc('TASK COMPLETED!')}\n{sc('YOU RECEIVED')} {task['reward']:,} 💸"
-        await query.answer(popup_msg, show_alert=True)
-        
-        log_data = {
-            sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={owner_id}'>{safe_name}</a></b>",
-            sc("ɪᴅ"): f"<code>{owner_id}</code>",
-            sc("ᴛᴀsᴋ ɴᴀᴍᴇ"): f"<b>{sc(task['name'])}</b>",
-            sc("ʀᴇᴡᴀʀᴅ"): f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {task['reward']:,}</b>",
-            sc("ᴛʏᴘᴇ"): f"<b>{sc(task['type'].upper())}</b>"
-        }
-        asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼ ✅", log_data)))
-        
-        # 🔥 Update UI In-Place Without New Message Page
-        new_kb = await build_task_keyboard(owner_id, context.bot.username)
+            popup_msg = f"✅ {sc('TASK COMPLETED!')}\n{sc('YOU RECEIVED')} {task['reward']:,} 💸"
+            await query.answer(popup_msg, show_alert=True)
+            
+            log_data = {
+                sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={owner_id}'>{safe_name}</a></b>",
+                sc("ɪᴅ"): f"<code>{owner_id}</code>",
+                sc("ᴛᴀsᴋ ɴᴀᴍᴇ"): f"<b>{sc(task['name'])}</b>",
+                sc("ʀᴇᴡᴀʀᴅ"): f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {task['reward']:,}</b>",
+                sc("ᴛʏᴘᴇ"): f"<b>{sc(task['type'].upper())}</b>"
+            }
+            asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼ ✅", log_data)))
+            
+            new_kb = await build_task_keyboard(owner_id, context.bot.username)
+            try:
+                await query.edit_message_reply_markup(reply_markup=new_kb)
+            except Exception:
+                pass
+                
+    except Exception as e:
+        LOGGER.error(f"Callback error in task_callback: {e}")
         try:
-            await query.edit_message_reply_markup(reply_markup=new_kb)
-        except Exception:
+            await update.callback_query.answer(sc("AN ERROR OCCURRED! PLEASE TRY AGAIN LATER."), show_alert=True)
+        except:
             pass
 
 
