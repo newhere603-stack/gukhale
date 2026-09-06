@@ -3,7 +3,7 @@ import re
 import html
 import asyncio
 from datetime import datetime, timedelta, timezone
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
 from telegram.constants import ParseMode
 import logging
@@ -220,25 +220,30 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
         cb_data = f"verify_task_{t_id}"
         
-        # Left side button: Task Name | Reward
+        # UI: 3 Buttons in one row -> [ Name ] [ Reward ] [ Status ]
         icon = "🔴" if task.get('difficulty') == 'hard' else "📝"
-        task_btn_text = f"{icon} {sc(task['name'])} | {task['reward']:,} 💸"
-        
-        row = []
         if is_completed:
-            # Agar task completed hai to Verify ki jagah ✅ Completed aayega
-            row.append(InlineKeyboardButton(task_btn_text, callback_data="task_ignore"))
-            row.append(InlineKeyboardButton(f"✅ {sc('Completed')}", callback_data="task_ignore"))
+            icon = "✅"
+            
+        name_text = f"{icon} {sc(task['name'])}"
+        reward_text = f"{task['reward']:,} 💸"
+        
+        # 1. Name Button (with URL if available and not complete)
+        if task.get('url') and not is_completed:
+            btn_name = InlineKeyboardButton(name_text, url=task['url'])
         else:
-            # Agar pending hai to URL open karne ka option dega if URL exists
-            if task.get('url'):
-                row.append(InlineKeyboardButton(task_btn_text, url=task['url']))
-                row.append(InlineKeyboardButton(f"Verify 🔄", callback_data=cb_data))
-            else:
-                row.append(InlineKeyboardButton(task_btn_text, callback_data="task_ignore"))
-                row.append(InlineKeyboardButton(f"Verify 🔄", callback_data=cb_data))
-                
-        keyboard.append(row)
+            btn_name = InlineKeyboardButton(name_text, callback_data="task_ignore")
+            
+        # 2. Reward Button
+        btn_reward = InlineKeyboardButton(reward_text, callback_data="task_ignore")
+        
+        # 3. Status Button
+        if is_completed:
+            btn_status = InlineKeyboardButton(f"✅ {sc('Done')}", callback_data="task_ignore")
+        else:
+            btn_status = InlineKeyboardButton(f"🔄 {sc('Verify')}", callback_data=cb_data)
+            
+        keyboard.append([btn_name, btn_reward, btn_status])
             
     bot_username = context.bot.username
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
@@ -252,12 +257,25 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         f"<blockquote><b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('COINS SPENT TODAY')}:</b> <b>{user_data.get('coins_spent_today', 0):,}</b></blockquote>"
     )
     
-    await update.message.reply_text(
-        text, 
-        reply_markup=InlineKeyboardMarkup(keyboard), 
-        parse_mode=ParseMode.HTML, 
-        disable_web_page_preview=True
-    )
+    photo_url = "https://files.catbox.moe/lge487.png"
+    
+    # Send photo with caption
+    try:
+        await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=photo_url,
+            caption=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML
+        )
+    except Exception as e:
+        LOGGER.error(f"Task photo send error: {e}")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML
+        )
 
 
 # ==========================================
@@ -270,20 +288,24 @@ async def task_callback(update: Update, context: CallbackContext):
     data = query.data
     
     if data == "task_ignore":
-        await query.answer(sc("You have already completed this task or no action is needed here!"), show_alert=True)
+        await query.answer(sc("No action needed here!"), show_alert=False)
         return
         
     if data.startswith("verify_task_"):
         task_id = data.replace("verify_task_", "")
-        task = await tasks_collection.find_one({'task_id': task_id})
         
+        # 🔥 SPAMMING BUG FIX: Check if task is already completed before doing anything!
+        user_data = await check_daily_reset(user_id)
+        if task_id in user_data.get('completed_daily', []) or task_id in user_data.get('completed_onetime', []):
+            await query.answer(sc("You have already completed this task!"), show_alert=True)
+            return
+            
+        task = await tasks_collection.find_one({'task_id': task_id})
         if not task:
             await query.answer(sc("This task is no longer available!"), show_alert=True)
             return
-            
-        user_data = await check_daily_reset(user_id)
         
-        # Spend tracker verification logic
+        # 🔥 SPEND TRACKER LOGIC FIX
         if "spend" in task['name'].lower():
             required_spend = 0
             nums = re.findall(r'\d+', task['name'])
@@ -321,12 +343,12 @@ async def task_callback(update: Update, context: CallbackContext):
         }
         asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼ ✅", log_data)))
         
-        # Dashboard message update karo
-        await tasks_cmd(update, context) 
+        # Dashboard ko Delete karke naya bhejo (Image attachment ki wajah se)
         try:
             await query.message.delete()
         except:
             pass
+        await tasks_cmd(update, context)
 
 
 # ==========================================
