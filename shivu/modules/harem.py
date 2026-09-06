@@ -82,7 +82,7 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
     asyncio.create_task(memory_delete())
 
 
-# 🔥 UNIFIED RARITY DICTIONARY
+# 🔥 UNIFIED RARITY DICTIONARY (Updated as per requested Emojis)
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Cosmic"),
@@ -91,7 +91,7 @@ RARITIES = {
     "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🟡</tg-emoji>', "Legendary"),
     "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
     "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
-    "summer": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"),
+    "summer": ("⛱️", '<tg-emoji emoji-id="5433645645376264953">⛱️</tg-emoji>', "Summer"),
     "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"),
     "special": ("🔴", '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>', "Medium"),
     "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">💞</tg-emoji>', "Valentine"),
@@ -334,18 +334,23 @@ class HaremHandler:
         self.collection_db = db['anime_characters_lol']
         self.user_db = db['user_collection_lmaoooo']
 
-    # 🔥 0-DELAY REAL-TIME SYNC (Instant update whenever DB changes)
+    # 🔥 OPTIMIZED 0-DELAY REAL-TIME SYNC (Superfast)
     async def sync_user_characters_with_live_data(self, characters: List[Character]):
         if not characters: return
         
-        query_ids = set()
+        # Ek hi baar mein unique ID map create karna taki database load kam ho
+        unique_map = {}
         for c in characters:
-            cid_str = str(c.id).strip()
-            c_clean = cid_str.lstrip('0') or '0'
-            query_ids.update([cid_str, c_clean])
-            if c_clean.isdigit():
-                val = int(c_clean)
-                query_ids.update([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
+            c_clean = str(c.id).strip().lstrip('0') or '0'
+            if c_clean not in unique_map:
+                unique_map[c_clean] = []
+            unique_map[c_clean].append(c)
+            
+        query_ids = set(unique_map.keys())
+        for val_str in list(query_ids):
+            if val_str.isdigit():
+                val = int(val_str)
+                query_ids.update([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
         
         cursor = self.collection_db.find(
             {"id": {"$in": list(query_ids)}}, 
@@ -357,20 +362,19 @@ class HaremHandler:
         for doc in docs:
             c_clean = str(doc.get('id', '')).strip().lstrip('0') or '0'
             if c_clean:
-                live_map[c_clean] = {
-                    "name": doc.get('name', 'Unknown'),
-                    "anime": doc.get('anime', 'Unknown'),
-                    "rarity": doc.get('rarity', '🟢 Common')
-                }
+                live_map[c_clean] = doc
                 
-        # Apply real-time live data directly
-        for c in characters:
-            c_clean = str(c.id).strip().lstrip('0') or '0'
-            live_data = live_map.get(c_clean)
-            if live_data:
-                c.name = live_data['name']
-                c.anime = live_data['anime']
-                c.rarity = live_data['rarity']
+        # Apply real-time live data fast mapping
+        for c_clean, chars_list in unique_map.items():
+            if c_clean in live_map:
+                live_data = live_map[c_clean]
+                name = live_data.get('name', 'Unknown')
+                anime = live_data.get('anime', 'Unknown')
+                rarity = live_data.get('rarity', '🟢 Common')
+                for c in chars_list:
+                    c.name = name
+                    c.anime = anime
+                    c.rarity = rarity
 
     async def load_user_collection(self, user_id: int) -> Optional[UserCollection]:
         user = await self.user_db.find_one({'id': user_id})
@@ -378,7 +382,7 @@ class HaremHandler:
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
         
-        # Real-time sync on every call
+        # Real-time sync ab superfast ho gaya
         await self.sync_user_characters_with_live_data(characters)
         
         fav_data = user.get('favorites')
@@ -402,20 +406,25 @@ class HaremHandler:
             filter_mode=user.get('hmode', 'default')
         )
 
-    # Naya method jo permanent auto delete task schedule karega
     async def _auto_delete_message(self, message, delay_seconds: int = 1200):
         await schedule_auto_delete(message, delay_seconds)
 
+    # 🔥 SUPERFAST UPDATE IMAGE LIVE DATA
     async def update_live_data_all(self, characters: List[Character]):
         if not characters: return
             
-        query_ids = set()
+        unique_map = {}
         for c in characters:
             c_clean = str(c.id).strip().lstrip('0') or '0'
-            query_ids.update([str(c.id).strip(), c_clean])
-            if c_clean.isdigit():
-                val = int(c_clean)
-                query_ids.update([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
+            if c_clean not in unique_map:
+                unique_map[c_clean] = []
+            unique_map[c_clean].append(c)
+            
+        query_ids = set(unique_map.keys())
+        for val_str in list(query_ids):
+            if val_str.isdigit():
+                val = int(val_str)
+                query_ids.update([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
         
         cursor = self.collection_db.find(
             {"id": {"$in": list(query_ids)}},
@@ -425,33 +434,37 @@ class HaremHandler:
             
         live_map = {}
         for doc in live_docs:
-            doc_id_str = str(doc.get('id')).strip()
-            live_map[doc_id_str] = doc
-            live_map[doc_id_str.lstrip('0') or '0'] = doc
+            doc_id_str = str(doc.get('id', '')).strip()
+            c_clean = doc_id_str.lstrip('0') or '0'
+            if c_clean: live_map[c_clean] = doc
             
-        for c in characters:
-            c_clean = str(c.id).strip().lstrip('0') or '0'
-            doc = live_map.get(str(c.id).strip()) or live_map.get(c_clean)
-            if doc:
-                if doc.get('img_url'): c.img_url = doc.get('img_url')
-                c.is_video = doc.get('is_video', c.is_video)
-                c.gender = doc.get('gender', c.gender)
+        for c_clean, chars_list in unique_map.items():
+            if c_clean in live_map:
+                doc = live_map[c_clean]
+                img_url = doc.get('img_url')
+                is_video = doc.get('is_video', False)
+                gender = doc.get('gender')
+                for c in chars_list:
+                    if img_url: c.img_url = img_url
+                    c.is_video = is_video
+                    if gender: c.gender = gender
 
+    # 🔥 OPTIMIZED ANIME COUNTS
     async def get_anime_counts(self, anime_list: List[str]) -> Dict[str, int]:
         if not anime_list: return {}
-        counts = {}
-        pipeline = [{"$match": {"anime": {"$in": anime_list}}}, {"$group": {"_id": "$anime", "count": {"$sum": 1}}}]
-        cursor = self.collection_db.aggregate(pipeline)
-        docs = await cursor.to_list(length=None)
-        for doc in docs:
-            counts[doc['_id']] = doc['count']
-        for m in anime_list:
-            if m not in counts:
-                counts[m] = 0
-        return counts
+        unique_animes = list(set(anime_list))
+        
+        async def count_anime(anime):
+            c = await self.collection_db.count_documents({"anime": anime})
+            return anime, c
+            
+        results = await asyncio.gather(*(count_anime(a) for a in unique_animes))
+        return dict(results)
 
     def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int, step: int = 1) -> InlineKeyboardMarkup:
-        keyboard = [[InlineKeyboardButton(f'<tg-emoji emoji-id="6093637923834438402">✨</tg-emoji> ʜᴀʀᴇᴍ ({total_chars})', switch_inline_query_current_chat=f"collection.{user_id}")]]
+        # ✅ FIX: Changed inline button to use premium emoji via icon_custom_emoji_id
+        keyboard = [[InlineKeyboardButton(f'ʜᴀʀᴇᴍ ({total_chars})', switch_inline_query_current_chat=f"collection.{user_id}", icon_custom_emoji_id="6093637923834438402")]]
+        
         if total_pages > 1:
             nav = []
             if page > 0: nav.append(InlineKeyboardButton("❮", callback_data=f"harem_page:{max(0, page - step)}:{user_id}:{step}"))
@@ -493,7 +506,7 @@ class HaremHandler:
             q_ids = [str(display_char.id).strip(), c_clean]
             if c_clean.isdigit(): 
                 val = int(c_clean)
-                q_ids.extend([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
+                q_ids.extend([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
             
             doc = await self.collection_db.find_one({"id": {"$in": q_ids}, "img_url": {"$nin": [None, ""]}})
             if doc:
@@ -517,19 +530,20 @@ class HaremHandler:
                 media_urls.append(c.img_url)
                 is_videos.append(getattr(c, 'is_video', False))
 
+        # 🔥 SUPERFAST FALLBACK LOOP IF NO IMAGE
         if not media_urls:
             db_query_ids = set()
-            for c in collection.characters[:30]:
+            for c in display_order[:15]:
                 c_clean = str(c.id).strip().lstrip('0') or '0'
-                db_query_ids.update([str(c.id).strip(), c_clean])
+                db_query_ids.add(c_clean)
                 if c_clean.isdigit():
                     val = int(c_clean)
-                    db_query_ids.update([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
+                    db_query_ids.update([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
                 
             valid_docs = await self.collection_db.find({
                 "id": {"$in": list(db_query_ids)},
                 "img_url": {"$type": "string", "$ne": ""}
-            }).to_list(length=10)
+            }).limit(3).to_list(length=None)
             
             for doc in valid_docs:
                 url = doc.get("img_url")
@@ -606,9 +620,29 @@ class ModeHandler:
         if update.callback_query: await update.callback_query.edit_message_caption(caption=caption, reply_markup=markup, parse_mode='HTML')
         else: await update.message.reply_photo(self.IMG, caption=caption, reply_markup=markup, parse_mode='HTML')
 
+    # 🔥 EXACT 5x3 GRID LAYOUT REQUESTED (UPDATED WITH PREMIUM EMOJIS)
     async def show_rarity_menu(self, query, user_id: int):
-        buttons = [InlineKeyboardButton(db_emoji, callback_data=f"harem_mode:{key}:{user_id}") for key, (db_emoji, _, _) in RARITIES.items()]
-        keyboard = chunk(buttons, 3) + [[InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")]]
+        grid_layout = [
+            ["common", "special", "rare"],
+            ["legendary", "exclusive", "sweet"],
+            ["neon", "summer", "winter"],
+            ["celestial", "valentine", "erotic"],
+            ["mythic", "premium", "cosmic"]
+        ]
+        
+        keyboard = []
+        for row in grid_layout:
+            btn_row = []
+            for key in row:
+                db_emoji = RARITIES[key][0]
+                prem_emoji_html = RARITIES[key][1]
+                # Dynamic premium emoji id extract karna taaki manually likhna na pade
+                emoji_id = prem_emoji_html.split('emoji-id="')[1].split('"')[0]
+                btn_row.append(InlineKeyboardButton(db_emoji, callback_data=f"harem_mode:{key}:{user_id}", icon_custom_emoji_id=emoji_id))
+            keyboard.append(btn_row)
+            
+        keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")])
+        
         await query.edit_message_caption(caption="<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
     async def show_anime_menu(self, query, user_id: int, page: int):
@@ -754,7 +788,7 @@ class UnfavHandler:
         q_ids = [str(fav.id).strip(), c_clean]
         if c_clean.isdigit(): 
             val = int(c_clean)
-            q_ids.extend([val, f"{val:02d}", f"{val:03d}", f"{val:04d}"])
+            q_ids.extend([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
         live_doc = await db['anime_characters_lol'].find_one({"id": {"$in": q_ids}})
         if live_doc and live_doc.get('img_url'):
             fav.img_url = live_doc.get('img_url')
