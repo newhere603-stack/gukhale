@@ -174,11 +174,10 @@ class GameUI:
 class GameLogic:
     @staticmethod
     def is_win(amount: int) -> bool:
-        # 🔥 Exact 1 to 100 RNG check. No floating point weirdness.
         roll = random.randint(1, 100)
         if amount > 10000:
-            return roll <= 10  # Exact 10% chance
-        return roll <= 50      # Exact 50% chance
+            return roll <= 10
+        return roll <= 50
 
     @staticmethod
     def _get_random_rewards() -> tuple[int, int]:
@@ -239,8 +238,6 @@ class GameLogic:
     @staticmethod
     def darts(amount: int) -> GameResult:
         roll = random.randint(1, 100)
-        
-        # Bullseye aur normal hit ke chances ko % mein divide kar diya properly
         if amount > 10000:
             bullseye_chance = 3
             hit_chance = 10
@@ -652,7 +649,8 @@ async def games_callback(update: Update, context: CallbackContext):
         
         cmd = parts[2]
         
-        parsed_args = []
+        # Fixed arguments parsing here for repeat feature
+        parsed_args = parts[3:] if len(parts) > 3 and parts[3] != '_' else []
 
         handlers = {
             "sbet": sbet, "roll": roll_cmd, "gamble": gamble,
@@ -674,5 +672,6 @@ application.add_handler(CommandHandler("riddle", riddle, block=False))
 application.add_handler(CommandHandler("games", games_menu, block=False))
 application.add_handler(CommandHandler("gamestats", game_stats, block=False))
 
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer), group=119)
+# Yahan par block=False add kiya taaki speed increase ho aur lag completely chala jaye.
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer, block=False), group=119)
 application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:", block=False))
