@@ -451,7 +451,7 @@ class HaremHandler:
         return counts
 
     def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int, step: int = 1) -> InlineKeyboardMarkup:
-        keyboard = [[InlineKeyboardButton(f"✨ ʜᴀʀᴇᴍ ({total_chars})", switch_inline_query_current_chat=f"collection.{user_id}")]]
+        keyboard = [[InlineKeyboardButton(f'<tg-emoji emoji-id="6093637923834438402">✨</tg-emoji> ʜᴀʀᴇᴍ ({total_chars})', switch_inline_query_current_chat=f"collection.{user_id}")]]
         if total_pages > 1:
             nav = []
             if page > 0: nav.append(InlineKeyboardButton("❮", callback_data=f"harem_page:{max(0, page - step)}:{user_id}:{step}"))
