@@ -911,7 +911,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         ])
         await update_menu(query, f"<b>{E_EXC} {sc('exchange menu')}</b>\n\n<i>{sc('daily limit:')} {limit_text}</i>\n<i>{sc('what would you like to do?')}</i>", keyboard)
 
-            elif action == "pm_r":
+    elif action == "pm_r":
         rarity_key = parts[1]
         
         keyboard = InlineKeyboardMarkup([
@@ -922,7 +922,6 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         
         _, prem_emoji, name = RARITIES.get(rarity_key, RARITIES["common"])
         await update_menu(query, f"<b>{prem_emoji} {sc(name)} {sc('characters')}</b>\n\n<i>{sc('how do you want to sort them?')}</i>", keyboard)
-    
 
     elif action == "pm_s" or action == "pm_s_back":
         rarity_key = parts[1]
