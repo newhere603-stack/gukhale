@@ -94,7 +94,7 @@ async def handle_referral(update: Update, context: CallbackContext):
                     )
                     
                     try:
-                        ref_msg = f"<b>{sc('🎉 SUCCESSFUL REFERRAL! A NEW USER JOINED VIA YOUR LINK.')}\n\n{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF 25,000 💸!')}</b>"
+                        ref_msg = f"<b>{sc('SUCCESSFUL REFERRAL A NEW USER JOINED VIA YOUR LINK')}\n\n{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF 25,000 COINS')}</b>"
                         await context.bot.send_message(chat_id=referrer_id, text=ref_msg, parse_mode=ParseMode.HTML)
                     except Exception:
                         pass
@@ -105,7 +105,7 @@ async def handle_referral(update: Update, context: CallbackContext):
                         sc("ʀᴇғᴇʀʀᴇᴅ ʙʏ"): f"<code>{referrer_id}</code>",
                         sc("sᴛᴀᴛᴜs"): f"<b>{sc('Pending Claim')}</b>"
                     }
-                    asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ɴᴇᴡ ʀᴇғᴇʀʀᴀʟ')} ˼ 👥", log_data)))
+                    asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ɴᴇᴡ ʀᴇғᴇʀʀᴀʟ')} ˼", log_data)))
             except ValueError:
                 pass
                 
@@ -120,8 +120,8 @@ async def handle_referral(update: Update, context: CallbackContext):
         })
         
         welcome_text = (
-            f"<b>{sc('🎉 WELCOME! YOU RECEIVED 1,000 💸 FOR STARTING THE BOT!')}</b>\n"
-            f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE.')}</b>"
+            f"<b>{sc('WELCOME YOU RECEIVED 1,000 COINS FOR STARTING THE BOT')}</b>\n"
+            f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE')}</b>"
         )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
 
@@ -155,7 +155,7 @@ async def addtask(update: Update, context: CallbackContext):
         })
         
         msg = (
-            f"<b>✅ {sc('NEW TASK ADDED SUCCESSFULLY!')}</b>\n"
+            f"<b>✅ {sc('NEW TASK ADDED SUCCESSFULLY')}</b>\n"
             f"<blockquote><b>{sc('ID')}:</b> <code>{task_id}</code>\n"
             f"<b>{sc('NAME')}:</b> <b>{sc(name)}</b>\n"
             f"<b>{sc('REWARD')}:</b> <b>{reward:,} 💸</b>\n"
@@ -165,7 +165,7 @@ async def addtask(update: Update, context: CallbackContext):
         
     except Exception as e:
         error_msg = (
-            f"<b>⚠️ {sc('INVALID FORMAT!')}</b>\n"
+            f"<b>⚠️ {sc('INVALID FORMAT')}</b>\n"
             f"<b>{sc('USAGE')}:</b> <code>/addtask type | difficulty | reward | Name | URL(or None)</code>\n\n"
             f"<b>{sc('EXAMPLE')}:</b>\n<code>/addtask daily | normal | 5000 | Join Our Channel | https://t.me/shivu</code>"
         )
@@ -179,7 +179,7 @@ async def tasklist(update: Update, context: CallbackContext):
         tasks = await tasks_collection.find({}).to_list(length=1000)
         
         if not tasks:
-            await update.message.reply_text(f"<b>{sc('NO TASKS FOUND!')}</b>", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(f"<b>{sc('NO TASKS FOUND')}</b>", parse_mode=ParseMode.HTML)
             return
             
         msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
@@ -192,7 +192,7 @@ async def tasklist(update: Update, context: CallbackContext):
             
             keyboard.append([InlineKeyboardButton(f"🗑️ {sc('DELETE')} {t_name}", callback_data=f"dt_{t_id}")])
             
-        msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK.')}</i></b>"
+        msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK')}</i></b>"
         await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
         
     except Exception as e:
@@ -204,16 +204,16 @@ async def removetask(update: Update, context: CallbackContext):
         return
         
     if not context.args:
-        await update.message.reply_text(f"<b>{sc('USAGE:')} /removetask <task_id></b>\n{sc('USE')} /tasklist {sc('TO FIND OR DELETE EASILY.')}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>{sc('USAGE:')} /removetask <task_id></b>\n{sc('USE')} /tasklist {sc('TO FIND OR DELETE EASILY')}", parse_mode=ParseMode.HTML)
         return
         
     task_id = context.args[0]
     result = await tasks_collection.delete_one({'task_id': task_id})
     
     if result.deleted_count > 0:
-        await update.message.reply_text(f"<b>✅ {sc('TASK REMOVED SUCCESSFULLY!')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>✅ {sc('TASK REMOVED SUCCESSFULLY')}</b>", parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(f"<b>❌ {sc('TASK NOT FOUND!')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b>❌ {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
 
 
 # ==========================================
@@ -272,33 +272,33 @@ async def build_task_keyboard(user_id, bot_username):
             row.append(InlineKeyboardButton(reward_text, callback_data=f"ign_{user_id}"))
             
             if is_completed:
-                # Sirf check emoji agar done ho gaya
+                # Sirf check emoji ✅ jaise bola tha
                 row.append(InlineKeyboardButton("✅", callback_data=f"ign_{user_id}"))
             else:
-                # Bina kisi emoji ke sirf CHECK likha hoga
-                row.append(InlineKeyboardButton(sc("CHECK"), callback_data=f"vt_{user_id}_{t_id}"))
+                # Bina kisi emoji ke sirf CHECK chhote font mein
+                row.append(InlineKeyboardButton(sc("check"), callback_data=f"vt_{user_id}_{t_id}"))
                 
             keyboard.append(row)
             
-    invite_claim_text = sc('CLAIM') if pending_invites > 0 else sc('CHECK')
+    invite_claim_text = sc('claim') if pending_invites > 0 else sc('check')
     keyboard.append([
-        InlineKeyboardButton(sc('INVITES'), callback_data=f"ign_{user_id}"),
-        InlineKeyboardButton(f"{total_invites} {sc('FRIENDS')}", callback_data=f"ign_{user_id}"),
+        InlineKeyboardButton(sc('invites'), callback_data=f"ign_{user_id}"),
+        InlineKeyboardButton(f"{total_invites} {sc('friends')}", callback_data=f"ign_{user_id}"),
         InlineKeyboardButton(invite_claim_text, callback_data=f"ci_{user_id}")
     ])
     
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     raw_share_text = (
-        f"🌸 {sc('STEP INTO THE ULTIMATE WAIFU BOT!')}\n\n"
-        f"🎮 {sc('COLLECT BEAUTIFUL WAIFUS, PLAY GAMES, AND EARN HUGE REWARDS.')}\n"
-        f"🎁 {sc('JOIN USING MY LINK AND GET 1,000 💸 FREE STARTING BONUS!')}\n\n"
-        f"🔗 {sc('TAP TO START')}: {invite_link}"
+        f"{sc('STEP INTO THE ULTIMATE WAIFU BOT')}\n\n"
+        f"{sc('COLLECT BEAUTIFUL WAIFUS PLAY GAMES AND EARN HUGE REWARDS')}\n"
+        f"{sc('JOIN USING MY LINK AND GET 1000 COINS FREE STARTING BONUS')}\n\n"
+        f"{sc('TAP TO START')}: {invite_link}"
     )
     
     encoded_text = urllib.parse.quote(raw_share_text)
     share_url = f"https://t.me/share/url?text={encoded_text}"
     
-    keyboard.append([InlineKeyboardButton(f"🔗 {sc('SHARE INVITE LINK')}", url=share_url)])
+    keyboard.append([InlineKeyboardButton(sc('share invite link'), url=share_url)])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -312,7 +312,7 @@ async def tasks_cmd(update: Update, context: CallbackContext):
     
     text = (
         f"<b>📋 <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a></b>\n\n"
-        f"<b><i>{sc('COMPLETE TASKS TO EARN HUGE REWARDS! DAILY TASKS RESET EVERY MIDNIGHT.')}</i></b>"
+        f"<b><i>{sc('COMPLETE TASKS TO EARN HUGE REWARDS DAILY TASKS RESET EVERY MIDNIGHT')}</i></b>"
     )
     
     photo_url = "https://files.catbox.moe/lge487.png"
@@ -355,7 +355,7 @@ async def task_callback(update: Update, context: CallbackContext):
                 await query.answer(sc("YOU ARE NOT AUTHORIZED"), show_alert=True)
                 return
                 
-            task_id = parts[1] + "_" + parts[2]
+            task_id = data[3:]
             res = await tasks_collection.delete_one({'task_id': task_id})
             
             if res.deleted_count > 0:
@@ -367,7 +367,7 @@ async def task_callback(update: Update, context: CallbackContext):
                 
                 tasks = await tasks_collection.find({}).to_list(length=1000)
                 if not tasks:
-                    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"<b>{sc('NO TASKS FOUND!')}</b>", parse_mode=ParseMode.HTML)
+                    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"<b>{sc('NO TASKS FOUND')}</b>", parse_mode=ParseMode.HTML)
                     return
                     
                 msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
@@ -377,7 +377,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     msg += f"<b>{sc('NAME')}:</b> {t_name}\n<b>{sc('ID')}:</b> <code>{t['task_id']}</code>\n\n"
                     keyboard.append([InlineKeyboardButton(f"🗑️ {sc('DELETE')} {t_name}", callback_data=f"dt_{t['task_id']}")])
                     
-                msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK.')}</i></b>"
+                msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK')}</i></b>"
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
             else:
                 await query.answer(sc("TASK NOT FOUND"), show_alert=True)
@@ -411,8 +411,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     reward = pending * 25000
                     await eco_collection.update_one({'id': owner_id}, {'$inc': {'balance': reward}})
                     
-                    # No Emojis, Pure Small Caps string formatting
-                    popup_msg = f"{sc('CLAIM SUCCESSFUL!')}\n{sc('YOU RECEIVED')} {reward:,} {sc('COINS FOR')} {pending} {sc('INVITES')}"
+                    popup_msg = f"{sc('claim successful')}\n{sc('you received')} {reward:,} {sc('coins for')} {pending} {sc('invites')}"
                     await query.answer(popup_msg, show_alert=True)
                     
                     new_kb = await build_task_keyboard(owner_id, context.bot.username)
@@ -442,26 +441,43 @@ async def task_callback(update: Update, context: CallbackContext):
                 
             task_name_lower = str(task['name']).lower()
             
-            # 1. CHANNEL VERIFICATION LOGIC (Robust Strict Check)
+            # 1. CHANNEL VERIFICATION LOGIC (Super Strict PTB Format Check)
             if "join" in task_name_lower or "subscribe" in task_name_lower:
                 if task.get('url') and "t.me/" in task.get('url') and "+" not in task.get('url') and "joinchat" not in task.get('url'):
                     try:
-                        channel_username = "@" + task['url'].split("t.me/")[1].split("/")[0].split("?")[0]
+                        channel_username = "@" + task['url'].split("t.me/")[1].split("/")[0].split("?")[0].strip()
                         member = await context.bot.get_chat_member(chat_id=channel_username, user_id=owner_id)
                         
-                        status_str = str(getattr(member, 'status', '')).lower()
-                        # Agar user chhod chuka hai, ban hai, ya allow nahi hai to join fail maana jayega
-                        if 'left' in status_str or 'kicked' in status_str or 'banned' in status_str or 'restricted' in status_str or 'not' in status_str:
+                        # Extracting exact string status properly
+                        status = getattr(member, 'status', '')
+                        if hasattr(status, 'value'):
+                            status_str = str(status.value).lower()
+                        else:
+                            status_str = str(status).lower()
+                            
+                        # Sirf in 4 me se koi ek hona chahiye, warna left/kicked/banned count hoga
+                        valid_statuses = ['member', 'creator', 'administrator', 'restricted']
+                        is_valid = any(v in status_str for v in valid_statuses)
+                        
+                        if not is_valid:
                             await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                             return
+                            
                     except Exception as e:
+                        error_msg = str(e).lower()
                         LOGGER.error(f"Channel Verify Error: {e}")
-                        await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
+                        # Agar user ne kabhi interact nahi kiya toh 'user not found' aata hai
+                        if "user not found" in error_msg:
+                            await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
+                        else:
+                            # Agar bot admin nahi hai toh ye alert dega owner ko notify karne
+                            await query.answer(sc("VERIFICATION FAILED BOT IS NOT ADMIN IN THAT CHANNEL"), show_alert=True)
                         return
 
-            # 2. SPEND TRACKER LOGIC
+            # 2. SPEND TRACKER LOGIC (Bug Free Number Extraction)
             if "spend" in task_name_lower:
-                nums = re.findall(r'\d+', task['name'])
+                name_clean = str(task['name']).replace(',', '')
+                nums = re.findall(r'\d+', name_clean)
                 required_spend = int(nums[0]) if nums else int(task['reward'])
                 
                 current_spent = int(user_data.get('coins_spent_today', 0) or 0)
@@ -469,7 +485,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     await query.answer(f"{sc('PLEASE COMPLETE TASK FIRST YOU SPENT')} {current_spent:,}/{required_spend:,}", show_alert=True)
                     return
 
-            # COMPLETE TASK
+            # COMPLETE TASK (Atomic Update)
             push_field = 'completed_daily' if task['type'] == 'daily' else 'completed_onetime'
             
             update_res = await user_tasks_collection.update_one(
@@ -488,18 +504,18 @@ async def task_callback(update: Update, context: CallbackContext):
                 upsert=True
             )
             
-            # No Emojis in Success Popup
-            popup_msg = f"{sc('TASK COMPLETED!')}\n{sc('YOU RECEIVED')} {reward_val:,} {sc('COINS')}"
+            # Emojis removed from success popup text completely!
+            popup_msg = f"{sc('task completed')}\n{sc('you received')} {reward_val:,} {sc('coins')}"
             await query.answer(popup_msg, show_alert=True)
             
             log_data = {
                 sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={owner_id}'>{safe_name}</a></b>",
                 sc("ɪᴅ"): f"<code>{owner_id}</code>",
                 sc("ᴛᴀsᴋ ɴᴀᴍᴇ"): f"<b>{sc(task['name'])}</b>",
-                sc("ʀᴇᴡᴀʀᴅ"): f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {reward_val:,}</b>",
+                sc("ʀᴇᴡᴀʀᴅ"): f"<b>{reward_val:,}</b>",
                 sc("ᴛʏᴘᴇ"): f"<b>{sc(task['type'].upper())}</b>"
             }
-            asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼ ✅", log_data)))
+            asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼", log_data)))
             
             new_kb = await build_task_keyboard(owner_id, context.bot.username)
             try:
