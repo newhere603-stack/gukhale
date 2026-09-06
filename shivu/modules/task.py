@@ -2,6 +2,7 @@ import time
 import re
 import html
 import asyncio
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
@@ -66,34 +67,44 @@ async def send_log(context: CallbackContext, text: str):
 # 🎁 WELCOME & REFERRAL LOGIC
 # ==========================================
 async def handle_referral(update: Update, context: CallbackContext):
+    if not update.effective_user:
+        return
+        
     user_id = update.effective_user.id
     raw_first_name = update.effective_user.first_name or "User"
     safe_name = html.escape(raw_first_name)
     
     user_task_data = await user_tasks_collection.find_one({'user_id': user_id})
     
+    # 🔥 ANTI-CHEAT: Ye block sirf NEW USER ke liye chalega
     if not user_task_data:
+        # Give Welcome Bonus
         await eco_collection.update_one(
             {'id': user_id}, 
             {'$inc': {'balance': 1000}, '$set': {'first_name': raw_first_name}}, 
             upsert=True
         )
         
+        # Check for Referral
         if context.args and context.args[0].startswith("ref_"):
             try:
                 referrer_id = int(context.args[0].split("_")[1])
                 if referrer_id != user_id:
+                    # Give pending invite to Referrer
                     await user_tasks_collection.update_one(
                         {'user_id': referrer_id}, 
                         {'$inc': {'pending_invites': 1, 'total_invites': 1}},
                         upsert=True
                     )
+                    
+                    # 🔥 SEND NOTIFICATION TO REFERRER
                     try:
-                        ref_msg = f"<b>{sc('🎉 SOMEONE JOINED USING YOUR INVITE LINK! CHECK /tasks TO CLAIM YOUR REWARD!')}</b>"
+                        ref_msg = f"<b>{sc('🎉 SUCCESSFUL REFERRAL! A NEW USER JOINED VIA YOUR LINK.')}\n\n{sc('USE /tasks TO CLAIM YOUR REWARD OF 25,000 💸!')}</b>"
                         await context.bot.send_message(chat_id=referrer_id, text=ref_msg, parse_mode=ParseMode.HTML)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        LOGGER.error(f"Referral Notification Error: {e}")
                         
+                    # Log the referral
                     log_data = {
                         sc("ɴᴇᴡ ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{safe_name}</a></b>",
                         sc("ɪᴅ"): f"<code>{user_id}</code>",
@@ -104,6 +115,7 @@ async def handle_referral(update: Update, context: CallbackContext):
             except ValueError:
                 pass
                 
+        # Initialize new user task profile
         await user_tasks_collection.insert_one({
             'user_id': user_id,
             'completed_daily': [],
@@ -114,6 +126,7 @@ async def handle_referral(update: Update, context: CallbackContext):
             'last_reset_date': datetime.now(IST).strftime("%Y-%m-%d")
         })
         
+        # Send Welcome Message
         welcome_text = (
             f"<b>{sc('🎉 WELCOME! YOU RECEIVED 1,000 💸 FOR STARTING THE BOT!')}</b>\n"
             f"<b>{sc('USE /tasks TO COMPLETE MISSIONS AND EARN MORE.')}</b>"
@@ -168,12 +181,10 @@ async def addtask(update: Update, context: CallbackContext):
 
 
 async def tasklist(update: Update, context: CallbackContext):
-    """Admin command to list and directly delete tasks using inline buttons."""
     if update.effective_user.id != OWNER_ID:
         return
         
     try:
-        # Fetching with explicit limit to avoid motor PyMongo errors
         tasks = await tasks_collection.find({}).to_list(length=1000)
         
         if not tasks:
@@ -188,7 +199,6 @@ async def tasklist(update: Update, context: CallbackContext):
             t_id = t['task_id']
             msg += f"<b>{sc('NAME')}:</b> {t_name}\n<b>{sc('ID')}:</b> <code>{t_id}</code>\n\n"
             
-            # Delete button logic
             keyboard.append([InlineKeyboardButton(f"🗑️ {sc('DELETE')} {t_name}", callback_data=f"deltask_{t_id}")])
             
         msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK.')}</i></b>"
@@ -200,7 +210,6 @@ async def tasklist(update: Update, context: CallbackContext):
 
 
 async def removetask(update: Update, context: CallbackContext):
-    """Manual remove command just in case."""
     if update.effective_user.id != OWNER_ID:
         return
         
@@ -242,7 +251,7 @@ async def check_daily_reset(user_id):
 
 
 # ==========================================
-# 📋 USER TASKS DASHBOARD (/tasks)
+# 📋 USER TASKS DASHBOARD (/tasks & /task)
 # ==========================================
 async def tasks_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -253,7 +262,6 @@ async def tasks_cmd(update: Update, context: CallbackContext):
     pending_invites = user_data.get('pending_invites', 0)
     total_invites = user_data.get('total_invites', 0)
     
-    # Safely fetch tasks
     all_tasks = await tasks_collection.find({}).to_list(length=1000)
     
     keyboard = []
@@ -269,16 +277,13 @@ async def tasks_cmd(update: Update, context: CallbackContext):
             
             row = []
             
-            # COLUMN 1: Name (No emojis to save space)
             if task.get('url') and not is_completed:
                 btn_name = InlineKeyboardButton(name_text, url=task['url'])
             else:
                 btn_name = InlineKeyboardButton(name_text, callback_data="task_ignore")
                 
-            # COLUMN 2: Reward
             btn_reward = InlineKeyboardButton(reward_text, callback_data="task_ignore")
             
-            # COLUMN 3: Status
             if is_completed:
                 btn_status = InlineKeyboardButton(f"✅ {sc('DONE')}", callback_data="task_ignore")
             else:
@@ -286,7 +291,6 @@ async def tasks_cmd(update: Update, context: CallbackContext):
                 
             keyboard.append([btn_name, btn_reward, btn_status])
             
-    # 2. INVITE SYSTEM ROW (3 Columns)
     invite_claim_text = f"{sc('CLAIM')}" if pending_invites > 0 else f"{sc('CHECK')}"
     keyboard.append([
         InlineKeyboardButton(f"{sc('INVITES')}", callback_data="task_ignore"),
@@ -294,10 +298,23 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton(invite_claim_text, callback_data="claim_invites")
     ])
     
+    # 🔥 THEMATIC SHARE TEXT WITH IMAGE PREVIEW
     bot_username = context.bot.username
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     
-    keyboard.append([InlineKeyboardButton(f"🔗 {sc('SHARE INVITE LINK')}", url=f"https://t.me/share/url?url={invite_link}&text=Join%20this%20awesome%20bot!")])
+    share_photo = "https://files.catbox.moe/flth7m.png"
+    raw_share_text = (
+        f"🌸 {sc('STEP INTO THE ULTIMATE WAIFU BOT!')}\n\n"
+        f"🎮 {sc('COLLECT BEAUTIFUL WAIFUS, PLAY GAMES, AND EARN HUGE REWARDS.')}\n"
+        f"🎁 {sc('JOIN USING MY LINK AND GET 1,000 💸 FREE STARTING BONUS!')}\n\n"
+        f"🔗 {sc('TAP TO START')}: {invite_link}\n\n"
+        f"🖼️ {sc('PREVIEW')}: {share_photo}"
+    )
+    
+    encoded_text = urllib.parse.quote(raw_share_text)
+    share_url = f"https://t.me/share/url?url={invite_link}&text={encoded_text}"
+    
+    keyboard.append([InlineKeyboardButton(f"🔗 {sc('SHARE INVITE LINK')}", url=share_url)])
     
     text = (
         f"<b>📋 <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a></b>\n\n"
@@ -337,7 +354,6 @@ async def task_callback(update: Update, context: CallbackContext):
         await query.answer(sc("NO ACTION NEEDED HERE!"), show_alert=False)
         return
         
-    # --- ADMIN DELETE TASK LOGIC ---
     if data.startswith("deltask_"):
         if user_id != OWNER_ID:
             await query.answer(sc("YOU ARE NOT AUTHORIZED!"), show_alert=True)
@@ -353,7 +369,6 @@ async def task_callback(update: Update, context: CallbackContext):
             except:
                 pass
             
-            # Send updated list immediately
             tasks = await tasks_collection.find({}).to_list(length=1000)
             if not tasks:
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=f"<b>{sc('NO TASKS FOUND!')}</b>", parse_mode=ParseMode.HTML)
@@ -372,7 +387,6 @@ async def task_callback(update: Update, context: CallbackContext):
             await query.answer(sc("❌ TASK NOT FOUND!"), show_alert=True)
         return
 
-    # --- INVITE CLAIM LOGIC ---
     if data == "claim_invites":
         user_data = await check_daily_reset(user_id)
         pending = user_data.get('pending_invites', 0)
@@ -394,7 +408,6 @@ async def task_callback(update: Update, context: CallbackContext):
             await query.answer(sc("NO PENDING INVITES TO CLAIM! SHARE YOUR LINK WITH FRIENDS."), show_alert=True)
         return
 
-    # --- NORMAL TASK VERIFICATION ---
     if data.startswith("verify_task_"):
         task_id = data.replace("verify_task_", "")
         
@@ -410,7 +423,6 @@ async def task_callback(update: Update, context: CallbackContext):
             
         task_name_lower = task['name'].lower()
         
-        # 1. CHANNEL VERIFICATION LOGIC (Strict Check)
         if "join" in task_name_lower or "subscribe" in task_name_lower:
             if task.get('url') and "t.me/" in task.get('url') and "+" not in task.get('url') and "joinchat" not in task.get('url'):
                 try:
@@ -425,7 +437,6 @@ async def task_callback(update: Update, context: CallbackContext):
                     await query.answer(sc("VERIFICATION FAILED! PLEASE MAKE SURE YOU JOINED THE CHANNEL."), show_alert=True)
                     return
 
-        # 2. SPEND TRACKER LOGIC
         if "spend" in task_name_lower:
             required_spend = 0
             nums = re.findall(r'\d+', task['name'])
@@ -437,7 +448,6 @@ async def task_callback(update: Update, context: CallbackContext):
                 await query.answer(sc(f"YOU HAVEN'T SPENT ENOUGH COINS TODAY! (SPENT: {current_spent:,}/{required_spend:,} 💸)"), show_alert=True)
                 return
 
-        # COMPLETE TASK
         push_field = 'completed_daily' if task['type'] == 'daily' else 'completed_onetime'
         await user_tasks_collection.update_one(
             {'user_id': user_id},
@@ -472,9 +482,12 @@ async def task_callback(update: Update, context: CallbackContext):
 # ==========================================
 # 🛑 HANDLER REGISTRATIONS
 # ==========================================
+application.add_handler(CommandHandler("start", handle_referral, block=False), group=65)
 application.add_handler(CommandHandler("addtask", addtask, block=False))
 application.add_handler(CommandHandler("removetask", removetask, block=False))
 application.add_handler(CommandHandler("tasklist", tasklist, block=False))
-application.add_handler(CommandHandler("tasks", tasks_cmd, block=False))
-# Maine deltask_ callback handle ko idhar fix add kiya hai:
+
+# 🔥 Command handler modified for both /task and /tasks
+application.add_handler(CommandHandler(["task", "tasks"], tasks_cmd, block=False))
+
 application.add_handler(CallbackQueryHandler(task_callback, pattern="^verify_task_|^task_ignore|^claim_invites|^deltask_", block=False))
