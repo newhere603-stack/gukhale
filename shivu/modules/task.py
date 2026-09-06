@@ -298,21 +298,19 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton(invite_claim_text, callback_data="claim_invites")
     ])
     
-    # 🔥 THEMATIC SHARE TEXT WITH IMAGE PREVIEW
+    # 🔥 CLEAN SHARE TEXT WITHOUT EXTRA LEADING URL
     bot_username = context.bot.username
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     
-    share_photo = "https://files.catbox.moe/flth7m.png"
     raw_share_text = (
         f"🌸 {sc('STEP INTO THE ULTIMATE WAIFU BOT!')}\n\n"
         f"🎮 {sc('COLLECT BEAUTIFUL WAIFUS, PLAY GAMES, AND EARN HUGE REWARDS.')}\n"
         f"🎁 {sc('JOIN USING MY LINK AND GET 1,000 💸 FREE STARTING BONUS!')}\n\n"
-        f"🔗 {sc('TAP TO START')}: {invite_link}\n\n"
-        f"🖼️ {sc('PREVIEW')}: {share_photo}"
+        f"🔗 {sc('TAP TO START')}: {invite_link}"
     )
     
     encoded_text = urllib.parse.quote(raw_share_text)
-    share_url = f"https://t.me/share/url?url={invite_link}&text={encoded_text}"
+    share_url = f"https://t.me/share/url?text={encoded_text}"
     
     keyboard.append([InlineKeyboardButton(f"🔗 {sc('SHARE INVITE LINK')}", url=share_url)])
     
@@ -482,12 +480,9 @@ async def task_callback(update: Update, context: CallbackContext):
 # ==========================================
 # 🛑 HANDLER REGISTRATIONS
 # ==========================================
-application.add_handler(CommandHandler("start", handle_referral, block=False), group=65)
+application.add_handler(CommandHandler("start", handle_referral, block=False), group=69)
 application.add_handler(CommandHandler("addtask", addtask, block=False))
 application.add_handler(CommandHandler("removetask", removetask, block=False))
 application.add_handler(CommandHandler("tasklist", tasklist, block=False))
-
-# 🔥 Command handler modified for both /task and /tasks
 application.add_handler(CommandHandler(["task", "tasks"], tasks_cmd, block=False))
-
 application.add_handler(CallbackQueryHandler(task_callback, pattern="^verify_task_|^task_ignore|^claim_invites|^deltask_", block=False))
