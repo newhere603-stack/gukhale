@@ -88,6 +88,7 @@ class GameState:
 CONFIG = GameConfig()
 game_state = GameState()
 
+# Sab original premium emojis barkarar hain
 GAME_EMOJIS = {
     GameType.COINFLIP: '<tg-emoji emoji-id="5379600444098093058">🪙</tg-emoji>', 
     GameType.DICE: '<tg-emoji emoji-id="6055198348787324579">🎲</tg-emoji>', 
@@ -238,6 +239,7 @@ class GameLogic:
     @staticmethod
     def darts(amount: int) -> GameResult:
         roll = random.randint(1, 100)
+        
         if amount > 10000:
             bullseye_chance = 3
             hit_chance = 10
@@ -495,11 +497,13 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
     if await check_cooldown(update, context, user_id): return
     
     question, answer = GameLogic.generate_riddle()
+    
+    # EXACT format from screenshot with original premium emojis!
     text = (
-        f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> ʀɪᴅᴅʟᴇ ᴛɪᴍᴇ</b>\n"
-        f"<b>sᴏʟᴠᴇ: {question}</b>\n"
-        f"<b>ᴛɪᴍᴇ: <code>{CONFIG.riddle_timeout}s</code> | ʀᴇᴡᴀʀᴅ: <code>50</code> ᴄᴏɪɴs + <code>1</code> ᴛᴏᴋᴇɴ</b>\n"
-        f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜᴍʙᴇʀ</b></i>"
+        f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> RIDDLE TIME</b>\n"
+        f"<b>SOLVE: {question}</b>\n"
+        f"<b>TIME: {CONFIG.riddle_timeout}s | REWARD: 50 COINS + 1\nTOKEN</b>\n"
+        f"<b>REPLY WITH THE NUMBER</b>"
     )
     sent = await send_or_edit_response(update, context, text)
     msg_id = sent.message_id if sent else (update.callback_query.message.message_id if update.callback_query else 0)
@@ -515,7 +519,11 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
             if time.time() >= pending.expires_at:
                 game_state.riddles.pop(user_id, None)
                 try:
-                    await application.bot.send_message(pending.chat_id, f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {answer}</b>", parse_mode="HTML")
+                    await application.bot.send_message(
+                        pending.chat_id, 
+                        f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> TIME'S UP</b>\n<b>ANSWER WAS {answer}</b>", 
+                        parse_mode="HTML"
+                    )
                 except Exception:
                     pass
     
@@ -523,14 +531,15 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
 
 
 async def riddle_answer(update: Update, context: CallbackContext):
-    if not update.effective_user or not update.message or update.effective_chat.id != -1003087506512:
+    msg = update.message
+    if not update.effective_user or not msg or update.effective_chat.id != -1003087506512:
         return
     
     user_id = update.effective_user.id
     pending = game_state.riddles.get(user_id)
     if not pending: return
     
-    text = (update.message.text or "").strip()
+    text = (msg.text or "").strip()
     if not text: return
     
     if time.time() > pending.expires_at:
@@ -556,18 +565,24 @@ async def riddle_answer(update: Update, context: CallbackContext):
         else:
             bal, tok = 0, 0
             
-        rewards_str = f"<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs</b>"
+        rewards_str = f"EARNED {total_coins} COINS"
         if total_tokens > 0:
-            rewards_str += f" <b>& {total_tokens} ᴛᴏᴋᴇɴ!</b>"
+            rewards_str += f" & {total_tokens} TOKEN!"
+        else:
+            rewards_str += "!"
             
-        await update.message.reply_text(
-            f"<b><tg-emoji emoji-id=\"6100179962185129743\">✅</tg-emoji> ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
-            parse_mode="HTML"
+        # EXACT format from screenshot with original premium emojis!
+        final_text = (
+            f"<b><tg-emoji emoji-id=\"6100179962185129743\">✅</tg-emoji> CORRECT</b>\n"
+            f"<b>{rewards_str}</b>\n"
+            f"<b>TOTAL: {bal:,} COINS | {tok:,}\nTOKENS</b>"
         )
+        await msg.reply_text(final_text, parse_mode="HTML")
+        
     elif text.isdigit() or (text.startswith('-') and text[1:].isdigit()):
         game_state.riddles.pop(user_id, None)
-        await update.message.reply_text(
-            f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴡʀᴏɴɢ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {pending.answer}</b>",
+        await msg.reply_text(
+            f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> WRONG</b>\n<b>ANSWER WAS {pending.answer}</b>",
             parse_mode="HTML"
         )
 
@@ -649,7 +664,6 @@ async def games_callback(update: Update, context: CallbackContext):
         
         cmd = parts[2]
         
-        # Fixed arguments parsing here for repeat feature
         parsed_args = parts[3:] if len(parts) > 3 and parts[3] != '_' else []
 
         handlers = {
@@ -672,6 +686,6 @@ application.add_handler(CommandHandler("riddle", riddle, block=False))
 application.add_handler(CommandHandler("games", games_menu, block=False))
 application.add_handler(CommandHandler("gamestats", game_stats, block=False))
 
-# Yahan par block=False add kiya taaki speed increase ho aur lag completely chala jaye.
+# block=False for instant superfast response!
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, riddle_answer, block=False), group=119)
 application.add_handler(CallbackQueryHandler(games_callback, pattern="^games:", block=False))
