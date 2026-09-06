@@ -16,6 +16,7 @@ from shivu.Database.db import eco_collection
 # 🔥 Sahi anime database collection
 collection = db['anime_characters_lol'] 
 delete_collection = db['auto_delete_queue'] # 🔥 Yaddasht ke liye nayi collection
+user_tasks_collection = db['user_tasks'] # 🔥 Tasks aur spend track karne ke liye collection
 
 try:
     auction_collection = db['auctions']
@@ -580,6 +581,9 @@ async def place_bid_cmd(update: Update, context: CallbackContext):
         await update.message.reply_text(bold_sc(f"Low balance! You need {add_amount:,} 💸 more for this bid."), parse_mode='HTML')
         return
         
+    # 🔥 Mission Tracker Update
+    await user_tasks_collection.update_one({'user_id': user_id}, {'$inc': {'coins_spent_today': add_amount}}, upsert=True)
+        
     top_bids = [b for b in top_bids if b['id'] != user_id]
     top_bids.append({'id': user_id, 'name': update.effective_user.first_name, 'bid': new_total})
     top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
@@ -644,6 +648,9 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await query.answer(to_small_caps(f"Low balance! You need {add_amount:,} 💸 more."), show_alert=True)
                     return
                 
+                # 🔥 Mission Tracker Update
+                await user_tasks_collection.update_one({'user_id': clicker_id}, {'$inc': {'coins_spent_today': add_amount}}, upsert=True)
+                
                 top_bids = [b for b in top_bids if b['id'] != clicker_id]
                 top_bids.append({'id': clicker_id, 'name': query.from_user.first_name, 'bid': new_total})
                 top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
@@ -670,6 +677,8 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     return
                     
                 await eco_collection.update_one({'id': clicker_id}, {'$inc': {'balance': existing_bid}})
+                # 🔥 Anti-Cheat: Cancel pe spend counter wapas kam kar do
+                await user_tasks_collection.update_one({'user_id': clicker_id}, {'$inc': {'coins_spent_today': -existing_bid}}, upsert=True)
                 
                 top_bids = [b for b in top_bids if b['id'] != clicker_id]
                 top_bids = sorted(top_bids, key=lambda x: x['bid'], reverse=True)
@@ -713,9 +722,10 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await query.answer(to_small_caps("Already purchased or processing!"), show_alert=True)
                     return
                 
+                sale_price_val = char.get('mp_sale', 0)
                 eco_user = await eco_collection.find_one_and_update(
                     {'id': user_id, 'balance': {'$gte': char.get('mp_sale', 9999999)}},
-                    {'$inc': {'balance': -char.get('mp_sale', 0)}},
+                    {'$inc': {'balance': -sale_price_val}},
                     projection={'balance': 1} 
                 )
                 
@@ -723,6 +733,9 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                     await user_collection.update_one({'id': user_id}, {'$set': {f'mp_data.chars.{index}.is_sold': False}})
                     await query.answer(to_small_caps("Low balance!"), show_alert=True)
                     return
+                    
+                # 🔥 Mission Tracker Update
+                await user_tasks_collection.update_one({'user_id': user_id}, {'$inc': {'coins_spent_today': sale_price_val}}, upsert=True)
                     
                 char['is_sold'] = True
                 clean_char = {k: v for k, v in char.items() if k not in ['mp_orig', 'mp_disc', 'mp_sale', 'is_sold', '_id']}
@@ -757,6 +770,9 @@ async def marketplace_callbacks(update: Update, context: CallbackContext):
                 if not eco_user:
                     await query.answer(to_small_caps("Not enough coins!"), show_alert=True)
                     return
+                    
+                # 🔥 Mission Tracker Update
+                await user_tasks_collection.update_one({'user_id': user_id}, {'$inc': {'coins_spent_today': 30000}}, upsert=True)
                     
                 await user_collection.update_one({'id': user_id}, {'$set': {'mp_data.day': "FORCE_REFRESH"}})
                 new_user = await load_user_deals(user_id)
@@ -881,6 +897,8 @@ async def end_auction(update: Update, context: CallbackContext):
         await update.message.reply_text(bold_sc("Error: Character not found! Refunding all bids..."), parse_mode='HTML')
         for b in top_bids:
             await eco_collection.update_one({'id': b['id']}, {'$inc': {'balance': b['bid']}})
+            # 🔥 Anti-Cheat update
+            await user_tasks_collection.update_one({'user_id': b['id']}, {'$inc': {'coins_spent_today': -b['bid']}}, upsert=True)
         return
 
     clean_char = {k: v for k, v in char.items() if k not in ['auction_exclusive', 'mp_orig', 'mp_disc', 'mp_sale', 'is_sold', '_id']}
@@ -897,6 +915,8 @@ async def end_auction(update: Update, context: CallbackContext):
         
     for l in losers:
         await eco_collection.update_one({'id': l['id']}, {'$inc': {'balance': l['bid']}})
+        # 🔥 Anti-Cheat update
+        await user_tasks_collection.update_one({'user_id': l['id']}, {'$inc': {'coins_spent_today': -l['bid']}}, upsert=True)
         
     header = f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {bold_sc('AUCTION ENDED!')} <tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji>\n\n{bold_sc('WINNERS:')}\n"
     footer = f"\n{bold_sc('Rest of the bidders have received their full refund!')}"
@@ -919,6 +939,8 @@ async def cancel_auction(update: Update, context: CallbackContext):
     top_bids = active_auc.get('top_bids', [])
     for b in top_bids:
         await eco_collection.update_one({'id': b['id']}, {'$inc': {'balance': b['bid']}})
+        # 🔥 Anti-Cheat update
+        await user_tasks_collection.update_one({'user_id': b['id']}, {'$inc': {'coins_spent_today': -b['bid']}}, upsert=True)
         
     await update.message.reply_text(bold_sc("Auction Cancelled! All active bids have been refunded."), parse_mode='HTML')
 
