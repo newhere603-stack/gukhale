@@ -1696,7 +1696,7 @@ application.add_handler(exchange_conv, group=-2)
 application.add_handler(buy_conv, group=-3) 
 
 application.add_handler(CommandHandler(["pmarket", "exchange", "market", "shop"], pmarket_command, block=False), group=0)
-application.add_handler(MessageHandler(filters.Regex(r'(?i)^(cutiepie shop|cutepie shop|cutie pie shop)$'), pmarket_command, block=False), group=0)
+application.add_handler(MessageHandler(filters.Regex(re.compile(r'^(cutiepie shop|cutepie shop|cutie pie shop)$', re.IGNORECASE)), pmarket_command, block=False), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd, block=False), group=0)
 application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd, block=False), group=0)
 application.add_handler(CommandHandler("forcedelist", force_delist_cmd, block=False), group=0)
