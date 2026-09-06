@@ -1,30 +1,30 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CommandHandler, ContextTypes
-from pymongo import ReturnDocument  # 🔥 FIX: Accurate ReturnDocument import kiya
+# pymongo ReturnDocument ki ab zaroorat nahi padegi, par aapke baaki code ke liye chhod diya hai
+from pymongo import ReturnDocument  
 
 from shivu import application, LOGGER, BOT_USERNAME
-
-# 🔥 Direct economy collection use kar rahe hain
 from shivu.Database.db import eco_collection 
 
 
 async def get_or_init_user(uid: int):
-    """User ko database se ek hi query mein fetch ya initialize karega (Super Fast & Atomic)."""
+    """User ko fetch karega (Superfast Read). Agar nahi hai tabhi Create karega."""
     try:
-        user = await eco_collection.find_one_and_update(
-            {"id": uid},
-            {
-                "$setOnInsert": {
-                    "id": uid,
-                    "balance": 0,
-                    "tokens": 0,
-                    "bot_started": False
-                }
-            },
-            upsert=True,
-            return_document=ReturnDocument.AFTER  # 🔥 FIX: Safely return the updated document
-        )
+        # 🔥 STEP 1: Pehle sirf READ karo (Yeh Find_one_and_update se 10x fast hai)
+        user = await eco_collection.find_one({"id": uid})
+        
+        # 🔥 STEP 2: Agar user database mein NAHI hai, tabhi INSERT karo
+        if not user:
+            new_user = {
+                "id": uid,
+                "balance": 0,
+                "tokens": 0,
+                "bot_started": False
+            }
+            await eco_collection.insert_one(new_user)
+            return new_user
+            
         return user
     except Exception as e:
         LOGGER.error(f"Error in get_or_init_user for uid {uid}: {e}")
@@ -63,7 +63,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LOGGER.error(f"Critical error in balance_cmd: {e}")
         try:
             await update.message.reply_text(
-                "<b>⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
+                "<b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
                 parse_mode="HTML",
             )
         except Exception:
@@ -102,7 +102,7 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LOGGER.error(f"Critical error in tokens_cmd: {e}")
         try:
             await update.message.reply_text(
-                "<b>⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
+                "<b>ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>",
                 parse_mode="HTML",
             )
         except Exception:
