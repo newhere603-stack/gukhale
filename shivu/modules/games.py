@@ -67,7 +67,6 @@ class PendingRiddle:
 class GameState:
     cooldowns: Dict[int, datetime] = field(default_factory=dict)
     riddles: Dict[int, PendingRiddle] = field(default_factory=dict)
-    stats: Dict[int, Dict[str, int]] = field(default_factory=dict)
 
     def check_cooldown(self, user_id: int) -> Optional[float]:
         if last := self.cooldowns.get(user_id):
@@ -78,11 +77,6 @@ class GameState:
 
     def set_cooldown(self, user_id: int):
         self.cooldowns[user_id] = datetime.now(timezone.utc)
-
-    def record_play(self, user_id: int, game: str):
-        if user_id not in self.stats:
-            self.stats[user_id] = {}
-        self.stats[user_id][game] = self.stats[user_id].get(game, 0) + 1
 
 
 CONFIG = GameConfig()
@@ -96,6 +90,16 @@ GAME_EMOJIS = {
     GameType.DART: '<tg-emoji emoji-id="5350460637182993292">🎯</tg-emoji>', 
     GameType.CONTRACT: '<tg-emoji emoji-id="6332514633219315005">🤝</tg-emoji>',
     GameType.RIDDLE: '<tg-emoji emoji-id="5265120027853481187">🧩</tg-emoji>'
+}
+
+GAME_NAMES_SMALL_CAPS = {
+    "sbet": "sʙᴇᴛ",
+    "roll": "ʀᴏʟʟ",
+    "gamble": "ɢᴀᴍʙʟᴇ",
+    "basket": "ʙᴀsᴋᴇᴛ",
+    "dart": "ᴅᴀʀᴛ",
+    "stour": "sᴛᴏᴜʀ",
+    "riddle": "ʀɪᴅᴅʟᴇ"
 }
 
 
@@ -341,7 +345,8 @@ async def process_game(update: Update, context: CallbackContext, user: dict, gam
     if net_coins < 0:
         query[target_field] = {'$gte': abs(net_coins)}
 
-    inc_data = {target_field: net_coins}
+    # 🔥 Permanent stat increment saved in DB!
+    inc_data = {target_field: net_coins, f'game_stats.{game_type.value}': 1}
     if net_tokens > 0:
         inc_data['tokens'] = net_tokens
 
@@ -355,7 +360,6 @@ async def process_game(update: Update, context: CallbackContext, user: dict, gam
         await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> ɪɴsᴜғғɪᴄɪᴇɴᴛ ʙᴀʟᴀɴᴄᴇ ᴏʀ ᴇʀʀᴏʀ</b>\n<b>ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>")
         return
         
-    game_state.record_play(user_id, game_type.value)
     game_state.set_cooldown(user_id)
     
     new_bal = int(updated_user.get(target_field, 0))
@@ -496,11 +500,12 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
     if await check_cooldown(update, context, user_id): return
     
     question, answer = GameLogic.generate_riddle()
+    
     text = (
-        f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> ʀɪᴅᴅʟᴇ ᴛɪᴍᴇ</b>\n"
-        f"<b>sᴏʟᴠᴇ: {question}</b>\n"
-        f"<b>ᴛɪᴍᴇ: <code>{CONFIG.riddle_timeout}s</code> | ʀᴇᴡᴀʀᴅ: <code>50</code> ᴄᴏɪɴs + <code>1</code> ᴛᴏᴋᴇɴ</b>\n"
-        f"<i><b>ʀᴇᴘʟʏ ᴡɪᴛʜ ᴛʜᴇ ɴᴜᴍʙᴇʀ</b></i>"
+        f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> RIDDLE TIME</b>\n"
+        f"<b>SOLVE: {question}</b>\n"
+        f"<b>TIME: {CONFIG.riddle_timeout}s | REWARD: 50 COINS + 1\nTOKEN</b>\n"
+        f"<b>REPLY WITH THE NUMBER</b>"
     )
     sent = await send_or_edit_response(update, context, text)
     msg_id = sent.message_id if sent else (update.callback_query.message.message_id if update.callback_query else 0)
@@ -508,7 +513,16 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
     riddle_data = PendingRiddle(answer, time.time() + CONFIG.riddle_timeout, msg_id, update.effective_chat.id, question)
     game_state.riddles[user_id] = riddle_data
     game_state.set_cooldown(user_id)
-    game_state.record_play(user_id, GameType.RIDDLE.value)
+    
+    # 🔥 Permanent play count saved to MongoDB asynchronously
+    async def record_riddle_db():
+        user = await UserDB.get(user_id)
+        if user:
+            await user_collection.update_one(
+                {'_id': user['_id']}, 
+                {'$inc': {f'game_stats.{GameType.RIDDLE.value}': 1}}
+            )
+    asyncio.create_task(record_riddle_db())
     
     async def expire():
         await asyncio.sleep(CONFIG.riddle_timeout)
@@ -516,7 +530,11 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
             if time.time() >= pending.expires_at:
                 game_state.riddles.pop(user_id, None)
                 try:
-                    await application.bot.send_message(pending.chat_id, f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {answer}</b>", parse_mode="HTML")
+                    await application.bot.send_message(
+                        pending.chat_id, 
+                        f"<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> TIME'S UP</b>\n<b>ANSWER WAS {answer}</b>", 
+                        parse_mode="HTML"
+                    )
                 except Exception:
                     pass
     
@@ -524,14 +542,15 @@ async def riddle(update: Update, context: CallbackContext, override_args: List[s
 
 
 async def riddle_answer(update: Update, context: CallbackContext):
-    if not update.effective_user or not update.message or update.effective_chat.id != -1003087506512:
+    msg = update.message
+    if not update.effective_user or not msg or update.effective_chat.id != -1003087506512:
         return
     
     user_id = update.effective_user.id
     pending = game_state.riddles.get(user_id)
     if not pending: return
     
-    text = (update.message.text or "").strip()
+    text = (msg.text or "").strip()
     if not text: return
     
     if time.time() > pending.expires_at:
@@ -557,18 +576,23 @@ async def riddle_answer(update: Update, context: CallbackContext):
         else:
             bal, tok = 0, 0
             
-        rewards_str = f"<b>ᴇᴀʀɴᴇᴅ {total_coins} ᴄᴏɪɴs</b>"
+        rewards_str = f"EARNED {total_coins} COINS"
         if total_tokens > 0:
-            rewards_str += f" <b>& {total_tokens} ᴛᴏᴋᴇɴ!</b>"
+            rewards_str += f" & {total_tokens} TOKEN!"
+        else:
+            rewards_str += "!"
             
-        await update.message.reply_text(
-            f"<b><tg-emoji emoji-id=\"6100179962185129743\">✅</tg-emoji> ᴄᴏʀʀᴇᴄᴛ</b>\n{rewards_str}\n<b>ᴛᴏᴛᴀʟ: <code>{bal:,}</code> ᴄᴏɪɴs | <code>{tok:,}</code> ᴛᴏᴋᴇɴs</b>",
-            parse_mode="HTML"
+        final_text = (
+            f"<b><tg-emoji emoji-id=\"6100179962185129743\">✅</tg-emoji> CORRECT</b>\n"
+            f"<b>{rewards_str}</b>\n"
+            f"<b>TOTAL: {bal:,} COINS | {tok:,}\nTOKENS</b>"
         )
+        await msg.reply_text(final_text, parse_mode="HTML")
+        
     elif text.isdigit() or (text.startswith('-') and text[1:].isdigit()):
         game_state.riddles.pop(user_id, None)
-        await update.message.reply_text(
-            f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴡʀᴏɴɢ</b>\n<b>ᴀɴsᴡᴇʀ ᴡᴀs {pending.answer}</b>",
+        await msg.reply_text(
+            f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> WRONG</b>\n<b>ANSWER WAS {pending.answer}</b>",
             parse_mode="HTML"
         )
 
@@ -587,17 +611,22 @@ async def games_menu(update: Update, context: CallbackContext):
 async def game_stats(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     user = await UserDB.get(user_id)
-    stats = game_state.stats.get(user_id, {})
+    
+    # 🔥 Reading permanent stats directly from MongoDB
+    stats = user.get('game_stats', {}) if user else {}
     
     if not stats:
         return await send_or_edit_response(update, context, "<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɴᴏ sᴛᴀᴛɪsᴛɪᴄs</b>\n<b>ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴘʟᴀʏᴇᴅ ᴀɴʏ ɢᴀᴍᴇs ʏᴇᴛ.</b>")
 
-    stat_lines = [f"• {game.upper()}: {count} ᴘʟᴀʏ(s)" for game, count in stats.items()]
+    # 🔥 Small caps text exactly as expected by user
+    stat_lines = [f"• {GAME_NAMES_SMALL_CAPS.get(game, game.upper())}: {count} ᴘʟᴀʏ(s)" for game, count in stats.items()]
     stats_str = "\n".join(stat_lines)
     name = user.get('first_name', 'ᴜɴᴋɴᴏᴡɴ') if user else 'ᴜɴᴋɴᴏᴡɴ'
     
     bal, _ = await UserDB.get_balance_and_field(user) if user else (0, 'balance')
-    tok = user.get('tokens', 0) if user else 0
+    
+    # Token display fixed to int to remove annoying .0 floats
+    tok = int(user.get('tokens', 0)) if user else 0
 
     text = (
         f"<b><tg-emoji emoji-id=\"6314169895890199228\">📊</tg-emoji> ɢᴀᴍᴇ sᴛᴀᴛɪsᴛɪᴄs</b>\n"
