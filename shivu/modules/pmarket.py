@@ -517,6 +517,9 @@ async def start_buy_menu(update: Update, context: CallbackContext):
     return WAITING_FOR_BUY_PRODUCT
 
 async def buy_back_callback(update: Update, context: CallbackContext):
+    if context.user_data.get('last_processed_update_id') == update.update_id: return
+    context.user_data['last_processed_update_id'] = update.update_id
+    
     query = update.callback_query
     await query.answer()
     context.user_data.pop('buy_product', None)
@@ -525,6 +528,9 @@ async def buy_back_callback(update: Update, context: CallbackContext):
     return await start_buy_menu(update, context)
 
 async def buy_product_callback(update: Update, context: CallbackContext):
+    if context.user_data.get('last_processed_update_id') == update.update_id: return
+    context.user_data['last_processed_update_id'] = update.update_id
+    
     query = update.callback_query
     await ensure_buy_user_data(context, query.from_user.id)
     if not context.user_data.get('buy_order_id'):
@@ -566,6 +572,7 @@ async def buy_product_callback(update: Update, context: CallbackContext):
     return next_state
 
 async def ask_buy_char_id(update: Update, context: CallbackContext):
+    context.user_data['last_processed_update_id'] = update.update_id
     await ensure_buy_user_data(context, update.message.from_user.id)
     text = update.message.text.strip()
     if not text: return WAITING_FOR_BUY_CHAR_ID
@@ -606,6 +613,7 @@ async def ask_buy_char_id(update: Update, context: CallbackContext):
     return WAITING_FOR_BUY_AMOUNT
 
 async def ask_buy_amount(update: Update, context: CallbackContext):
+    context.user_data['last_processed_update_id'] = update.update_id
     await ensure_buy_user_data(context, update.message.from_user.id)
     text = update.message.text.strip()
     if not text.isdigit() or int(text) <= 0: return WAITING_FOR_BUY_AMOUNT
@@ -669,6 +677,7 @@ async def ask_buy_amount(update: Update, context: CallbackContext):
     return WAITING_FOR_BUY_SCREENSHOT
 
 async def receive_buy_screenshot(update: Update, context: CallbackContext):
+    context.user_data['last_processed_update_id'] = update.update_id
     user_id = update.message.from_user.id
     if not update.message.photo: return WAITING_FOR_BUY_SCREENSHOT
 
@@ -735,6 +744,9 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 async def cancel_buy_callback(update: Update, context: CallbackContext):
+    if context.user_data.get('last_processed_update_id') == update.update_id: return
+    context.user_data['last_processed_update_id'] = update.update_id
+    
     query = update.callback_query
     await query.answer()
     await ensure_buy_user_data(context, query.from_user.id)
@@ -905,8 +917,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(sc("price low to high"), callback_data=f"pm_s:{rarity_key}:asc:{user_id}")],
             [InlineKeyboardButton(sc("price high to low"), callback_data=f"pm_s:{rarity_key}:desc:{user_id}")],
-            [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_b:{user_id}")]
-        ])
+            [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_b:{user_id}")])
         
         _, prem_emoji, name = RARITIES.get(rarity_key, RARITIES["common"])
         await update_menu(query, f"<b>{prem_emoji} {sc(name)} {sc('characters')}</b>\n\n<i>{sc('how do you want to sort them?')}</i>", keyboard)
@@ -1227,6 +1238,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
 # CONVERSATION HANDLERS
 # ========================
 async def cancel_process(update: Update, context: CallbackContext):
+    context.user_data['last_processed_update_id'] = update.update_id
     qr_msg_id = context.user_data.get('qr_msg_id')
     if qr_msg_id:
         try: await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=qr_msg_id)
@@ -1256,6 +1268,7 @@ async def cancel_process(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 async def timeout_process(update: Update, context: CallbackContext):
+    context.user_data['last_processed_update_id'] = update.update_id
     qr_msg_id = context.user_data.get('qr_msg_id')
     chat_id = update.effective_chat.id if update.effective_chat else update.callback_query.message.chat_id
     if qr_msg_id:
@@ -1621,6 +1634,9 @@ buy_conv = ConversationHandler(
 
 # --- Resume real-money buy flow after a bot restart (MongoDB is source of truth) ---
 async def resume_buy_screenshot_after_restart(update: Update, context: CallbackContext):
+    if context.user_data.get('last_processed_update_id') == update.update_id: return
+    context.user_data['last_processed_update_id'] = update.update_id
+    
     if not update.message or not update.message.photo or not update.effective_user:
         return
     session = await load_buy_session(update.effective_user.id)
@@ -1632,6 +1648,9 @@ async def resume_buy_screenshot_after_restart(update: Update, context: CallbackC
     return await receive_buy_screenshot(update, context)
 
 async def resume_buy_text_after_restart(update: Update, context: CallbackContext):
+    if context.user_data.get('last_processed_update_id') == update.update_id: return
+    context.user_data['last_processed_update_id'] = update.update_id
+    
     if not update.message or not update.message.text or not update.effective_user:
         return
     session = await load_buy_session(update.effective_user.id)
@@ -1648,6 +1667,9 @@ async def resume_buy_text_after_restart(update: Update, context: CallbackContext
     return await ask_buy_amount(update, context)
 
 async def resume_buy_cancel_cmd(update: Update, context: CallbackContext):
+    if context.user_data.get('last_processed_update_id') == update.update_id: return
+    context.user_data['last_processed_update_id'] = update.update_id
+    
     if not update.effective_user:
         return
     session = await load_buy_session(update.effective_user.id)
@@ -1673,6 +1695,7 @@ application.add_handler(exchange_conv, group=-2)
 application.add_handler(buy_conv, group=-3) 
 
 application.add_handler(CommandHandler(["pmarket", "exchange", "market", "shop"], pmarket_command, block=False), group=0)
+application.add_handler(MessageHandler(filters.Regex(r'(?i)^(cutiepie shop|cutie pie shop)$'), pmarket_command, block=False), group=0)
 application.add_handler(CommandHandler("toggle_exchange", toggle_exchange_cmd, block=False), group=0)
 application.add_handler(CommandHandler("set_exchange_limit", set_exchange_limit_cmd, block=False), group=0)
 application.add_handler(CommandHandler("forcedelist", force_delist_cmd, block=False), group=0)
