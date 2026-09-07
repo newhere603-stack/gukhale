@@ -39,7 +39,7 @@ def to_small_caps(text: str) -> str:
 sc = to_small_caps
 
 # ==========================================
-# 🔘 SMART BUTTON HELPER (ZERO-WIDTH FIX)
+# 🔘 SMART BUTTON HELPER
 # ==========================================
 def ibtn(text, cb=None, url=None, style=None, icon=None):
     if text == "":
@@ -205,8 +205,16 @@ async def addtask(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
         return
 
+    message = update.effective_message
+    if not message or not message.text:
+        return
+
     try:
-        raw_text = update.message.text.split(" ", 1)[1]
+        parts_initial = message.text.split(" ", 1)
+        if len(parts_initial) < 2:
+            raise ValueError("Missing arguments")
+
+        raw_text = parts_initial[1]
         parts = [p.strip() for p in raw_text.split("|")]
 
         if len(parts) < 5:
@@ -222,7 +230,6 @@ async def addtask(update: Update, context: CallbackContext):
         if len(parts) > 5 and parts[5].lower() not in ("none", "null", ""):
             url = parts[5]
 
-        # Naya Channel ID logic private channels ke liye
         channel = None
         if len(parts) > 6 and parts[6].lower() not in ("none", "null", ""):
             channel = parts[6]
@@ -257,7 +264,7 @@ async def addtask(update: Update, context: CallbackContext):
             f"<b>{sc('CHANNEL')}:</b> <b>{html.escape(str(channel))}</b>"
             f"</blockquote>"
         )
-        await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+        await message.reply_text(msg, parse_mode=ParseMode.HTML)
 
     except Exception as e:
         error_msg = (
@@ -269,7 +276,7 @@ async def addtask(update: Update, context: CallbackContext):
             f"<code>/addtask daily | normal | 3000 | Join Private | Join private | https://t.me/+Abcdef | -10012345678</code>\n"
             f"<code>/addtask daily | normal | 10000 | Spend Coins | Spend 10000 coins | None | None</code>"
         )
-        await update.message.reply_text(error_msg, parse_mode=ParseMode.HTML)
+        await message.reply_text(error_msg, parse_mode=ParseMode.HTML)
 
 async def tasklist(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
@@ -321,7 +328,7 @@ async def removetask(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 🔧 KEYBOARD + CAPTION BUILDER (WITH CHAT CONTEXT)
+# 🔧 KEYBOARD + CAPTION BUILDER 
 # ==========================================
 async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, chat_id: str = None, chat_type: str = 'private'):
     user_data = await ensure_user_data(user_id)
@@ -341,7 +348,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
     keyboard = []
 
-    # ========== FIRST ROW: Navigation ==========
     nav_row = []
     if page > 0:
         nav_row.append(ibtn("", cb=f"bk_{user_id}_{page}", style="primary", icon="5258236805890710909"))
@@ -357,7 +363,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
     keyboard.append(nav_row)
 
-    # ========== TASK ROWS ==========
     for task in page_tasks:
         t_id = task['task_id']
         is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
@@ -377,8 +382,18 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
         row = []
 
-        if task.get('url') and not is_completed:
-            row.append(ibtn(name_text, url=task['url'], style=btn_style))
+        # 🛑 SMART URL HANDLER (Prevents Crash)
+        raw_url = str(task.get('url', '')).strip()
+        if raw_url and not is_completed and raw_url.lower() not in ("none", "null"):
+            if raw_url.startswith('@'):
+                raw_url = f"https://t.me/{raw_url[1:]}"
+            elif raw_url.startswith('t.me/'):
+                raw_url = f"https://{raw_url}"
+                
+            if raw_url.startswith(('http://', 'https://', 'tg://')):
+                row.append(ibtn(name_text, url=raw_url, style=btn_style))
+            else:
+                row.append(ibtn(name_text, cb=f"ign_{user_id}", style=btn_style))
         else:
             row.append(ibtn(name_text, cb=f"ign_{user_id}", style=btn_style))
 
@@ -391,7 +406,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
         keyboard.append(row)
 
-    # ========== INVITE ROW ==========
     invite_claim_text = sc('claim') if pending_invites > 0 else sc('check')
     invite_style = "primary"
 
@@ -401,9 +415,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
         ibtn(invite_claim_text, cb=f"ci_{user_id}_{page}", style=invite_style)
     ])
 
-    # ========== SHARE LINK ==========
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
-    
     raw_share_text = (
         f"✨ {sc('STEP INTO THE ULTIMATE WAIFU BOT')} ✨\n\n"
         f"🎴 {sc('COLLECT BEAUTIFUL WAIFUS PLAY GAMES AND EARN HUGE REWARDS')} 🎮\n"
@@ -415,23 +427,13 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
     
     keyboard.append([ibtn(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon="5769289093221454192")])
 
-    # ==========================================
-    # 🖼️ RANDOM TASK IMAGE
-    # ==========================================
     photo_urls = [
         "https://files.catbox.moe/lge487.png",
         "https://files.catbox.moe/flth7m.png"
     ]
     img_url = random.choice(photo_urls)
-
-    # ==========================================
-    # 🖼️ RICH MESSAGE PHOTO
-    # ==========================================
     caption = f'<img src="{html.escape(img_url)}"/>'
 
-    # ==========================================
-    # 📋 HEADER
-    # ==========================================
     caption += (
         f'<b><tg-emoji emoji-id="5197269100878907942">✍️</tg-emoji> '
         f'<a href="tg://user?id={user_id}">{sc("TASK DASHBOARD")}</a> • '
@@ -443,31 +445,15 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
     else:
         for task in page_tasks:
             t_id = task['task_id']
+            is_completed = (t_id in completed_daily or t_id in completed_onetime)
 
-            is_completed = (
-                t_id in completed_daily or
-                t_id in completed_onetime
-            )
-
-            status = (
-                '<tg-emoji emoji-id="6100397639717625616">✔️</tg-emoji>'
-                if is_completed
-                else '<tg-emoji emoji-id="6309702258023994825">🌟</tg-emoji>'
-            )
-
-            name = html.escape(
-                str(task.get('name', 'Task'))
-            )
-
-            mission = html.escape(
-                str(task.get('mission', task.get('name', 'Task')))
-            )
-
+            status = '<tg-emoji emoji-id="6100397639717625616">✔️</tg-emoji>' if is_completed else '<tg-emoji emoji-id="6309702258023994825">🌟</tg-emoji>'
+            name = html.escape(str(task.get('name', 'Task')))
+            mission = html.escape(str(task.get('mission', task.get('name', 'Task'))))
             reward = f"{int(task.get('reward', 0)):,}"
             
-            # Progress tracker logic for Message tasks per group
-            msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', mission.lower())
             progress_text = ""
+            msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', mission.lower())
             if msg_match and not is_completed:
                 req_msgs = int(msg_match.group(1))
                 if chat_type in ['group', 'supergroup'] and chat_id:
@@ -477,7 +463,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
                     max_msgs = max(user_data.get('group_messages_today', {}).values()) if user_data.get('group_messages_today') else 0
                     progress_text = f" ({max_msgs}/{req_msgs})"
 
-            # Progress tracker logic for Spend tasks
             spend_match = re.search(r'(?:spend|use)\s+(\d+)', mission.lower())
             if spend_match and not is_completed:
                 req_spend = int(spend_match.group(1))
@@ -504,13 +489,9 @@ async def tasks_cmd(update: Update, context: CallbackContext):
     )
 
     reply_to = update.message.message_id if update.message else None
-
-    # Payload with exact requirements
     data = {
         "chat_id": chat_id,
-        "rich_message": {
-            "html": caption
-        },
+        "rich_message": {"html": caption},
         "reply_markup": keyboard.to_dict()
     }
     
@@ -521,29 +502,15 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         await context.bot._post("sendRichMessage", data)
     except Exception as e:
         LOGGER.warning(f"Rich Message failed: {e}")
-        
-        # Fallback - real photo send
         try:
-            clean_caption = re.sub(
-                r'<img\b[^>]*>',
-                '',
-                caption,
-                flags=re.IGNORECASE
-            )
-
-            # Fallback formatting fix
+            clean_caption = re.sub(r'<img\b[^>]*>', '', caption, flags=re.IGNORECASE)
             clean_caption = (
                 clean_caption
-                .replace('<h2>', '\n<b>')
-                .replace('</h2>', '</b>\n')
-                .replace('<h3>', '\n<b>')
-                .replace('</h3>', '</b>\n')
-                .replace('<br>', '\n')
-                .replace('<br/>', '\n')
+                .replace('<h2>', '\n<b>').replace('</h2>', '</b>\n')
+                .replace('<h3>', '\n<b>').replace('</h3>', '</b>\n')
+                .replace('<br>', '\n').replace('<br/>', '\n')
                 .replace('​', '')
             )
-            
-            # Removes massive gaps in fallback view if they exist
             clean_caption = re.sub(r'\n{3,}', '\n\n', clean_caption).strip()
             
             await context.bot.send_photo(
@@ -663,9 +630,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     {
                         "chat_id": query.message.chat_id,
                         "message_id": query.message.message_id,
-                        "rich_message": {
-                            "html": new_caption
-                        },
+                        "rich_message": {"html": new_caption},
                         "reply_markup": new_kb.to_dict()
                     }
                 )
@@ -714,9 +679,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     {
                         "chat_id": query.message.chat_id,
                         "message_id": query.message.message_id,
-                        "rich_message": {
-                            "html": new_caption
-                        },
+                        "rich_message": {"html": new_caption},
                         "reply_markup": new_kb.to_dict()
                     }
                 )
@@ -745,25 +708,31 @@ async def task_callback(update: Update, context: CallbackContext):
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             
-            # ==========================================
-            # 🔐 CHANNEL JOIN VERIFICATION (FIXED)
-            # ==========================================
+            # 🛑 SMART CHANNEL JOIN VERIFICATION
             need_join_check = ("join" in check_text or "subscribe" in check_text) and (task.get("url") or task.get("channel"))
 
             if need_join_check:
                 target_channel = task.get("channel")
                 task_url = str(task.get("url", "")).strip()
 
-                # Agar DB me channel na ho toh purane tasks ke liye fallback as URL
+                # Galti se URL ki jagah ID/Username daalne par Fallback
                 if not target_channel and task_url:
-                    match = re.search(r"(?:https?://)?t\.me/([A-Za-z0-9_]+)", task_url, re.IGNORECASE)
-                    if match and "+" not in task_url and "joinchat" not in task_url:
-                        target_channel = "@" + match.group(1)
+                    if task_url.startswith('-100') or task_url.startswith('@'):
+                        target_channel = task_url
+                    else:
+                        match = re.search(r"(?:https?://)?t\.me/([A-Za-z0-9_]+)", task_url, re.IGNORECASE)
+                        if match and "+" not in task_url and "joinchat" not in task_url:
+                            target_channel = "@" + match.group(1)
 
                 if target_channel:
                     try:
+                        try:
+                            chat_id_to_check = int(target_channel)
+                        except ValueError:
+                            chat_id_to_check = target_channel
+
                         member = await context.bot.get_chat_member(
-                            chat_id=target_channel,
+                            chat_id=chat_id_to_check,
                             user_id=owner_id
                         )
 
@@ -790,7 +759,6 @@ async def task_callback(update: Update, context: CallbackContext):
                             await query.answer(sc("COULD NOT VERIFY CHANNEL MEMBERSHIP PLEASE TRY AGAIN"), show_alert=True)
                             return
                 elif "+" in task_url or "joinchat" in task_url:
-                    # Agar link private hai lekin database mein channel ID set nahi hai
                     await query.answer(sc("CANNOT VERIFY PRIVATE LINK PLEASE CONTACT ADMIN TO FIX THIS TASK"), show_alert=True)
                     return
 
@@ -825,13 +793,8 @@ async def task_callback(update: Update, context: CallbackContext):
             field = 'completed_onetime' if t_type == 'onetime' else 'completed_daily'
 
             res = await user_tasks_collection.update_one(
-                {
-                    'user_id': owner_id,
-                    field: {'$ne': task_id}
-                },
-                {
-                    '$addToSet': {field: task_id}
-                }
+                {'user_id': owner_id, field: {'$ne': task_id}},
+                {'$addToSet': {field: task_id}}
             )
 
             if res.modified_count == 0:
@@ -839,16 +802,9 @@ async def task_callback(update: Update, context: CallbackContext):
                 return
 
             reward = int(task.get('reward', 0))
-            await eco_collection.update_one(
-                {'id': owner_id},
-                {'$inc': {'balance': reward}},
-                upsert=True
-            )
+            await eco_collection.update_one({'id': owner_id}, {'$inc': {'balance': reward}}, upsert=True)
 
-            await query.answer(
-                f"✅ {sc('TASK COMPLETED')}!\n{sc('YOU RECEIVED')} {reward:,} 💸",
-                show_alert=True
-            )
+            await query.answer(f"✅ {sc('TASK COMPLETED')}!\n{sc('YOU RECEIVED')} {reward:,} 💸", show_alert=True)
 
             new_kb, new_caption, _, _, img_url = await build_task_keyboard(
                 owner_id, context.bot.username, page=page, chat_id=chat_id_str, chat_type=chat_type
@@ -860,9 +816,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     {
                         "chat_id": query.message.chat_id,
                         "message_id": query.message.message_id,
-                        "rich_message": {
-                            "html": new_caption
-                        },
+                        "rich_message": {"html": new_caption},
                         "reply_markup": new_kb.to_dict()
                     }
                 )
@@ -877,7 +831,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     sc("ʀᴇᴡᴀʀᴅ"): f"<b>{reward:,}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>",
                     sc("ᴛʏᴘᴇ"): sc(t_type.upper())
                 }
-                asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍPLᴇᴛᴇᴅ')} ˼", log_data)))
+                asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼", log_data)))
             except Exception:
                 pass
 
