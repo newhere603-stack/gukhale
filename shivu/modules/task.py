@@ -5,7 +5,7 @@ import asyncio
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext
+from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext, MessageHandler, filters
 from telegram.constants import ParseMode
 import logging
 
@@ -31,8 +31,8 @@ user_tasks_collection = db['user_tasks']
 def to_small_caps(text: str) -> str:
     if not text:
         return "ᴜɴᴋɴᴏᴡɴ"
-    normal = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    small = "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ"
+    normal = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    small = "ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ0123456789"
     return str(text).translate(str.maketrans(normal, small))
 
 sc = to_small_caps
@@ -60,6 +60,54 @@ async def send_log(context: CallbackContext, text: str):
         )
     except Exception as e:
         LOGGER.error(f"Task Log error: {e}")
+
+# ==========================================
+# 🔄 DAILY RESET + ENSURE USER DATA
+# ==========================================
+async def ensure_user_data(user_id: int):
+    user_data = await user_tasks_collection.find_one({'user_id': user_id})
+    today_str = datetime.now(IST).strftime("%Y-%m-%d")
+
+    if not user_data:
+        new_data = {
+            'user_id': user_id,
+            'completed_daily': [],
+            'completed_onetime': [],
+            'coins_spent_today': 0,
+            'messages_sent_today': 0, # Added for Chat Tracking
+            'pending_invites': 0,
+            'total_invites': 0,
+            'last_reset_date': today_str
+        }
+        await user_tasks_collection.insert_one(new_data)
+        return new_data
+
+    if user_data.get('last_reset_date') != today_str:
+        await user_tasks_collection.update_one(
+            {'user_id': user_id},
+            {'$set': {
+                'completed_daily': [],
+                'coins_spent_today': 0,
+                'messages_sent_today': 0, # Reset daily messages
+                'last_reset_date': today_str
+            }}
+        )
+        return await user_tasks_collection.find_one({'user_id': user_id})
+
+    return user_data
+
+# ==========================================
+# ✉️ MESSAGE TRACKER (To prevent fake claims)
+# ==========================================
+async def track_user_messages(update: Update, context: CallbackContext):
+    if update.effective_user and not update.effective_user.is_bot:
+        user_id = update.effective_user.id
+        today_str = datetime.now(IST).strftime("%Y-%m-%d")
+        # Increment message count silently in background
+        await user_tasks_collection.update_one(
+            {'user_id': user_id, 'last_reset_date': today_str},
+            {'$inc': {'messages_sent_today': 1}}
+        )
 
 # ==========================================
 # 🎁 WELCOME + REFERRAL
@@ -114,6 +162,7 @@ async def handle_referral(update: Update, context: CallbackContext):
             'completed_daily': [],
             'completed_onetime': [],
             'coins_spent_today': 0,
+            'messages_sent_today': 0,
             'pending_invites': 0,
             'total_invites': 0,
             'last_reset_date': datetime.now(IST).strftime("%Y-%m-%d")
@@ -187,7 +236,7 @@ async def addtask(update: Update, context: CallbackContext):
             f"<b>{sc('EXAMPLES')}:</b>\n"
             f"<code>/addtask daily | easy | 5000 | Join Channel | Join our official channel | https://t.me/yourchannel</code>\n"
             f"<code>/addtask daily | normal | 3000 | Message Task | Send 50 messages in the group | None</code>\n"
-            f"<code>/addtask onetime | hard | 25000 | YouTube | Subscribe to our YouTube channel | https://youtube.com/@you</code>"
+            f"<code>/addtask daily | normal | 10000 | Spend Coins | Spend 10000 coins | None</code>"
         )
         await update.message.reply_text(error_msg, parse_mode=ParseMode.HTML)
 
@@ -237,39 +286,6 @@ async def removetask(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b>✅ {sc('TASK REMOVED SUCCESSFULLY')}</b>", parse_mode=ParseMode.HTML)
     else:
         await update.message.reply_text(f"<b>❌ {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
-
-# ==========================================
-# 🔄 DAILY RESET + ENSURE USER DATA
-# ==========================================
-async def ensure_user_data(user_id: int):
-    user_data = await user_tasks_collection.find_one({'user_id': user_id})
-    today_str = datetime.now(IST).strftime("%Y-%m-%d")
-
-    if not user_data:
-        new_data = {
-            'user_id': user_id,
-            'completed_daily': [],
-            'completed_onetime': [],
-            'coins_spent_today': 0,
-            'pending_invites': 0,
-            'total_invites': 0,
-            'last_reset_date': today_str
-        }
-        await user_tasks_collection.insert_one(new_data)
-        return new_data
-
-    if user_data.get('last_reset_date') != today_str:
-        await user_tasks_collection.update_one(
-            {'user_id': user_id},
-            {'$set': {
-                'completed_daily': [],
-                'coins_spent_today': 0,
-                'last_reset_date': today_str
-            }}
-        )
-        return await user_tasks_collection.find_one({'user_id': user_id})
-
-    return user_data
 
 # ==========================================
 # 🔧 KEYBOARD + CAPTION BUILDER
@@ -379,15 +395,13 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
             t_id = task['task_id']
             is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
             status = "✅" if is_completed else "▫️"
+            
             mission = html.escape(task.get('mission', task.get('name', '')))
             name = html.escape(task.get('name', 'Task'))
             reward = f"{int(task.get('reward', 0)):,}"
 
-            caption += (
-                f"{status} <b>{name}</b>\n"
-                f"   <i>{mission}</i>\n"
-                f"   <b>Reward:</b> {reward} 💸\n\n"
-            )
+            # 🛠️ Updated Single Line Format Logic with small caps
+            caption += f"{status} <b>{sc(name)} • {sc(mission)} • {reward} 💸</b>\n\n"
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages
 
@@ -597,8 +611,9 @@ async def task_callback(update: Update, context: CallbackContext):
                 return
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
+            
+            # 1. CHANNEL JOIN CHECK
             need_join_check = ("join" in check_text or "subscribe" in check_text) and task.get('url')
-
             if need_join_check and "t.me/" in str(task.get('url', '')) and "+" not in task['url'] and "joinchat" not in task['url']:
                 try:
                     channel_username = "@" + task['url'].split("t.me/")[1].split("/")[0].split("?")[0].strip()
@@ -618,6 +633,23 @@ async def task_callback(update: Update, context: CallbackContext):
                         await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                         return
 
+            # 2. MESSAGE SEND CHECK (Ab bot messages count karega)
+            msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', check_text)
+            if msg_match:
+                req_msgs = int(msg_match.group(1))
+                if user_data.get('messages_sent_today', 0) < req_msgs:
+                    await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SENT {user_data.get('messages_sent_today', 0)}/{req_msgs} MESSAGES TODAY"), show_alert=True)
+                    return
+
+            # 3. SPEND COINS CHECK (Agar "spend 10000" likha hai to)
+            spend_match = re.search(r'(?:spend|use)\s+(\d+)', check_text)
+            if spend_match:
+                req_spend = int(spend_match.group(1))
+                if user_data.get('coins_spent_today', 0) < req_spend:
+                    await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SPENT {user_data.get('coins_spent_today', 0)}/{req_spend} COINS TODAY"), show_alert=True)
+                    return
+
+            # Agar sab rules cross ho gaye to yaha reward de do
             t_type = task.get('type', 'daily').lower()
             field = 'completed_onetime' if t_type == 'onetime' else 'completed_daily'
 
@@ -691,3 +723,6 @@ application.add_handler(CommandHandler("addtask", addtask))
 application.add_handler(CommandHandler("tasklist", tasklist))
 application.add_handler(CommandHandler("removetask", removetask))
 application.add_handler(CallbackQueryHandler(task_callback, pattern=r"^(dt_|ign_|ci_|vt_|rf_|nx_|bk_)"))
+
+# YE HANDLER BHI ADD KIYA HAI MESSAGE COUNT KARNE KE LIYE
+application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, track_user_messages), group=32)
