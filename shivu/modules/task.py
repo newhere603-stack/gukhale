@@ -38,7 +38,7 @@ def to_small_caps(text: str) -> str:
 sc = to_small_caps
 
 # ==========================================
-# 🔘 SMART BUTTON HELPER (FOR COLORS & PREMIUM EMOJIS)
+# 🔘 SMART BUTTON HELPER
 # ==========================================
 def ibtn(text, cb=None, url=None, style=None, icon=None):
     kw = {"text": text}
@@ -108,7 +108,7 @@ async def ensure_user_data(user_id: int):
     return user_data
 
 # ==========================================
-# ✉️ MESSAGE TRACKER (CHAT COUNT BUG FIX 🔥)
+# ✉️ MESSAGE TRACKER 
 # ==========================================
 async def track_user_messages(update: Update, context: CallbackContext):
     if update.effective_user and not update.effective_user.is_bot:
@@ -117,13 +117,11 @@ async def track_user_messages(update: Update, context: CallbackContext):
             chat_id = str(update.effective_chat.id)
             today_str = datetime.now(IST).strftime("%Y-%m-%d")
             
-            # Smart update jo bot restart hone par bhi reset hone se bachayega
             result = await user_tasks_collection.update_one(
                 {'user_id': user_id, 'last_reset_date': today_str},
                 {'$inc': {f'group_messages_today.{chat_id}': 1}}
             )
             
-            # Agar record purana hai ya nahi mila, toh pehle reset/create karo fir increment karo
             if result.modified_count == 0:
                 await ensure_user_data(user_id)
                 await user_tasks_collection.update_one(
@@ -310,7 +308,7 @@ async def removetask(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 🔧 KEYBOARD + CAPTION BUILDER (COLORS FIX & CHHOTE BUTTONS)
+# 🔧 KEYBOARD + CAPTION BUILDER (COMPACT BUTTONS FIX)
 # ==========================================
 async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     user_data = await ensure_user_data(user_id)
@@ -330,23 +328,23 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
     keyboard = []
 
-    # ========== FIRST ROW: Back | Refresh | Next (CHHOTE BUTTONS + PREMIUM EMOJI + COLOR) ==========
+    # ========== FIRST ROW: COMPACT NAVIGATION (USING ㅤ) ==========
     nav_row = []
     if page > 0:
-        nav_row.append(ibtn(" ", cb=f"bk_{user_id}_{page}", style="primary", icon="5258236805890710909"))
+        nav_row.append(ibtn("ㅤ", cb=f"bk_{user_id}_{page}", style="primary", icon="5258236805890710909"))
     else:
-        nav_row.append(ibtn(" ", cb=f"ign_{user_id}", style="primary", icon="5258236805890710909"))
+        nav_row.append(ibtn("ㅤ", cb=f"ign_{user_id}", style="primary", icon="5258236805890710909"))
 
-    nav_row.append(ibtn(" ", cb=f"rf_{user_id}_{page}", style="primary", icon="5258420634785947640"))
+    nav_row.append(ibtn("ㅤ", cb=f"rf_{user_id}_{page}", style="primary", icon="5258420634785947640"))
 
     if page < total_pages - 1:
-        nav_row.append(ibtn(" ", cb=f"nx_{user_id}_{page}", style="primary", icon="5260450573768990626"))
+        nav_row.append(ibtn("ㅤ", cb=f"nx_{user_id}_{page}", style="primary", icon="5260450573768990626"))
     else:
-        nav_row.append(ibtn(" ", cb=f"ign_{user_id}", style="primary", icon="5260450573768990626"))
+        nav_row.append(ibtn("ㅤ", cb=f"ign_{user_id}", style="primary", icon="5260450573768990626"))
 
     keyboard.append(nav_row)
 
-    # ========== TASK ROWS (COLORS APPLIED) ==========
+    # ========== TASK ROWS (COLORS + COMPACT STATUS BUTTONS) ==========
     for task in page_tasks:
         t_id = task['task_id']
         is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
@@ -355,7 +353,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
         name_text = sc(task.get('name', 'Task'))
         reward_text = f"{int(task.get('reward', 0)):,}"
 
-        # Tumhare hisaab se styles waapis lag gaye!
         if is_completed:
             btn_style = "success"
         elif difficulty == "hard":
@@ -367,26 +364,24 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
         row = []
 
-        # Name Button
         if task.get('url') and not is_completed:
             row.append(ibtn(name_text, url=task['url'], style=btn_style))
         else:
             row.append(ibtn(name_text, cb=f"ign_{user_id}", style=btn_style))
 
-        # Reward Button with Premium Money
         row.append(ibtn(reward_text, cb=f"ign_{user_id}", style=btn_style, icon="5472030678633684592"))
 
-        # Action / Status Button (Chhote Size me space se)
+        # Compact Status Button using invisible character "ㅤ"
         if is_completed:
-            row.append(ibtn(" ", cb=f"ign_{user_id}", style="success", icon="6100397639717625616"))
+            row.append(ibtn("ㅤ", cb=f"ign_{user_id}", style="success", icon="6100397639717625616"))
         else:
             row.append(ibtn(sc("check"), cb=f"vt_{user_id}_{t_id}_{page}", style=btn_style))
 
         keyboard.append(row)
 
-    # ========== INVITE ROW (EXACTLY AS SCREENSHOT) ==========
+    # ========== INVITE ROW ==========
     invite_claim_text = sc('claim') if pending_invites > 0 else sc('check')
-    invite_style = "primary" # The check button is blue
+    invite_style = "primary"
 
     keyboard.append([
         ibtn(sc('invites'), cb=f"ign_{user_id}"),
@@ -394,7 +389,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
         ibtn(invite_claim_text, cb=f"ci_{user_id}_{page}", style=invite_style)
     ])
 
-    # ========== SHARE LINK (FULL WIDTH BLUE BUTTON) ==========
+    # ========== SHARE LINK ==========
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     raw_share_text = (
         f"{sc('STEP INTO THE ULTIMATE WAIFU BOT')}\n\n"
