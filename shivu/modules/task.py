@@ -435,7 +435,11 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     else:
         for task in page_tasks:
             t_id = task['task_id']
-            is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
+
+            is_completed = (
+                t_id in completed_daily or
+                t_id in completed_onetime
+            )
 
             status = (
                 '<tg-emoji emoji-id="6100397639717625616">✔️</tg-emoji>'
@@ -443,14 +447,23 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
                 else '<tg-emoji emoji-id="6309702258023994825">🌟</tg-emoji>'
             )
 
-            mission = html.escape(task.get('mission', task.get('name', 'Task')))
-            name = html.escape(task.get('name', 'Task'))
+            name = html.escape(
+                str(task.get('name', 'Task'))
+            )
+
+            mission = html.escape(
+                str(task.get('mission', task.get('name', 'Task')))
+            )
+
             reward = f"{int(task.get('reward', 0)):,}"
 
-            # Task line + blank line after every task
             caption += (
-                f'{status} <b>{sc(name)}</b> • <b>{sc(mission)}</b> • '
-                f'<b>{reward}</b> <tg-emoji emoji-id="5472030678633684592">💸</tg-emoji><br><br>'
+                f'{status} '
+                f'<b>{name}</b> • '
+                f'{mission} • '
+                f'<b>{reward}</b> '
+                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji>'
+                f'<br><br>'
             )
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages, img_url
