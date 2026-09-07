@@ -394,28 +394,36 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
     # ========== SHARE LINK ==========
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
+    
+    # Adding elegant emojis into the share text logically
     raw_share_text = (
-        f"{sc('STEP INTO THE ULTIMATE WAIFU BOT')}\n\n"
-        f"{sc('COLLECT BEAUTIFUL WAIFUS PLAY GAMES AND EARN HUGE REWARDS')}\n"
-        f"{sc('JOIN USING MY LINK AND GET 1000 COINS FREE STARTING BONUS')}\n\n"
-        f"{sc('TAP TO START')}: {invite_link}"
+        f"✨ {sc('STEP INTO THE ULTIMATE WAIFU BOT')} ✨\n\n"
+        f"🎴 {sc('COLLECT BEAUTIFUL WAIFUS PLAY GAMES AND EARN HUGE REWARDS')} 🎮\n"
+        f"🎁 {sc('JOIN USING MY LINK AND GET 1000 COINS FREE STARTING BONUS')} 💰\n\n"
+        f"🚀 {sc('TAP TO START')}: {invite_link}"
     )
     encoded_text = urllib.parse.quote(raw_share_text)
     share_url = f"https://t.me/share/url?text={encoded_text}"
     
     keyboard.append([ibtn(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon="5769289093221454192")])
 
-    # ========== CAPTION ==========
+    # ==========================================
+    # 🖼️ RANDOM TASK IMAGE
+    # ==========================================
     photo_urls = [
         "https://files.catbox.moe/lge487.png",
         "https://files.catbox.moe/flth7m.png"
     ]
     img_url = random.choice(photo_urls)
 
-    # Force image preview
-    caption = f'<a href="{img_url}">​</a>'
+    # ==========================================
+    # 🖼️ RICH MESSAGE PHOTO
+    # ==========================================
+    caption = f'<img src="{html.escape(img_url)}"/>'
 
-    # Header + empty line
+    # ==========================================
+    # 📋 HEADER
+    # ==========================================
     caption += (
         f'<b><tg-emoji emoji-id="5197269100878907942">✍️</tg-emoji> '
         f'<a href="tg://user?id={user_id}">{sc("TASK DASHBOARD")}</a> • '
@@ -457,18 +465,15 @@ async def tasks_cmd(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     reply_to = update.message.message_id if update.message else None
 
+    # Payload with exact requirements
     data = {
         "chat_id": chat_id,
-        "rich_message": {"html": caption},
-        "reply_markup": keyboard.to_dict(),
-        "disable_web_page_preview": False,
-        "link_preview_options": {
-            "is_disabled": False,
-            "url": img_url,
-            "show_above_text": True,
-            "prefer_large_media": True
-        }
+        "rich_message": {
+            "html": caption
+        },
+        "reply_markup": keyboard.to_dict()
     }
+    
     if reply_to:
         data["reply_to_message_id"] = reply_to
 
@@ -476,9 +481,24 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         await context.bot._post("sendRichMessage", data)
     except Exception as e:
         LOGGER.warning(f"Rich Message failed: {e}")
+        
         # Fallback - real photo send
         try:
-            clean_caption = caption.replace('<br>', '\n').replace('<br/>', '\n').replace('​', '')
+            # Replaced <img> element safely for normal HTML parse mode
+            clean_caption = re.sub(
+                r'<img\b[^>]*>',
+                '',
+                caption,
+                flags=re.IGNORECASE
+            )
+
+            clean_caption = (
+                clean_caption
+                .replace('<br>', '\n')
+                .replace('<br/>', '\n')
+                .replace('​', '')
+            )
+            
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=img_url,
@@ -591,15 +611,10 @@ async def task_callback(update: Update, context: CallbackContext):
                     {
                         "chat_id": query.message.chat_id,
                         "message_id": query.message.message_id,
-                        "rich_message": {"html": new_caption},
-                        "reply_markup": new_kb.to_dict(),
-                        "disable_web_page_preview": False,
-                        "link_preview_options": {
-                            "is_disabled": False,
-                            "url": img_url,
-                            "show_above_text": True,
-                            "prefer_large_media": True
-                        }
+                        "rich_message": {
+                            "html": new_caption
+                        },
+                        "reply_markup": new_kb.to_dict()
                     }
                 )
             except Exception:
@@ -645,15 +660,10 @@ async def task_callback(update: Update, context: CallbackContext):
                     {
                         "chat_id": query.message.chat_id,
                         "message_id": query.message.message_id,
-                        "rich_message": {"html": new_caption},
-                        "reply_markup": new_kb.to_dict(),
-                        "disable_web_page_preview": False,
-                        "link_preview_options": {
-                            "is_disabled": False,
-                            "url": img_url,
-                            "show_above_text": True,
-                            "prefer_large_media": True
-                        }
+                        "rich_message": {
+                            "html": new_caption
+                        },
+                        "reply_markup": new_kb.to_dict()
                     }
                 )
             except Exception:
@@ -759,15 +769,10 @@ async def task_callback(update: Update, context: CallbackContext):
                     {
                         "chat_id": query.message.chat_id,
                         "message_id": query.message.message_id,
-                        "rich_message": {"html": new_caption},
-                        "reply_markup": new_kb.to_dict(),
-                        "disable_web_page_preview": False,
-                        "link_preview_options": {
-                            "is_disabled": False,
-                            "url": img_url,
-                            "show_above_text": True,
-                            "prefer_large_media": True
-                        }
+                        "rich_message": {
+                            "html": new_caption
+                        },
+                        "reply_markup": new_kb.to_dict()
                     }
                 )
             except Exception:
