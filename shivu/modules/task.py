@@ -405,21 +405,25 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     
     keyboard.append([ibtn(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon="5769289093221454192")])
 
-    # ========== CAPTION (Rich HTML ready) ==========
+    # ========== CAPTION (Zero-Width Space Fix) ==========
     
-    # 1. Random image url pickup
     photo_urls = [
         "https://files.catbox.moe/lge487.png",
         "https://files.catbox.moe/flth7m.png"
     ]
     img_url = random.choice(photo_urls)
 
-    # 2. Ye rha magic invisible HTML link jis se API tumhari rich message fetch karegi par TG upar photo show karega.
+    # Invisible HTML link included just in case
     caption = f"<a href='{img_url}'>&#8203;</a>"
-    caption += f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • {sc('page')} <b>{page + 1}</b>/<b>{total_pages}</b></b>\n\n"
+    
+    # Dashboard line
+    caption += f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • {sc('page')} <b>{page + 1}</b>/<b>{total_pages}</b></b>\n"
+    
+    # ✨ Yahan magic hai - Invisible character for empty space taaki vo collapse na ho
+    caption += "&#8203;\n"
 
     if not page_tasks:
-        caption += f"<b>{sc('NO TASKS ON THIS PAGE')}</b>"
+        caption += f"<b>{sc('NO TASKS ON THIS PAGE')}</b>\n"
     else:
         for idx, task in enumerate(page_tasks, 1):
             t_id = task['task_id']
@@ -431,26 +435,35 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
             name = html.escape(task.get('name', 'Task'))
             reward = f"{int(task.get('reward', 0)):,}"
 
-            # 3. Newline gap (\n\n) har ek ke baad aur sab digits properly bold mein format ho gaye hain
-            caption += f"{status} <b>{sc(name)}</b> • <b>{sc(mission)}</b> • <b>{reward}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n\n"
+            # Task info
+            caption += f"{status} <b>{sc(name)}</b> • <b>{sc(mission)}</b> • <b>{reward}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
+            
+            # ✨ Yahan wapas ek invisible line lagai har task ke baad gap dene k liye
+            caption += "&#8203;\n"
 
-    return InlineKeyboardMarkup(keyboard), caption, page, total_pages
+    return InlineKeyboardMarkup(keyboard), caption, page, total_pages, img_url
 
 # ==========================================
-# 📋 /tasks COMMAND  (Wapas sendRichMessage wala hi logic hai)
+# 📋 /tasks COMMAND  (Explicit Image Payload Fix)
 # ==========================================
 async def tasks_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    keyboard, caption, page, total_pages = await build_task_keyboard(user_id, context.bot.username, page=0)
+    keyboard, caption, page, total_pages, img_url = await build_task_keyboard(user_id, context.bot.username, page=0)
 
     chat_id = update.effective_chat.id
     reply_to = update.message.message_id if update.message else None
 
-    # Teri demand ke hisab se wapas custom API sendRichMessage yahan add kar di
+    # Ab dekho maine yaha explicitly link_preview_options ghusa di hai sendRichMessage ko force karne k liye
     data = {
         "chat_id": chat_id,
         "rich_message": {"html": caption},
         "reply_markup": keyboard.to_dict(),
+        "disable_web_page_preview": False,
+        "link_preview_options": {
+            "is_disabled": False,
+            "url": img_url,
+            "show_above_text": True
+        }
     }
     if reply_to:
         data["reply_to_message_id"] = reply_to
@@ -553,9 +566,8 @@ async def task_callback(update: Update, context: CallbackContext):
             else:
                 new_page = current_page
 
-            new_kb, new_caption, _, _ = await build_task_keyboard(owner_id, context.bot.username, page=new_page)
+            new_kb, new_caption, _, _, img_url = await build_task_keyboard(owner_id, context.bot.username, page=new_page)
 
-            # Pagination ke time page edit bhi sendRichMessage ki format mein rakhi hai
             try:
                 await context.bot._post(
                     "editMessageText",
@@ -564,6 +576,12 @@ async def task_callback(update: Update, context: CallbackContext):
                         "message_id": query.message.message_id,
                         "rich_message": {"html": new_caption},
                         "reply_markup": new_kb.to_dict(),
+                        "disable_web_page_preview": False,
+                        "link_preview_options": {
+                            "is_disabled": False,
+                            "url": img_url,
+                            "show_above_text": True
+                        }
                     }
                 )
             except Exception:
@@ -601,7 +619,7 @@ async def task_callback(update: Update, context: CallbackContext):
                 show_alert=True
             )
 
-            new_kb, new_caption, _, _ = await build_task_keyboard(owner_id, context.bot.username, page=page)
+            new_kb, new_caption, _, _, img_url = await build_task_keyboard(owner_id, context.bot.username, page=page)
 
             try:
                 await context.bot._post(
@@ -611,6 +629,12 @@ async def task_callback(update: Update, context: CallbackContext):
                         "message_id": query.message.message_id,
                         "rich_message": {"html": new_caption},
                         "reply_markup": new_kb.to_dict(),
+                        "disable_web_page_preview": False,
+                        "link_preview_options": {
+                            "is_disabled": False,
+                            "url": img_url,
+                            "show_above_text": True
+                        }
                     }
                 )
             except Exception:
@@ -708,7 +732,7 @@ async def task_callback(update: Update, context: CallbackContext):
                 show_alert=True
             )
 
-            new_kb, new_caption, _, _ = await build_task_keyboard(owner_id, context.bot.username, page=page)
+            new_kb, new_caption, _, _, img_url = await build_task_keyboard(owner_id, context.bot.username, page=page)
 
             try:
                 await context.bot._post(
@@ -718,6 +742,12 @@ async def task_callback(update: Update, context: CallbackContext):
                         "message_id": query.message.message_id,
                         "rich_message": {"html": new_caption},
                         "reply_markup": new_kb.to_dict(),
+                        "disable_web_page_preview": False,
+                        "link_preview_options": {
+                            "is_disabled": False,
+                            "url": img_url,
+                            "show_above_text": True
+                        }
                     }
                 )
             except Exception:
