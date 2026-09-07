@@ -142,8 +142,8 @@ async def addtask(update: Update, context: CallbackContext):
         t_type = parts[0].lower()
         difficulty = parts[1].lower()
         reward = int(parts[2])
-        button_name = parts[3]               # Button pe dikhega
-        mission = parts[4]                   # Poora mission / kya karna hai
+        button_name = parts[3]
+        mission = parts[4]
         url = None
 
         if len(parts) > 5 and parts[5].lower() not in ("none", "null", ""):
@@ -161,8 +161,8 @@ async def addtask(update: Update, context: CallbackContext):
             'type': t_type,
             'difficulty': difficulty,
             'reward': reward,
-            'name': button_name,             # short button text
-            'mission': mission,              # full description
+            'name': button_name,
+            'mission': mission,
             'url': url
         })
 
@@ -295,7 +295,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     # ========== FIRST ROW: Back | Refresh | Next ==========
     nav_row = []
     if page > 0:
-        nav_row.append(InlineKeyboardButton("⋟", callback_data=f"bk_{user_id}_{page}", style="primary"))
+        nav_row.append(InlineKeyboardButton("⋞", callback_data=f"bk_{user_id}_{page}", style="primary"))
     else:
         nav_row.append(InlineKeyboardButton("⋞", callback_data=f"ign_{user_id}"))
 
@@ -363,7 +363,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     share_url = f"https://t.me/share/url?text={encoded_text}"
     keyboard.append([InlineKeyboardButton(sc('share invite link'), url=share_url, style="primary")])
 
-    # ========== CAPTION (Mission alag dikhega) ==========
+    # ========== CAPTION ==========
     caption = (
         f"<b>📋 <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a></b>\n\n"
         f"<b><i>{sc('COMPLETE TASKS TO EARN HUGE REWARDS')}</i></b>\n"
@@ -476,25 +476,28 @@ async def task_callback(update: Update, context: CallbackContext):
                 await query.answer(sc("TASK NOT FOUND"), show_alert=True)
             return
 
-        # ========== PARSE ==========
+        # ========== SAFE PARSING ==========
         parts = data.split("_")
         action = parts[0]
 
-        if action in ("ign", "ci", "vt", "rf", "nx", "bk"):
-            try:
-                owner_id = int(parts[1])
-            except (IndexError, ValueError):
-                await query.answer("Invalid data", show_alert=True)
-                return
+        if action not in ("ign", "ci", "vt", "rf", "nx", "bk"):
+            await query.answer()
+            return
 
-            if clicker_id != owner_id:
-                await query.answer(
-                    f"{sc('PLEASE USE')} /tasks {sc('COMMAND TO OPEN YOUR OWN DASHBOARD')}",
-                    show_alert=True
-                )
-                return
+        try:
+            owner_id = int(parts[1])
+        except (IndexError, ValueError):
+            await query.answer("Invalid data", show_alert=True)
+            return
 
-        if data.startswith("ign_"):
+        if clicker_id != owner_id:
+            await query.answer(
+                f"{sc('PLEASE USE')} /tasks {sc('COMMAND TO OPEN YOUR OWN DASHBOARD')}",
+                show_alert=True
+            )
+            return
+
+        if action == "ign":
             await query.answer()
             return
 
@@ -508,14 +511,13 @@ async def task_callback(update: Update, context: CallbackContext):
             if action == "nx":
                 new_page = current_page + 1
             elif action == "bk":
-                new_page = current_page - 1
+                new_page = max(0, current_page - 1)
             else:
                 new_page = current_page
 
             new_kb, new_caption, _, _ = await build_task_keyboard(owner_id, context.bot.username, page=new_page)
 
             try:
-                # Photo message → edit caption + markup
                 await query.edit_message_caption(
                     caption=new_caption,
                     reply_markup=new_kb,
@@ -577,8 +579,8 @@ async def task_callback(update: Update, context: CallbackContext):
         # ========== NORMAL TASK CLAIM ==========
         if action == "vt":
             try:
-                task_id = parts[2]
-                page = int(parts[3]) if len(parts) > 3 else 0
+                page = int(parts[-1])
+                task_id = "_".join(parts[2:-1])
             except (IndexError, ValueError):
                 await query.answer("Invalid task data", show_alert=True)
                 return
@@ -594,11 +596,10 @@ async def task_callback(update: Update, context: CallbackContext):
                 await query.answer(sc("THIS TASK IS NO LONGER AVAILABLE"), show_alert=True)
                 return
 
-            # Check in both name + mission
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             need_join_check = ("join" in check_text or "subscribe" in check_text) and task.get('url')
 
-            if need_join_check and "t.me/" in task['url'] and "+" not in task['url'] and "joinchat" not in task['url']:
+            if need_join_check and "t.me/" in str(task.get('url', '')) and "+" not in task['url'] and "joinchat" not in task['url']:
                 try:
                     channel_username = "@" + task['url'].split("t.me/")[1].split("/")[0].split("?")[0].strip()
                     member = await context.bot.get_chat_member(chat_id=channel_username, user_id=owner_id)
@@ -617,7 +618,6 @@ async def task_callback(update: Update, context: CallbackContext):
                         await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                         return
 
-            # Atomic claim
             t_type = task.get('type', 'daily').lower()
             field = 'completed_onetime' if t_type == 'onetime' else 'completed_daily'
 
@@ -684,11 +684,10 @@ async def task_callback(update: Update, context: CallbackContext):
             pass
 
 # ==========================================
-# 📌 HANDLER REGISTRATION
+# 📌 HANDLERS REGISTER (IMPORTANT)
 # ==========================================
-def register_task_handlers(app):
-    app.add_handler(CommandHandler(["tasks", "task"], tasks_cmd))
-    app.add_handler(CommandHandler("addtask", addtask))
-    app.add_handler(CommandHandler("tasklist", tasklist))
-    app.add_handler(CommandHandler("removetask", removetask))
-    app.add_handler(CallbackQueryHandler(task_callback, pattern=r"^(dt_|ign_|ci_|vt_|rf_|nx_|bk_)"))
+application.add_handler(CommandHandler(["tasks", "task"], tasks_cmd))
+application.add_handler(CommandHandler("addtask", addtask))
+application.add_handler(CommandHandler("tasklist", tasklist))
+application.add_handler(CommandHandler("removetask", removetask))
+application.add_handler(CallbackQueryHandler(task_callback, pattern=r"^(dt_|ign_|ci_|vt_|rf_|nx_|bk_)"))
