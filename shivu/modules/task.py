@@ -382,7 +382,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
         row = []
 
-        # 🛑 SMART URL HANDLER (Prevents Crash)
         raw_url = str(task.get('url', '')).strip()
         if raw_url and not is_completed and raw_url.lower() not in ("none", "null"):
             if raw_url.startswith('@'):
@@ -708,37 +707,40 @@ async def task_callback(update: Update, context: CallbackContext):
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             
-            # 🛑 SMART CHANNEL JOIN VERIFICATION
-            need_join_check = ("join" in check_text or "subscribe" in check_text) and (task.get("url") or task.get("channel"))
+            # 🔥 BULLETPROOF CHANNEL MEMBERSHIP CHECK 🔥
+            need_join_check = ("join" in check_text or "subscribe" in check_text)
+            
+            target_channel = str(task.get("channel", "")).strip()
+            task_url = str(task.get("url", "")).strip()
 
-            if need_join_check:
-                target_channel = task.get("channel")
-                task_url = str(task.get("url", "")).strip()
+            if target_channel.lower() in ("none", "null", ""):
+                target_channel = None
+                
+            if task_url.lower() in ("none", "null", ""):
+                task_url = None
 
-                # Galti se URL ki jagah ID/Username daalne par Fallback
+            if need_join_check and (target_channel or task_url):
+                # Agar channel ki ID nahi di par link public hai, to URL se nikal lega
                 if not target_channel and task_url:
-                    if task_url.startswith('-100') or task_url.startswith('@'):
-                        target_channel = task_url
-                    else:
-                        match = re.search(r"(?:https?://)?t\.me/([A-Za-z0-9_]+)", task_url, re.IGNORECASE)
-                        if match and "+" not in task_url and "joinchat" not in task_url:
-                            target_channel = "@" + match.group(1)
+                    match = re.search(r"(?:https?://)?t\.me/([A-Za-z0-9_]+)", task_url, re.IGNORECASE)
+                    if match and "+" not in task_url and "joinchat" not in task_url:
+                        target_channel = "@" + match.group(1)
 
                 if target_channel:
                     try:
-                        try:
+                        # 🔥 STRICT TYPE CASTING (For Telegram numeric IDs like -100xxx)
+                        if target_channel.lstrip('-').isdigit():
                             chat_id_to_check = int(target_channel)
-                        except ValueError:
-                            chat_id_to_check = target_channel
+                        else:
+                            chat_id_to_check = target_channel if target_channel.startswith('@') else f"@{target_channel}"
 
                         member = await context.bot.get_chat_member(
                             chat_id=chat_id_to_check,
                             user_id=owner_id
                         )
 
-                        status_value = getattr(member.status, "value", str(member.status))
-                        status_value = str(status_value).lower().strip()
-
+                        # User chahe jis link se join ho, bas status 'member' ya us se upar hona chahiye
+                        status_value = getattr(member.status, "value", str(member.status)).lower().strip()
                         valid_statuses = {"member", "administrator", "creator", "restricted"}
 
                         if status_value not in valid_statuses:
@@ -746,20 +748,21 @@ async def task_callback(update: Update, context: CallbackContext):
                             return
 
                     except Exception as e:
-                        LOGGER.error(f"Channel verification failed | user={owner_id} | channel={target_channel} | error={e}")
                         error_text = str(e).lower()
+                        LOGGER.error(f"Membership Verify Error | ID: {chat_id_to_check} | Err: {error_text}")
 
                         if "user not found" in error_text or "member not found" in error_text:
                             await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                             return
                         elif "chat not found" in error_text or "bad request" in error_text:
-                            await query.answer(sc("CHANNEL VERIFICATION FAILED PLEASE CONTACT THE ADMIN"), show_alert=True)
+                            # Agar bot Admin nahi hai to exact ye popup aayega
+                            await query.answer(sc("BOT IS NOT ADMIN IN THAT CHANNEL OR ID IS WRONG"), show_alert=True)
                             return
                         else:
                             await query.answer(sc("COULD NOT VERIFY CHANNEL MEMBERSHIP PLEASE TRY AGAIN"), show_alert=True)
                             return
-                elif "+" in task_url or "joinchat" in task_url:
-                    await query.answer(sc("CANNOT VERIFY PRIVATE LINK PLEASE CONTACT ADMIN TO FIX THIS TASK"), show_alert=True)
+                elif task_url and ("+" in task_url or "joinchat" in task_url):
+                    await query.answer(sc("CANNOT VERIFY PRIVATE LINK WITHOUT CHANNEL ID IN ADDTASK"), show_alert=True)
                     return
 
             msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', check_text)
