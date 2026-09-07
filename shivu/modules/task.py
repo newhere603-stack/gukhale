@@ -217,10 +217,15 @@ async def addtask(update: Update, context: CallbackContext):
         reward = int(parts[2])
         button_name = parts[3]
         mission = parts[4]
+        
         url = None
-
         if len(parts) > 5 and parts[5].lower() not in ("none", "null", ""):
             url = parts[5]
+
+        # Naya Channel ID logic private channels ke liye
+        channel = None
+        if len(parts) > 6 and parts[6].lower() not in ("none", "null", ""):
+            channel = parts[6]
 
         if t_type not in ("daily", "onetime"):
             raise ValueError("type must be daily or onetime")
@@ -236,7 +241,8 @@ async def addtask(update: Update, context: CallbackContext):
             'reward': reward,
             'name': button_name,
             'mission': mission,
-            'url': url
+            'url': url,
+            'channel': channel
         })
 
         msg = (
@@ -247,7 +253,8 @@ async def addtask(update: Update, context: CallbackContext):
             f"<b>{sc('MISSION')}:</b> <b>{html.escape(mission)}</b>\n"
             f"<b>{sc('REWARD')}:</b> <b>{reward:,}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
             f"<b>{sc('TYPE')}:</b> <b>{sc(t_type.upper())}</b>\n"
-            f"<b>{sc('DIFFICULTY')}:</b> <b>{sc(difficulty.upper())}</b>"
+            f"<b>{sc('DIFFICULTY')}:</b> <b>{sc(difficulty.upper())}</b>\n"
+            f"<b>{sc('CHANNEL')}:</b> <b>{html.escape(str(channel))}</b>"
             f"</blockquote>"
         )
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
@@ -256,11 +263,11 @@ async def addtask(update: Update, context: CallbackContext):
         error_msg = (
             f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {sc('INVALID FORMAT')}</b>\n\n"
             f"<b>{sc('USAGE')}:</b>\n"
-            f"<code>/addtask type | difficulty | reward | Button Name | Mission Description | URL(or None)</code>\n\n"
+            f"<code>/addtask type | difficulty | reward | Button Name | Mission Description | URL(or None) | Channel_ID(or None)</code>\n\n"
             f"<b>{sc('EXAMPLES')}:</b>\n"
-            f"<code>/addtask daily | easy | 5000 | Join Channel | Join our official channel | https://t.me/yourchannel</code>\n"
-            f"<code>/addtask daily | normal | 3000 | Message Task | Send 50 messages in the group | None</code>\n"
-            f"<code>/addtask daily | normal | 10000 | Spend Coins | Spend 10000 coins | None</code>"
+            f"<code>/addtask daily | easy | 5000 | Join Channel | Join our official channel | https://t.me/yourchannel | @yourchannel</code>\n"
+            f"<code>/addtask daily | normal | 3000 | Join Private | Join private | https://t.me/+Abcdef | -10012345678</code>\n"
+            f"<code>/addtask daily | normal | 10000 | Spend Coins | Spend 10000 coins | None | None</code>"
         )
         await update.message.reply_text(error_msg, parse_mode=ParseMode.HTML)
 
@@ -280,10 +287,12 @@ async def tasklist(update: Update, context: CallbackContext):
             t_name = html.escape(t.get('name', 'UNKNOWN'))
             t_mission = html.escape(t.get('mission', ''))
             t_id = t['task_id']
+            t_channel = html.escape(str(t.get('channel', 'None')))
             msg += (
                 f"<b>{sc('BUTTON')}:</b> {t_name}\n"
                 f"<b>{sc('MISSION')}:</b> {t_mission}\n"
-                f"<b>{sc('ID')}:</b> <b>{t_id}</b>\n\n"
+                f"<b>{sc('ID')}:</b> <b>{t_id}</b>\n"
+                f"<b>{sc('CH')}:</b> {t_channel}\n\n"
             )
             keyboard.append([InlineKeyboardButton(f"🗑️ Delete {t_name[:18]}", callback_data=f"dt_{t_id}")])
 
@@ -423,7 +432,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
     # ==========================================
     # 📋 HEADER
     # ==========================================
-    # Added only '\n' at the end to ensure exactly 1 line gap
     caption += (
         f'<b><tg-emoji emoji-id="5197269100878907942">✍️</tg-emoji> '
         f'<a href="tg://user?id={user_id}">{sc("TASK DASHBOARD")}</a> • '
@@ -476,8 +484,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
                 current_spend = user_data.get('coins_spent_today', 0)
                 progress_text = f" ({current_spend}/{req_spend})"
 
-            # ✨ YAHAN HEADING 2 (H2) LAGAYA HAI AUR SAARE EXTRA <br> HATA DIYE HAIN ✨
-            # <h2> tag naturally 1 line ka space chhodta hai, isliye ab sirf 1 khali line dikhegi
             caption += (
                 f'<h2>{status} {name} • {mission}{progress_text} • {reward} '
                 f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji></h2>'
@@ -739,35 +745,54 @@ async def task_callback(update: Update, context: CallbackContext):
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             
-            # 🛑 100% FIXED CHANNEL JOIN LOGIC 🛑
-            need_join_check = ("join" in check_text or "subscribe" in check_text) and task.get('url')
-            if need_join_check and "t.me/" in str(task.get('url', '')) and "+" not in task['url'] and "joinchat" not in task['url']:
-                try:
-                    match = re.search(r't\.me/([^/?]+)', task['url'])
-                    if match:
-                        channel_username = "@" + match.group(1).strip()
-                        member = await context.bot.get_chat_member(chat_id=channel_username, user_id=owner_id)
+            # ==========================================
+            # 🔐 CHANNEL JOIN VERIFICATION (FIXED)
+            # ==========================================
+            need_join_check = ("join" in check_text or "subscribe" in check_text) and (task.get("url") or task.get("channel"))
 
-                        # Yahan pe value direct object se li hai taaki API enum pass kare ya plain text, dono handle ho jayein
-                        status = getattr(member, 'status', '')
-                        status_str = str(getattr(status, 'value', status)).lower()
-                        
-                        valid_statuses = ['member', 'creator', 'administrator', 'restricted']
-                        
-                        # Bulletproof check (substring in string)
-                        if not any(v in status_str for v in valid_statuses):
+            if need_join_check:
+                target_channel = task.get("channel")
+                task_url = str(task.get("url", "")).strip()
+
+                # Agar DB me channel na ho toh purane tasks ke liye fallback as URL
+                if not target_channel and task_url:
+                    match = re.search(r"(?:https?://)?t\.me/([A-Za-z0-9_]+)", task_url, re.IGNORECASE)
+                    if match and "+" not in task_url and "joinchat" not in task_url:
+                        target_channel = "@" + match.group(1)
+
+                if target_channel:
+                    try:
+                        member = await context.bot.get_chat_member(
+                            chat_id=target_channel,
+                            user_id=owner_id
+                        )
+
+                        status_value = getattr(member.status, "value", str(member.status))
+                        status_value = str(status_value).lower().strip()
+
+                        valid_statuses = {"member", "administrator", "creator", "restricted"}
+
+                        if status_value not in valid_statuses:
                             await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                             return
-                except Exception as e:
-                    LOGGER.error(f"Channel Verify Error: {e}")
-                    error_msg = str(e).lower()
-                    if "user not found" in error_msg:
-                        await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
-                        return
-                    elif "chat not found" in error_msg:
-                        pass
-                    else:
-                        pass
+
+                    except Exception as e:
+                        LOGGER.error(f"Channel verification failed | user={owner_id} | channel={target_channel} | error={e}")
+                        error_text = str(e).lower()
+
+                        if "user not found" in error_text or "member not found" in error_text:
+                            await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
+                            return
+                        elif "chat not found" in error_text or "bad request" in error_text:
+                            await query.answer(sc("CHANNEL VERIFICATION FAILED PLEASE CONTACT THE ADMIN"), show_alert=True)
+                            return
+                        else:
+                            await query.answer(sc("COULD NOT VERIFY CHANNEL MEMBERSHIP PLEASE TRY AGAIN"), show_alert=True)
+                            return
+                elif "+" in task_url or "joinchat" in task_url:
+                    # Agar link private hai lekin database mein channel ID set nahi hai
+                    await query.answer(sc("CANNOT VERIFY PRIVATE LINK PLEASE CONTACT ADMIN TO FIX THIS TASK"), show_alert=True)
+                    return
 
             msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', check_text)
             if msg_match:
@@ -852,7 +877,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     sc("ʀᴇᴡᴀʀᴅ"): f"<b>{reward:,}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>",
                     sc("ᴛʏᴘᴇ"): sc(t_type.upper())
                 }
-                asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼", log_data)))
+                asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍPLᴇᴛᴇᴅ')} ˼", log_data)))
             except Exception:
                 pass
 
