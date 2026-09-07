@@ -38,6 +38,17 @@ def to_small_caps(text: str) -> str:
 sc = to_small_caps
 
 # ==========================================
+# 🔘 SMART BUTTON HELPER (FOR COLORS & PREMIUM EMOJIS)
+# ==========================================
+def ibtn(text, cb=None, url=None, style=None, icon=None):
+    kw = {"text": text}
+    if cb: kw["callback_data"] = cb
+    if url: kw["url"] = url
+    if style: kw["style"] = style
+    if icon: kw["icon_custom_emoji_id"] = icon
+    return InlineKeyboardButton(**kw)
+
+# ==========================================
 # 📡 LOGGING
 # ==========================================
 def create_log_message(title: str, data: dict) -> str:
@@ -97,7 +108,7 @@ async def ensure_user_data(user_id: int):
     return user_data
 
 # ==========================================
-# ✉️ MESSAGE TRACKER (SIRF GROUPS KE LIYE)
+# ✉️ MESSAGE TRACKER (CHAT COUNT BUG FIX 🔥)
 # ==========================================
 async def track_user_messages(update: Update, context: CallbackContext):
     if update.effective_user and not update.effective_user.is_bot:
@@ -106,10 +117,19 @@ async def track_user_messages(update: Update, context: CallbackContext):
             chat_id = str(update.effective_chat.id)
             today_str = datetime.now(IST).strftime("%Y-%m-%d")
             
-            await user_tasks_collection.update_one(
+            # Smart update jo bot restart hone par bhi reset hone se bachayega
+            result = await user_tasks_collection.update_one(
                 {'user_id': user_id, 'last_reset_date': today_str},
                 {'$inc': {f'group_messages_today.{chat_id}': 1}}
             )
+            
+            # Agar record purana hai ya nahi mila, toh pehle reset/create karo fir increment karo
+            if result.modified_count == 0:
+                await ensure_user_data(user_id)
+                await user_tasks_collection.update_one(
+                    {'user_id': user_id, 'last_reset_date': today_str},
+                    {'$inc': {f'group_messages_today.{chat_id}': 1}}
+                )
 
 # ==========================================
 # 🎁 WELCOME + REFERRAL 
@@ -290,7 +310,7 @@ async def removetask(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 🔧 KEYBOARD + CAPTION BUILDER (ZERO-WIDTH SPACE FIX)
+# 🔧 KEYBOARD + CAPTION BUILDER (COLORS FIX & CHHOTE BUTTONS)
 # ==========================================
 async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     user_data = await ensure_user_data(user_id)
@@ -310,57 +330,71 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
     keyboard = []
 
-    # ========== FIRST ROW: Back | Refresh | Next (NO NORMAL EMOJIS HERE) ==========
+    # ========== FIRST ROW: Back | Refresh | Next (CHHOTE BUTTONS + PREMIUM EMOJI + COLOR) ==========
     nav_row = []
     if page > 0:
-        nav_row.append(InlineKeyboardButton("\u200b", callback_data=f"bk_{user_id}_{page}", icon_custom_emoji_id="5258236805890710909"))
+        nav_row.append(ibtn(" ", cb=f"bk_{user_id}_{page}", style="primary", icon="5258236805890710909"))
     else:
-        nav_row.append(InlineKeyboardButton("\u200b", callback_data=f"ign_{user_id}", icon_custom_emoji_id="5258236805890710909"))
+        nav_row.append(ibtn(" ", cb=f"ign_{user_id}", style="primary", icon="5258236805890710909"))
 
-    nav_row.append(InlineKeyboardButton("\u200b", callback_data=f"rf_{user_id}_{page}", icon_custom_emoji_id="5258420634785947640"))
+    nav_row.append(ibtn(" ", cb=f"rf_{user_id}_{page}", style="primary", icon="5258420634785947640"))
 
     if page < total_pages - 1:
-        nav_row.append(InlineKeyboardButton("\u200b", callback_data=f"nx_{user_id}_{page}", icon_custom_emoji_id="5260450573768990626"))
+        nav_row.append(ibtn(" ", cb=f"nx_{user_id}_{page}", style="primary", icon="5260450573768990626"))
     else:
-        nav_row.append(InlineKeyboardButton("\u200b", callback_data=f"ign_{user_id}", icon_custom_emoji_id="5260450573768990626"))
+        nav_row.append(ibtn(" ", cb=f"ign_{user_id}", style="primary", icon="5260450573768990626"))
 
     keyboard.append(nav_row)
 
-    # ========== TASK ROWS ==========
+    # ========== TASK ROWS (COLORS APPLIED) ==========
     for task in page_tasks:
         t_id = task['task_id']
         is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
+        difficulty = task.get('difficulty', 'normal').lower()
+        
         name_text = sc(task.get('name', 'Task'))
         reward_text = f"{int(task.get('reward', 0)):,}"
 
+        # Tumhare hisaab se styles waapis lag gaye!
+        if is_completed:
+            btn_style = "success"
+        elif difficulty == "hard":
+            btn_style = "danger"
+        elif difficulty == "easy":
+            btn_style = "primary"
+        else:
+            btn_style = None
+
         row = []
 
+        # Name Button
         if task.get('url') and not is_completed:
-            row.append(InlineKeyboardButton(name_text, url=task['url']))
+            row.append(ibtn(name_text, url=task['url'], style=btn_style))
         else:
-            row.append(InlineKeyboardButton(name_text, callback_data=f"ign_{user_id}"))
+            row.append(ibtn(name_text, cb=f"ign_{user_id}", style=btn_style))
 
-        # Reward button format with premium money emoji
-        row.append(InlineKeyboardButton(reward_text, callback_data=f"ign_{user_id}", icon_custom_emoji_id="5472030678633684592"))
+        # Reward Button with Premium Money
+        row.append(ibtn(reward_text, cb=f"ign_{user_id}", style=btn_style, icon="5472030678633684592"))
 
+        # Action / Status Button (Chhote Size me space se)
         if is_completed:
-            # Sirf Premium Checkmark dikhega (Zero-width space \u200b used)
-            row.append(InlineKeyboardButton("\u200b", callback_data=f"ign_{user_id}", icon_custom_emoji_id="6100397639717625616"))
+            row.append(ibtn(" ", cb=f"ign_{user_id}", style="success", icon="6100397639717625616"))
         else:
-            row.append(InlineKeyboardButton(sc("check"), callback_data=f"vt_{user_id}_{t_id}_{page}"))
+            row.append(ibtn(sc("check"), cb=f"vt_{user_id}_{t_id}_{page}", style=btn_style))
 
         keyboard.append(row)
 
-    # ========== INVITE ROW ==========
+    # ========== INVITE ROW (EXACTLY AS SCREENSHOT) ==========
     invite_claim_text = sc('claim') if pending_invites > 0 else sc('check')
+    invite_style = "primary" # The check button is blue
 
     keyboard.append([
-        InlineKeyboardButton(sc('invites'), callback_data=f"ign_{user_id}"),
-        InlineKeyboardButton("25,000", callback_data=f"ign_{user_id}", icon_custom_emoji_id="5472030678633684592"),
-        InlineKeyboardButton(invite_claim_text, callback_data=f"ci_{user_id}_{page}")
+        ibtn(sc('invites'), cb=f"ign_{user_id}"),
+        ibtn("25,000", cb=f"ign_{user_id}", icon="5472030678633684592"),
+        ibtn(invite_claim_text, cb=f"ci_{user_id}_{page}", style=invite_style)
     ])
 
-    # ========== SHARE LINK (ONLY PREMIUM EMOJI + TEXT) ==========
+    # ========== SHARE LINK (FULL WIDTH BLUE BUTTON) ==========
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     raw_share_text = (
         f"{sc('STEP INTO THE ULTIMATE WAIFU BOT')}\n\n"
@@ -370,10 +404,10 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     )
     encoded_text = urllib.parse.quote(raw_share_text)
     share_url = f"https://t.me/share/url?text={encoded_text}"
-    keyboard.append([InlineKeyboardButton(f"{sc('SHARE INVITE LINK')}", url=share_url, icon_custom_emoji_id="5769289093221454192")])
+    
+    keyboard.append([ibtn(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon="5769289093221454192")])
 
     # ========== CAPTION ==========
-    # HTML tag me emoji id ke sath fallback emoji dena zaruri hota hai taki tag empty na lage
     caption = f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • {sc('page')} <code>{page + 1}</code>/<code>{total_pages}</code></b>\n\n"
 
     if not page_tasks:
