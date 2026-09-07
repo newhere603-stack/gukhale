@@ -3,6 +3,7 @@ import re
 import html
 import asyncio
 import urllib.parse
+import random
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CommandHandler, CallbackQueryHandler, CallbackContext, MessageHandler, filters
@@ -41,8 +42,6 @@ sc = to_small_caps
 # 🔘 SMART BUTTON HELPER (ZERO-WIDTH FIX)
 # ==========================================
 def ibtn(text, cb=None, url=None, style=None, icon=None):
-    # Telegram crash na kare isliye empty text ko zero-width space (\u200b) se replace kar rahe hain
-    # Ye screen pe 0 pixel space lega aur button ekdum square/chhota rahega
     if text == "":
         text = "\u200b"
         
@@ -166,7 +165,7 @@ async def handle_referral(update: Update, context: CallbackContext):
                     try:
                         ref_msg = (
                             f"<b>{sc('SUCCESSFUL REFERRAL A NEW USER JOINED VIA YOUR LINK')}\n\n"
-                            f"{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF')} <code>25,000</code> {sc('COINS')}</b>"
+                            f"{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF')} <b>25,000</b> {sc('COINS')}</b>"
                         )
                         await context.bot.send_message(chat_id=referrer_id, text=ref_msg, parse_mode=ParseMode.HTML)
                     except Exception:
@@ -174,8 +173,8 @@ async def handle_referral(update: Update, context: CallbackContext):
 
                     log_data = {
                         sc("ɴᴇᴡ ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{safe_name}</a></b>",
-                        sc("ɪᴅ"): f"<code>{user_id}</code>",
-                        sc("ʀᴇғᴇʀʀᴇᴅ ʙʏ"): f"<code>{referrer_id}</code>",
+                        sc("ɪᴅ"): f"<b>{user_id}</b>",
+                        sc("ʀᴇғᴇʀʀᴇᴅ ʙʏ"): f"<b>{referrer_id}</b>",
                         sc("sᴛᴀᴛᴜs"): f"<b>{sc('Pending Claim')}</b>"
                     }
                     asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ɴᴇᴡ ʀᴇғᴇʀʀᴀʟ')} ˼", log_data)))
@@ -194,7 +193,7 @@ async def handle_referral(update: Update, context: CallbackContext):
         })
 
         welcome_text = (
-            f"<b>{sc('WELCOME YOU RECEIVED')} <code>1,000</code> {sc('COINS FOR STARTING THE BOT')}</b>\n"
+            f"<b>{sc('WELCOME YOU RECEIVED')} <b>1,000</b> {sc('COINS FOR STARTING THE BOT')}</b>\n"
             f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE')}</b>"
         )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
@@ -243,10 +242,10 @@ async def addtask(update: Update, context: CallbackContext):
         msg = (
             f"<b><tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji> {sc('NEW TASK ADDED SUCCESSFULLY')}</b>\n"
             f"<blockquote>"
-            f"<b>{sc('ID')}:</b> <code>{task_id}</code>\n"
+            f"<b>{sc('ID')}:</b> <b>{task_id}</b>\n"
             f"<b>{sc('BUTTON')}:</b> <b>{html.escape(button_name)}</b>\n"
             f"<b>{sc('MISSION')}:</b> <b>{html.escape(mission)}</b>\n"
-            f"<b>{sc('REWARD')}:</b> <code>{reward:,}</code> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
+            f"<b>{sc('REWARD')}:</b> <b>{reward:,}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
             f"<b>{sc('TYPE')}:</b> <b>{sc(t_type.upper())}</b>\n"
             f"<b>{sc('DIFFICULTY')}:</b> <b>{sc(difficulty.upper())}</b>"
             f"</blockquote>"
@@ -284,7 +283,7 @@ async def tasklist(update: Update, context: CallbackContext):
             msg += (
                 f"<b>{sc('BUTTON')}:</b> {t_name}\n"
                 f"<b>{sc('MISSION')}:</b> {t_mission}\n"
-                f"<b>{sc('ID')}:</b> <code>{t_id}</code>\n\n"
+                f"<b>{sc('ID')}:</b> <b>{t_id}</b>\n\n"
             )
             keyboard.append([InlineKeyboardButton(f"🗑️ Delete {t_name[:18]}", callback_data=f"dt_{t_id}")])
 
@@ -333,7 +332,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
     keyboard = []
 
-    # ========== FIRST ROW: Navigation (EMPTY TEXT, ONLY PREMIUM ICONS) ==========
+    # ========== FIRST ROW: Navigation ==========
     nav_row = []
     if page > 0:
         nav_row.append(ibtn("", cb=f"bk_{user_id}_{page}", style="primary", icon="5258236805890710909"))
@@ -376,7 +375,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
         row.append(ibtn(reward_text, cb=f"ign_{user_id}", style=btn_style, icon="5472030678633684592"))
 
-        # Compact Status Button (EMPTY TEXT, ONLY ICON)
         if is_completed:
             row.append(ibtn("", cb=f"ign_{user_id}", style="success", icon="6100397639717625616"))
         else:
@@ -408,7 +406,17 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     keyboard.append([ibtn(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon="5769289093221454192")])
 
     # ========== CAPTION (Rich HTML ready) ==========
-    caption = f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • {sc('page')} <code>{page + 1}</code>/<code>{total_pages}</code></b>\n\n"
+    
+    # 1. Random image url pickup
+    photo_urls = [
+        "https://files.catbox.moe/lge487.png",
+        "https://files.catbox.moe/flth7m.png"
+    ]
+    img_url = random.choice(photo_urls)
+
+    # 2. Ye rha magic invisible HTML link jis se API tumhari rich message fetch karegi par TG upar photo show karega.
+    caption = f"<a href='{img_url}'>&#8203;</a>"
+    caption += f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • {sc('page')} <b>{page + 1}</b>/<b>{total_pages}</b></b>\n\n"
 
     if not page_tasks:
         caption += f"<b>{sc('NO TASKS ON THIS PAGE')}</b>"
@@ -423,12 +431,13 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
             name = html.escape(task.get('name', 'Task'))
             reward = f"{int(task.get('reward', 0)):,}"
 
-            caption += f"{status} <b>{sc(name)} • {sc(mission)} • <code>{reward}</code> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n\n"
+            # 3. Newline gap (\n\n) har ek ke baad aur sab digits properly bold mein format ho gaye hain
+            caption += f"{status} <b>{sc(name)}</b> • <b>{sc(mission)}</b> • <b>{reward}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n\n"
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages
 
 # ==========================================
-# 📋 /tasks COMMAND  (Rich Message)
+# 📋 /tasks COMMAND  (Wapas sendRichMessage wala hi logic hai)
 # ==========================================
 async def tasks_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -437,41 +446,19 @@ async def tasks_cmd(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     reply_to = update.message.message_id if update.message else None
 
-    # Try modern Rich Message (article-style) first
-    try:
-        data = {
-            "chat_id": chat_id,
-            "rich_message": {"html": caption},
-            "reply_markup": keyboard.to_dict(),
-        }
-        if reply_to:
-            data["reply_to_message_id"] = reply_to
+    # Teri demand ke hisab se wapas custom API sendRichMessage yahan add kar di
+    data = {
+        "chat_id": chat_id,
+        "rich_message": {"html": caption},
+        "reply_markup": keyboard.to_dict(),
+    }
+    if reply_to:
+        data["reply_to_message_id"] = reply_to
 
+    try:
         await context.bot._post("sendRichMessage", data)
-        return
     except Exception as e:
-        LOGGER.warning(f"Rich Message failed, falling back: {e}")
-
-    # Fallback: classic photo + caption
-    photo_url = "https://files.catbox.moe/lge487.png"
-    try:
-        await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=photo_url,
-            caption=caption,
-            reply_markup=keyboard,
-            parse_mode=ParseMode.HTML,
-            reply_to_message_id=reply_to
-        )
-    except Exception as e:
-        LOGGER.error(f"Task photo send error: {e}")
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=caption,
-            reply_markup=keyboard,
-            parse_mode=ParseMode.HTML,
-            reply_to_message_id=reply_to
-        )
+        LOGGER.warning(f"Rich Message failed: {e}")
 
 # ==========================================
 # 🔘 CALLBACK HANDLER
@@ -514,7 +501,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     msg += (
                         f"<b>{sc('BUTTON')}:</b> {t_name}\n"
                         f"<b>{sc('MISSION')}:</b> {t_mission}\n"
-                        f"<b>{sc('ID')}:</b> <code>{t['task_id']}</code>\n\n"
+                        f"<b>{sc('ID')}:</b> <b>{t['task_id']}</b>\n\n"
                     )
                     keyboard.append([InlineKeyboardButton(f"🗑️ Delete {t_name[:18]}", callback_data=f"dt_{t['task_id']}")])
 
@@ -568,7 +555,7 @@ async def task_callback(update: Update, context: CallbackContext):
 
             new_kb, new_caption, _, _ = await build_task_keyboard(owner_id, context.bot.username, page=new_page)
 
-            # Try edit as Rich Message first
+            # Pagination ke time page edit bhi sendRichMessage ki format mein rakhi hai
             try:
                 await context.bot._post(
                     "editMessageText",
@@ -580,24 +567,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     }
                 )
             except Exception:
-                try:
-                    await query.edit_message_caption(
-                        caption=new_caption,
-                        reply_markup=new_kb,
-                        parse_mode=ParseMode.HTML
-                    )
-                except Exception:
-                    try:
-                        await query.edit_message_text(
-                            text=new_caption,
-                            reply_markup=new_kb,
-                            parse_mode=ParseMode.HTML
-                        )
-                    except Exception:
-                        try:
-                            await query.edit_message_reply_markup(reply_markup=new_kb)
-                        except Exception:
-                            pass
+                pass
             await query.answer()
             return
 
@@ -644,24 +614,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     }
                 )
             except Exception:
-                try:
-                    await query.edit_message_caption(
-                        caption=new_caption,
-                        reply_markup=new_kb,
-                        parse_mode=ParseMode.HTML
-                    )
-                except Exception:
-                    try:
-                        await query.edit_message_text(
-                            text=new_caption,
-                            reply_markup=new_kb,
-                            parse_mode=ParseMode.HTML
-                        )
-                    except Exception:
-                        try:
-                            await query.edit_message_reply_markup(reply_markup=new_kb)
-                        except Exception:
-                            pass
+                pass
             return
 
         if action == "vt":
@@ -768,31 +721,14 @@ async def task_callback(update: Update, context: CallbackContext):
                     }
                 )
             except Exception:
-                try:
-                    await query.edit_message_caption(
-                        caption=new_caption,
-                        reply_markup=new_kb,
-                        parse_mode=ParseMode.HTML
-                    )
-                except Exception:
-                    try:
-                        await query.edit_message_text(
-                            text=new_caption,
-                            reply_markup=new_kb,
-                            parse_mode=ParseMode.HTML
-                        )
-                    except Exception:
-                        try:
-                            await query.edit_message_reply_markup(reply_markup=new_kb)
-                        except Exception:
-                            pass
+                pass
 
             try:
                 log_data = {
                     sc("ᴜsᴇʀ"): f"<a href='tg://user?id={owner_id}'>{html.escape(query.from_user.first_name or 'User')}</a>",
                     sc("ʙᴜᴛᴛᴏɴ"): html.escape(task.get('name', '')),
                     sc("ᴍɪssɪᴏɴ"): html.escape(task.get('mission', '')),
-                    sc("ʀᴇᴡᴀʀᴅ"): f"<code>{reward:,}</code> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>",
+                    sc("ʀᴇᴡᴀʀᴅ"): f"<b>{reward:,}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>",
                     sc("ᴛʏᴘᴇ"): sc(t_type.upper())
                 }
                 asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼", log_data)))
