@@ -395,7 +395,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     # ========== SHARE LINK ==========
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     
-    # Adding elegant emojis into the share text logically
     raw_share_text = (
         f"✨ {sc('STEP INTO THE ULTIMATE WAIFU BOT')} ✨\n\n"
         f"🎴 {sc('COLLECT BEAUTIFUL WAIFUS PLAY GAMES AND EARN HUGE REWARDS')} 🎮\n"
@@ -457,13 +456,11 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
             reward = f"{int(task.get('reward', 0)):,}"
 
+            # 🛑 MAINE YAHAN SE BLOCKQUOTE HATA DIYA HAI
+            # BAS EK BOLD LINE "CASHED OUT!" WALI FEELING KE LIYE
             caption += (
-                f'{status} '
-                f'<b>{name}</b> • '
-                f'{mission} • '
-                f'<b>{reward}</b> '
-                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji>'
-                f'<br><br>'
+                f'{status} <b>{name} • {mission} • {reward}</b> '
+                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji><br><br>'
             )
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages, img_url
@@ -497,7 +494,6 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         
         # Fallback - real photo send
         try:
-            # Replaced <img> element safely for normal HTML parse mode
             clean_caption = re.sub(
                 r'<img\b[^>]*>',
                 '',
