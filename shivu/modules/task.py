@@ -38,9 +38,14 @@ def to_small_caps(text: str) -> str:
 sc = to_small_caps
 
 # ==========================================
-# 🔘 SMART BUTTON HELPER
+# 🔘 SMART BUTTON HELPER (ZERO-WIDTH FIX)
 # ==========================================
 def ibtn(text, cb=None, url=None, style=None, icon=None):
+    # Telegram crash na kare isliye empty text ko zero-width space (\u200b) se replace kar rahe hain
+    # Ye screen pe 0 pixel space lega aur button ekdum square/chhota rahega
+    if text == "":
+        text = "\u200b"
+        
     kw = {"text": text}
     if cb: kw["callback_data"] = cb
     if url: kw["url"] = url
@@ -308,7 +313,7 @@ async def removetask(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 🔧 KEYBOARD + CAPTION BUILDER (COMPACT BUTTONS FIX)
+# 🔧 KEYBOARD + CAPTION BUILDER
 # ==========================================
 async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     user_data = await ensure_user_data(user_id)
@@ -328,23 +333,23 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
     keyboard = []
 
-    # ========== FIRST ROW: COMPACT NAVIGATION (USING ㅤ) ==========
+    # ========== FIRST ROW: Navigation (EMPTY TEXT, ONLY PREMIUM ICONS) ==========
     nav_row = []
     if page > 0:
-        nav_row.append(ibtn("ㅤ", cb=f"bk_{user_id}_{page}", style="primary", icon="5258236805890710909"))
+        nav_row.append(ibtn("", cb=f"bk_{user_id}_{page}", style="primary", icon="5258236805890710909"))
     else:
-        nav_row.append(ibtn("ㅤ", cb=f"ign_{user_id}", style="primary", icon="5258236805890710909"))
+        nav_row.append(ibtn("", cb=f"ign_{user_id}", style="primary", icon="5258236805890710909"))
 
-    nav_row.append(ibtn("ㅤ", cb=f"rf_{user_id}_{page}", style="primary", icon="5258420634785947640"))
+    nav_row.append(ibtn("", cb=f"rf_{user_id}_{page}", style="primary", icon="5258420634785947640"))
 
     if page < total_pages - 1:
-        nav_row.append(ibtn("ㅤ", cb=f"nx_{user_id}_{page}", style="primary", icon="5260450573768990626"))
+        nav_row.append(ibtn("", cb=f"nx_{user_id}_{page}", style="primary", icon="5260450573768990626"))
     else:
-        nav_row.append(ibtn("ㅤ", cb=f"ign_{user_id}", style="primary", icon="5260450573768990626"))
+        nav_row.append(ibtn("", cb=f"ign_{user_id}", style="primary", icon="5260450573768990626"))
 
     keyboard.append(nav_row)
 
-    # ========== TASK ROWS (COLORS + COMPACT STATUS BUTTONS) ==========
+    # ========== TASK ROWS ==========
     for task in page_tasks:
         t_id = task['task_id']
         is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
@@ -371,9 +376,9 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
         row.append(ibtn(reward_text, cb=f"ign_{user_id}", style=btn_style, icon="5472030678633684592"))
 
-        # Compact Status Button using invisible character "ㅤ"
+        # Compact Status Button (EMPTY TEXT, ONLY ICON)
         if is_completed:
-            row.append(ibtn("ㅤ", cb=f"ign_{user_id}", style="success", icon="6100397639717625616"))
+            row.append(ibtn("", cb=f"ign_{user_id}", style="success", icon="6100397639717625616"))
         else:
             row.append(ibtn(sc("check"), cb=f"vt_{user_id}_{t_id}_{page}", style=btn_style))
 
@@ -414,7 +419,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
             
             status = "<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji>" if is_completed else "<tg-emoji emoji-id=\"6309702258023994825\">🌟</tg-emoji>"
             
-            mission = html.escape(task.get('mission', task.get('name', '')))
+            mission = html.escape(task.get('mission', task.get('name', 'Task')))
             name = html.escape(task.get('name', 'Task'))
             reward = f"{int(task.get('reward', 0)):,}"
 
