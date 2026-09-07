@@ -423,14 +423,15 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
     # ==========================================
     # 📋 HEADER
     # ==========================================
+    # Added only '\n' at the end to ensure exactly 1 line gap
     caption += (
         f'<b><tg-emoji emoji-id="5197269100878907942">✍️</tg-emoji> '
         f'<a href="tg://user?id={user_id}">{sc("TASK DASHBOARD")}</a> • '
-        f'{sc("page")} <b>{page + 1}</b>/<b>{total_pages}</b></b><br><br>'
+        f'{sc("page")} <b>{page + 1}</b>/<b>{total_pages}</b></b>\n'
     )
 
     if not page_tasks:
-        caption += f'<b>{sc("NO TASKS ON THIS PAGE")}</b><br>'
+        caption += f'\n<b>{sc("NO TASKS ON THIS PAGE")}</b>'
     else:
         for task in page_tasks:
             t_id = task['task_id']
@@ -475,10 +476,11 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
                 current_spend = user_data.get('coins_spent_today', 0)
                 progress_text = f" ({current_spend}/{req_spend})"
 
-            # ✨ EXACT HEADING 3 (H3) BINA KISI EMOJI KE ✨
+            # ✨ YAHAN HEADING 2 (H2) LAGAYA HAI AUR SAARE EXTRA <br> HATA DIYE HAIN ✨
+            # <h2> tag naturally 1 line ka space chhodta hai, isliye ab sirf 1 khali line dikhegi
             caption += (
-                f'<h3>{status} {name} • {mission}{progress_text} • {reward} '
-                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji></h3><br><br>'
+                f'<h2>{status} {name} • {mission}{progress_text} • {reward} '
+                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji></h2>'
             )
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages, img_url
@@ -523,16 +525,20 @@ async def tasks_cmd(update: Update, context: CallbackContext):
                 flags=re.IGNORECASE
             )
 
-            # Agar fallback mein normal API use hoti hai, 
-            # to <h3> tags ko properly bold me badal dega taaki formatting break na ho.
+            # Fallback formatting fix
             clean_caption = (
                 clean_caption
-                .replace('<h3>', '<b>')
-                .replace('</h3>', '</b>')
+                .replace('<h2>', '\n<b>')
+                .replace('</h2>', '</b>\n')
+                .replace('<h3>', '\n<b>')
+                .replace('</h3>', '</b>\n')
                 .replace('<br>', '\n')
                 .replace('<br/>', '\n')
                 .replace('​', '')
             )
+            
+            # Removes massive gaps in fallback view if they exist
+            clean_caption = re.sub(r'\n{3,}', '\n\n', clean_caption).strip()
             
             await context.bot.send_photo(
                 chat_id=chat_id,
@@ -733,7 +739,6 @@ async def task_callback(update: Update, context: CallbackContext):
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             
-            # 🛑 IMPROVED CHANNEL JOIN LOGIC 🛑
             need_join_check = ("join" in check_text or "subscribe" in check_text) and task.get('url')
             if need_join_check and "t.me/" in str(task.get('url', '')) and "+" not in task['url'] and "joinchat" not in task['url']:
                 try:
@@ -752,16 +757,13 @@ async def task_callback(update: Update, context: CallbackContext):
                     LOGGER.error(f"Channel Verify Error: {e}")
                     error_msg = str(e).lower()
                     if "user not found" in error_msg:
-                        # Ye error tab aata hai jab bot ne user ko kabhi nahi dekha
                         await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                         return
                     elif "chat not found" in error_msg:
-                        # Agar bot us group/channel me admin nahi hai to soft-lock se bachane ke liye verify skip karo
                         pass
                     else:
                         pass
 
-            # 🛑 IMPROVED GROUP-WISE MESSAGE COUNT LOGIC 🛑
             msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', check_text)
             if msg_match:
                 req_msgs = int(msg_match.group(1))
