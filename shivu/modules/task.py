@@ -739,6 +739,7 @@ async def task_callback(update: Update, context: CallbackContext):
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             
+            # 🛑 100% FIXED CHANNEL JOIN LOGIC 🛑
             need_join_check = ("join" in check_text or "subscribe" in check_text) and task.get('url')
             if need_join_check and "t.me/" in str(task.get('url', '')) and "+" not in task['url'] and "joinchat" not in task['url']:
                 try:
@@ -747,10 +748,14 @@ async def task_callback(update: Update, context: CallbackContext):
                         channel_username = "@" + match.group(1).strip()
                         member = await context.bot.get_chat_member(chat_id=channel_username, user_id=owner_id)
 
-                        status_str = str(member.status).lower()
+                        # Yahan pe value direct object se li hai taaki API enum pass kare ya plain text, dono handle ho jayein
+                        status = getattr(member, 'status', '')
+                        status_str = str(getattr(status, 'value', status)).lower()
+                        
                         valid_statuses = ['member', 'creator', 'administrator', 'restricted']
                         
-                        if status_str not in valid_statuses:
+                        # Bulletproof check (substring in string)
+                        if not any(v in status_str for v in valid_statuses):
                             await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                             return
                 except Exception as e:
