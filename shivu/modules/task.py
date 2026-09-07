@@ -74,7 +74,7 @@ async def ensure_user_data(user_id: int):
             'completed_daily': [],
             'completed_onetime': [],
             'coins_spent_today': 0,
-            'messages_sent_today': 0, # Added for Chat Tracking
+            'group_messages_today': {}, # 🔥 HAR GROUP KA ALAG COUNT HOGA
             'pending_invites': 0,
             'total_invites': 0,
             'last_reset_date': today_str
@@ -88,7 +88,7 @@ async def ensure_user_data(user_id: int):
             {'$set': {
                 'completed_daily': [],
                 'coins_spent_today': 0,
-                'messages_sent_today': 0, # Reset daily messages
+                'group_messages_today': {}, # Reset daily messages
                 'last_reset_date': today_str
             }}
         )
@@ -97,20 +97,23 @@ async def ensure_user_data(user_id: int):
     return user_data
 
 # ==========================================
-# ✉️ MESSAGE TRACKER (To prevent fake claims)
+# ✉️ MESSAGE TRACKER (SIRF GROUPS KE LIYE)
 # ==========================================
 async def track_user_messages(update: Update, context: CallbackContext):
     if update.effective_user and not update.effective_user.is_bot:
-        user_id = update.effective_user.id
-        today_str = datetime.now(IST).strftime("%Y-%m-%d")
-        # Increment message count silently in background
-        await user_tasks_collection.update_one(
-            {'user_id': user_id, 'last_reset_date': today_str},
-            {'$inc': {'messages_sent_today': 1}}
-        )
+        # 🔥 Sirf Group/Supergroup me hi messages count honge
+        if update.effective_chat.type in ['group', 'supergroup']:
+            user_id = update.effective_user.id
+            chat_id = str(update.effective_chat.id)
+            today_str = datetime.now(IST).strftime("%Y-%m-%d")
+            
+            await user_tasks_collection.update_one(
+                {'user_id': user_id, 'last_reset_date': today_str},
+                {'$inc': {f'group_messages_today.{chat_id}': 1}}
+            )
 
 # ==========================================
-# 🎁 WELCOME + REFERRAL
+# 🎁 WELCOME + REFERRAL (AB LINK WORK KAREGA)
 # ==========================================
 async def handle_referral(update: Update, context: CallbackContext):
     if not update.effective_user:
@@ -122,6 +125,7 @@ async def handle_referral(update: Update, context: CallbackContext):
 
     user_task_data = await user_tasks_collection.find_one({'user_id': user_id})
 
+    # Naya User Hai
     if not user_task_data:
         await eco_collection.update_one(
             {'id': user_id},
@@ -141,7 +145,7 @@ async def handle_referral(update: Update, context: CallbackContext):
                     try:
                         ref_msg = (
                             f"<b>{sc('SUCCESSFUL REFERRAL A NEW USER JOINED VIA YOUR LINK')}\n\n"
-                            f"{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF 25,000 COINS')}</b>"
+                            f"{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF')} <code>25,000</code> {sc('COINS')}</b>"
                         )
                         await context.bot.send_message(chat_id=referrer_id, text=ref_msg, parse_mode=ParseMode.HTML)
                     except Exception:
@@ -162,14 +166,14 @@ async def handle_referral(update: Update, context: CallbackContext):
             'completed_daily': [],
             'completed_onetime': [],
             'coins_spent_today': 0,
-            'messages_sent_today': 0,
+            'group_messages_today': {},
             'pending_invites': 0,
             'total_invites': 0,
             'last_reset_date': datetime.now(IST).strftime("%Y-%m-%d")
         })
 
         welcome_text = (
-            f"<b>{sc('WELCOME YOU RECEIVED 1,000 COINS FOR STARTING THE BOT')}</b>\n"
+            f"<b>{sc('WELCOME YOU RECEIVED')} <code>1,000</code> {sc('COINS FOR STARTING THE BOT')}</b>\n"
             f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE')}</b>"
         )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
@@ -216,12 +220,12 @@ async def addtask(update: Update, context: CallbackContext):
         })
 
         msg = (
-            f"<b>✅ {sc('NEW TASK ADDED SUCCESSFULLY')}</b>\n"
+            f"<b><tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji> {sc('NEW TASK ADDED SUCCESSFULLY')}</b>\n"
             f"<blockquote>"
             f"<b>{sc('ID')}:</b> <code>{task_id}</code>\n"
             f"<b>{sc('BUTTON')}:</b> <b>{html.escape(button_name)}</b>\n"
             f"<b>{sc('MISSION')}:</b> <b>{html.escape(mission)}</b>\n"
-            f"<b>{sc('REWARD')}:</b> <b>{reward:,} 💸</b>\n"
+            f"<b>{sc('REWARD')}:</b> <code>{reward:,}</code> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
             f"<b>{sc('TYPE')}:</b> <b>{sc(t_type.upper())}</b>\n"
             f"<b>{sc('DIFFICULTY')}:</b> <b>{sc(difficulty.upper())}</b>"
             f"</blockquote>"
@@ -230,7 +234,7 @@ async def addtask(update: Update, context: CallbackContext):
 
     except Exception as e:
         error_msg = (
-            f"<b>⚠️ {sc('INVALID FORMAT')}</b>\n\n"
+            f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {sc('INVALID FORMAT')}</b>\n\n"
             f"<b>{sc('USAGE')}:</b>\n"
             f"<code>/addtask type | difficulty | reward | Button Name | Mission Description | URL(or None)</code>\n\n"
             f"<b>{sc('EXAMPLES')}:</b>\n"
@@ -250,7 +254,7 @@ async def tasklist(update: Update, context: CallbackContext):
             await update.message.reply_text(f"<b>{sc('NO TASKS FOUND')}</b>", parse_mode=ParseMode.HTML)
             return
 
-        msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
+        msg = f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> {sc('ALL ACTIVE TASKS')}</b>\n\n"
         keyboard = []
         for t in tasks:
             t_name = html.escape(t.get('name', 'UNKNOWN'))
@@ -267,7 +271,7 @@ async def tasklist(update: Update, context: CallbackContext):
         await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
     except Exception as e:
         LOGGER.error(f"Tasklist Error: {e}")
-        await update.message.reply_text(f"<b>⚠️ ERROR:</b> {e}", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> ERROR:</b> {e}", parse_mode=ParseMode.HTML)
 
 async def removetask(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
@@ -283,12 +287,12 @@ async def removetask(update: Update, context: CallbackContext):
     task_id = context.args[0]
     result = await tasks_collection.delete_one({'task_id': task_id})
     if result.deleted_count > 0:
-        await update.message.reply_text(f"<b>✅ {sc('TASK REMOVED SUCCESSFULLY')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji> {sc('TASK REMOVED SUCCESSFULLY')}</b>", parse_mode=ParseMode.HTML)
     else:
-        await update.message.reply_text(f"<b>❌ {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 🔧 KEYBOARD + CAPTION BUILDER
+# 🔧 KEYBOARD + CAPTION BUILDER (PREMIUM EMOJIS FIX)
 # ==========================================
 async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     user_data = await ensure_user_data(user_id)
@@ -308,19 +312,19 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 
     keyboard = []
 
-    # ========== FIRST ROW: Back | Refresh | Next ==========
+    # ========== FIRST ROW: Back | Refresh | Next (PREMIUM ICONS) ==========
     nav_row = []
     if page > 0:
-        nav_row.append(InlineKeyboardButton("⋞", callback_data=f"bk_{user_id}_{page}", style="primary"))
+        nav_row.append(InlineKeyboardButton("⬅️", callback_data=f"bk_{user_id}_{page}", style="primary", icon_custom_emoji_id="5258236805890710909"))
     else:
-        nav_row.append(InlineKeyboardButton("⋞", callback_data=f"ign_{user_id}"))
+        nav_row.append(InlineKeyboardButton("⬅️", callback_data=f"ign_{user_id}", icon_custom_emoji_id="5258236805890710909"))
 
-    nav_row.append(InlineKeyboardButton("⟳", callback_data=f"rf_{user_id}_{page}", style="primary"))
+    nav_row.append(InlineKeyboardButton("🔄", callback_data=f"rf_{user_id}_{page}", style="primary", icon_custom_emoji_id="5258420634785947640"))
 
     if page < total_pages - 1:
-        nav_row.append(InlineKeyboardButton("⋟", callback_data=f"nx_{user_id}_{page}", style="primary"))
+        nav_row.append(InlineKeyboardButton("➡️", callback_data=f"nx_{user_id}_{page}", style="primary", icon_custom_emoji_id="5260450573768990626"))
     else:
-        nav_row.append(InlineKeyboardButton("⋟", callback_data=f"ign_{user_id}"))
+        nav_row.append(InlineKeyboardButton("➡️", callback_data=f"ign_{user_id}", icon_custom_emoji_id="5260450573768990626"))
 
     keyboard.append(nav_row)
 
@@ -330,7 +334,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
         is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
         difficulty = task.get('difficulty', 'normal').lower()
         name_text = sc(task.get('name', 'Task'))
-        reward_text = f"{int(task.get('reward', 0)):,} 💸"
+        reward_text = f"{int(task.get('reward', 0)):,}"
 
         if is_completed:
             btn_style = "success"
@@ -348,26 +352,27 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
         else:
             row.append(InlineKeyboardButton(name_text, callback_data=f"ign_{user_id}", style=btn_style))
 
-        row.append(InlineKeyboardButton(reward_text, callback_data=f"ign_{user_id}"))
+        # Reward button format with premium money emoji
+        row.append(InlineKeyboardButton(reward_text, callback_data=f"ign_{user_id}", icon_custom_emoji_id="5472030678633684592"))
 
         if is_completed:
-            row.append(InlineKeyboardButton("✅", callback_data=f"ign_{user_id}", style="success"))
+            row.append(InlineKeyboardButton("✔️", callback_data=f"ign_{user_id}", style="success", icon_custom_emoji_id="6100397639717625616"))
         else:
             row.append(InlineKeyboardButton(sc("check"), callback_data=f"vt_{user_id}_{t_id}_{page}", style=btn_style))
 
         keyboard.append(row)
 
-    # ========== INVITE ROW ==========
+    # ========== INVITE ROW (PRICE FIX) ==========
     invite_claim_text = sc('claim') if pending_invites > 0 else sc('check')
     invite_style = "success" if pending_invites > 0 else "primary"
 
     keyboard.append([
         InlineKeyboardButton(sc('invites'), callback_data=f"ign_{user_id}"),
-        InlineKeyboardButton(f"{total_invites} {sc('friends')}", callback_data=f"ign_{user_id}"),
+        InlineKeyboardButton("25,000", callback_data=f"ign_{user_id}", icon_custom_emoji_id="5472030678633684592"),
         InlineKeyboardButton(invite_claim_text, callback_data=f"ci_{user_id}_{page}", style=invite_style)
     ])
 
-    # ========== SHARE LINK ==========
+    # ========== SHARE LINK (PREMIUM EMOJI FIX) ==========
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     raw_share_text = (
         f"{sc('STEP INTO THE ULTIMATE WAIFU BOT')}\n\n"
@@ -377,13 +382,10 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     )
     encoded_text = urllib.parse.quote(raw_share_text)
     share_url = f"https://t.me/share/url?text={encoded_text}"
-    keyboard.append([InlineKeyboardButton(sc('share invite link'), url=share_url, style="primary")])
+    keyboard.append([InlineKeyboardButton(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon_custom_emoji_id="5769289093221454192")])
 
-    # ========== CAPTION ==========
-    caption = (
-        f"<b>📋 <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a></b>\n\n"
-        f"<b>Page {page + 1}/{total_pages}</b>\n\n"
-    )
+    # ========== CAPTION (DASHBOARD SAME LINE & CHHOTE FONT FIX) ==========
+    caption = f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • {sc('page')} <code>{page + 1}</code>/<code>{total_pages}</code></b>\n\n"
 
     if not page_tasks:
         caption += f"<b>{sc('NO TASKS ON THIS PAGE')}</b>"
@@ -391,14 +393,16 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
         for idx, task in enumerate(page_tasks, 1):
             t_id = task['task_id']
             is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
-            status = "✅" if is_completed else "▫️"
+            
+            # Premium Emojis for Status
+            status = "<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji>" if is_completed else "<tg-emoji emoji-id=\"6309702258023994825\">🌟</tg-emoji>"
             
             mission = html.escape(task.get('mission', task.get('name', '')))
             name = html.escape(task.get('name', 'Task'))
             reward = f"{int(task.get('reward', 0)):,}"
 
-            # 🛠️ Updated Single Line Format Logic with small caps
-            caption += f"{status} <b>{sc(name)} • {sc(mission)} • {reward} 💸</b>\n\n"
+            # 🛠️ All numbers wrapped in <code>
+            caption += f"{status} <b>{sc(name)} • {sc(mission)} • <code>{reward}</code> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n\n"
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages
 
@@ -464,7 +468,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     )
                     return
 
-                msg = f"<b>📋 {sc('ALL ACTIVE TASKS')}</b>\n\n"
+                msg = f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> {sc('ALL ACTIVE TASKS')}</b>\n\n"
                 keyboard = []
                 for t in tasks:
                     t_name = html.escape(t.get('name', 'UNKNOWN'))
@@ -630,21 +634,23 @@ async def task_callback(update: Update, context: CallbackContext):
                         await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                         return
 
-            # 2. MESSAGE SEND CHECK 
+            # 2. MESSAGE SEND CHECK (Group only check)
             msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', check_text)
             if msg_match:
                 req_msgs = int(msg_match.group(1))
-                if user_data.get('messages_sent_today', 0) < req_msgs:
-                    await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SENT {user_data.get('messages_sent_today', 0)}/{req_msgs} MESSAGES TODAY"), show_alert=True)
+                group_messages = user_data.get('group_messages_today', {})
+                max_msgs_in_any_group = max(group_messages.values()) if group_messages else 0
+                
+                if max_msgs_in_any_group < req_msgs:
+                    await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SENT {max_msgs_in_any_group}/{req_msgs} MESSAGES IN A GROUP TODAY"), show_alert=True)
                     return
 
-            # 3. SPEND COINS CHECK (Ab check karega properly bina bug ke)
+            # 3. SPEND COINS CHECK
             if "spend" in check_text or "use" in check_text:
                 spend_match = re.search(r'(?:spend|use)\s+(\d+)', check_text)
                 if spend_match:
                     req_spend = int(spend_match.group(1))
                 else:
-                    # Agar task ke text me number nahi likha hai, toh reward amount ko hi required spend maan lega
                     req_spend = int(task.get('reward', 0))
                     
                 if user_data.get('coins_spent_today', 0) < req_spend:
@@ -677,7 +683,7 @@ async def task_callback(update: Update, context: CallbackContext):
             )
 
             await query.answer(
-                f"✅ {sc('TASK COMPLETED')}!\n{sc('YOU RECEIVED')} {reward:,} 💸",
+                f"✔️ {sc('TASK COMPLETED')}!\n{sc('YOU RECEIVED')} {reward:,} 💸",
                 show_alert=True
             )
 
@@ -699,7 +705,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     sc("ᴜsᴇʀ"): f"<a href='tg://user?id={owner_id}'>{html.escape(query.from_user.first_name or 'User')}</a>",
                     sc("ʙᴜᴛᴛᴏɴ"): html.escape(task.get('name', '')),
                     sc("ᴍɪssɪᴏɴ"): html.escape(task.get('mission', '')),
-                    sc("ʀᴇᴡᴀʀᴅ"): f"{reward:,} 💸",
+                    sc("ʀᴇᴡᴀʀᴅ"): f"<code>{reward:,}</code> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>",
                     sc("ᴛʏᴘᴇ"): sc(t_type.upper())
                 }
                 asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼", log_data)))
@@ -718,13 +724,16 @@ async def task_callback(update: Update, context: CallbackContext):
             pass
 
 # ==========================================
-# 📌 HANDLERS REGISTER (IMPORTANT)
+# 📌 HANDLERS REGISTER (IMPORTANT FIXES YAHAN HAIN)
 # ==========================================
+# 🔥 MAIN FIX: Start handler attach kiya hai taaki invite link properly handle ho
+application.add_handler(CommandHandler("start", handle_referral))
+
 application.add_handler(CommandHandler(["tasks", "task"], tasks_cmd))
 application.add_handler(CommandHandler("addtask", addtask))
 application.add_handler(CommandHandler("tasklist", tasklist))
 application.add_handler(CommandHandler("removetask", removetask))
 application.add_handler(CallbackQueryHandler(task_callback, pattern=r"^(dt_|ign_|ci_|vt_|rf_|nx_|bk_)"))
 
-# YE HANDLER BHI ADD KIYA HAI MESSAGE COUNT KARNE KE LIYE
+# 🔥 PM WALE MESSAGES IGNORE HOGE, SIRF GROUP WALE COUNT HOGE
 application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, track_user_messages), group=32)
