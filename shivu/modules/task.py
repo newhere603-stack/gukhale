@@ -295,16 +295,16 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     # ========== FIRST ROW: Back | Refresh | Next ==========
     nav_row = []
     if page > 0:
-        nav_row.append(InlineKeyboardButton("« Back", callback_data=f"bk_{user_id}_{page}", style="primary"))
+        nav_row.append(InlineKeyboardButton("⋟", callback_data=f"bk_{user_id}_{page}", style="primary"))
     else:
-        nav_row.append(InlineKeyboardButton("« Back", callback_data=f"ign_{user_id}"))
+        nav_row.append(InlineKeyboardButton("⋞", callback_data=f"ign_{user_id}"))
 
-    nav_row.append(InlineKeyboardButton("🔄 Refresh", callback_data=f"rf_{user_id}_{page}", style="primary"))
+    nav_row.append(InlineKeyboardButton("⟳", callback_data=f"rf_{user_id}_{page}", style="primary"))
 
     if page < total_pages - 1:
-        nav_row.append(InlineKeyboardButton("Next »", callback_data=f"nx_{user_id}_{page}", style="primary"))
+        nav_row.append(InlineKeyboardButton("⋟", callback_data=f"nx_{user_id}_{page}", style="primary"))
     else:
-        nav_row.append(InlineKeyboardButton("Next »", callback_data=f"ign_{user_id}"))
+        nav_row.append(InlineKeyboardButton("⋟", callback_data=f"ign_{user_id}"))
 
     keyboard.append(nav_row)
 
