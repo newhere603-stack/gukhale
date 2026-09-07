@@ -312,9 +312,9 @@ async def removetask(update: Update, context: CallbackContext):
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> {sc('TASK NOT FOUND')}</b>", parse_mode=ParseMode.HTML)
 
 # ==========================================
-# 🔧 KEYBOARD + CAPTION BUILDER
+# 🔧 KEYBOARD + CAPTION BUILDER (WITH CHAT CONTEXT)
 # ==========================================
-async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
+async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, chat_id: str = None, chat_type: str = 'private'):
     user_data = await ensure_user_data(user_id)
 
     completed_daily = set(user_data.get('completed_daily', []))
@@ -455,12 +455,30 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
             )
 
             reward = f"{int(task.get('reward', 0)):,}"
+            
+            # Progress tracker logic for Message tasks per group
+            msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', mission.lower())
+            progress_text = ""
+            if msg_match and not is_completed:
+                req_msgs = int(msg_match.group(1))
+                if chat_type in ['group', 'supergroup'] and chat_id:
+                    current_msgs = user_data.get('group_messages_today', {}).get(str(chat_id), 0)
+                    progress_text = f" ({current_msgs}/{req_msgs})"
+                else:
+                    max_msgs = max(user_data.get('group_messages_today', {}).values()) if user_data.get('group_messages_today') else 0
+                    progress_text = f" ({max_msgs}/{req_msgs})"
 
-            # 🛑 MAINE YAHAN SE BLOCKQUOTE HATA DIYA HAI
-            # BAS EK BOLD LINE "CASHED OUT!" WALI FEELING KE LIYE
+            # Progress tracker logic for Spend tasks
+            spend_match = re.search(r'(?:spend|use)\s+(\d+)', mission.lower())
+            if spend_match and not is_completed:
+                req_spend = int(spend_match.group(1))
+                current_spend = user_data.get('coins_spent_today', 0)
+                progress_text = f" ({current_spend}/{req_spend})"
+
+            # ✨ EXACT HEADING 3 (H3) BINA KISI EMOJI KE ✨
             caption += (
-                f'{status} <b>{name} • {mission} • {reward}</b> '
-                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji><br><br>'
+                f'<h3>{status} {name} • {mission}{progress_text} • {reward} '
+                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji></h3><br><br>'
             )
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages, img_url
@@ -470,9 +488,13 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
 # ==========================================
 async def tasks_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    keyboard, caption, page, total_pages, img_url = await build_task_keyboard(user_id, context.bot.username, page=0)
-
     chat_id = update.effective_chat.id
+    chat_type = update.effective_chat.type
+    
+    keyboard, caption, page, total_pages, img_url = await build_task_keyboard(
+        user_id, context.bot.username, page=0, chat_id=str(chat_id), chat_type=chat_type
+    )
+
     reply_to = update.message.message_id if update.message else None
 
     # Payload with exact requirements
@@ -501,8 +523,12 @@ async def tasks_cmd(update: Update, context: CallbackContext):
                 flags=re.IGNORECASE
             )
 
+            # Agar fallback mein normal API use hoti hai, 
+            # to <h3> tags ko properly bold me badal dega taaki formatting break na ho.
             clean_caption = (
                 clean_caption
+                .replace('<h3>', '<b>')
+                .replace('</h3>', '</b>')
                 .replace('<br>', '\n')
                 .replace('<br/>', '\n')
                 .replace('​', '')
@@ -526,6 +552,9 @@ async def task_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     clicker_id = query.from_user.id
     data = query.data
+
+    chat_id_str = str(query.message.chat.id) if query.message else None
+    chat_type = query.message.chat.type if query.message else 'private'
 
     try:
         if data.startswith("dt_"):
@@ -612,7 +641,9 @@ async def task_callback(update: Update, context: CallbackContext):
             else:
                 new_page = current_page
 
-            new_kb, new_caption, _, _, img_url = await build_task_keyboard(owner_id, context.bot.username, page=new_page)
+            new_kb, new_caption, _, _, img_url = await build_task_keyboard(
+                owner_id, context.bot.username, page=new_page, chat_id=chat_id_str, chat_type=chat_type
+            )
 
             try:
                 await context.bot._post(
@@ -661,7 +692,9 @@ async def task_callback(update: Update, context: CallbackContext):
                 show_alert=True
             )
 
-            new_kb, new_caption, _, _, img_url = await build_task_keyboard(owner_id, context.bot.username, page=page)
+            new_kb, new_caption, _, _, img_url = await build_task_keyboard(
+                owner_id, context.bot.username, page=page, chat_id=chat_id_str, chat_type=chat_type
+            )
 
             try:
                 await context.bot._post(
@@ -700,35 +733,50 @@ async def task_callback(update: Update, context: CallbackContext):
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             
+            # 🛑 IMPROVED CHANNEL JOIN LOGIC 🛑
             need_join_check = ("join" in check_text or "subscribe" in check_text) and task.get('url')
             if need_join_check and "t.me/" in str(task.get('url', '')) and "+" not in task['url'] and "joinchat" not in task['url']:
                 try:
-                    channel_username = "@" + task['url'].split("t.me/")[1].split("/")[0].split("?")[0].strip()
-                    member = await context.bot.get_chat_member(chat_id=channel_username, user_id=owner_id)
+                    match = re.search(r't\.me/([^/?]+)', task['url'])
+                    if match:
+                        channel_username = "@" + match.group(1).strip()
+                        member = await context.bot.get_chat_member(chat_id=channel_username, user_id=owner_id)
 
-                    status = getattr(member, 'status', '')
-                    status_str = str(getattr(status, 'value', status)).lower()
-
-                    valid_statuses = ['member', 'creator', 'administrator', 'restricted']
-                    if not any(v in status_str for v in valid_statuses):
-                        await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
-                        return
+                        status_str = str(member.status).lower()
+                        valid_statuses = ['member', 'creator', 'administrator', 'restricted']
+                        
+                        if status_str not in valid_statuses:
+                            await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
+                            return
                 except Exception as e:
-                    error_msg = str(e).lower()
                     LOGGER.error(f"Channel Verify Error: {e}")
-                    if "user not found" in error_msg or "chat not found" in error_msg:
+                    error_msg = str(e).lower()
+                    if "user not found" in error_msg:
+                        # Ye error tab aata hai jab bot ne user ko kabhi nahi dekha
                         await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                         return
+                    elif "chat not found" in error_msg:
+                        # Agar bot us group/channel me admin nahi hai to soft-lock se bachane ke liye verify skip karo
+                        pass
+                    else:
+                        pass
 
+            # 🛑 IMPROVED GROUP-WISE MESSAGE COUNT LOGIC 🛑
             msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', check_text)
             if msg_match:
                 req_msgs = int(msg_match.group(1))
                 group_messages = user_data.get('group_messages_today', {})
-                max_msgs_in_any_group = max(group_messages.values()) if group_messages else 0
                 
-                if max_msgs_in_any_group < req_msgs:
-                    await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SENT {max_msgs_in_any_group}/{req_msgs} MESSAGES IN A GROUP TODAY"), show_alert=True)
-                    return
+                if chat_type in ['group', 'supergroup']:
+                    current_msgs = group_messages.get(chat_id_str, 0)
+                    if current_msgs < req_msgs:
+                        await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SENT {current_msgs}/{req_msgs} MESSAGES IN THIS GROUP TODAY"), show_alert=True)
+                        return
+                else:
+                    max_msgs_in_any_group = max(group_messages.values()) if group_messages else 0
+                    if max_msgs_in_any_group < req_msgs:
+                        await query.answer(sc(f"MISSION INCOMPLETE PLEASE DO THIS TASK IN A GROUP ({max_msgs_in_any_group}/{req_msgs})"), show_alert=True)
+                        return
 
             if "spend" in check_text or "use" in check_text:
                 spend_match = re.search(r'(?:spend|use)\s+(\d+)', check_text)
@@ -770,7 +818,9 @@ async def task_callback(update: Update, context: CallbackContext):
                 show_alert=True
             )
 
-            new_kb, new_caption, _, _, img_url = await build_task_keyboard(owner_id, context.bot.username, page=page)
+            new_kb, new_caption, _, _, img_url = await build_task_keyboard(
+                owner_id, context.bot.username, page=page, chat_id=chat_id_str, chat_type=chat_type
+            )
 
             try:
                 await context.bot._post(
