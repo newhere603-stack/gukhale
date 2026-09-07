@@ -276,7 +276,7 @@ class GameLogic:
     @staticmethod
     def generate_riddle() -> tuple[str, str]:
         a, b = random.randint(2, 50), random.randint(1, 50)
-        op = random.choice(['+', '-', '*'])
+        op = random.choice(['+', '-', '×'])
         ans = a + b if op == '+' else (a - b if op == '-' else a * b)
         return f"{a} {op} {b}", str(ans)
 
