@@ -407,7 +407,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     
     keyboard.append([ibtn(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon="5769289093221454192")])
 
-    # ========== CAPTION ==========
+    # ========== CAPTION (Rich HTML ready) ==========
     caption = f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • {sc('page')} <code>{page + 1}</code>/<code>{total_pages}</code></b>\n\n"
 
     if not page_tasks:
@@ -428,31 +428,49 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages
 
 # ==========================================
-# 📋 /tasks COMMAND
+# 📋 /tasks COMMAND  (Rich Message)
 # ==========================================
 async def tasks_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     keyboard, caption, page, total_pages = await build_task_keyboard(user_id, context.bot.username, page=0)
 
-    photo_url = "https://files.catbox.moe/lge487.png"
+    chat_id = update.effective_chat.id
+    reply_to = update.message.message_id if update.message else None
 
+    # Try modern Rich Message (article-style) first
+    try:
+        data = {
+            "chat_id": chat_id,
+            "rich_message": {"html": caption},
+            "reply_markup": keyboard.to_dict(),
+        }
+        if reply_to:
+            data["reply_to_message_id"] = reply_to
+
+        await context.bot._post("sendRichMessage", data)
+        return
+    except Exception as e:
+        LOGGER.warning(f"Rich Message failed, falling back: {e}")
+
+    # Fallback: classic photo + caption
+    photo_url = "https://files.catbox.moe/lge487.png"
     try:
         await context.bot.send_photo(
-            chat_id=update.effective_chat.id,
+            chat_id=chat_id,
             photo=photo_url,
             caption=caption,
             reply_markup=keyboard,
             parse_mode=ParseMode.HTML,
-            reply_to_message_id=update.message.message_id if update.message else None
+            reply_to_message_id=reply_to
         )
     except Exception as e:
         LOGGER.error(f"Task photo send error: {e}")
         await context.bot.send_message(
-            chat_id=update.effective_chat.id,
+            chat_id=chat_id,
             text=caption,
             reply_markup=keyboard,
             parse_mode=ParseMode.HTML,
-            reply_to_message_id=update.message.message_id if update.message else None
+            reply_to_message_id=reply_to
         )
 
 # ==========================================
@@ -550,17 +568,36 @@ async def task_callback(update: Update, context: CallbackContext):
 
             new_kb, new_caption, _, _ = await build_task_keyboard(owner_id, context.bot.username, page=new_page)
 
+            # Try edit as Rich Message first
             try:
-                await query.edit_message_caption(
-                    caption=new_caption,
-                    reply_markup=new_kb,
-                    parse_mode=ParseMode.HTML
+                await context.bot._post(
+                    "editMessageText",
+                    {
+                        "chat_id": query.message.chat_id,
+                        "message_id": query.message.message_id,
+                        "rich_message": {"html": new_caption},
+                        "reply_markup": new_kb.to_dict(),
+                    }
                 )
             except Exception:
                 try:
-                    await query.edit_message_reply_markup(reply_markup=new_kb)
+                    await query.edit_message_caption(
+                        caption=new_caption,
+                        reply_markup=new_kb,
+                        parse_mode=ParseMode.HTML
+                    )
                 except Exception:
-                    pass
+                    try:
+                        await query.edit_message_text(
+                            text=new_caption,
+                            reply_markup=new_kb,
+                            parse_mode=ParseMode.HTML
+                        )
+                    except Exception:
+                        try:
+                            await query.edit_message_reply_markup(reply_markup=new_kb)
+                        except Exception:
+                            pass
             await query.answer()
             return
 
@@ -595,17 +632,36 @@ async def task_callback(update: Update, context: CallbackContext):
             )
 
             new_kb, new_caption, _, _ = await build_task_keyboard(owner_id, context.bot.username, page=page)
+
             try:
-                await query.edit_message_caption(
-                    caption=new_caption,
-                    reply_markup=new_kb,
-                    parse_mode=ParseMode.HTML
+                await context.bot._post(
+                    "editMessageText",
+                    {
+                        "chat_id": query.message.chat_id,
+                        "message_id": query.message.message_id,
+                        "rich_message": {"html": new_caption},
+                        "reply_markup": new_kb.to_dict(),
+                    }
                 )
             except Exception:
                 try:
-                    await query.edit_message_reply_markup(reply_markup=new_kb)
+                    await query.edit_message_caption(
+                        caption=new_caption,
+                        reply_markup=new_kb,
+                        parse_mode=ParseMode.HTML
+                    )
                 except Exception:
-                    pass
+                    try:
+                        await query.edit_message_text(
+                            text=new_caption,
+                            reply_markup=new_kb,
+                            parse_mode=ParseMode.HTML
+                        )
+                    except Exception:
+                        try:
+                            await query.edit_message_reply_markup(reply_markup=new_kb)
+                        except Exception:
+                            pass
             return
 
         if action == "vt":
@@ -700,17 +756,36 @@ async def task_callback(update: Update, context: CallbackContext):
             )
 
             new_kb, new_caption, _, _ = await build_task_keyboard(owner_id, context.bot.username, page=page)
+
             try:
-                await query.edit_message_caption(
-                    caption=new_caption,
-                    reply_markup=new_kb,
-                    parse_mode=ParseMode.HTML
+                await context.bot._post(
+                    "editMessageText",
+                    {
+                        "chat_id": query.message.chat_id,
+                        "message_id": query.message.message_id,
+                        "rich_message": {"html": new_caption},
+                        "reply_markup": new_kb.to_dict(),
+                    }
                 )
             except Exception:
                 try:
-                    await query.edit_message_reply_markup(reply_markup=new_kb)
+                    await query.edit_message_caption(
+                        caption=new_caption,
+                        reply_markup=new_kb,
+                        parse_mode=ParseMode.HTML
+                    )
                 except Exception:
-                    pass
+                    try:
+                        await query.edit_message_text(
+                            text=new_caption,
+                            reply_markup=new_kb,
+                            parse_mode=ParseMode.HTML
+                        )
+                    except Exception:
+                        try:
+                            await query.edit_message_reply_markup(reply_markup=new_kb)
+                        except Exception:
+                            pass
 
             try:
                 log_data = {
@@ -744,4 +819,4 @@ application.add_handler(CommandHandler("addtask", addtask))
 application.add_handler(CommandHandler("tasklist", tasklist))
 application.add_handler(CommandHandler("removetask", removetask))
 application.add_handler(CallbackQueryHandler(task_callback, pattern=r"^(dt_|ign_|ci_|vt_|rf_|nx_|bk_)"))
-application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, track_user_messages), group=32)
+application.add_handler(MessageHandler(filters.ALL & \~filters.COMMAND, track_user_messages), group=32)
