@@ -405,7 +405,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     
     keyboard.append([ibtn(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon="5769289093221454192")])
 
-    # ========== CAPTION (Zero-Width Space Fix) ==========
+    # ========== CAPTION (Proper HTML line breaks) ==========
     
     photo_urls = [
         "https://files.catbox.moe/lge487.png",
@@ -413,33 +413,41 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     ]
     img_url = random.choice(photo_urls)
 
-    # Invisible HTML link included just in case
+    # Invisible HTML link to help force image preview
     caption = f"<a href='{img_url}'>&#8203;</a>"
     
     # Dashboard line
-    caption += f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • {sc('page')} <b>{page + 1}</b>/<b>{total_pages}</b></b>\n"
+    caption += (
+        f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> "
+        f"<a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • "
+        f"{sc('page')} <b>{page + 1}</b>/<b>{total_pages}</b></b><br>"
+    )
     
-    # ✨ Yahan magic hai - Invisible character for empty space taaki vo collapse na ho
-    caption += "&#8203;\n"
+    # Empty line after header
+    caption += "<br>"
 
     if not page_tasks:
-        caption += f"<b>{sc('NO TASKS ON THIS PAGE')}</b>\n"
+        caption += f"<b>{sc('NO TASKS ON THIS PAGE')}</b><br>"
     else:
-        for idx, task in enumerate(page_tasks, 1):
+        for task in page_tasks:
             t_id = task['task_id']
             is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
             
-            status = "<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji>" if is_completed else "<tg-emoji emoji-id=\"6309702258023994825\">🌟</tg-emoji>"
+            status = (
+                "<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji>"
+                if is_completed
+                else "<tg-emoji emoji-id=\"6309702258023994825\">🌟</tg-emoji>"
+            )
             
             mission = html.escape(task.get('mission', task.get('name', 'Task')))
             name = html.escape(task.get('name', 'Task'))
             reward = f"{int(task.get('reward', 0)):,}"
 
-            # Task info
-            caption += f"{status} <b>{sc(name)}</b> • <b>{sc(mission)}</b> • <b>{reward}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>\n"
-            
-            # ✨ Yahan wapas ek invisible line lagai har task ke baad gap dene k liye
-            caption += "&#8203;\n"
+            # Each task on its own line
+            caption += (
+                f"{status} <b>{sc(name)}</b> • <b>{sc(mission)}</b> • "
+                f"<b>{reward}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji><br>"
+            )
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages, img_url
 
@@ -453,7 +461,6 @@ async def tasks_cmd(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     reply_to = update.message.message_id if update.message else None
 
-    # Ab dekho maine yaha explicitly link_preview_options ghusa di hai sendRichMessage ko force karne k liye
     data = {
         "chat_id": chat_id,
         "rich_message": {"html": caption},
