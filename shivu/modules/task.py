@@ -382,9 +382,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     # ========== CAPTION ==========
     caption = (
         f"<b>📋 <a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a></b>\n\n"
-        f"<b><i>{sc('COMPLETE TASKS TO EARN HUGE REWARDS')}</i></b>\n"
-        f"<b>{sc('DAILY TASKS RESET EVERY MIDNIGHT IST')}</b>\n\n"
-        f"<b>Blue = Easy  •  Red = Hard  •  Green = Completed</b>\n"
         f"<b>Page {page + 1}/{total_pages}</b>\n\n"
     )
 
@@ -633,7 +630,7 @@ async def task_callback(update: Update, context: CallbackContext):
                         await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                         return
 
-            # 2. MESSAGE SEND CHECK (Ab bot messages count karega)
+            # 2. MESSAGE SEND CHECK 
             msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', check_text)
             if msg_match:
                 req_msgs = int(msg_match.group(1))
@@ -641,10 +638,15 @@ async def task_callback(update: Update, context: CallbackContext):
                     await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SENT {user_data.get('messages_sent_today', 0)}/{req_msgs} MESSAGES TODAY"), show_alert=True)
                     return
 
-            # 3. SPEND COINS CHECK (Agar "spend 10000" likha hai to)
-            spend_match = re.search(r'(?:spend|use)\s+(\d+)', check_text)
-            if spend_match:
-                req_spend = int(spend_match.group(1))
+            # 3. SPEND COINS CHECK (Ab check karega properly bina bug ke)
+            if "spend" in check_text or "use" in check_text:
+                spend_match = re.search(r'(?:spend|use)\s+(\d+)', check_text)
+                if spend_match:
+                    req_spend = int(spend_match.group(1))
+                else:
+                    # Agar task ke text me number nahi likha hai, toh reward amount ko hi required spend maan lega
+                    req_spend = int(task.get('reward', 0))
+                    
                 if user_data.get('coins_spent_today', 0) < req_spend:
                     await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SPENT {user_data.get('coins_spent_today', 0)}/{req_spend} COINS TODAY"), show_alert=True)
                     return
