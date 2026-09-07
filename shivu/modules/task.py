@@ -405,54 +405,50 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0):
     
     keyboard.append([ibtn(f"{sc('SHARE INVITE LINK')}", url=share_url, style="primary", icon="5769289093221454192")])
 
-    # ========== CAPTION (Proper HTML line breaks) ==========
-    
+    # ========== CAPTION ==========
     photo_urls = [
         "https://files.catbox.moe/lge487.png",
         "https://files.catbox.moe/flth7m.png"
     ]
     img_url = random.choice(photo_urls)
 
-    # Invisible HTML link to help force image preview
-    caption = f"<a href='{img_url}'>&#8203;</a>"
-    
-    # Dashboard line
+    # Force image preview
+    caption = f'<a href="{img_url}">​</a>'
+
+    # Header + empty line
     caption += (
-        f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> "
-        f"<a href='tg://user?id={user_id}'>{sc('TASK DASHBOARD')}</a> • "
-        f"{sc('page')} <b>{page + 1}</b>/<b>{total_pages}</b></b><br>"
+        f'<b><tg-emoji emoji-id="5197269100878907942">✍️</tg-emoji> '
+        f'<a href="tg://user?id={user_id}">{sc("TASK DASHBOARD")}</a> • '
+        f'{sc("page")} <b>{page + 1}</b>/<b>{total_pages}</b></b><br><br>'
     )
-    
-    # Empty line after header
-    caption += "<br>"
 
     if not page_tasks:
-        caption += f"<b>{sc('NO TASKS ON THIS PAGE')}</b><br>"
+        caption += f'<b>{sc("NO TASKS ON THIS PAGE")}</b><br>'
     else:
         for task in page_tasks:
             t_id = task['task_id']
             is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
-            
+
             status = (
-                "<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji>"
+                '<tg-emoji emoji-id="6100397639717625616">✔️</tg-emoji>'
                 if is_completed
-                else "<tg-emoji emoji-id=\"6309702258023994825\">🌟</tg-emoji>"
+                else '<tg-emoji emoji-id="6309702258023994825">🌟</tg-emoji>'
             )
-            
+
             mission = html.escape(task.get('mission', task.get('name', 'Task')))
             name = html.escape(task.get('name', 'Task'))
             reward = f"{int(task.get('reward', 0)):,}"
 
-            # Each task on its own line
+            # Task line + blank line after every task
             caption += (
-                f"{status} <b>{sc(name)}</b> • <b>{sc(mission)}</b> • "
-                f"<b>{reward}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji><br>"
+                f'{status} <b>{sc(name)}</b> • <b>{sc(mission)}</b> • '
+                f'<b>{reward}</b> <tg-emoji emoji-id="5472030678633684592">💸</tg-emoji><br><br>'
             )
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages, img_url
 
 # ==========================================
-# 📋 /tasks COMMAND  (Explicit Image Payload Fix)
+# 📋 /tasks COMMAND
 # ==========================================
 async def tasks_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -469,7 +465,8 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         "link_preview_options": {
             "is_disabled": False,
             "url": img_url,
-            "show_above_text": True
+            "show_above_text": True,
+            "prefer_large_media": True
         }
     }
     if reply_to:
@@ -479,6 +476,19 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         await context.bot._post("sendRichMessage", data)
     except Exception as e:
         LOGGER.warning(f"Rich Message failed: {e}")
+        # Fallback - real photo send
+        try:
+            clean_caption = caption.replace('<br>', '\n').replace('<br/>', '\n').replace('​', '')
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=img_url,
+                caption=clean_caption,
+                reply_markup=keyboard,
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=reply_to
+            )
+        except Exception as e2:
+            LOGGER.error(f"Fallback photo also failed: {e2}")
 
 # ==========================================
 # 🔘 CALLBACK HANDLER
@@ -587,7 +597,8 @@ async def task_callback(update: Update, context: CallbackContext):
                         "link_preview_options": {
                             "is_disabled": False,
                             "url": img_url,
-                            "show_above_text": True
+                            "show_above_text": True,
+                            "prefer_large_media": True
                         }
                     }
                 )
@@ -640,7 +651,8 @@ async def task_callback(update: Update, context: CallbackContext):
                         "link_preview_options": {
                             "is_disabled": False,
                             "url": img_url,
-                            "show_above_text": True
+                            "show_above_text": True,
+                            "prefer_large_media": True
                         }
                     }
                 )
@@ -753,7 +765,8 @@ async def task_callback(update: Update, context: CallbackContext):
                         "link_preview_options": {
                             "is_disabled": False,
                             "url": img_url,
-                            "show_above_text": True
+                            "show_above_text": True,
+                            "prefer_large_media": True
                         }
                     }
                 )
