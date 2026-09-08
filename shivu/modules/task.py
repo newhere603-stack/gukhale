@@ -527,7 +527,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
 
 # ==========================================
-# ✨ TELEGRAM LIVE TEXT ANIMATION (SUPERFAST)
+# ✨ TELEGRAM LIVE TEXT ANIMATION (FLASH OPEN)
 # ==========================================
 async def animated_task_reply(
     update: Update,
@@ -537,7 +537,8 @@ async def animated_task_reply(
     img_url: str
 ):
     """
-    Task menu ke liye SUPERFAST Animation Helper.
+    Task menu ke liye FLASH OPEN Animation Helper.
+    Chhota sa text animation hoga aur turant final menu open ho jayega.
     """
     message = update.effective_message
     user = update.effective_user
@@ -591,34 +592,27 @@ async def animated_task_reply(
     # Group me bina animation direct reply aayega
     if update.effective_chat.type != "private":
         return await send_final()
-
-    # HTML tags strip karke plain text banayenge draft animation ke liye
-    draft_text = re.sub(r'<[^>]+>', '', caption).strip()
     
     draft_id = random.randint(1, 2_000_000_000)
     
-    # 🔥 YE HAI SUPERFAST UPGRADE 🔥
-    speed = 0.02   # Pehle 0.04 tha, ab aur bhi fast (almost minimum delay)
-    chunk_size = 8 # Pehle 4 tha, ab doguna zyada text ek baar me aayega
+    # 🔥 YE HAI FLASH LOADING TEXT 🔥
+    loading_frames = [
+        "🚀",
+        "🚀 ᴏᴘᴇɴɪɴɢ...",
+        "🚀 ᴏᴘᴇɴɪɴɢ ᴛᴀsᴋs...",
+        "🚀 ᴏᴘᴇɴɪɴɢ ᴛᴀsᴋs ᴍᴇɴᴜ..."
+    ]
 
     try:
-        current = draft_text[:chunk_size]
-        try:
-            await context.bot._post("sendMessageDraft", {"chat_id": user.id, "draft_id": draft_id, "text": current})
-        except AttributeError:
-            pass
-        
-        await asyncio.sleep(speed)
-
-        for i in range(chunk_size, len(draft_text), chunk_size):
-            current = draft_text[:i + chunk_size]
+        # Pura task page scroll hone ki jagah sirf chhota sa loading text flash hoga
+        for frame in loading_frames:
             try:
-                await context.bot._post("sendMessageDraft", {"chat_id": user.id, "draft_id": draft_id, "text": current})
+                await context.bot._post("sendMessageDraft", {"chat_id": user.id, "draft_id": draft_id, "text": frame})
             except AttributeError:
                 pass
-            await asyncio.sleep(speed)
+            await asyncio.sleep(0.05) # Bohot tezi se load hoga
 
-        # Final Permanent message (with image and buttons)
+        # Final Permanent message (with image and buttons) turant aa jayega
         return await send_final()
 
     except Exception as e:
