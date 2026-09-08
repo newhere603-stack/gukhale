@@ -498,12 +498,9 @@ async def bot_added_to_group_handler(update: Update, context: ContextTypes.DEFAU
         except Exception as e:
             LOGGER.error(f"Admin prompt bhejne mein error: {e}")
 
-# Handlers Register Karte Waqt (Fast Processing Ke Liye Block=False Rakha Hai)
-application.add_handler(CommandHandler("start", start, block=False))
+# Yahan start command ko group=1 mein daal diya hai
+application.add_handler(CommandHandler("start", start, block=False), group=1)
 application.add_handler(
     CallbackQueryHandler(button_callback, pattern=r"^sxc_", block=False)
 )
-# Ye trigger hoga jab bhi bot ko kisi naye group me add/remove kiya jayega
 application.add_handler(ChatMemberHandler(bot_added_to_group_handler, ChatMemberHandler.MY_CHAT_MEMBER, block=False))
-
-LOGGER.info("✓ Start module loaded successfully")
