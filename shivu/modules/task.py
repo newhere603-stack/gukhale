@@ -435,9 +435,9 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
     invite_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     raw_share_text = (
-        f"✨ {sc('STEP INTO THE ULTIMATE WAIFU BOT')} ✨\n\n"
-        f"🎴 {sc('COLLECT BEAUTIFUL WAIFUS PLAY GAMES AND EARN HUGE REWARDS')} 🎮\n"
-        f"🎁 {sc('JOIN USING MY LINK AND GET 10000 COINS FREE STARTING BONUS')} 💰\n\n"
+        f"✨ {sc('STEP INTO THE WAIFU BOT')} ✨\n\n"
+        f"🎴 {sc('COLLECT BEAUTIFUL WAIFUS PLAY GAMES AND EARN HUGE REWARDS')}\n"
+        f"🎁 {sc('JOIN USING MY LINK AND GET 10000 COINS FREE STARTING BONUS')}\n\n"
         f"🚀 {sc('TAP TO START')}: {invite_link}"
     )
     encoded_text = urllib.parse.quote(raw_share_text)
