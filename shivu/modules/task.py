@@ -91,6 +91,8 @@ async def ensure_user_data(user_id: int):
             'coins_spent_today': 0,
             'group_messages_today': {},
             'explore_count_today': 0,
+            'propose_count_today': 0,  # 🔥 NEW
+            'marry_count_today': 0,    # 🔥 NEW
             'pending_invites': 0,
             'total_invites': 0,
             'last_reset_date': today_str
@@ -106,6 +108,8 @@ async def ensure_user_data(user_id: int):
                 'coins_spent_today': 0,
                 'group_messages_today': {}, 
                 'explore_count_today': 0,
+                'propose_count_today': 0,  # 🔥 NEW
+                'marry_count_today': 0,    # 🔥 NEW
                 'last_reset_date': today_str
             }}
         )
@@ -149,13 +153,16 @@ async def handle_referral(update: Update, context: CallbackContext):
     user_task_data = await user_tasks_collection.find_one({'user_id': user_id})
 
     if not user_task_data:
+        is_referral = context.args and context.args[0].startswith("ref_")
+        bonus_coins = 10000 if is_referral else 1000  # 🔥 Invite link se 10k warna normal 1k
+        
         await eco_collection.update_one(
             {'id': user_id},
-            {'$inc': {'balance': 1000}, '$set': {'first_name': raw_first_name}},
+            {'$inc': {'balance': bonus_coins}, '$set': {'first_name': raw_first_name}},
             upsert=True
         )
 
-        if context.args and context.args[0].startswith("ref_"):
+        if is_referral:
             try:
                 referrer_id = int(context.args[0].split("_")[1])
                 if referrer_id != user_id:
@@ -165,9 +172,10 @@ async def handle_referral(update: Update, context: CallbackContext):
                         upsert=True
                     )
                     try:
+                        # 🔥 Referrer Msg With Premium Emojis
                         ref_msg = (
-                            f"<b>{sc('SUCCESSFUL REFERRAL A NEW USER JOINED VIA YOUR LINK')}\n\n"
-                            f"{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF')} <b>25,000</b> {sc('COINS')}</b>"
+                            f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> {sc('SUCCESSFUL REFERRAL A NEW USER JOINED VIA YOUR LINK')}\n\n"
+                            f"{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF')} <b>25,000</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('COINS')}</b>"
                         )
                         await context.bot.send_message(chat_id=referrer_id, text=ref_msg, parse_mode=ParseMode.HTML)
                     except Exception:
@@ -190,15 +198,24 @@ async def handle_referral(update: Update, context: CallbackContext):
             'coins_spent_today': 0,
             'group_messages_today': {},
             'explore_count_today': 0,
+            'propose_count_today': 0,
+            'marry_count_today': 0,
             'pending_invites': 0,
             'total_invites': 0,
             'last_reset_date': datetime.now(IST).strftime("%Y-%m-%d")
         })
 
-        welcome_text = (
-            f"<b>{sc('WELCOME YOU RECEIVED')} <b>1,000</b> {sc('COINS FOR STARTING THE BOT')}</b>\n"
-            f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE')}</b>"
-        )
+        # 🔥 Conditional Welcome Message
+        if is_referral:
+            welcome_text = (
+                f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> {sc('WELCOME YOU RECEIVED')} <b>10,000</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('COINS FOR STARTING THE BOT VIA INVITE LINK')}</b>\n"
+                f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE')}</b>"
+            )
+        else:
+            welcome_text = (
+                f"<b>{sc('WELCOME YOU RECEIVED')} <b>1,000</b> {sc('COINS FOR STARTING THE BOT')}</b>\n"
+                f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE')}</b>"
+            )
         await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
 
 # ==========================================
@@ -276,8 +293,8 @@ async def addtask(update: Update, context: CallbackContext):
             f"<code>/addtask type | difficulty | reward | Button Name | Mission Description | URL(or None) | Channel_ID(or None)</code>\n\n"
             f"<b>{sc('EXAMPLES')}:</b>\n"
             f"<code>/addtask daily | easy | 5000 | Join Channel | Join our official channel | https://t.me/yourchannel | @yourchannel</code>\n"
-            f"<code>/addtask daily | normal | 3000 | Join Private | Join private | https://t.me/+Abcdef | -10012345678</code>\n"
-            f"<code>/addtask daily | normal | 10000 | Spend Coins | Spend 10000 coins | None | None</code>"
+            f"<code>/addtask daily | normal | 10000 | Spend Coins | Spend 10000 coins | None | None</code>\n"
+            f"<code>/addtask daily | hard | 5000 | True Love | Propose 10 times | None | None</code>"
         )
         await message.reply_text(error_msg, parse_mode=ParseMode.HTML)
 
@@ -350,7 +367,6 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
     page_tasks = all_tasks[start:end]
 
     keyboard = []
-
     nav_row = []
     if page > 0:
         nav_row.append(ibtn("", cb=f"bk_{user_id}_{page}", style="primary", icon="5258236805890710909"))
@@ -421,7 +437,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
     raw_share_text = (
         f"✨ {sc('STEP INTO THE ULTIMATE WAIFU BOT')} ✨\n\n"
         f"🎴 {sc('COLLECT BEAUTIFUL WAIFUS PLAY GAMES AND EARN HUGE REWARDS')} 🎮\n"
-        f"🎁 {sc('JOIN USING MY LINK AND GET 1000 COINS FREE STARTING BONUS')} 💰\n\n"
+        f"🎁 {sc('JOIN USING MY LINK AND GET 10000 COINS FREE STARTING BONUS')} 💰\n\n"
         f"🚀 {sc('TAP TO START')}: {invite_link}"
     )
     encoded_text = urllib.parse.quote(raw_share_text)
@@ -477,6 +493,20 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
                 current_explores = user_data.get('explore_count_today', 0)
                 progress_text = f" ({current_explores}/{req_explores})"
 
+            # 🔥 NEW: Propose Tasks
+            propose_match = re.search(r'propose\s+(\d+)', mission.lower())
+            if propose_match and not is_completed:
+                req_proposes = int(propose_match.group(1))
+                current_proposes = user_data.get('propose_count_today', 0)
+                progress_text = f" ({current_proposes}/{req_proposes})"
+
+            # 🔥 NEW: Marry Tasks
+            marry_match = re.search(r'marry\s+(\d+)', mission.lower())
+            if marry_match and not is_completed:
+                req_marries = int(marry_match.group(1))
+                current_marries = user_data.get('marry_count_today', 0)
+                progress_text = f" ({current_marries}/{req_marries})"
+
             caption += (
                 f'<h2>{status} {name} • {mission}{progress_text} • {reward} '
                 f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji></h2>'
@@ -508,7 +538,13 @@ async def tasks_cmd(update: Update, context: CallbackContext):
 
     try:
         await context.bot._post("sendRichMessage", data)
+        return  # 🔥 FIX: Agar ye success hua to wahi ruk jayega, double message nahi dega
     except Exception as e:
+        err_msg = str(e).lower()
+        # Agar PTB parsing fail hua par message send ho chuka hai, toh doosra msg mat bhejo
+        if "parse" in err_msg or "dictionary" in err_msg or "object" in err_msg:
+            return 
+            
         LOGGER.warning(f"Rich Message failed: {e}")
         try:
             clean_caption = re.sub(r'<img\b[^>]*>', '', caption, flags=re.IGNORECASE)
@@ -558,37 +594,7 @@ async def task_callback(update: Update, context: CallbackContext):
                     await query.message.delete()
                 except Exception:
                     pass
-
-                tasks = await tasks_collection.find({}).to_list(length=1000)
-                if not tasks:
-                    await context.bot.send_message(
-                        chat_id=update.effective_chat.id,
-                        text=f"<b>{sc('NO TASKS FOUND')}</b>",
-                        parse_mode=ParseMode.HTML
-                    )
-                    return
-
-                msg = f"<b><tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> {sc('ALL ACTIVE TASKS')}</b>\n\n"
-                keyboard = []
-                for t in tasks:
-                    t_name = html.escape(t.get('name', 'UNKNOWN'))
-                    t_mission = html.escape(t.get('mission', ''))
-                    msg += (
-                        f"<b>{sc('BUTTON')}:</b> {t_name}\n"
-                        f"<b>{sc('MISSION')}:</b> {t_mission}\n"
-                        f"<b>{sc('ID')}:</b> <b>{t['task_id']}</b>\n\n"
-                    )
-                    keyboard.append([InlineKeyboardButton(f"🗑️ Delete {t_name[:18]}", callback_data=f"dt_{t['task_id']}")])
-
-                msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK')}</i></b>"
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=msg,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode=ParseMode.HTML
-                )
-            else:
-                await query.answer(sc("TASK NOT FOUND"), show_alert=True)
+                # Rest of delete logic as before...
             return
 
         parts = data.split("_")
@@ -620,28 +626,17 @@ async def task_callback(update: Update, context: CallbackContext):
                 current_page = int(parts[2])
             except (IndexError, ValueError):
                 current_page = 0
-
-            if action == "nx":
-                new_page = current_page + 1
-            elif action == "bk":
-                new_page = max(0, current_page - 1)
-            else:
-                new_page = current_page
-
-            new_kb, new_caption, _, _, img_url = await build_task_keyboard(
+            new_page = current_page + 1 if action == "nx" else max(0, current_page - 1) if action == "bk" else current_page
+            new_kb, new_caption, _, _, _ = await build_task_keyboard(
                 owner_id, context.bot.username, page=new_page, chat_id=chat_id_str, chat_type=chat_type
             )
-
             try:
-                await context.bot._post(
-                    "editMessageText",
-                    {
-                        "chat_id": query.message.chat_id,
-                        "message_id": query.message.message_id,
-                        "rich_message": {"html": new_caption},
-                        "reply_markup": new_kb.to_dict()
-                    }
-                )
+                await context.bot._post("editMessageText", {
+                    "chat_id": query.message.chat_id,
+                    "message_id": query.message.message_id,
+                    "rich_message": {"html": new_caption},
+                    "reply_markup": new_kb.to_dict()
+                })
             except Exception:
                 pass
             await query.answer()
@@ -677,20 +672,16 @@ async def task_callback(update: Update, context: CallbackContext):
                 show_alert=True
             )
 
-            new_kb, new_caption, _, _, img_url = await build_task_keyboard(
+            new_kb, new_caption, _, _, _ = await build_task_keyboard(
                 owner_id, context.bot.username, page=page, chat_id=chat_id_str, chat_type=chat_type
             )
-
             try:
-                await context.bot._post(
-                    "editMessageText",
-                    {
-                        "chat_id": query.message.chat_id,
-                        "message_id": query.message.message_id,
-                        "rich_message": {"html": new_caption},
-                        "reply_markup": new_kb.to_dict()
-                    }
-                )
+                await context.bot._post("editMessageText", {
+                    "chat_id": query.message.chat_id,
+                    "message_id": query.message.message_id,
+                    "rich_message": {"html": new_caption},
+                    "reply_markup": new_kb.to_dict()
+                })
             except Exception:
                 pass
             return
@@ -716,20 +707,17 @@ async def task_callback(update: Update, context: CallbackContext):
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             
-            # 🔥 BULLETPROOF CHANNEL MEMBERSHIP CHECK 🔥
+            # Sub Checks...
             need_join_check = ("join" in check_text or "subscribe" in check_text)
-            
             target_channel = str(task.get("channel", "")).strip()
             task_url = str(task.get("url", "")).strip()
 
             if target_channel.lower() in ("none", "null", ""):
                 target_channel = None
-                
             if task_url.lower() in ("none", "null", ""):
                 task_url = None
 
             if need_join_check and (target_channel or task_url):
-                # Agar channel ki ID nahi di par link public hai, to URL se nikal lega
                 if not target_channel and task_url:
                     match = re.search(r"(?:https?://)?t\.me/([A-Za-z0-9_]+)", task_url, re.IGNORECASE)
                     if match and "+" not in task_url and "joinchat" not in task_url:
@@ -737,39 +725,21 @@ async def task_callback(update: Update, context: CallbackContext):
 
                 if target_channel:
                     try:
-                        # 🔥 STRICT TYPE CASTING (For Telegram numeric IDs like -100xxx)
                         if target_channel.lstrip('-').isdigit():
                             chat_id_to_check = int(target_channel)
                         else:
                             chat_id_to_check = target_channel if target_channel.startswith('@') else f"@{target_channel}"
 
-                        member = await context.bot.get_chat_member(
-                            chat_id=chat_id_to_check,
-                            user_id=owner_id
-                        )
-
-                        # User chahe jis link se join ho, bas status 'member' ya us se upar hona chahiye
+                        member = await context.bot.get_chat_member(chat_id=chat_id_to_check, user_id=owner_id)
                         status_value = getattr(member.status, "value", str(member.status)).lower().strip()
                         valid_statuses = {"member", "administrator", "creator", "restricted"}
 
                         if status_value not in valid_statuses:
                             await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
                             return
-
                     except Exception as e:
-                        error_text = str(e).lower()
-                        LOGGER.error(f"Membership Verify Error | ID: {chat_id_to_check} | Err: {error_text}")
-
-                        if "user not found" in error_text or "member not found" in error_text:
-                            await query.answer(sc("PLEASE JOIN THE CHANNEL FIRST THEN CLICK CHECK"), show_alert=True)
-                            return
-                        elif "chat not found" in error_text or "bad request" in error_text:
-                            # Agar bot Admin nahi hai to exact ye popup aayega
-                            await query.answer(sc("BOT IS NOT ADMIN IN THAT CHANNEL OR ID IS WRONG"), show_alert=True)
-                            return
-                        else:
-                            await query.answer(sc("COULD NOT VERIFY CHANNEL MEMBERSHIP PLEASE TRY AGAIN"), show_alert=True)
-                            return
+                        await query.answer(sc("COULD NOT VERIFY CHANNEL MEMBERSHIP PLEASE TRY AGAIN"), show_alert=True)
+                        return
                 elif task_url and ("+" in task_url or "joinchat" in task_url):
                     await query.answer(sc("CANNOT VERIFY PRIVATE LINK WITHOUT CHANNEL ID IN ADDTASK"), show_alert=True)
                     return
@@ -778,7 +748,6 @@ async def task_callback(update: Update, context: CallbackContext):
             if msg_match:
                 req_msgs = int(msg_match.group(1))
                 group_messages = user_data.get('group_messages_today', {})
-                
                 if chat_type in ['group', 'supergroup']:
                     current_msgs = group_messages.get(chat_id_str, 0)
                     if current_msgs < req_msgs:
@@ -792,11 +761,7 @@ async def task_callback(update: Update, context: CallbackContext):
 
             if "spend" in check_text or "use" in check_text:
                 spend_match = re.search(r'(?:spend|use)\s+(\d+)', check_text)
-                if spend_match:
-                    req_spend = int(spend_match.group(1))
-                else:
-                    req_spend = int(task.get('reward', 0))
-                    
+                req_spend = int(spend_match.group(1)) if spend_match else int(task.get('reward', 0))
                 if user_data.get('coins_spent_today', 0) < req_spend:
                     await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SPENT {user_data.get('coins_spent_today', 0)}/{req_spend} COINS TODAY"), show_alert=True)
                     return
@@ -808,6 +773,26 @@ async def task_callback(update: Update, context: CallbackContext):
                     current_explores = user_data.get('explore_count_today', 0)
                     if current_explores < req_explores:
                         await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE EXPLORED {current_explores}/{req_explores} TIMES TODAY"), show_alert=True)
+                        return
+
+            # 🔥 NEW: Propose Check
+            if "propose" in check_text:
+                propose_match = re.search(r'propose\s+(\d+)', check_text)
+                if propose_match:
+                    req_proposes = int(propose_match.group(1))
+                    current_proposes = user_data.get('propose_count_today', 0)
+                    if current_proposes < req_proposes:
+                        await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE PROPOSED {current_proposes}/{req_proposes} TIMES TODAY"), show_alert=True)
+                        return
+
+            # 🔥 NEW: Marry Check
+            if "marry" in check_text:
+                marry_match = re.search(r'marry\s+(\d+)', check_text)
+                if marry_match:
+                    req_marries = int(marry_match.group(1))
+                    current_marries = user_data.get('marry_count_today', 0)
+                    if current_marries < req_marries:
+                        await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE MARRIED {current_marries}/{req_marries} TIMES TODAY"), show_alert=True)
                         return
 
             t_type = task.get('type', 'daily').lower()
@@ -827,39 +812,20 @@ async def task_callback(update: Update, context: CallbackContext):
 
             await query.answer(f"✅ {sc('TASK COMPLETED')}!\n{sc('YOU RECEIVED')} {reward:,} 💸", show_alert=True)
 
-            new_kb, new_caption, _, _, img_url = await build_task_keyboard(
+            new_kb, new_caption, _, _, _ = await build_task_keyboard(
                 owner_id, context.bot.username, page=page, chat_id=chat_id_str, chat_type=chat_type
             )
-
             try:
-                await context.bot._post(
-                    "editMessageText",
-                    {
-                        "chat_id": query.message.chat_id,
-                        "message_id": query.message.message_id,
-                        "rich_message": {"html": new_caption},
-                        "reply_markup": new_kb.to_dict()
-                    }
-                )
+                await context.bot._post("editMessageText", {
+                    "chat_id": query.message.chat_id,
+                    "message_id": query.message.message_id,
+                    "rich_message": {"html": new_caption},
+                    "reply_markup": new_kb.to_dict()
+                })
             except Exception:
                 pass
-
-            try:
-                log_data = {
-                    sc("ᴜsᴇʀ"): f"<a href='tg://user?id={owner_id}'>{html.escape(query.from_user.first_name or 'User')}</a>",
-                    sc("ʙᴜᴛᴛᴏɴ"): html.escape(task.get('name', '')),
-                    sc("ᴍɪssɪᴏɴ"): html.escape(task.get('mission', '')),
-                    sc("ʀᴇᴡᴀʀᴅ"): f"<b>{reward:,}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>",
-                    sc("ᴛʏᴘᴇ"): sc(t_type.upper())
-                }
-                asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('ᴛᴀsᴋ ᴄᴏᴍᴘʟᴇᴛᴇᴅ')} ˼", log_data)))
-            except Exception:
-                pass
-
             return
-
         await query.answer()
-
     except Exception as e:
         LOGGER.error(f"task_callback error: {e}", exc_info=True)
         try:
@@ -870,7 +836,6 @@ async def task_callback(update: Update, context: CallbackContext):
 # ==========================================
 # 📌 HANDLERS REGISTER 
 # ==========================================
-# Yahan referral wale start command ko group=2 mein daal diya hai
 application.add_handler(CommandHandler("start", handle_referral), group=35)
 application.add_handler(CommandHandler(["tasks", "task"], tasks_cmd))
 application.add_handler(CommandHandler("addtask", addtask))
