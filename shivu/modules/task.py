@@ -319,7 +319,7 @@ async def tasklist(update: Update, context: CallbackContext):
                 f"<b>{sc('ID')}:</b> <b>{t_id}</b>\n"
                 f"<b>{sc('CH')}:</b> {t_channel}\n\n"
             )
-            keyboard.append([InlineKeyboardButton(f"🗑️ Delete {t_name[:18]}", callback_data=f"dt_{t_id}")])
+            keyboard.append([InlineKeyboardButton(f"🗑️ {sc('Delete')} {sc(t_name[:18])}", callback_data=f"dt_{t_id}")])
 
         msg += f"<b><i>{sc('CLICK THE BUTTON BELOW TO DELETE A TASK')}</i></b>"
         await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=ParseMode.HTML)
@@ -460,13 +460,13 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
                 raw_url = f"https://{raw_url}"
                 
             if raw_url.startswith(('http://', 'https://', 'tg://')):
-                row.append(ibtn(name_text, url=raw_url, style=btn_style))
+                row.append(ibtn(sc(name_text), url=raw_url, style=btn_style))
             else:
-                row.append(ibtn(name_text, cb=f"ign_{user_id}", style=btn_style))
+                row.append(ibtn(sc(name_text), cb=f"ign_{user_id}", style=btn_style))
         else:
-            row.append(ibtn(name_text, cb=f"ign_{user_id}", style=btn_style))
+            row.append(ibtn(sc(name_text), cb=f"ign_{user_id}", style=btn_style))
 
-        row.append(ibtn(reward_text, cb=f"ign_{user_id}", style=btn_style, icon="5472030678633684592"))
+        row.append(ibtn(sc(reward_text), cb=f"ign_{user_id}", style=btn_style, icon="5472030678633684592"))
 
         if is_completed:
             row.append(ibtn("", cb=f"ign_{user_id}", style="success", icon="6100397639717625616"))
@@ -485,13 +485,13 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
             f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji></h2>'
         )
 
-    # 🔥 INVITES WALI LINE (Jaise thi waise hi)
+    # 🔥 INVITES WALI LINE
     invite_claim_text = sc('claim') if pending_invites > 0 else sc('check')
     invite_style = "primary"
 
     keyboard.append([
         ibtn(sc('invites'), cb=f"ign_{user_id}"),
-        ibtn("25,000", cb=f"ign_{user_id}", icon="5472030678633684592"),
+        ibtn(sc("25,000"), cb=f"ign_{user_id}", icon="5472030678633684592"),
         ibtn(invite_claim_text, cb=f"ci_{user_id}_{page}", style=invite_style)
     ])
 
