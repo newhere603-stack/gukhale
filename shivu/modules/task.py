@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 IST = timezone(timedelta(hours=5, minutes=30))
 OWNER_ID = 7657218453
 LOG_GROUP_ID = -1003893927065
-TASKS_PER_PAGE = 5
+TASKS_PER_PAGE = 4  # 🔥 Ek page mein ab 4 tasks hi aayenge
 
 tasks_collection = db['bot_tasks']
 user_tasks_collection = db['user_tasks']
@@ -91,8 +91,8 @@ async def ensure_user_data(user_id: int):
             'coins_spent_today': 0,
             'group_messages_today': {},
             'explore_count_today': 0,
-            'propose_count_today': 0,  # 🔥 NEW
-            'marry_count_today': 0,    # 🔥 NEW
+            'propose_count_today': 0,  
+            'marry_count_today': 0,    
             'pending_invites': 0,
             'total_invites': 0,
             'last_reset_date': today_str
@@ -108,8 +108,8 @@ async def ensure_user_data(user_id: int):
                 'coins_spent_today': 0,
                 'group_messages_today': {}, 
                 'explore_count_today': 0,
-                'propose_count_today': 0,  # 🔥 NEW
-                'marry_count_today': 0,    # 🔥 NEW
+                'propose_count_today': 0,  
+                'marry_count_today': 0,    
                 'last_reset_date': today_str
             }}
         )
@@ -154,7 +154,7 @@ async def handle_referral(update: Update, context: CallbackContext):
 
     if not user_task_data:
         is_referral = context.args and context.args[0].startswith("ref_")
-        bonus_coins = 10000 if is_referral else 1000  # 🔥 Invite link se 10k warna normal 1k
+        bonus_coins = 10000 if is_referral else 1000  
         
         await eco_collection.update_one(
             {'id': user_id},
@@ -172,7 +172,6 @@ async def handle_referral(update: Update, context: CallbackContext):
                         upsert=True
                     )
                     try:
-                        # 🔥 Referrer Msg With Premium Emojis
                         ref_msg = (
                             f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> {sc('SUCCESSFUL REFERRAL A NEW USER JOINED VIA YOUR LINK')}\n\n"
                             f"{sc('USE')} /tasks {sc('TO CLAIM YOUR REWARD OF')} <b>25,000</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('COINS')}</b>"
@@ -205,7 +204,6 @@ async def handle_referral(update: Update, context: CallbackContext):
             'last_reset_date': datetime.now(IST).strftime("%Y-%m-%d")
         })
 
-        # 🔥 Conditional Welcome Message
         if is_referral:
             welcome_text = (
                 f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> {sc('WELCOME YOU RECEIVED')} <b>10,000</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('COINS FOR STARTING THE BOT VIA INVITE LINK')}</b>\n"
@@ -382,12 +380,17 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
     keyboard.append(nav_row)
 
+    caption_lines = []
+
+    # 🔥 LOOP START: Yaha dono keyboard button text aur caption text ek hi sath evaluate honge
     for task in page_tasks:
         t_id = task['task_id']
         is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
         difficulty = task.get('difficulty', 'normal').lower()
         
         name_text = sc(task.get('name', 'Task'))
+        mission = str(task.get('mission', task.get('name', 'Task')))
+        check_text = (str(task.get('name', '')) + " " + mission).lower()
         reward_text = f"{int(task.get('reward', 0)):,}"
 
         if is_completed:
@@ -399,8 +402,56 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
         else:
             btn_style = None
 
-        row = []
+        progress_text = ""
+        has_measurable = False
+        all_met = True
 
+        msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', check_text)
+        if msg_match and not is_completed:
+            has_measurable = True
+            req_msgs = int(msg_match.group(1))
+            if chat_type in ['group', 'supergroup'] and chat_id:
+                current_msgs = user_data.get('group_messages_today', {}).get(str(chat_id), 0)
+                progress_text += f" ({current_msgs}/{req_msgs})"
+                if current_msgs < req_msgs: all_met = False
+            else:
+                max_msgs = max(user_data.get('group_messages_today', {}).values()) if user_data.get('group_messages_today') else 0
+                progress_text += f" ({max_msgs}/{req_msgs})"
+                if max_msgs < req_msgs: all_met = False
+
+        spend_match = re.search(r'(?:spend|use)\s+(\d+)', check_text)
+        if spend_match and not is_completed:
+            has_measurable = True
+            req_spend = int(spend_match.group(1))
+            current_spend = user_data.get('coins_spent_today', 0)
+            if not progress_text: progress_text += f" ({current_spend}/{req_spend})"
+            if current_spend < req_spend: all_met = False
+
+        explore_match = re.search(r'explore\s+(\d+)', check_text)
+        if explore_match and not is_completed:
+            has_measurable = True
+            req_explores = int(explore_match.group(1))
+            current_explores = user_data.get('explore_count_today', 0)
+            if not progress_text: progress_text += f" ({current_explores}/{req_explores})"
+            if current_explores < req_explores: all_met = False
+
+        propose_match = re.search(r'propose\s+(\d+)', check_text)
+        if propose_match and not is_completed:
+            has_measurable = True
+            req_proposes = int(propose_match.group(1))
+            current_proposes = user_data.get('propose_count_today', 0)
+            if not progress_text: progress_text += f" ({current_proposes}/{req_proposes})"
+            if current_proposes < req_proposes: all_met = False
+
+        marry_match = re.search(r'marry\s+(\d+)', check_text)
+        if marry_match and not is_completed:
+            has_measurable = True
+            req_marries = int(marry_match.group(1))
+            current_marries = user_data.get('marry_count_today', 0)
+            if not progress_text: progress_text += f" ({current_marries}/{req_marries})"
+            if current_marries < req_marries: all_met = False
+
+        row = []
         raw_url = str(task.get('url', '')).strip()
         if raw_url and not is_completed and raw_url.lower() not in ("none", "null"):
             if raw_url.startswith('@'):
@@ -420,10 +471,21 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
         if is_completed:
             row.append(ibtn("", cb=f"ign_{user_id}", style="success", icon="6100397639717625616"))
         else:
-            row.append(ibtn(sc("check"), cb=f"vt_{user_id}_{t_id}_{page}", style=btn_style))
+            # 🔥 Agar mission mein progress nikal gaya aur complete ho gaya, to CLAIM show karega
+            action_text = sc("claim") if (has_measurable and all_met) else sc("check")
+            row.append(ibtn(action_text, cb=f"vt_{user_id}_{t_id}_{page}", style=btn_style))
 
         keyboard.append(row)
 
+        status = '<tg-emoji emoji-id="6100397639717625616">✔️</tg-emoji>' if is_completed else '<tg-emoji emoji-id="6309702258023994825">🌟</tg-emoji>'
+        escaped_name = html.escape(name_text)
+        escaped_mission = html.escape(mission)
+        caption_lines.append(
+            f'<h2>{status} {escaped_name} • {escaped_mission}{progress_text} • {reward_text} '
+            f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji></h2>'
+        )
+
+    # 🔥 INVITES WALI LINE (Jaise thi waise hi)
     invite_claim_text = sc('claim') if pending_invites > 0 else sc('check')
     invite_style = "primary"
 
@@ -461,56 +523,8 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
     if not page_tasks:
         caption += f'\n<b>{sc("NO TASKS ON THIS PAGE")}</b>'
     else:
-        for task in page_tasks:
-            t_id = task['task_id']
-            is_completed = (t_id in completed_daily or t_id in completed_onetime)
-
-            status = '<tg-emoji emoji-id="6100397639717625616">✔️</tg-emoji>' if is_completed else '<tg-emoji emoji-id="6309702258023994825">🌟</tg-emoji>'
-            name = html.escape(str(task.get('name', 'Task')))
-            mission = html.escape(str(task.get('mission', task.get('name', 'Task'))))
-            reward = f"{int(task.get('reward', 0)):,}"
-            
-            progress_text = ""
-            msg_match = re.search(r'(?:send|chat|message|msg)\s+(\d+)', mission.lower())
-            if msg_match and not is_completed:
-                req_msgs = int(msg_match.group(1))
-                if chat_type in ['group', 'supergroup'] and chat_id:
-                    current_msgs = user_data.get('group_messages_today', {}).get(str(chat_id), 0)
-                    progress_text = f" ({current_msgs}/{req_msgs})"
-                else:
-                    max_msgs = max(user_data.get('group_messages_today', {}).values()) if user_data.get('group_messages_today') else 0
-                    progress_text = f" ({max_msgs}/{req_msgs})"
-
-            spend_match = re.search(r'(?:spend|use)\s+(\d+)', mission.lower())
-            if spend_match and not is_completed:
-                req_spend = int(spend_match.group(1))
-                current_spend = user_data.get('coins_spent_today', 0)
-                progress_text = f" ({current_spend}/{req_spend})"
-
-            explore_match = re.search(r'explore\s+(\d+)', mission.lower())
-            if explore_match and not is_completed:
-                req_explores = int(explore_match.group(1))
-                current_explores = user_data.get('explore_count_today', 0)
-                progress_text = f" ({current_explores}/{req_explores})"
-
-            # 🔥 NEW: Propose Tasks
-            propose_match = re.search(r'propose\s+(\d+)', mission.lower())
-            if propose_match and not is_completed:
-                req_proposes = int(propose_match.group(1))
-                current_proposes = user_data.get('propose_count_today', 0)
-                progress_text = f" ({current_proposes}/{req_proposes})"
-
-            # 🔥 NEW: Marry Tasks
-            marry_match = re.search(r'marry\s+(\d+)', mission.lower())
-            if marry_match and not is_completed:
-                req_marries = int(marry_match.group(1))
-                current_marries = user_data.get('marry_count_today', 0)
-                progress_text = f" ({current_marries}/{req_marries})"
-
-            caption += (
-                f'<h2>{status} {name} • {mission}{progress_text} • {reward} '
-                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji></h2>'
-            )
+        for line in caption_lines:
+            caption += line
 
     return InlineKeyboardMarkup(keyboard), caption, page, total_pages, img_url
 
@@ -538,10 +552,9 @@ async def tasks_cmd(update: Update, context: CallbackContext):
 
     try:
         await context.bot._post("sendRichMessage", data)
-        return  # 🔥 FIX: Agar ye success hua to wahi ruk jayega, double message nahi dega
+        return  
     except Exception as e:
         err_msg = str(e).lower()
-        # Agar PTB parsing fail hua par message send ho chuka hai, toh doosra msg mat bhejo
         if "parse" in err_msg or "dictionary" in err_msg or "object" in err_msg:
             return 
             
@@ -594,7 +607,6 @@ async def task_callback(update: Update, context: CallbackContext):
                     await query.message.delete()
                 except Exception:
                     pass
-                # Rest of delete logic as before...
             return
 
         parts = data.split("_")
@@ -707,7 +719,6 @@ async def task_callback(update: Update, context: CallbackContext):
 
             check_text = (str(task.get('name', '')) + " " + str(task.get('mission', ''))).lower()
             
-            # Sub Checks...
             need_join_check = ("join" in check_text or "subscribe" in check_text)
             target_channel = str(task.get("channel", "")).strip()
             task_url = str(task.get("url", "")).strip()
@@ -775,7 +786,6 @@ async def task_callback(update: Update, context: CallbackContext):
                         await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE EXPLORED {current_explores}/{req_explores} TIMES TODAY"), show_alert=True)
                         return
 
-            # 🔥 NEW: Propose Check
             if "propose" in check_text:
                 propose_match = re.search(r'propose\s+(\d+)', check_text)
                 if propose_match:
@@ -785,7 +795,6 @@ async def task_callback(update: Update, context: CallbackContext):
                         await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE PROPOSED {current_proposes}/{req_proposes} TIMES TODAY"), show_alert=True)
                         return
 
-            # 🔥 NEW: Marry Check
             if "marry" in check_text:
                 marry_match = re.search(r'marry\s+(\d+)', check_text)
                 if marry_match:
