@@ -314,11 +314,17 @@ async def _ensure_user(user_id, first_name, username):
         return False
 
 
+# 🔥 LOG SENDING ERROR FIXED HERE
 async def safe_track_bot_start(user_id, first_name, username, is_new_user):
     try:
         from shivu.modules.chatlog import track_bot_start
+        
+        # Chatlog module bhejte time bhi HTML escape lagana padega taaki track_bot_start fail na ho
+        safe_fname = html.escape(first_name)
+        safe_uname = html.escape(username)
+        
         await asyncio.wait_for(
-            track_bot_start(user_id, first_name, username, is_new_user),
+            track_bot_start(user_id, safe_fname, safe_uname, is_new_user),
             timeout=5.0,
         )
     except asyncio.TimeoutError:
@@ -482,7 +488,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         LOGGER.error(f"Error in button callback: {e}", exc_info=True)
         try:
             await query.answer(
-                "⚠️ ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.", show_alert=True
+                "ᴀɴ ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.", show_alert=True
             )
         except Exception:
             pass
