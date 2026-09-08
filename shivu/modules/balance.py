@@ -39,105 +39,104 @@ async def get_or_init_user(uid: int):
 
 
 # ==========================================================
-# ✨ TELEGRAM LIVE TEXT ANIMATION
+# ✨ TELEGRAM LIVE TEXT ANIMATION (FIXED)
 # ==========================================================
 
-async def animated_text(
-    bot,
-    chat_id: int,
+async def animated_reply(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    draft_text: str,
     final_text: str,
-    parse_mode: str = "HTML",
-    speed: float = 0.08
+    speed: float = 0.12
 ):
     """
     Telegram Live Text Animation.
 
-    Private chat mein text gradually appear hoga.
-    End mein normal permanent message send hoga.
-    Groups/channels mein fail hone par automatically normal message bhejega.
+    Draft:
+        Plain text only, so HTML parsing never breaks.
+
+    Final:
+        Proper HTML formatted reply to the user's command.
     """
+    message = update.effective_message
+    user = update.effective_user
+
+    if not message or not user:
+        return
+
+    # sendMessageDraft ONLY works for private chats. Group mein direct reply dega.
+    if update.effective_chat.type != "private":
+        return await message.reply_text(
+            final_text,
+            parse_mode="HTML"
+        )
+
+    # Must be non-zero and SAME throughout the animation.
     draft_id = random.randint(1, 2_000_000_000)
 
     try:
-        # Text ko reasonable chunks mein divide karo. (Flood limit bachane ke liye)
-        chunk_size = 4
+        # -----------------------------------------
+        # STREAMING TEXT
+        # -----------------------------------------
+        # Small chunks = smoother animation.
+        chunk_size = 2
 
-        # ------------------------------------------
-        # FIRST DRAFT
-        # ------------------------------------------
-        current_text = final_text[:chunk_size]
+        # First visible part
+        current = draft_text[:chunk_size]
 
         try:
-            # New PTB versions
-            await bot.send_message_draft(
-                chat_id=chat_id,
-                draft_id=draft_id,
-                text=current_text,
-                parse_mode=parse_mode
-            )
-        except AttributeError:
-            # Older/custom PTB fallback
-            await bot._post(
+            await context.bot._post(
                 "sendMessageDraft",
                 {
-                    "chat_id": chat_id,
+                    "chat_id": user.id,
                     "draft_id": draft_id,
-                    "text": current_text,
-                    "parse_mode": parse_mode
+                    "text": current
                 }
             )
+        except AttributeError:
+            pass # Ignore if method not supported in older PTB versions
 
-        # ------------------------------------------
-        # STREAM THE TEXT
-        # ------------------------------------------
-        for i in range(chunk_size, len(final_text), chunk_size):
-            current_text = final_text[:i + chunk_size]
+        await asyncio.sleep(speed)
+
+        # Continue with SAME draft_id
+        for i in range(chunk_size, len(draft_text), chunk_size):
+            current = draft_text[:i + chunk_size]
 
             try:
-                await bot.send_message_draft(
-                    chat_id=chat_id,
-                    draft_id=draft_id,
-                    text=current_text,
-                    parse_mode=parse_mode
-                )
-            except AttributeError:
-                await bot._post(
+                await context.bot._post(
                     "sendMessageDraft",
                     {
-                        "chat_id": chat_id,
+                        "chat_id": user.id,
                         "draft_id": draft_id,
-                        "text": current_text,
-                        "parse_mode": parse_mode
+                        "text": current
                     }
                 )
+            except AttributeError:
+                pass
 
-            # Animation speed
             await asyncio.sleep(speed)
 
-        # ------------------------------------------
-        # FINAL PERMANENT MESSAGE
-        # ------------------------------------------
-        return await bot.send_message(
-            chat_id=chat_id,
-            text=final_text,
-            parse_mode=parse_mode
+        # -----------------------------------------
+        # FINAL PERMANENT REPLY
+        # -----------------------------------------
+        return await message.reply_text(
+            final_text,
+            parse_mode="HTML"
         )
 
     except Exception as e:
-        LOGGER.warning(f"Animated text failed for {chat_id}: {e}")
+        LOGGER.warning(f"Live text animation failed for {user.id}: {e}")
 
-        # ------------------------------------------
+        # -----------------------------------------
         # SAFE FALLBACK
-        # ------------------------------------------
-        # Animation fail ho jaye to bot ka command kabhi break nahi hoga.
+        # -----------------------------------------
         try:
-            return await bot.send_message(
-                chat_id=chat_id,
-                text=final_text,
-                parse_mode=parse_mode
+            return await message.reply_text(
+                final_text,
+                parse_mode="HTML"
             )
         except Exception as final_error:
-            LOGGER.error(f"Final message also failed for {chat_id}: {final_error}")
+            LOGGER.error(f"Animated reply fallback failed: {final_error}")
             return None
 
 
@@ -146,11 +145,10 @@ async def animated_text(
 # ==========================================================
 
 async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or not update.message or not update.effective_chat:
+    if not update.effective_user or not update.message:
         return
 
     uid = update.effective_user.id
-    chat_id = update.effective_chat.id
 
     try:
         user = await get_or_init_user(uid)
@@ -169,18 +167,16 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         balance = user.get("balance", 0) if user else 0
         
-        balance_text = (
-            f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji> '
-            f'<b>ʙᴀʟᴀɴᴄᴇ: <code>{balance:,}</code></b>'
-        )
-
-        # Private chat mein animated live text, fail hone par automatically normal message.
-        await animated_text(
-            bot=context.bot,
-            chat_id=chat_id,
-            final_text=balance_text,
-            parse_mode="HTML",
-            speed=0.08
+        # Animated reply call
+        await animated_reply(
+            update=update,
+            context=context,
+            draft_text=f"💸 ʙᴀʟᴀɴᴄᴇ: {balance:,}",
+            final_text=(
+                f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji> '
+                f'<b>ʙᴀʟᴀɴᴄᴇ: <code>{balance:,}</code></b>'
+            ),
+            speed=0.12
         )
         
     except Exception as e:
@@ -199,11 +195,10 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================================
 
 async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or not update.message or not update.effective_chat:
+    if not update.effective_user or not update.message:
         return
 
     uid = update.effective_user.id
-    chat_id = update.effective_chat.id
 
     try:
         user = await get_or_init_user(uid)
@@ -222,18 +217,16 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         tokens = user.get("tokens", 0) if user else 0
 
-        tokens_text = (
-            f'<tg-emoji emoji-id="6332379101231323246">💠</tg-emoji> '
-            f'<b>ᴛᴏᴋᴇɴs: <code>{tokens:,}</code></b>'
-        )
-
-        # Private chat mein animated live text, fail hone par automatically normal message.
-        await animated_text(
-            bot=context.bot,
-            chat_id=chat_id,
-            final_text=tokens_text,
-            parse_mode="HTML",
-            speed=0.08
+        # Animated reply call
+        await animated_reply(
+            update=update,
+            context=context,
+            draft_text=f"💠 ᴛᴏᴋᴇɴs: {tokens:,}",
+            final_text=(
+                f'<tg-emoji emoji-id="6332379101231323246">💠</tg-emoji> '
+                f'<b>ᴛᴏᴋᴇɴs: <code>{tokens:,}</code></b>'
+            ),
+            speed=0.12
         )
         
     except Exception as e:
@@ -255,4 +248,4 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application.add_handler(CommandHandler(["bal", "balance", "coins", "coin"], balance_cmd, block=False))
 application.add_handler(CommandHandler(["tokens", "tbal", "token"], tokens_cmd, block=False))
 
-LOGGER.info("✓ Balance & Tokens module loaded successfully (Live Text Animation Enabled)")
+LOGGER.info("✓ Balance & Tokens module loaded successfully (Live Text Animation Fix Applied)")
