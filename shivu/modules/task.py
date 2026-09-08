@@ -527,7 +527,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
 
 # ==========================================
-# ✨ TELEGRAM LIVE TEXT ANIMATION FOR TASKS
+# ✨ TELEGRAM LIVE TEXT ANIMATION (SUPERFAST)
 # ==========================================
 async def animated_task_reply(
     update: Update,
@@ -537,8 +537,7 @@ async def animated_task_reply(
     img_url: str
 ):
     """
-    Task menu ke liye Fast Animation Helper.
-    Draft stream plain text me karega, end me RichMessage (photo/button) bhejega.
+    Task menu ke liye SUPERFAST Animation Helper.
     """
     message = update.effective_message
     user = update.effective_user
@@ -597,8 +596,10 @@ async def animated_task_reply(
     draft_text = re.sub(r'<[^>]+>', '', caption).strip()
     
     draft_id = random.randint(1, 2_000_000_000)
-    speed = 0.04   # Super Fast
-    chunk_size = 4
+    
+    # 🔥 YE HAI SUPERFAST UPGRADE 🔥
+    speed = 0.02   # Pehle 0.04 tha, ab aur bhi fast (almost minimum delay)
+    chunk_size = 8 # Pehle 4 tha, ab doguna zyada text ek baar me aayega
 
     try:
         current = draft_text[:chunk_size]
