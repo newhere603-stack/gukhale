@@ -113,9 +113,10 @@ def get_main_caption(user_id: int, first_name: str) -> str:
         f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
     )
 
-# Robust Force Sub Checker
+# 🔥 FULLY FIXED Robust Force Sub Checker
 async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
+        # Group mein Force Sub check karne ki jarurat nahi hoti private me karni hai
         if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
             return True
 
@@ -130,14 +131,23 @@ async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE
         member = await context.bot.get_chat_member(
             chat_id=chat_identifier, user_id=user_id
         )
-        return member.status in [ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]
+        
+        # Agar user ban ho chuka hai ya left kar chuka hai toh False
+        if member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
+            return False
+            
+        # Baaki sab valid hain (MEMBER, RESTRICTED, ADMINISTRATOR, OWNER)
+        return True
 
     except BadRequest as e:
+        # User not found ka error matlab user ne join nahi kiya hai
+        if "User not found" in str(e) or "Participant_id_invalid" in str(e):
+            return False
         LOGGER.warning(f"Force-sub BadRequest for user: {e}")
-        return True
+        return False # Agar error aaya toh safe side ke liye subscribe bolo
     except Exception as e:
         LOGGER.error(f"Force-sub error: {e}")
-        return True
+        return False
 
 
 def menu_view():
@@ -220,7 +230,6 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
 # 🔥 SUPERFAST DUAL DATABASE UPSERT
 async def _ensure_user(user_id, first_name, username):
     try:
-        # DB se fetch parallel karwao jisse double wait na karna pade
         char_task = user_collection.find_one({"id": user_id}, {"bot_started": 1})
         eco_task = eco_collection.find_one({"id": user_id}, {"bot_started": 1})
         char_doc, eco_doc = await asyncio.gather(char_task, eco_task)
@@ -293,9 +302,7 @@ async def _ensure_user(user_id, first_name, username):
                 )
             )
 
-        # Data updates ek sath execute honge for max speed
         await asyncio.gather(*update_tasks)
-        
         return is_new_user
     except Exception as e:
         LOGGER.error(f"Error in _ensure_user DB query: {e}")
@@ -305,7 +312,6 @@ async def _ensure_user(user_id, first_name, username):
 async def safe_track_bot_start(user_id, first_name, username, is_new_user):
     try:
         from shivu.modules.chatlog import track_bot_start
-
         await asyncio.wait_for(
             track_bot_start(user_id, first_name, username, is_new_user),
             timeout=5.0,
@@ -313,9 +319,7 @@ async def safe_track_bot_start(user_id, first_name, username, is_new_user):
     except asyncio.TimeoutError:
         LOGGER.warning(f"track_bot_start timed out for user {user_id}")
     except ImportError:
-        LOGGER.warning(
-            "chatlog module not available, skipping bot start tracking"
-        )
+        LOGGER.warning("chatlog module not available, skipping bot start tracking")
     except Exception as e:
         LOGGER.error(f"Error in safe_track_bot_start: {e}")
 
@@ -330,11 +334,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_name = update.effective_user.first_name or "User"
         username = update.effective_user.username or ""
 
-        # 🔥 FAST ADMIN CHECK: Agar group mein start trigger ho to verify karo ki bot admin hai ya nahi
+        # 🔥 FAST ADMIN CHECK FIX: OWNER status bhi add kiya
         if update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             try:
                 bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
-                if bot_member.status != ChatMemberStatus.ADMINISTRATOR:
+                if bot_member.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ!</b>",
@@ -343,7 +347,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ", url=ADMIN_RIGHTS_LINK)]
                         ])
                     )
-                    return # Aage ka koi action nahi hoga, bas yehi message bolega
+                    return 
             except Exception as e:
                 LOGGER.error(f"Error checking admin status inside group: {e}")
                 return
@@ -369,7 +373,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 safe_track_bot_start(user_id, first_name, username, is_new)
             )
 
-        # 🔥 FIX: Agar deep link (start payload) mein 'buy_tokens' hai toh aage ka start video mat bhejo, yahan se exit lelo.
+        # 🔥 FIX: Deep link bypass for 'buy_tokens'
         if context.args and context.args[0] == 'buy_tokens':
             return
 
@@ -478,13 +482,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-# 🔥 NEW: Agar bot direct group mein bina admin banaye add hua, toh message drop karega
 async def bot_added_to_group_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     result = update.my_chat_member
     if not result or result.chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
         return
 
-    # Jab naya member (bot) group mein aata hai
     if result.new_chat_member.status == ChatMemberStatus.MEMBER: 
         try:
             await context.bot.send_message(
@@ -498,7 +500,6 @@ async def bot_added_to_group_handler(update: Update, context: ContextTypes.DEFAU
         except Exception as e:
             LOGGER.error(f"Admin prompt bhejne mein error: {e}")
 
-# Yahan start command ko group=1 mein daal diya hai
 application.add_handler(CommandHandler("start", start, block=False), group=1)
 application.add_handler(
     CallbackQueryHandler(button_callback, pattern=r"^sxc_", block=False)
