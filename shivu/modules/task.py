@@ -388,7 +388,7 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
         is_completed = (t_id in completed_daily) or (t_id in completed_onetime)
         difficulty = task.get('difficulty', 'normal').lower()
         
-        name_text = sc(task.get('name', 'Task'))
+        name_text = str(task.get('name', 'Task'))
         mission = str(task.get('mission', task.get('name', 'Task')))
         check_text = (str(task.get('name', '')) + " " + mission).lower()
         reward_text = f"{int(task.get('reward', 0)):,}"
@@ -680,7 +680,7 @@ async def task_callback(update: Update, context: CallbackContext):
             await eco_collection.update_one({'id': owner_id}, {'$inc': {'balance': reward}}, upsert=True)
 
             await query.answer(
-                f"{sc('claim successful')}\n{sc('you received')} {reward:,} {sc('coins for')} {pending} {sc('invites')}",
+                f"✅ {sc('claim successful')}\n{sc('you received')} {reward:,} {sc('coins for')} {pending} {sc('invites')}",
                 show_alert=True
             )
 
