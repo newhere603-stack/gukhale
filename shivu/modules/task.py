@@ -870,7 +870,8 @@ async def task_callback(update: Update, context: CallbackContext):
 # ==========================================
 # 📌 HANDLERS REGISTER 
 # ==========================================
-application.add_handler(CommandHandler("start", handle_referral))
+# Yahan referral wale start command ko group=2 mein daal diya hai
+application.add_handler(CommandHandler("start", handle_referral), group=35)
 application.add_handler(CommandHandler(["tasks", "task"], tasks_cmd))
 application.add_handler(CommandHandler("addtask", addtask))
 application.add_handler(CommandHandler("tasklist", tasklist))
