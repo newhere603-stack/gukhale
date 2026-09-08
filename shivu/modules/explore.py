@@ -1,7 +1,7 @@
 import random
 import html
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, CallbackContext
@@ -10,8 +10,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # 🔥 NAYA IMPORT: Economy database se connect karne ke liye
-from shivu import application
+from shivu import application, db
 from shivu.Database.db import eco_collection as user_collection
+
+# 🔥 NAYA IMPORT: Task system ke daily explore-count ke liye
+user_tasks_collection = db['user_tasks']
+IST = timezone(timedelta(hours=5, minutes=30))
 
 COOLDOWN_SEC = 73
 FEE = 300
@@ -29,6 +33,36 @@ EXPLORE_ACTIONS = [
     "ʀᴀɪᴅᴇᴅ ᴀ ɢᴏʙʟɪɴ ɴᴇsᴛ",
     "sᴜʀᴠɪᴠᴇᴅ ᴀɴ ᴏʀᴄ ᴅᴇɴ"
 ]
+
+
+# 🔥 NAYA HELPER: user_tasks doc ko aaj ke din ke hisaab se reset/create karta hai
+# (tasks.py ke ensure_user_data() jaisa hi logic, explore_count_today ke saath)
+async def _sync_daily_reset(user_id: int, today_str: str):
+    doc = await user_tasks_collection.find_one({'user_id': user_id})
+    if not doc:
+        await user_tasks_collection.insert_one({
+            'user_id': user_id,
+            'completed_daily': [],
+            'completed_onetime': [],
+            'coins_spent_today': 0,
+            'group_messages_today': {},
+            'explore_count_today': 0,
+            'pending_invites': 0,
+            'total_invites': 0,
+            'last_reset_date': today_str
+        })
+    elif doc.get('last_reset_date') != today_str:
+        await user_tasks_collection.update_one(
+            {'user_id': user_id},
+            {'$set': {
+                'completed_daily': [],
+                'coins_spent_today': 0,
+                'group_messages_today': {},
+                'explore_count_today': 0,
+                'last_reset_date': today_str
+            }}
+        )
+
 
 async def explore_cmd(update: Update, context: CallbackContext) -> None:
     if not update.message:
@@ -92,7 +126,15 @@ async def explore_cmd(update: Update, context: CallbackContext) -> None:
             {'id': user_id},
             {'$inc': {'balance': net_reward}}
         )
-        
+
+        # 🔥 NAYA: Task system ke liye daily explore count badhao
+        today_str = datetime.now(IST).strftime("%Y-%m-%d")
+        await _sync_daily_reset(user_id, today_str)
+        await user_tasks_collection.update_one(
+            {'user_id': user_id, 'last_reset_date': today_str},
+            {'$inc': {'explore_count_today': 1}}
+        )
+
         action = random.choice(EXPLORE_ACTIONS)
 
         # Using correct emoji-id attribute for Telegram custom emojis
