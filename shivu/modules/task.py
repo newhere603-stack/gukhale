@@ -90,6 +90,7 @@ async def ensure_user_data(user_id: int):
             'completed_onetime': [],
             'coins_spent_today': 0,
             'group_messages_today': {},
+            'explore_count_today': 0,
             'pending_invites': 0,
             'total_invites': 0,
             'last_reset_date': today_str
@@ -104,6 +105,7 @@ async def ensure_user_data(user_id: int):
                 'completed_daily': [],
                 'coins_spent_today': 0,
                 'group_messages_today': {}, 
+                'explore_count_today': 0,
                 'last_reset_date': today_str
             }}
         )
@@ -187,6 +189,7 @@ async def handle_referral(update: Update, context: CallbackContext):
             'completed_onetime': [],
             'coins_spent_today': 0,
             'group_messages_today': {},
+            'explore_count_today': 0,
             'pending_invites': 0,
             'total_invites': 0,
             'last_reset_date': datetime.now(IST).strftime("%Y-%m-%d")
@@ -467,6 +470,12 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
                 req_spend = int(spend_match.group(1))
                 current_spend = user_data.get('coins_spent_today', 0)
                 progress_text = f" ({current_spend}/{req_spend})"
+
+            explore_match = re.search(r'explore\s+(\d+)', mission.lower())
+            if explore_match and not is_completed:
+                req_explores = int(explore_match.group(1))
+                current_explores = user_data.get('explore_count_today', 0)
+                progress_text = f" ({current_explores}/{req_explores})"
 
             caption += (
                 f'<h2>{status} {name} • {mission}{progress_text} • {reward} '
@@ -791,6 +800,15 @@ async def task_callback(update: Update, context: CallbackContext):
                 if user_data.get('coins_spent_today', 0) < req_spend:
                     await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE SPENT {user_data.get('coins_spent_today', 0)}/{req_spend} COINS TODAY"), show_alert=True)
                     return
+
+            if "explore" in check_text:
+                explore_match = re.search(r'explore\s+(\d+)', check_text)
+                if explore_match:
+                    req_explores = int(explore_match.group(1))
+                    current_explores = user_data.get('explore_count_today', 0)
+                    if current_explores < req_explores:
+                        await query.answer(sc(f"MISSION INCOMPLETE YOU HAVE EXPLORED {current_explores}/{req_explores} TIMES TODAY"), show_alert=True)
+                        return
 
             t_type = task.get('type', 'daily').lower()
             field = 'completed_onetime' if t_type == 'onetime' else 'completed_daily'
