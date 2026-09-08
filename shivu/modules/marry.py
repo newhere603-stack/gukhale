@@ -3,19 +3,21 @@ import random
 import time
 import re
 from html import escape
+from datetime import datetime, timedelta, timezone
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 
-# 🔥 FIX: db aur sahi collections import ki hain
 from shivu import application, user_collection, db, LOGGER
 from shivu.Database.db import eco_collection
 
-# Asli collections yahan set ki hain
 collection = db['anime_characters_lol']
-bot_settings_collection = db['bot_settings'] # 🔥 Persistent Settings ke liye
-delete_collection = db['auto_delete_queue'] # 🔥 Yaddasht ke liye nayi collection
+bot_settings_collection = db['bot_settings'] 
+delete_collection = db['auto_delete_queue'] 
+user_tasks_collection = db['user_tasks'] # 🔥 NEW: For task tracking
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 # ---------------- CUSTOM RARITIES ----------------
 RARITIES = {
@@ -58,7 +60,6 @@ def get_base_rarity(rarity_str):
 _worker_started = False
 
 async def background_delete_worker(bot):
-    """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
     try:
         await delete_collection.create_index("delete_at")
     except Exception:
@@ -80,7 +81,6 @@ async def background_delete_worker(bot):
         await asyncio.sleep(30)
 
 async def auto_delete_msg(message, delay: int):
-    """Message ko database aur memory memory queue dono me daalta hai"""
     if not message: return
         
     global _worker_started
@@ -92,14 +92,12 @@ async def auto_delete_msg(message, delay: int):
     message_id = message.message_id
     delete_at = time.time() + delay
 
-    # MongoDB me save karega taki bot crash/restart hone par mission na bhule
     await delete_collection.insert_one({
         'chat_id': chat_id,
         'message_id': message_id,
         'delete_at': delete_at
     })
 
-    # Memory worker taaki smoothly delete ho jaye agar bot chalu rahe to
     async def memory_delete():
         await asyncio.sleep(delay)
         try:
@@ -110,7 +108,7 @@ async def auto_delete_msg(message, delay: int):
 
     asyncio.create_task(memory_delete())
 
-# 🔥 SMART MEDIA SENDER FOR FILE IDs & URLs (Photos + Videos)
+# 🔥 SMART MEDIA SENDER
 async def send_media_smart(context, chat_id, media, caption, reply_to_msg_id=None):
     media_str = str(media).lower()
     is_video_ext = any(media_str.endswith(ext) for ext in ['.mp4', '.gif', '.mov', '.webm'])
@@ -125,19 +123,16 @@ async def send_media_smart(context, chat_id, media, caption, reply_to_msg_id=Non
         except Exception:
             return await context.bot.send_animation(animation=media, **kwargs)
     
-    # Agar image URL ho ya Telegram File ID (File ID me ext nahi hota)
     try:
         return await context.bot.send_photo(photo=media, **kwargs)
     except Exception:
-        # send_photo fail hua matlab ho sakta hai user ne Video ka File ID daala ho
         try:
             return await context.bot.send_video(video=media, **kwargs)
         except Exception:
-            # Agar video bhi nahi, toh animation/gif ho sakta hai
             try:
                 return await context.bot.send_animation(animation=media, **kwargs)
             except Exception as e:
-                raise e # Yahan fail hua to niche fallback text handle karega
+                raise e
 
 # ---------------- CONFIG ----------------
 OWNER_ID = 7657218453
@@ -146,7 +141,7 @@ SUDO_USERS = {7657218453}
 PROPOSAL_COST = 2000
 DICE_COOLDOWN = 1800
 PROPOSE_COOLDOWN = 300
-PROPOSE_SUCCESS_RATE = 0.35  # 🔥 EXACT 33% WIN CHANCE!
+PROPOSE_SUCCESS_RATE = 0.35  
 
 UPDATE_GROUP_URL = "https://t.me/Anime_Group_hai"
 UPDATE_GROUP_ID = -1003087506512
@@ -159,7 +154,6 @@ PROPOSE_IMAGES = [
     "https://files.catbox.moe/5z3vgb.jpg"
 ]
 
-# 🔥 UNIQUE REJECT IMAGES (No Duplicates)
 REJECT_IMAGES = [
     "https://files.catbox.moe/2ala3u.png",
     "https://files.catbox.moe/k01s4a.png",
@@ -197,7 +191,6 @@ PROPOSING_LOADING_TEXTS = [
     "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ʜᴏᴘɪɴɢ ғᴏʀ ᴀ ʏᴇs....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>"
 ]
 
-# 🔥 EXTENDED FUNNY DICE REJECTS IN HINGLISH
 DICE_REJECT_TEXTS = [
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛ ʜᴏ ɢᴀʏᴀ ᴀᴜʀ ᴡᴏ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
     "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴇᴡᴡ, ɴᴏ!' ᴀᴜʀ sᴀʙ ᴊᴀɢᴀʜ sᴇ ʙʟᴏᴄᴋ ᴋᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
@@ -219,7 +212,6 @@ DICE_REJECT_TEXTS = [
     "<b>ᴏᴏᴘs! ᴜsɴᴇ ᴛᴏ ᴛᴜᴍʜᴇ 'ʙʜᴀɪʏᴀ' ʙᴏʟ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6159082552431746788\">🫂</tg-emoji></b>"
 ]
 
-# 🔥 EXTENDED FUNNY PROPOSE REJECT MESSAGES IN HINGLISH
 PROPOSE_REJECT_TEXTS = [
     "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴡᴏ ᴛᴜᴍsᴇ ᴀɢʟᴇ ᴊᴀɴᴀᴍ ᴍᴇɪɴ ᴘᴀᴛᴇɢɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
     "<b>ᴛᴜᴍ ɪᴛɴɪ ʙᴜʀɪ ᴛᴀʀᴀʜ ғʀɪᴇɴᴅ-ᴢᴏɴᴇ ʜᴜᴇ ʜᴏ ᴋɪ ᴀʙ ᴛᴜᴍ ᴡᴀʜᴀɴ ᴋᴇ ᴍᴀʏᴏʀ ʜᴏ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
@@ -270,7 +262,6 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
     except Exception:
         return False
 
-# 🔥 YAHAN PE ROBUST DATABASE LOGIC LAGAYI HAI
 async def get_unique_char(user_id: int, rarity_pattern: str = None):
     try:
         user = await user_collection.find_one({"id": user_id})
@@ -292,7 +283,6 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
                 except ValueError:
                     pass
 
-        # Fetch disabled rarities purely from DB & Normalize them
         settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
         if settings and 'disabled_rarities' in settings:
             raw_disabled = set(settings['disabled_rarities'])
@@ -306,14 +296,11 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
         available_chars = []
         for char in all_chars:
             c_id = char.get("id")
-            
-            # PERFECT RARITY MATCH
             char_rarity_key = get_base_rarity(char.get("rarity", ""))
             
             if char_rarity_key in normalized_disabled:
                 continue
 
-            # CLEAN OWNERSHIP CHECK
             is_owned = False
             if c_id in owned_set or str(c_id) in owned_set:
                 is_owned = True
@@ -439,19 +426,28 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     set_cooldown(user.id, "dice")
     
+    # 🔥 TASK TRACKER UPDATE: Marry Mission Increment
+    today_str = datetime.now(IST).strftime("%Y-%m-%d")
+    u_data = await user_tasks_collection.find_one({'user_id': user.id})
+    if u_data and u_data.get('last_reset_date') == today_str:
+        await user_tasks_collection.update_one({'user_id': user.id}, {'$inc': {'marry_count_today': 1}})
+    else:
+        await user_tasks_collection.update_one(
+            {'user_id': user.id}, 
+            {'$set': {'last_reset_date': today_str, 'completed_daily': [], 'coins_spent_today': 0, 'group_messages_today': {}, 'explore_count_today': 0, 'propose_count_today': 0, 'marry_count_today': 1}}, 
+            upsert=True
+        )
+    
     try:
         dice_msg = await context.bot.send_dice(chat_id=chat_id, emoji="🎲", reply_to_message_id=msg_id)
-        
-        # 🔥 Suspenseful wait for dice roll to complete
         await asyncio.sleep(4.0)
 
         val = dice_msg.dice.value
-        # 🔥 EXACT 33.3% WIN RATE
         if val not in (5, 6):
             text = random.choice(DICE_REJECT_TEXTS)
             try:
                 rej_msg = await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_to_message_id=msg_id)
-                await auto_delete_msg(rej_msg, 1800) # 30 mins me delete
+                await auto_delete_msg(rej_msg, 1800)
             except Exception:
                 pass
             return
@@ -464,7 +460,6 @@ async def dice_marry(update: Update, context: CallbackContext):
                 return
 
         await add_char_to_user(user.id, user.username or "", plain_name or "User", char)
-        
         prem_emoji, r_name = get_rarity_details(char.get('rarity', 'common'))
         
         caption = (
@@ -477,7 +472,7 @@ async def dice_marry(update: Update, context: CallbackContext):
         
         try:
             win_msg = await send_media_smart(context, chat_id, char["img_url"], caption, msg_id)
-            await auto_delete_msg(win_msg, 1200) # Win image 20 mins me delete
+            await auto_delete_msg(win_msg, 1200)
         except Exception as e:
             LOGGER.error(f"Error sending dice win photo, fallback to text: {e}")
             try:
@@ -535,9 +530,20 @@ async def propose(update: Update, context: CallbackContext):
             reply_to_message_id=msg_id
         )
 
-    # Coins seedha cut kar rahe hain
     await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
     set_cooldown(user.id, "propose")
+    
+    # 🔥 TASK TRACKER UPDATE: Propose Mission Increment
+    today_str = datetime.now(IST).strftime("%Y-%m-%d")
+    u_data = await user_tasks_collection.find_one({'user_id': user.id})
+    if u_data and u_data.get('last_reset_date') == today_str:
+        await user_tasks_collection.update_one({'user_id': user.id}, {'$inc': {'propose_count_today': 1}})
+    else:
+        await user_tasks_collection.update_one(
+            {'user_id': user.id}, 
+            {'$set': {'last_reset_date': today_str, 'completed_daily': [], 'coins_spent_today': 0, 'group_messages_today': {}, 'explore_count_today': 0, 'propose_count_today': 1, 'marry_count_today': 0}}, 
+            upsert=True
+        )
 
     try:
         msg = await send_media_smart(
@@ -562,7 +568,6 @@ async def propose(update: Update, context: CallbackContext):
 
     except TelegramError as e:
         LOGGER.error(f"Error sending propose image: {e}")
-        # 🔥 FIX: Agar catbox image ya File ID fail ho gayi, toh text bhej do!
         try:
             msg = await context.bot.send_message(
                 chat_id=chat_id,
@@ -577,7 +582,6 @@ async def propose(update: Update, context: CallbackContext):
         except Exception:
             pass
 
-    # 🔥 EXACT 33% WIN CHANCE!
     if random.random() > PROPOSE_SUCCESS_RATE:
         reject_text = random.choice(PROPOSE_REJECT_TEXTS)
         try:
@@ -588,7 +592,7 @@ async def propose(update: Update, context: CallbackContext):
                 reject_text,
                 msg_id
             )
-            await auto_delete_msg(rej_msg, 1800) # 30 mins me delete
+            await auto_delete_msg(rej_msg, 1800) 
         except Exception as e:
             LOGGER.error(f"Reject photo failed, falling back to text: {e}")
             try:
@@ -630,7 +634,7 @@ async def propose(update: Update, context: CallbackContext):
     
     try:
         win_msg = await send_media_smart(context, chat_id, char["img_url"], caption, msg_id)
-        await auto_delete_msg(win_msg, 1200) # Win image 20 mins me delete
+        await auto_delete_msg(win_msg, 1200) 
     except Exception as e:
         LOGGER.error(f"Error sending propose win photo, fallback to text: {e}")
         try:
