@@ -1325,6 +1325,11 @@ async def ask_character_id(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     
     char_id = update.message.text.strip()
+    
+    # 🔥 Fix: Sirf digits ko allow karega, koi aur text hua to ignore (bina delete kiye)
+    if not char_id.isdigit():
+        return WAITING_FOR_CHARACTER_ID
+
     try: await update.message.delete() # 🧹 Clear user input immediately
     except: pass
 
@@ -1370,18 +1375,23 @@ async def ask_price(update: Update, context: CallbackContext):
     chat_id = update.effective_chat.id
     
     price_text = update.message.text.strip()
+    
+    # 🔥 Fix: Sirf digits ko allow karega, koi aur text hua to ignore (bina delete kiye)
+    if not price_text.isdigit():
+        return WAITING_FOR_PRICE
+
     try: await update.message.delete() # 🧹 Clear user input immediately
     except: pass
 
     back_kb = InlineKeyboardMarkup([[InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_sm:{user_id}")]])
 
-    if not price_text.isdigit() or int(price_text) <= 0:
+    price = int(price_text)
+    if price <= 0:
         if shop_msg_id:
             try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{sc('invalid price! enter a positive number.')}</b>", reply_markup=back_kb, parse_mode='HTML')
             except: pass
         return WAITING_FOR_PRICE
 
-    price = int(price_text)
     if price > 2500000:
         if shop_msg_id:
             try: await context.bot.edit_message_caption(chat_id=chat_id, message_id=shop_msg_id, caption=f"<b>{E_WARN} {sc('maximum price limit is 2,500,000 coins. please enter a lower amount.')}</b>", reply_markup=back_kb, parse_mode='HTML')
