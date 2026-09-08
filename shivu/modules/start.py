@@ -104,9 +104,14 @@ CATEGORIES = {
     ),
 }
 
-# Dynamic Caption Generator with User Mention
+# Top par check kar lena ki 'import html' likha ho (waise purane code mein tha)
+
+# Dynamic Caption Generator with User Mention (HTML Error Fixed)
 def get_main_caption(user_id: int, first_name: str) -> str:
-    user_mention = f'<a href="tg://user?id={user_id}">{first_name}</a>'
+    # 🔥 FIX: html.escape use kiya taaki name ke < > ya ajeeb fonts error na dein
+    safe_name = html.escape(first_name)
+    user_mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
+    
     return (
         f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> Hᴇʏ {user_mention},<tg-emoji emoji-id=\"6093854622114390223\">🎀</tg-emoji>\n"
         f"ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ. <tg-emoji emoji-id=\"6066873332618238192\">⛈</tg-emoji></b>\n\n"
