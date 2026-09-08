@@ -527,9 +527,9 @@ async def build_task_keyboard(user_id: int, bot_username: str, page: int = 0, ch
 
 
 # ==========================================
-# ✨ TELEGRAM LIVE TEXT ANIMATION (FLASH OPEN)
+# ✨ INSTANT TASK MENU OPENER (NO TEXT ANIMATION)
 # ==========================================
-async def animated_task_reply(
+async def send_task_menu(
     update: Update,
     context: CallbackContext,
     caption: str,
@@ -537,91 +537,57 @@ async def animated_task_reply(
     img_url: str
 ):
     """
-    Task menu ke liye FLASH OPEN Animation Helper.
-    Chhota sa text animation hoga aur turant final menu open ho jayega.
+    Direct and instant Task menu opener.
+    Text draft animation is completely removed as per request.
+    Opens the rich message instantly in 0 milliseconds.
     """
     message = update.effective_message
-    user = update.effective_user
     chat_id = update.effective_chat.id
     reply_to = message.message_id if message else None
 
-    # Helper function for final message delivery (RichMessage or Photo Fallback)
-    async def send_final():
-        data = {
-            "chat_id": chat_id,
-            "rich_message": {"html": caption},
-            "reply_markup": keyboard.to_dict()
-        }
-        if reply_to:
-            data["reply_to_message_id"] = reply_to
-
-        try:
-            await context.bot._post("sendRichMessage", data)
-            return  
-        except Exception as e:
-            err_msg = str(e).lower()
-            if "parse" in err_msg or "dictionary" in err_msg or "object" in err_msg:
-                return 
-                
-            LOGGER.warning(f"Rich Message failed: {e}")
-            try:
-                clean_caption = re.sub(r'<img\b[^>]*>', '', caption, flags=re.IGNORECASE)
-                clean_caption = (
-                    clean_caption
-                    .replace('<h2>', '\n<b>').replace('</h2>', '</b>\n')
-                    .replace('<h3>', '\n<b>').replace('</h3>', '</b>\n')
-                    .replace('<br>', '\n').replace('<br/>', '\n')
-                    .replace('​', '')
-                )
-                clean_caption = re.sub(r'\n{3,}', '\n\n', clean_caption).strip()
-                
-                await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=img_url,
-                    caption=clean_caption,
-                    reply_markup=keyboard,
-                    parse_mode=ParseMode.HTML,
-                    reply_to_message_id=reply_to
-                )
-            except Exception as e2:
-                LOGGER.error(f"Fallback photo also failed: {e2}")
-
-    if not message or not user:
-        return await send_final()
-
-    # Group me bina animation direct reply aayega
-    if update.effective_chat.type != "private":
-        return await send_final()
-    
-    draft_id = random.randint(1, 2_000_000_000)
-    
-    # 🔥 YE HAI FLASH LOADING TEXT 🔥
-    loading_frames = [
-        "🚀",
-        "🚀 ᴏᴘᴇɴɪɴɢ...",
-        "🚀 ᴏᴘᴇɴɪɴɢ ᴛᴀsᴋs...",
-        "🚀 ᴏᴘᴇɴɪɴɢ ᴛᴀsᴋs ᴍᴇɴᴜ..."
-    ]
+    data = {
+        "chat_id": chat_id,
+        "rich_message": {"html": caption},
+        "reply_markup": keyboard.to_dict()
+    }
+    if reply_to:
+        data["reply_to_message_id"] = reply_to
 
     try:
-        # Pura task page scroll hone ki jagah sirf chhota sa loading text flash hoga
-        for frame in loading_frames:
-            try:
-                await context.bot._post("sendMessageDraft", {"chat_id": user.id, "draft_id": draft_id, "text": frame})
-            except AttributeError:
-                pass
-            await asyncio.sleep(0.05) # Bohot tezi se load hoga
-
-        # Final Permanent message (with image and buttons) turant aa jayega
-        return await send_final()
-
+        # Pura task page directly 0 milliseconds me open karega (No loading text)
+        await context.bot._post("sendRichMessage", data)
+        return  
     except Exception as e:
-        LOGGER.warning(f"Live text animation failed for {user.id}: {e}")
-        return await send_final()
+        err_msg = str(e).lower()
+        if "parse" in err_msg or "dictionary" in err_msg or "object" in err_msg:
+            return 
+            
+        LOGGER.warning(f"Rich Message failed: {e}")
+        try:
+            clean_caption = re.sub(r'<img\b[^>]*>', '', caption, flags=re.IGNORECASE)
+            clean_caption = (
+                clean_caption
+                .replace('<h2>', '\n<b>').replace('</h2>', '</b>\n')
+                .replace('<h3>', '\n<b>').replace('</h3>', '</b>\n')
+                .replace('<br>', '\n').replace('<br/>', '\n')
+                .replace('​', '')
+            )
+            clean_caption = re.sub(r'\n{3,}', '\n\n', clean_caption).strip()
+            
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=img_url,
+                caption=clean_caption,
+                reply_markup=keyboard,
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=reply_to
+            )
+        except Exception as e2:
+            LOGGER.error(f"Fallback photo also failed: {e2}")
 
 
 # ==========================================
-# 📋 /tasks COMMAND (ANIMATED)
+# 📋 /tasks COMMAND 
 # ==========================================
 async def tasks_cmd(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
@@ -632,8 +598,8 @@ async def tasks_cmd(update: Update, context: CallbackContext):
         user_id, context.bot.username, page=0, chat_id=str(chat_id), chat_type=chat_type
     )
 
-    # Animated Helper call kar liya (Ye sab handle kar lega PM/Group dono ke liye)
-    await animated_task_reply(update, context, caption, keyboard, img_url)
+    # Directly opens the menu instantly
+    await send_task_menu(update, context, caption, keyboard, img_url)
 
 
 # ==========================================
