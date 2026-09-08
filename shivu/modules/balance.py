@@ -39,7 +39,7 @@ async def get_or_init_user(uid: int):
 
 
 # ==========================================================
-# ✨ TELEGRAM LIVE TEXT ANIMATION (FIXED)
+# ✨ TELEGRAM LIVE TEXT ANIMATION (FAST MODE)
 # ==========================================================
 
 async def animated_reply(
@@ -47,7 +47,7 @@ async def animated_reply(
     context: ContextTypes.DEFAULT_TYPE,
     draft_text: str,
     final_text: str,
-    speed: float = 0.12
+    speed: float = 0.04  # <-- Speed boost (Pehle 0.12 tha)
 ):
     """
     Telegram Live Text Animation.
@@ -78,8 +78,8 @@ async def animated_reply(
         # -----------------------------------------
         # STREAMING TEXT
         # -----------------------------------------
-        # Small chunks = smoother animation.
-        chunk_size = 2
+        # Zyada chunk size = Fast delivery + Telegram limits se bachaav
+        chunk_size = 4  # <-- Chunk size badha diya (Pehle 2 tha)
 
         # First visible part
         current = draft_text[:chunk_size]
@@ -176,7 +176,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f'<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji> '
                 f'<b>ʙᴀʟᴀɴᴄᴇ: <code>{balance:,}</code></b>'
             ),
-            speed=0.12
+            speed=0.04 # <-- Fast speed
         )
         
     except Exception as e:
@@ -226,7 +226,7 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f'<tg-emoji emoji-id="6332379101231323246">💠</tg-emoji> '
                 f'<b>ᴛᴏᴋᴇɴs: <code>{tokens:,}</code></b>'
             ),
-            speed=0.12
+            speed=0.04 # <-- Fast speed
         )
         
     except Exception as e:
@@ -248,4 +248,4 @@ async def tokens_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application.add_handler(CommandHandler(["bal", "balance", "coins", "coin"], balance_cmd, block=False))
 application.add_handler(CommandHandler(["tokens", "tbal", "token"], tokens_cmd, block=False))
 
-LOGGER.info("✓ Balance & Tokens module loaded successfully (Live Text Animation Fix Applied)")
+LOGGER.info("✓ Balance & Tokens module loaded successfully (Superfast Animation)")
