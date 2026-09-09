@@ -597,9 +597,9 @@ async def animated_task_reply(
     # 🔥 YE HAI FLASH LOADING TEXT 🔥
     loading_frames = [
         "🚀",
-        "🚀 ᴏᴘᴇɴɪɴɢ...",
-        "🚀 ᴏᴘᴇɴɪɴɢ ᴛᴀsᴋs...",
-        "🚀 ᴏᴘᴇɴɪɴɢ ᴛᴀsᴋs ᴍᴇɴᴜ..."
+        "<b>🚀 ᴏᴘᴇɴɪɴɢ...</b>",
+        "<b>🚀 ᴏᴘᴇɴɪɴɢ ᴛᴀsᴋs...</b>",
+        "<b>🚀 ᴏᴘᴇɴɪɴɢ ᴛᴀsᴋs ᴍᴇɴᴜ...</b>"
     ]
 
     try:
