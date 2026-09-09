@@ -371,10 +371,9 @@ async def animated_start_reply(
     
     # 🔥 FLASH LOADING TEXT (Small Caps 'sᴛᴀʀᴛɪɴɢ...')
     loading_frames = [
-        "🚀",
-        "🚀 sᴛᴀʀᴛ...",
-        "🚀 sᴛᴀʀᴛɪɴɢ...",
-        "🚀 sᴛᴀʀᴛɪɴɢ ʙᴏᴛ..."
+        "sᴛᴀʀᴛ...",
+        "sᴛᴀʀᴛɪɴɢ...",
+        "sᴛᴀʀᴛɪɴɢ ʙᴏᴛ..."
     ]
 
     try:
