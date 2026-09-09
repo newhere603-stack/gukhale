@@ -355,7 +355,8 @@ async def play_start_animation(bot, user_id):
         "<b>sᴛᴀʀᴛ...</b>",
         "<b>sᴛᴀʀᴛɪɴɢ...</b>",
         "<b>sᴛᴀʀᴛɪɴɢ ʙᴏᴛ...</b>",
-        "<b>sᴛᴀʀᴛɪɴɢ...</b>"
+        "<b>sᴛᴀʀᴛɪɴɢ...</b>",
+        "<b>sᴛᴀʀᴛ</b>"
     ]
 
     try:
