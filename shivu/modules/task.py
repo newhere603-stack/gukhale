@@ -606,7 +606,13 @@ async def animated_task_reply(
         # Pura task page scroll hone ki jagah sirf chhota sa loading text flash hoga
         for frame in loading_frames:
             try:
-                await context.bot._post("sendMessageDraft", {"chat_id": user.id, "draft_id": draft_id, "text": frame})
+                # 🔥 FIX: Added parse_mode=ParseMode.HTML for bold rendering
+                await context.bot._post("sendMessageDraft", {
+                    "chat_id": user.id, 
+                    "draft_id": draft_id, 
+                    "text": frame,
+                    "parse_mode": ParseMode.HTML
+                })
             except AttributeError:
                 pass
             await asyncio.sleep(0.025) # 0.025 x 4 frames = 0.1 seconds total time
