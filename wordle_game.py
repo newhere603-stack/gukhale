@@ -129,6 +129,39 @@ async def toggle_delete_handler(update: Update, context: ContextTypes.DEFAULT_TY
     status_text = "ENABLED 🗑️" if NEW_STATUS else "DISABLED 🛡️"
     await update.message.reply_text(f"<b>Auto-Delete is now: {status_text}</b>", parse_mode="HTML")
 
+# --- FAST BACKGROUND HELPER FUNCTIONS ---
+async def background_delete(context, chat_id, message_id):
+    try: await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception: pass
+
+async def background_db_update(user_id, first_name, username, inc_dict):
+    try:
+        await eco_collection.update_one(
+            {"id": user_id},
+            {"$inc": inc_dict, "$setOnInsert": {"first_name": first_name, "username": username}},
+            upsert=True
+        )
+    except Exception as db_err:
+        LOGGER.error(f"Database error while updating gold: {db_err}")
+
+async def background_sync_guess(chat_id, guess_data, new_msg_id):
+    try: 
+        await game_collection.update_one(
+            {"chat_id": chat_id}, 
+            {"$push": {"guesses": guess_data}, "$set": {"message_id": new_msg_id}}
+        )
+    except Exception as e: LOGGER.error(f"Error syncing guess: {e}")
+
+# Motor/PyMongo Futures ko Coroutine mein wrap kiya taaki asyncio task crash na ho
+async def background_insert_game(game_data):
+    try: await game_collection.insert_one(game_data)
+    except Exception as e: LOGGER.error(f"DB Insert Error: {e}")
+
+async def background_delete_game(chat_id):
+    try: await game_collection.delete_one({"chat_id": chat_id})
+    except Exception as e: LOGGER.error(f"DB Delete Error: {e}")
+
+
 async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_chat or not update.message:
         return
@@ -177,8 +210,8 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # Update cache instantly
             ACTIVE_GAMES_CACHE[chat_id] = game_data
             
-            # Update DB in background
-            asyncio.create_task(game_collection.insert_one(game_data))
+            # DB Insert background task (Ab coroutine hai, crash nahi hoga)
+            asyncio.create_task(background_insert_game(game_data))
             
             async def send_log():
                 try:
@@ -187,6 +220,7 @@ async def start_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     log_text = f"🎮 <b>New WordSeek Game Started!</b>\n<b>Group:</b> {chat_name}\n<b>Link/ID:</b> {chat_link}\n<b>Target Word:</b> <code>{target}</code>"
                     await context.bot.send_message(chat_id=LOG_GROUP_ID, text=log_text, parse_mode="HTML", disable_web_page_preview=True)
                 except Exception: pass
+            
             asyncio.create_task(send_log())
         except Exception as e:
             LOGGER.error(f"Error starting game: {e}")
@@ -209,8 +243,8 @@ async def end_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             target = ACTIVE_GAMES_CACHE[chat_id]["target"]
             # Clear from cache
             del ACTIVE_GAMES_CACHE[chat_id]
-            # Delete from DB in background
-            asyncio.create_task(game_collection.delete_one({"chat_id": chat_id}))
+            # DB Delete background task
+            asyncio.create_task(background_delete_game(chat_id))
             await update.message.reply_text(f"<b><blockquote>🛑 Game ended.\nThe word was:{target.lower()}</blockquote></b>", parse_mode="HTML")
         else:
             await update.message.reply_text("<b><blockquote>ℹ️ No active game running.</blockquote></b>", parse_mode="HTML")
@@ -242,29 +276,6 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /helpword → Show this help menu"
     )
     await update.message.reply_text(help_text, parse_mode="HTML")
-
-# --- FAST BACKGROUND HELPER FUNCTIONS ---
-async def background_delete(context, chat_id, message_id):
-    try: await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-    except Exception: pass
-
-async def background_db_update(user_id, first_name, username, inc_dict):
-    try:
-        await eco_collection.update_one(
-            {"id": user_id},
-            {"$inc": inc_dict, "$setOnInsert": {"first_name": first_name, "username": username}},
-            upsert=True
-        )
-    except Exception as db_err:
-        LOGGER.error(f"Database error while updating gold: {db_err}")
-
-async def background_sync_guess(chat_id, guess_data, new_msg_id):
-    try: 
-        await game_collection.update_one(
-            {"chat_id": chat_id}, 
-            {"$push": {"guesses": guess_data}, "$set": {"message_id": new_msg_id}}
-        )
-    except Exception as e: LOGGER.error(f"Error syncing guess: {e}")
 
 
 async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -339,7 +350,9 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif won:
                 points_earned = game["max_attempts"] - attempt_num + 1
                 del ACTIVE_GAMES_CACHE[chat_id]  # Clear from RAM
-                asyncio.create_task(game_collection.delete_one({"chat_id": chat_id})) # Background delete
+                
+                # Sahi tarike se background delete
+                asyncio.create_task(background_delete_game(chat_id)) 
                 
                 user = update.effective_user
                 now_ist = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
@@ -374,7 +387,9 @@ async def handle_guess(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             elif lost:
                 del ACTIVE_GAMES_CACHE[chat_id] # Clear from RAM
-                asyncio.create_task(game_collection.delete_one({"chat_id": chat_id})) # Background delete
+                
+                # Sahi tarike se background delete
+                asyncio.create_task(background_delete_game(chat_id)) 
                 
                 if should_delete and old_message_id:
                     asyncio.create_task(background_delete(context, chat_id, old_message_id))
