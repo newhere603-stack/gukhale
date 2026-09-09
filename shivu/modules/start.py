@@ -1,5 +1,6 @@
 import asyncio
 import html
+import random  # 🔥 NAYA IMPORT: Animation ke draft_id ke liye
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatMemberStatus, ChatType, ParseMode
 from telegram.error import BadRequest, TelegramError
@@ -335,6 +336,63 @@ async def safe_track_bot_start(user_id, first_name, username, is_new_user):
         LOGGER.error(f"Error in safe_track_bot_start: {e}")
 
 
+# ==========================================
+# ✨ TELEGRAM LIVE TEXT ANIMATION (START MENU)
+# ==========================================
+async def animated_start_reply(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    user_id: int,
+    caption_text: str,
+):
+    """
+    Start menu ke liye FLASH OPEN Animation Helper.
+    Small caps text 'sᴛᴀʀᴛɪɴɢ...' flash karke video open karega.
+    """
+    async def send_final():
+        try:
+            await context.bot.send_video(
+                chat_id=chat_id,
+                video=START_VIDEO,
+                caption=caption_text,
+                reply_markup=MAIN_KEYBOARD,
+                parse_mode=ParseMode.HTML,
+                supports_streaming=True,
+            )
+        except Exception as e:
+            LOGGER.error(f"Error sending final start video: {e}")
+
+    # Group me bina animation direct reply aayega
+    if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
+        return await send_final()
+    
+    draft_id = random.randint(1, 2_000_000_000)
+    
+    # 🔥 FLASH LOADING TEXT (Small Caps 'sᴛᴀʀᴛɪɴɢ...')
+    loading_frames = [
+        "🚀",
+        "🚀 sᴛᴀʀᴛ...",
+        "🚀 sᴛᴀʀᴛɪɴɢ...",
+        "🚀 sᴛᴀʀᴛɪɴɢ ʙᴏᴛ..."
+    ]
+
+    try:
+        for frame in loading_frames:
+            try:
+                await context.bot._post("sendMessageDraft", {"chat_id": user_id, "draft_id": draft_id, "text": frame})
+            except AttributeError:
+                pass
+            await asyncio.sleep(0.025) # Superfast flash (0.1 seconds total)
+
+        # Final Permanent video message
+        return await send_final()
+
+    except Exception as e:
+        LOGGER.warning(f"Live text animation failed for {user_id}: {e}")
+        return await send_final()
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if not update or not update.effective_user or not update.effective_chat:
@@ -390,14 +448,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         caption_text = get_main_caption(user_id, first_name)
 
-        await context.bot.send_video(
-            chat_id=chat_id,
-            video=START_VIDEO,
-            caption=caption_text,
-            reply_markup=MAIN_KEYBOARD,
-            parse_mode=ParseMode.HTML,
-            supports_streaming=True,
-        )
+        # Animated helper ko bulaya gaya hai (Send video ki jagah)
+        await animated_start_reply(update, context, chat_id, user_id, caption_text)
 
     except Exception as e:
         LOGGER.error(f"Critical error in start command: {e}", exc_info=True)
@@ -440,14 +492,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             
             caption_text = get_main_caption(user_id, first_name)
-            await context.bot.send_video(
-                chat_id=user_id,
-                video=START_VIDEO,
-                caption=caption_text,
-                reply_markup=MAIN_KEYBOARD,
-                parse_mode=ParseMode.HTML,
-                supports_streaming=True,
-            )
+            # Animated helper yahan bhi laga diya force sub bypass ke baad
+            await animated_start_reply(update, context, user_id, user_id, caption_text)
             return
 
         if not await is_force_sub_member(update, context):
