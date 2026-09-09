@@ -109,8 +109,6 @@ CATEGORIES = {
     ),
 }
 
-# Top par check kar lena ki 'import html' likha ho (waise purane code mein tha)
-
 # Dynamic Caption Generator with User Mention (HTML Error Fixed)
 def get_main_caption(user_id: int, first_name: str) -> str:
     # 🔥 FIX: html.escape use kiya taaki name ke < > ya ajeeb fonts error na dein
@@ -126,7 +124,6 @@ def get_main_caption(user_id: int, first_name: str) -> str:
 # 🔥 FULLY FIXED Robust Force Sub Checker
 async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
-        # Group mein Force Sub check karne ki jarurat nahi hoti private me karni hai
         if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
             return True
 
@@ -142,19 +139,16 @@ async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE
             chat_id=chat_identifier, user_id=user_id
         )
         
-        # Agar user ban ho chuka hai ya left kar chuka hai toh False
         if member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
             return False
             
-        # Baaki sab valid hain (MEMBER, RESTRICTED, ADMINISTRATOR, OWNER)
         return True
 
     except BadRequest as e:
-        # User not found ka error matlab user ne join nahi kiya hai
         if "User not found" in str(e) or "Participant_id_invalid" in str(e):
             return False
         LOGGER.warning(f"Force-sub BadRequest for user: {e}")
-        return False # Agar error aaya toh safe side ke liye subscribe bolo
+        return False
     except Exception as e:
         LOGGER.error(f"Force-sub error: {e}")
         return False
@@ -250,7 +244,6 @@ async def _ensure_user(user_id, first_name, username):
 
         update_tasks = []
 
-        # 1. Update Character DB (Harem)
         update_tasks.append(
             user_collection.update_one(
                 {"id": user_id},
@@ -280,7 +273,6 @@ async def _ensure_user(user_id, first_name, username):
             )
         )
 
-        # 2. Update Economy DB
         if is_new_user:
             update_tasks.append(
                 eco_collection.update_one(
@@ -291,7 +283,7 @@ async def _ensure_user(user_id, first_name, username):
                             "username": username,
                             "bot_started": True
                         },
-                        "$inc": {"balance": 5000},  # 🔥 Naye user ko silently 5000 coins denge
+                        "$inc": {"balance": 5000},
                         "$setOnInsert": {"tokens": 0}
                     },
                     upsert=True
@@ -319,15 +311,11 @@ async def _ensure_user(user_id, first_name, username):
         return False
 
 
-# 🔥 LOG SENDING ERROR FIXED HERE
 async def safe_track_bot_start(user_id, first_name, username, is_new_user):
     try:
         from shivu.modules.chatlog import track_bot_start
-        
-        # Chatlog module bhejte time bhi HTML escape lagana padega taaki track_bot_start fail na ho
         safe_fname = html.escape(first_name)
         safe_uname = html.escape(username)
-        
         await asyncio.wait_for(
             track_bot_start(user_id, safe_fname, safe_uname, is_new_user),
             timeout=5.0,
@@ -341,12 +329,12 @@ async def safe_track_bot_start(user_id, first_name, username, is_new_user):
 
 
 # ==========================================
-# ✨ FASTEST BACKGROUND ANIMATION HELPER
+# ✨ FASTEST BACKGROUND ANIMATION HELPER (RACE CONDITION FIXED)
 # ==========================================
 async def play_start_animation(bot, user_id):
     """
-    Ye animation pichhe background me chalega bina DB query ko roke.
-    Jis se response ekdum 0 second me dikhega.
+    Ye animation fast chalega aur poora clear hone ke baad hi aage ka message bhejega.
+    Is se "three dots" wala typing indicator aur draft kabhi nahi atakega.
     """
     draft_id = random.randint(1, 2_000_000_000)
     
@@ -370,9 +358,9 @@ async def play_start_animation(bot, user_id):
                 })
             except Exception:
                 pass
-            await asyncio.sleep(0.025) # Superfast flash
+            await asyncio.sleep(0.025)
 
-        # Draft ko saf kar dega taaki starting likha hua na chhute
+        # 🧹 Draft ko saf kar dega taaki starting likha hua aur 3 dots gayab ho jaye
         try:
             await bot._post("sendMessageDraft", {
                 "chat_id": user_id, 
@@ -453,15 +441,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_name = update.effective_user.first_name or "User"
         username = update.effective_user.username or ""
 
-        # 🔥 INSTANT RESPONSE FIX: Start hoty hi animation fire kar do background me!
+        # 🔥 TASK CREATED: Animation background me chalu hoga
+        animation_task = None
         if update.effective_chat.type == ChatType.PRIVATE:
-            asyncio.create_task(play_start_animation(context.bot, user_id))
+            animation_task = asyncio.create_task(play_start_animation(context.bot, user_id))
 
-        # 🔥 FAST ADMIN CHECK FIX: OWNER status bhi add kiya
+        # 🔥 FAST ADMIN CHECK FIX
         if update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             try:
                 bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
                 if bot_member.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+                    if animation_task: await animation_task  # Clear draft safely before sending error
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ!</b>",
@@ -477,6 +467,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Safe FSub Check
         if not await is_force_sub_member(update, context):
+            if animation_task: await animation_task  # Clear draft safely
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=FORCE_SUB_TEXT,
@@ -488,13 +479,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_new = await _ensure_user(user_id, first_name, username)
 
         if hasattr(context.application, "create_task"):
-            context.application.create_task(
-                safe_track_bot_start(user_id, first_name, username, is_new)
-            )
+            context.application.create_task(safe_track_bot_start(user_id, first_name, username, is_new))
         else:
-            asyncio.create_task(
-                safe_track_bot_start(user_id, first_name, username, is_new)
-            )
+            asyncio.create_task(safe_track_bot_start(user_id, first_name, username, is_new))
 
         # 🔥 FIX: Deep link bypass for 'buy_tokens'
         if context.args and context.args[0] == 'buy_tokens':
@@ -502,7 +489,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         caption_text = get_main_caption(user_id, first_name)
 
-        # Final Menu Send (Animation cover kar raha hoga delay ko)
+        # ✨ THE FIX: Wait for animation to fully clear the draft before sending final message
+        if animation_task:
+            await animation_task
+
+        # Final Menu Send
         await send_start_menu(update, context, chat_id, caption_text)
 
     except Exception as e:
@@ -532,11 +523,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = query.from_user.username or ""
 
         if data == "sxc_checksub":
-            # 🔥 INSTANT RESPONSE FIX (Background Animation)
+            animation_task = None
             if update.effective_chat and update.effective_chat.type == ChatType.PRIVATE:
-                asyncio.create_task(play_start_animation(context.bot, user_id))
+                animation_task = asyncio.create_task(play_start_animation(context.bot, user_id))
                 
             if not await is_force_sub_member(update, context):
+                if animation_task: await animation_task
                 await query.answer(
                     "ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True
                 )
@@ -550,6 +542,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             
             caption_text = get_main_caption(user_id, first_name)
+            
+            if animation_task:
+                await animation_task
+                
             await send_start_menu(update, context, user_id, caption_text)
             return
 
