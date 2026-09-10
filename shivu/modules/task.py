@@ -154,15 +154,16 @@ async def handle_referral(update: Update, context: CallbackContext):
 
     if not user_task_data:
         is_referral = context.args and context.args[0].startswith("ref_")
-        bonus_coins = 10000 if is_referral else 1000  
         
-        await eco_collection.update_one(
-            {'id': user_id},
-            {'$inc': {'balance': bonus_coins}, '$set': {'first_name': raw_first_name}},
-            upsert=True
-        )
-
+        # Sirf referral walo ko alag se eco balance dena hai yaha
         if is_referral:
+            bonus_coins = 10000 
+            await eco_collection.update_one(
+                {'id': user_id},
+                {'$inc': {'balance': bonus_coins}, '$set': {'first_name': raw_first_name}},
+                upsert=True
+            )
+
             try:
                 referrer_id = int(context.args[0].split("_")[1])
                 if referrer_id != user_id:
@@ -190,6 +191,7 @@ async def handle_referral(update: Update, context: CallbackContext):
             except ValueError:
                 pass
 
+        # Dono type ke users ke liye task data silently bana do
         await user_tasks_collection.insert_one({
             'user_id': user_id,
             'completed_daily': [],
@@ -204,17 +206,13 @@ async def handle_referral(update: Update, context: CallbackContext):
             'last_reset_date': datetime.now(IST).strftime("%Y-%m-%d")
         })
 
+        # Message sirf tab bhejo jab is_referral True ho (normal start chupchap ho jayega)
         if is_referral:
             welcome_text = (
                 f"<b><tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> {sc('WELCOME YOU RECEIVED')} <b>10,000</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('COINS FOR STARTING THE BOT VIA INVITE LINK')}</b>\n"
                 f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE')}</b>"
             )
-        else:
-            welcome_text = (
-                f"<b>{sc('WELCOME YOU RECEIVED')} <b>1,000</b> {sc('COINS FOR STARTING THE BOT')}</b>\n"
-                f"<b>{sc('USE')} /tasks {sc('TO COMPLETE MISSIONS AND EARN MORE')}</b>"
-            )
-        await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
+            await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
 
 # ==========================================
 # 🛠️ ADMIN COMMANDS
