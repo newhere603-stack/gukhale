@@ -329,94 +329,79 @@ async def safe_track_bot_start(user_id, first_name, username, is_new_user):
 
 
 # ==========================================
-# ✨ FASTEST SYNCHRONOUS ANIMATION & RICH MESSAGE HELPER
+# ✨ FASTEST NO-TYPING ANIMATION HELPER
 # ==========================================
-async def animated_start_reply(
+async def edit_anim_frames(msg):
+    """
+    Background mein message ko smoothly edit karega bina kisi 'Typing...' lag ke.
+    Premium Emoji wapas laga diya gaya hai.
+    """
+    frames = [
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛ</b>",
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ</b>",
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ ʙᴏᴛ...</b>"
+    ]
+    for frame in frames:
+        try:
+            await asyncio.sleep(0.15)
+            await msg.edit_text(text=frame, parse_mode=ParseMode.HTML)
+        except Exception:
+            break
+
+
+# ==========================================
+# ✨ RICH MESSAGE FINAL MENU SENDER
+# ==========================================
+async def send_start_menu(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
-    user_id: int,
     caption_text: str,
 ):
-    """
-    Ekdum Tasks wale command jaisa smoothly flash hoke Rich Message bhejne wala helper.
-    """
     message = update.effective_message
     reply_to = message.message_id if message else None
 
-    async def send_final():
-        rich_caption_text = caption_text.replace('\n', '<br>')
-        rich_caption = f'<video src="{html.escape(START_VIDEO)}"/><br>{rich_caption_text}'
-        
-        data = {
-            "chat_id": chat_id,
-            "rich_message": {"html": rich_caption},
-            "reply_markup": MAIN_KEYBOARD.to_dict()
-        }
-        if reply_to:
-            data["reply_to_message_id"] = reply_to
-
-        try:
-            await context.bot._post("sendRichMessage", data)
-            return  
-        except Exception as e:
-            err_msg = str(e).lower()
-            if "parse" in err_msg or "dictionary" in err_msg or "object" in err_msg:
-                return 
-            LOGGER.warning(f"Rich Message failed for start: {e}")
-            try:
-                clean_caption = re.sub(r'<(video|img)\b[^>]*>', '', caption_text, flags=re.IGNORECASE)
-                clean_caption = clean_caption.replace('<h2>', '\n<b>').replace('</h2>', '</b>\n')
-                clean_caption = clean_caption.replace('<h3>', '\n<b>').replace('</h3>', '</b>\n')
-                clean_caption = clean_caption.replace('<br>', '\n').replace('<br/>', '\n').replace('​', '')
-                clean_caption = re.sub(r'\n{3,}', '\n\n', clean_caption).strip()
-
-                await context.bot.send_video(
-                    chat_id=chat_id,
-                    video=START_VIDEO,
-                    caption=clean_caption,
-                    reply_markup=MAIN_KEYBOARD,
-                    parse_mode=ParseMode.HTML,
-                    supports_streaming=True,
-                    reply_to_message_id=reply_to
-                )
-            except Exception as e2:
-                LOGGER.error(f"Error sending fallback start video: {e2}")
-
-    # Group mein direct reply aayega bina animation ke
-    if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
-        return await send_final()
+    # 🔥 FIX: HTML engine newline (\n) ko <br> me convert karke multiline message allow karega
+    rich_caption_text = caption_text.replace('\n', '<br>')
+    rich_caption = f'<video src="{html.escape(START_VIDEO)}"/><br>{rich_caption_text}'
     
-    draft_id = random.randint(1, 2_000_000_000)
-    
-    # 🔥 Bold Text Loading Frames (Flash Animation)
-    loading_frames = [
-        "<b>sᴛᴀʀᴛ...</b>",
-        "<b>sᴛᴀʀᴛɪɴɢ...</b>",
-        "<b>sᴛᴀʀᴛɪɴɢ ʙᴏᴛ...</b>",
-        "<b>sᴛᴀʀᴛɪɴɢ...</b>"
-    ]
+    data = {
+        "chat_id": chat_id,
+        "rich_message": {"html": rich_caption},
+        "reply_markup": MAIN_KEYBOARD.to_dict()
+    }
+    if reply_to:
+        data["reply_to_message_id"] = reply_to
 
     try:
-        # Ye loop synchronously ekdum fast chalega jisse typing wala delay feel nahi hoga
-        for frame in loading_frames:
-            try:
-                await context.bot._post("sendMessageDraft", {
-                    "chat_id": user_id, 
-                    "draft_id": draft_id, 
-                    "text": frame,
-                    "parse_mode": ParseMode.HTML
-                })
-            except AttributeError:
-                pass
-            await asyncio.sleep(0.025)
-
-        # Uske baad final message seedha shoot kar dega (No typing loop)
-        return await send_final()
-
+        await context.bot._post("sendRichMessage", data)
+        return  
     except Exception as e:
-        LOGGER.warning(f"Live text animation failed for {user_id}: {e}")
-        return await send_final()
+        err_msg = str(e).lower()
+        if "parse" in err_msg or "dictionary" in err_msg or "object" in err_msg:
+            return 
+            
+        LOGGER.warning(f"Rich Message failed for start: {e}")
+        
+        # 🛡️ Fallback agar Custom API rich message fail ho jaye
+        try:
+            clean_caption = re.sub(r'<(video|img)\b[^>]*>', '', caption_text, flags=re.IGNORECASE)
+            clean_caption = clean_caption.replace('<h2>', '\n<b>').replace('</h2>', '</b>\n')
+            clean_caption = clean_caption.replace('<h3>', '\n<b>').replace('</h3>', '</b>\n')
+            clean_caption = clean_caption.replace('<br>', '\n').replace('<br/>', '\n').replace('​', '')
+            clean_caption = re.sub(r'\n{3,}', '\n\n', clean_caption).strip()
+
+            await context.bot.send_video(
+                chat_id=chat_id,
+                video=START_VIDEO,
+                caption=clean_caption,
+                reply_markup=MAIN_KEYBOARD,
+                parse_mode=ParseMode.HTML,
+                supports_streaming=True,
+                reply_to_message_id=reply_to
+            )
+        except Exception as e2:
+            LOGGER.error(f"Error sending fallback start video: {e2}")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -429,11 +414,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_name = update.effective_user.first_name or "User"
         username = update.effective_user.username or ""
 
+        anim_msg = None
+        # 🔥 THE ULTIMATE INSTANT FIX: Start Command run hote hi 0 delay ke sath message drop karega
+        if update.effective_chat.type == ChatType.PRIVATE:
+            if not context.args or str(context.args[0]).startswith("ref_"):
+                try:
+                    # Message bhejne se typing lag nahi aayega aur response instantly dikhega!
+                    anim_msg = await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛ...</b>",
+                        parse_mode=ParseMode.HTML
+                    )
+                    # Smooth background frame edit start
+                    asyncio.create_task(edit_anim_frames(anim_msg))
+                except Exception:
+                    pass
+
         # 🔥 FAST ADMIN CHECK
         if update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             try:
                 bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
                 if bot_member.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+                    if anim_msg: 
+                        try: await anim_msg.delete() 
+                        except: pass
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ!</b>",
@@ -449,6 +453,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Safe FSub Check
         if not await is_force_sub_member(update, context):
+            if anim_msg: 
+                try: await anim_msg.delete() 
+                except: pass
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=FORCE_SUB_TEXT,
@@ -464,14 +471,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             asyncio.create_task(safe_track_bot_start(user_id, first_name, username, is_new))
 
-        # 🔥 FIX: Deep link bypass for ALL deep links (shop, buy_tokens, etc.) except 'ref_'
+        # Deep link bypass for ALL deep links (shop, buy_tokens, etc.) except 'ref_'
         if context.args and not str(context.args[0]).startswith("ref_"):
+            if anim_msg: 
+                try: await anim_msg.delete() 
+                except: pass
             return
 
         caption_text = get_main_caption(user_id, first_name)
 
-        # 🔥 THE ULTIMATE FIX: Animation aur message dono ek sath smoothly end me call honge, just like Tasks!
-        await animated_start_reply(update, context, chat_id, user_id, caption_text)
+        # 🔥 Cleanup animation msg and send the rich video menu instantly
+        if anim_msg:
+            try:
+                await anim_msg.delete()
+            except Exception:
+                pass
+
+        await send_start_menu(update, context, chat_id, caption_text)
 
     except Exception as e:
         LOGGER.error(f"Critical error in start command: {e}", exc_info=True)
@@ -500,10 +516,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = query.from_user.username or ""
 
         if data == "sxc_checksub":
+            anim_msg = None
+            if update.effective_chat and update.effective_chat.type == ChatType.PRIVATE:
+                try:
+                    anim_msg = await context.bot.send_message(
+                        chat_id=user_id, 
+                        text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛ...</b>", 
+                        parse_mode=ParseMode.HTML
+                    )
+                    asyncio.create_task(edit_anim_frames(anim_msg))
+                except Exception:
+                    pass
+                
             if not await is_force_sub_member(update, context):
-                await query.answer(
-                    "ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True
-                )
+                if anim_msg:
+                    try: await anim_msg.delete()
+                    except: pass
+                await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True)
                 return
                 
             is_new = await _ensure_user(user_id, first_name, username)
@@ -515,8 +544,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             caption_text = get_main_caption(user_id, first_name)
             
-            # 🔥 Force Sub pass hone ke baad wapas smooth animation call hoga
-            await animated_start_reply(update, context, user_id, user_id, caption_text)
+            if anim_msg:
+                try: await anim_msg.delete()
+                except: pass
+                
+            await send_start_menu(update, context, user_id, caption_text)
             return
 
         if not await is_force_sub_member(update, context):
