@@ -609,7 +609,7 @@ async def bot_added_to_group_handler(update: Update, context: ContextTypes.DEFAU
         except Exception as e:
             LOGGER.error(f"Admin prompt bhejne mein error: {e}")
 
-application.add_handler(CommandHandler("start", start, block=False), group=1)
+application.add_handler(CommandHandler("start", start, block=False), group=11)
 application.add_handler(
     CallbackQueryHandler(button_callback, pattern=r"^sxc_", block=False)
 )
