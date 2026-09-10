@@ -317,7 +317,7 @@ async def safe_track_bot_start(user_id, first_name, username, is_new_user):
         LOGGER.error(f"Error in safe_track_bot_start: {e}")
 
 # ==========================================
-# ✨ FASTEST ANIMATION (TASKS WALA SAME LOGIC YAHI PE ADD KIYA HAI)
+# ✨ FASTEST ANIMATION
 # ==========================================
 async def send_start_menu(
     update: Update,
@@ -369,13 +369,11 @@ async def send_start_menu(
             except Exception as e2:
                 LOGGER.error(f"Error sending fallback start video: {e2}")
 
-    # Agar animate False hai ya group hai, seedha send mar do bina delay ke
     if not animate or update.effective_chat.type != ChatType.PRIVATE:
         return await send_final()
 
     draft_id = random.randint(1, 2_000_000_000)
     
-    # 🔥 YE HAI FLASH LOADING TEXT (Premium emojis barkarar) 🔥
     loading_frames = [
         "<tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji>",
         "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ...</b>",
@@ -396,12 +394,11 @@ async def send_start_menu(
                 pass
             await asyncio.sleep(0.025)
 
-        # Turant final message trigger (koi background lag nahi hoga ab)
         return await send_final()
-
     except Exception as e:
         LOGGER.warning(f"Live text animation failed: {e}")
         return await send_final()
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -413,7 +410,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         first_name = update.effective_user.first_name or "User"
         username = update.effective_user.username or ""
 
-        # Trigger check banaya taaki ye tabhi chale jab zaruri ho
         should_animate = False
         if update.effective_chat.type == ChatType.PRIVATE:
             if not context.args or str(context.args[0]).startswith("ref_"):
@@ -456,8 +452,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         caption_text = get_main_caption(user_id, first_name)
-
-        # 🔥 Ab ye helper function hi directly sab handle karega!
         await send_start_menu(update, context, chat_id, caption_text, animate=should_animate)
 
     except Exception as e:
@@ -505,8 +499,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             
             caption_text = get_main_caption(user_id, first_name)
-            
-            # 🔥 Checksub ke baad bhi same animation method call ho rahi hai
             await send_start_menu(update, context, user_id, caption_text, animate=should_animate)
             return
 
@@ -540,9 +532,43 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return
 
-        await query.edit_message_caption(
-            caption=text, parse_mode=ParseMode.HTML, reply_markup=markup
-        )
+        # 🔥 FIX: Rich message backend pe text ki tarah treat hota hai, 
+        # isliye ab hum directly rich message update karenge.
+        rich_text = text.replace('\n', '<br>')
+        rich_caption = f'<video src="{html.escape(START_VIDEO)}"/><br>{rich_text}'
+
+        try:
+            # 1️⃣ Fast custom API Method (Prevents 'no caption' crash)
+            await context.bot._post("editMessageText", {
+                "chat_id": query.message.chat_id,
+                "message_id": query.message.message_id,
+                "rich_message": {"html": rich_caption},
+                "reply_markup": markup.to_dict()
+            })
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "parse" not in err_msg and "dictionary" not in err_msg and "object" not in err_msg:
+                LOGGER.warning(f"Rich Message edit failed: {e}")
+            
+            # 2️⃣ Standard Telegram Method Fallback
+            try:
+                clean_text = re.sub(r'<(video|img)\b[^>]*>', '', text, flags=re.IGNORECASE)
+                clean_text = clean_text.replace('<h2>', '\n<b>').replace('</h2>', '</b>\n')
+                clean_text = clean_text.replace('<h3>', '\n<b>').replace('</h3>', '</b>\n')
+                clean_text = clean_text.replace('<br>', '\n').replace('<br/>', '\n').replace('​', '')
+                clean_text = re.sub(r'\n{3,}', '\n\n', clean_text).strip()
+
+                # Dynamic check: agar video properly standard bhej di gayi thi to
+                if query.message.caption is not None or query.message.video or query.message.photo:
+                    await query.edit_message_caption(
+                        caption=clean_text, parse_mode=ParseMode.HTML, reply_markup=markup
+                    )
+                else:
+                    await query.edit_message_text(
+                        text=clean_text, parse_mode=ParseMode.HTML, reply_markup=markup, disable_web_page_preview=True
+                    )
+            except Exception as e2:
+                LOGGER.error(f"Fallback edit also failed: {e2}")
 
     except Exception as e:
         LOGGER.error(f"Error in button callback: {e}", exc_info=True)
