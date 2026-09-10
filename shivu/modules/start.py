@@ -36,7 +36,6 @@ MAIN_KEYBOARD = InlineKeyboardMarkup([
         ),
     ],
     [
-        # 🔥 FIX: Premium Emoji Added here perfectly via kwargs
         InlineKeyboardButton(
             **{
                 "text": "ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ",
@@ -61,47 +60,68 @@ FORCE_SUB_KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("ᴛʀʏ ᴀɢᴀɪɴ", callback_data="sxc_checksub")],
 ])
 
-PAGE_SIZE = 6
+# 🔥 EXACTLY 10 COMMANDS PER PAGE
+PAGE_SIZE = 10
 
+# 🔥 NEW COMMANDS AND CATEGORIES AS PER REQUIREMENT (No Symbols)
 CATEGORIES = {
     "basic": (
         "ʙᴀsɪᴄ ᴄᴏᴍᴍᴀɴᴅs",
         [
-            ("/start", "sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ"),
-            ("/grab", "ɢʀᴀʙ ᴛʜᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ"),
-            ("/fav", "ᴀᴅᴅ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ yᴛᴏ ʏᴏᴜʀ ғᴀᴠᴏᴜʀɪᴛᴇ"),
-            ("/claim", "ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ"),
-            ("/pay", "ɢɪᴠᴇ ᴄᴏɪɴs ᴛᴏ ᴏᴛʜᴇʀ ᴜsᴇʀs"),
-            ("/bal", "sᴇᴇ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ"),
-            ("/harem", "sᴇᴇ ʏᴏᴜʀ ᴄʜᴀʀᴀᴄᴛᴇʀ's ᴄᴏʟʟᴇᴄᴛɪᴏɴ"),
-            ("/gift", "ɢɪғᴛ ʏᴏᴜʀ ᴡᴀɪғᴜ ᴛᴏ sᴏᴍᴇᴏɴᴇ"),
-            ("/trade", "ᴛʀᴀᴅᴇ ᴄʜᴀʀᴀᴄᴛᴇʀs ʙᴇᴛᴡᴇᴇɴ ᴜsᴇʀs"),
-            ("/top", "ᴠɪᴇᴡ ᴛʜᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ"),
-            ("/sprofile", "ᴠɪᴇᴡ ʏᴏᴜʀ ᴘʀᴏғɪʟᴇ"),
-            (
-                "/changetime",
-                "ᴄʜᴀɴɢᴇ ᴛʜᴇ sᴘᴀᴡɴ ᴛɪᴍᴇ ᴏғ ᴄʜᴀʀᴀᴄᴛᴇʀs [ᴏᴡɴᴇʀ/ᴀᴅᴍɪɴs]",
-            ),
+            ("/start", "ᴛᴏ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ"),
+            ("/grab", "ᴛᴏ ɢᴜᴇss ᴛʜᴇ ᴡᴀɪғᴜ"),
+            ("/fav", "ᴛᴏ ᴍᴀᴋᴇ ʏᴏᴜʀ ᴏᴡɴᴇᴅ ᴡᴀɪғᴜ ғᴀᴠᴏᴜʀɪᴛᴇ"),
+            ("/claim", "ᴛᴏ ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ ᴄᴏɪɴs"),
+            ("/tasks", "ᴛᴏ ᴇᴀʀɴ ᴍᴏʀᴇ ᴄᴏɪɴꜱ"),
+            ("/bonus", "ᴛᴏ ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ/ᴡᴇᴇᴋʟʏ ʙᴏɴᴜs"),
+            ("/top", "ᴛᴏ sᴇᴇ ᴛᴏᴘ ᴘʟᴀʏᴇʀs"),
+            ("/bal", "ᴛᴏ sᴇᴇ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ"),
+            ("/tokens", "ᴛᴏ sᴇᴇ ʏᴏᴜʀ ᴛᴏᴋᴇɴs"),
+            ("/pay", "ᴛᴏ ɢɪᴠᴇ ᴄᴏɪɴs"),
+            ("/tpay", "ᴛᴏ ɢɪᴠᴇ ᴛᴏᴋᴇɴs"),
+            ("/buy", "ᴛᴏ ʙᴜʏ ᴅɪʀᴇᴄᴛʟʏ ᴀʟʟ"),
+            ("/pmarket", "ᴛᴏ ᴏᴘᴇɴ ᴘᴇʀsᴏɴ ᴛᴏ ᴘᴇʀsᴏɴ sʜᴏᴘ"),
+            ("/marketplace", "ᴛᴏ ᴏᴘᴇɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ"),
+            ("/gift", "ᴛᴏ ɢɪғᴛ ʏᴏᴜʀ ᴡᴀɪғᴜ"),
+            ("/harem", "ᴛᴏ sᴇᴇ ʏᴏᴜʀ ᴡᴀɪғᴜ"),
+            ("/hmode", "ᴛᴏ ᴄʜᴀɴɢᴇ ʜᴀʀᴇᴍ ᴍᴏᴅᴇ"),
+            ("/check", "ᴛᴏ sᴇᴇ ᴡᴀɪғᴜ ғʀᴏᴍ ʜᴇʀ ɪᴅ"),
+            ("/sprofile", "ᴛᴏ sᴇᴇ ʏᴏᴜʀ's ᴘʀᴏғɪʟᴇ"),
+            ("/swaifu", "ᴛᴏ ᴄʟᴀɪᴍ ʏᴏᴜʀ sᴘᴇᴄɪᴀʟ ᴡᴀɪғᴜs"),
+            ("/redeem", "ᴛᴏ ʀᴇᴅᴇᴇᴍ ᴄᴏɪɴs/ᴛᴏᴋᴇɴs"),
+            ("/sredeem", "ᴛᴏ ʀᴇᴅᴇᴇᴍ ᴡᴀɪғᴜ"),
+            ("/leaderboard", "ᴛᴏ ᴠɪᴇᴡ ᴛʜᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ"),
         ],
     ),
     "interactive": (
         "ɪɴᴛᴇʀᴀᴄᴛɪᴠᴇ ᴄᴏᴍᴍᴀɴᴅs",
         [
-            ("/claim", "ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ ʀᴇᴡᴀʀᴅ"),
-            ("/roll", "ɢᴀᴍʙʟᴇ ʏᴏᴜʀ ɢᴏʟᴅ"),
+            ("/mines", "ᴛᴏ ᴘʟᴀʏ ᴍɪɴᴇs"),
+            ("/tic", "ᴛᴏ ᴘʟᴀʏ ᴛɪᴄ-ᴛᴀᴄ-ᴛᴏᴇ"),
+            ("/sbet", "ᴛᴏ ʙᴇᴛ ʏᴏᴜʀ ᴄᴏɪɴs"),
             ("/games", "ᴘʟᴀʏ ɢᴀᴍᴇs"),
+            ("/roll", "ᴛᴏ ʀᴏʟʟ ᴀ ᴅɪᴄᴇ"),
+            ("/explore", "ᴛᴏ ᴇxᴘʟᴏʀᴇ ᴀɴᴅ ɢᴇᴛ ᴄᴏɪɴs"),
+            ("/marry", "ᴛᴏ ᴍᴀʀʀʏ ᴀ ɴᴇᴡ ᴡᴀɪғᴜ"),
+            ("/propose", "ᴛᴏ ᴘʀᴏᴘᴏsᴇ ᴀ ᴡᴀɪғᴜ"),
+            ("/new", "ᴛᴏ sᴛᴀʀᴛ ᴀ ɴᴇᴡ ɢᴀᴍᴇ"),
+            ("/end", "ᴛᴏ ᴇɴᴅ ᴛʜᴇ ᴄᴜʀʀᴇɴᴛ ɢᴀᴍᴇ"),
+            ("/helpword", "ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ"),
+            ("/grid", "ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅ ɢʀɪᴅ"),
+            ("/grid_easy", "ᴛᴏ ᴘʟᴀʏ ᴇᴀsʏ ᴡᴏʀᴅ ɢʀɪᴅ"),
+            ("/grid_hard", "ᴛᴏ ᴘʟᴀʏ ʜᴀʀᴅ ᴡᴏʀᴅ ɢʀɪᴅ"),
+            ("/endgrid", "ᴇɴᴅ ɢʀɪᴅ ɢᴀᴍᴇ"),
+            ("/topgrid", "ᴛᴏ sᴇᴇ ɢʀɪᴅ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ"),
+            ("/helpgrid", "ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅɢʀɪᴅ"),
         ],
     ),
-    "sudo": (
-        "sᴜᴅᴏ ᴄᴏᴍᴍᴀɴᴅs",
+    "admins": (
+        "ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs",
         [
-            ("/broadcast", "ʙʀᴏᴀᴅᴄᴀsᴛ ᴀ ᴍᴇssᴀɢᴇ ᴛᴏ ᴀʟʟ ᴜsᴇʀs"),
-            ("/addsudo", "ᴀᴅᴅ ᴀ sᴜᴅᴏ ᴜsᴇʀ"),
-            ("/removesudo", "ʀᴇᴍᴏᴠᴇ ᴀ sᴜᴅᴏ ᴜsᴇʀ"),
-            ("/sudolist", "ᴠɪᴇᴡ sᴜᴅᴏ ᴜsᴇʀs ʟɪsᴛ"),
-            ("/ban", "ʙᴀɴ ᴀ ᴜsᴇʀ ғʀᴏᴍ ᴛʜᴇ ʙᴏᴛ"),
-            ("/unban", "ᴜɴʙᴀɴ ᴀ ᴜsᴇʀ"),
-            ("/stats", "ᴠɪᴇᴡ ʙᴏᴛ sᴛᴀᴛɪsᴛɪᴄs"),
+            ("/changetime", "ᴛᴏ ᴄʜᴀɴɢᴇ ᴛʜᴇ ᴀᴘᴘᴇᴀʀ ᴛɪᴍᴇ ᴏғ ᴡᴀɪғᴜ [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
+            ("/toggledelete", "ᴛᴏ ᴅᴇʟᴇᴛᴇ ᴡᴏʀᴅsᴇᴇᴋ sᴘᴀᴍ [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
+            ("/togglewordseek", "ᴛᴏ ᴅɪsᴀʙʟᴇ ᴡᴏʀᴅsᴇᴇᴋ ɢᴀᴍᴇ [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
+            ("/gridsettings", "ᴛᴏ ᴏᴘᴇɴ ɢʀɪᴅ sᴇᴛᴛɪɴɢs [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
         ],
     ),
 }
@@ -158,7 +178,8 @@ def menu_view():
                 "ɪɴᴛᴇʀᴀᴄᴛɪᴠᴇ", callback_data="sxc_cat_interactive"
             ),
         ],
-        [InlineKeyboardButton("🌿 sᴜᴅᴏ", callback_data="sxc_cat_sudo")],
+        # 🔥 CHANGED BUTTON NAME TO ADMINS AS PER REQUEST
+        [InlineKeyboardButton("👑 ᴀᴅᴍɪɴs", callback_data="sxc_cat_admins")],
         [InlineKeyboardButton("ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="sxc_back")],
     ]
     return (
@@ -172,7 +193,8 @@ def category_view(cat_key: str, page: int = 1):
     page = max(1, min(page, total_pages))
     chunk = commands[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
 
-    text = f"<b>{title}</b> `[{page}/{total_pages}]`\n\n" + "\n".join(
+    # 🔥 PROFESSIONAL PAGE INDICATOR FORMATTING
+    text = f"<b>{title}</b>  <b>• ᴘᴀɢᴇ {page}/{total_pages} •</b>\n\n" + "\n".join(
         f"• <code>{cmd}</code> - <b>{desc}</b>" for cmd, desc in chunk
     )
 
@@ -195,6 +217,7 @@ def category_view(cat_key: str, page: int = 1):
     ]
     return text, InlineKeyboardMarkup(kb)
 
+# 🔥 FULLY UPDATED CREDITS VIEW (1st Line Owner, Rest 2 Per Line)
 async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     kb = []
     added_ids = set()
@@ -205,22 +228,32 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         owner_name = "ＩＭ 𖣘 ＵＣＨＩＨＡ"
 
-    kb.append([InlineKeyboardButton(f"{owner_name}", url=f"tg://user?id={OWNER_ID}")])
+    # 🔥 First line: Only the owner
+    kb.append([InlineKeyboardButton(f"{owner_name} 👑", url=f"tg://user?id={OWNER_ID}")])
     added_ids.add(OWNER_ID)
 
     sudo_users = await sudo_users_collection.find().to_list(length=None)
 
+    # 🔥 Second line onwards: 2 sudo users per row
+    sudo_row = []
     if sudo_users:
         for u in sudo_users:
             u_id = u.get("id")
             if u_id not in added_ids:
                 name = u.get("first_name", "Sudo User")
                 url = f"tg://user?id={u_id}"
-                kb.append([InlineKeyboardButton(f"{name}", url=url)])
+                sudo_row.append(InlineKeyboardButton(f"{name}", url=url))
                 added_ids.add(u_id)
 
+                if len(sudo_row) == 2:
+                    kb.append(sudo_row)
+                    sudo_row = []
+
+        if sudo_row: # Agar koi 1 odd bacha ho last me
+            kb.append(sudo_row)
+
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
-    return "<b>sᴜᴅᴏ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
+    return "<b>sᴜᴅᴏ ʟɪsᴛ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
 
 async def _ensure_user(user_id, first_name, username):
     try:
@@ -532,13 +565,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return
 
-        # 🔥 FIX: Rich message backend pe text ki tarah treat hota hai, 
-        # isliye ab hum directly rich message update karenge.
+        # 🔥 Rich HTML Edit Helper
         rich_text = text.replace('\n', '<br>')
         rich_caption = f'<video src="{html.escape(START_VIDEO)}"/><br>{rich_text}'
 
         try:
-            # 1️⃣ Fast custom API Method (Prevents 'no caption' crash)
             await context.bot._post("editMessageText", {
                 "chat_id": query.message.chat_id,
                 "message_id": query.message.message_id,
@@ -550,7 +581,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if "parse" not in err_msg and "dictionary" not in err_msg and "object" not in err_msg:
                 LOGGER.warning(f"Rich Message edit failed: {e}")
             
-            # 2️⃣ Standard Telegram Method Fallback
             try:
                 clean_text = re.sub(r'<(video|img)\b[^>]*>', '', text, flags=re.IGNORECASE)
                 clean_text = clean_text.replace('<h2>', '\n<b>').replace('</h2>', '</b>\n')
@@ -558,7 +588,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 clean_text = clean_text.replace('<br>', '\n').replace('<br/>', '\n').replace('​', '')
                 clean_text = re.sub(r'\n{3,}', '\n\n', clean_text).strip()
 
-                # Dynamic check: agar video properly standard bhej di gayi thi to
                 if query.message.caption is not None or query.message.video or query.message.photo:
                     await query.edit_message_caption(
                         caption=clean_text, parse_mode=ParseMode.HTML, reply_markup=markup
