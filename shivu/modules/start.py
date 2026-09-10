@@ -343,7 +343,8 @@ async def play_start_animation(bot, user_id):
         "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛ...</b>",
         "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ...</b>",
         "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ ʙᴏᴛ...</b>",
-        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ...</b>"
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ...</b>",
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛ</b>"
     ]
 
     try:
@@ -443,7 +444,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 🔥 TASK CREATED: Animation background me chalu hoga
         animation_task = None
         if update.effective_chat.type == ChatType.PRIVATE:
-            animation_task = asyncio.create_task(play_start_animation(context.bot, user_id))
+            # 🔥 THE FIX: Animation sirf normal start (empty args) ya referral ('ref_') link pe chalega
+            if not context.args or str(context.args[0]).startswith("ref_"):
+                animation_task = asyncio.create_task(play_start_animation(context.bot, user_id))
 
         # 🔥 FAST ADMIN CHECK FIX
         if update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
@@ -488,7 +491,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         caption_text = get_main_caption(user_id, first_name)
 
-        # ✨ THE FIX: Wait for animation to fully clear the draft before sending final message
+        # ✨ Wait for animation to fully clear the draft before sending final message
         if animation_task:
             await animation_task
 
