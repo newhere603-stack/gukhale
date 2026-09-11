@@ -17,13 +17,15 @@ from shivu import (
 )
 from shivu.Database.db import eco_collection
 
-# File ID ki jagah temporary direct video URL daal kar check karo
 START_VIDEO = "https://gxtusqitetsemwjdtvvq.supabase.co/storage/v1/object/public/photos/1785999431478-sm4ln0.mp4"
 
-FORCE_SUB_CHAT = "anime_group_hai"
-OWNER_ID = 7657218453  # Aapki Master Owner ID
+# ⚠️ Yahan apne "Leaf Village" ya actual force sub group/channel ka NUMERIC ID daalna
+FORCE_SUB_CHAT = -1001234567890 
+# ⚠️ Yahan link ke liye bina '@' ke username daalna
+FORCE_SUB_CHAT_USERNAME = "anime_group_hai" 
 
-# 🔥 DEEP LINK UPDATE: Jab bot add hoga to auto full-rights maangega
+OWNER_ID = 7657218453  
+
 ADMIN_RIGHTS_LINK = f"https://t.me/{BOT_USERNAME}?startgroup=new&admin=change_info+delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+promote_members"
 
 MAIN_KEYBOARD = InlineKeyboardMarkup([
@@ -54,16 +56,14 @@ FORCE_SUB_TEXT = "<tg-emoji emoji-id=\"5291873529464122510\">🔓</tg-emoji> <b>
 FORCE_SUB_KEYBOARD = InlineKeyboardMarkup([
     [
         InlineKeyboardButton(
-            "ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ", url=f"https://t.me/{FORCE_SUB_CHAT}"
+            "ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ", url=f"https://t.me/{FORCE_SUB_CHAT_USERNAME}"
         )
     ],
     [InlineKeyboardButton("ᴛʀʏ ᴀɢᴀɪɴ", callback_data="sxc_checksub")],
 ])
 
-# 🔥 EXACTLY 10 COMMANDS PER PAGE
 PAGE_SIZE = 10
 
-# 🔥 NEW COMMANDS AND CATEGORIES AS PER REQUIREMENT (No Symbols)
 CATEGORIES = {
     "basic": (
         "ʙᴀsɪᴄ ᴄᴏᴍᴍᴀɴᴅs",
@@ -126,7 +126,6 @@ CATEGORIES = {
     ),
 }
 
-# Dynamic Caption Generator with User Mention
 def get_main_caption(user_id: int, first_name: str) -> str:
     safe_name = html.escape(first_name)
     user_mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
@@ -139,19 +138,16 @@ def get_main_caption(user_id: int, first_name: str) -> str:
 
 async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
+        if not update or not update.effective_user:
+            return False
+
+        user_id = update.effective_user.id
+
         if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
             return True
 
-        user_id = update.effective_user.id
-        chat_identifier = (
-            f"@{FORCE_SUB_CHAT}"
-            if not str(FORCE_SUB_CHAT).startswith("@")
-            and not str(FORCE_SUB_CHAT).startswith("-100")
-            else FORCE_SUB_CHAT
-        )
-
         member = await context.bot.get_chat_member(
-            chat_id=chat_identifier, user_id=user_id
+            chat_id=FORCE_SUB_CHAT, user_id=user_id
         )
         
         if member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
@@ -160,13 +156,17 @@ async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE
         return True
 
     except BadRequest as e:
-        if "User not found" in str(e) or "Participant_id_invalid" in str(e):
+        error_text = str(e).lower()
+        if "user not found" in error_text or "participant_id_invalid" in error_text:
             return False
         LOGGER.warning(f"Force-sub BadRequest for user: {e}")
-        return False
+        return True 
+    except TelegramError as e:
+        LOGGER.error(f"Force-sub TelegramError: {e}")
+        return True
     except Exception as e:
         LOGGER.error(f"Force-sub error: {e}")
-        return False
+        return True
 
 def menu_view():
     kb = [
@@ -178,7 +178,6 @@ def menu_view():
                 "ɪɴᴛᴇʀᴀᴄᴛɪᴠᴇ", callback_data="sxc_cat_interactive"
             ),
         ],
-        # 🔥 CHANGED BUTTON NAME TO ADMINS AS PER REQUEST
         [InlineKeyboardButton("👑 ᴀᴅᴍɪɴs", callback_data="sxc_cat_admins")],
         [InlineKeyboardButton("ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="sxc_back")],
     ]
@@ -193,7 +192,6 @@ def category_view(cat_key: str, page: int = 1):
     page = max(1, min(page, total_pages))
     chunk = commands[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
 
-    # 🔥 PROFESSIONAL PAGE INDICATOR FORMATTING
     text = f"<b>{title}</b>  <b>• ᴘᴀɢᴇ {page}/{total_pages} •</b>\n\n" + "\n".join(
         f"• <code>{cmd}</code> - <b>{desc}</b>" for cmd, desc in chunk
     )
@@ -217,7 +215,6 @@ def category_view(cat_key: str, page: int = 1):
     ]
     return text, InlineKeyboardMarkup(kb)
 
-# 🔥 FULLY UPDATED CREDITS VIEW (1st Line Owner, Rest 2 Per Line)
 async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     kb = []
     added_ids = set()
@@ -228,13 +225,20 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         owner_name = "ＩＭ 𖣘 ＵＣＨＩＨＡ"
 
-    # 🔥 First line: Only the owner
-    kb.append([InlineKeyboardButton(f"{owner_name} 👑", url=f"tg://user?id={OWNER_ID}")])
+    # 🔥 Owner line with Premium Emoji
+    kb.append([
+        InlineKeyboardButton(
+            **{
+                "text": f"{owner_name}",
+                "url": f"tg://user?id={OWNER_ID}",
+                "icon_custom_emoji_id": "6084374074513957348"
+            }
+        )
+    ])
     added_ids.add(OWNER_ID)
 
     sudo_users = await sudo_users_collection.find().to_list(length=None)
 
-    # 🔥 Second line onwards: 2 sudo users per row
     sudo_row = []
     if sudo_users:
         for u in sudo_users:
@@ -242,14 +246,24 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
             if u_id not in added_ids:
                 name = u.get("first_name", "Sudo User")
                 url = f"tg://user?id={u_id}"
-                sudo_row.append(InlineKeyboardButton(f"{name}", url=url))
+                
+                # 🔥 Sudo users with Premium Emoji
+                sudo_row.append(
+                    InlineKeyboardButton(
+                        **{
+                            "text": f"{name}",
+                            "url": url,
+                            "icon_custom_emoji_id": "6084374074513957348"
+                        }
+                    )
+                )
                 added_ids.add(u_id)
 
                 if len(sudo_row) == 2:
                     kb.append(sudo_row)
                     sudo_row = []
 
-        if sudo_row: # Agar koi 1 odd bacha ho last me
+        if sudo_row: 
             kb.append(sudo_row)
 
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
@@ -349,9 +363,6 @@ async def safe_track_bot_start(user_id, first_name, username, is_new_user):
     except Exception as e:
         LOGGER.error(f"Error in safe_track_bot_start: {e}")
 
-# ==========================================
-# ✨ FASTEST ANIMATION
-# ==========================================
 async def send_start_menu(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -432,7 +443,6 @@ async def send_start_menu(
         LOGGER.warning(f"Live text animation failed: {e}")
         return await send_final()
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if not update or not update.effective_user or not update.effective_chat:
@@ -498,7 +508,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     try:
@@ -519,9 +528,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 should_animate = True
                 
             if not await is_force_sub_member(update, context):
-                await query.answer(
-                    "ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True
-                )
+                try:
+                    await query.answer("ʏᴏᴜ ʜᴀᴠᴇɴ'ᴛ ᴊᴏɪɴᴇᴅ ʏᴇᴛ!", show_alert=True)
+                except Exception:
+                    pass
                 return
                 
             is_new = await _ensure_user(user_id, first_name, username)
@@ -532,7 +542,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             
             caption_text = get_main_caption(user_id, first_name)
-            await send_start_menu(update, context, user_id, caption_text, animate=should_animate)
+            # Yahan direct chat id send kar rahe query ka taki glitch na aye
+            await send_start_menu(update, context, query.message.chat_id, caption_text, animate=should_animate)
             return
 
         if not await is_force_sub_member(update, context):
@@ -565,7 +576,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return
 
-        # 🔥 Rich HTML Edit Helper
         rich_text = text.replace('\n', '<br>')
         rich_caption = f'<video src="{html.escape(START_VIDEO)}"/><br>{rich_text}'
 
