@@ -136,6 +136,7 @@ def get_main_caption(user_id: int, first_name: str) -> str:
         f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
     )
 
+# 🔥 SMART FORCE SUB CHECK: Admin check ke saath 🔥
 async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
         if not update or not update.effective_user:
@@ -143,30 +144,45 @@ async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         user_id = update.effective_user.id
 
+        # Group chats mein bot kaam karega normally (force-sub sirf PM mein mangta hai)
         if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
             return True
 
+        # Check membership (Strict mode)
         member = await context.bot.get_chat_member(
             chat_id=FORCE_SUB_CHAT, user_id=user_id
         )
         
-        if member.status in [ChatMemberStatus.LEFT, ChatMemberStatus.BANNED]:
-            return False
+        # Sirf tab true agar user explicitly group ka part hai
+        if member.status in [
+            ChatMemberStatus.MEMBER, 
+            ChatMemberStatus.ADMINISTRATOR, 
+            ChatMemberStatus.OWNER, 
+            ChatMemberStatus.RESTRICTED
+        ]:
+            return True
             
-        return True
+        # Left, Banned, Kicked sab ke liye strictly False (Joined nahi hai toh bypass allowed nahi)
+        return False
 
     except BadRequest as e:
         error_text = str(e).lower()
+        # Agar error ye bole ki "user nahi mila", iska matlab user group me hai hi nahi -> False (Block karo)
         if "user not found" in error_text or "participant_id_invalid" in error_text:
             return False
-        LOGGER.warning(f"Force-sub BadRequest for user: {e}")
+            
+        # Par agar bot admin hi nahi hai, ya chat ID galat hai, tab error aayega "Chat not found" wagera -> True (Sabko allow kardo)
+        LOGGER.warning(f"Bot admin nahi hai ya group nahi mila, allowing everyone: {e}")
         return True 
+
     except TelegramError as e:
-        LOGGER.error(f"Force-sub TelegramError: {e}")
+        LOGGER.warning(f"Telegram API issue, allowing everyone: {e}")
         return True
+        
     except Exception as e:
-        LOGGER.error(f"Force-sub error: {e}")
+        LOGGER.warning(f"Unexpected error, allowing everyone: {e}")
         return True
+
 
 def menu_view():
     kb = [
