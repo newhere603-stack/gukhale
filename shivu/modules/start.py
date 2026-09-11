@@ -20,7 +20,7 @@ from shivu.Database.db import eco_collection
 START_VIDEO = "https://gxtusqitetsemwjdtvvq.supabase.co/storage/v1/object/public/photos/1785999431478-sm4ln0.mp4"
 
 # ⚠️ Yahan apne "Leaf Village" ya actual force sub group/channel ka NUMERIC ID daalna
-FORCE_SUB_CHAT = -1001234567890 
+FORCE_SUB_CHAT = -1003087506512 
 # ⚠️ Yahan link ke liye bina '@' ke username daalna
 FORCE_SUB_CHAT_USERNAME = "anime_group_hai" 
 
@@ -133,7 +133,7 @@ def get_main_caption(user_id: int, first_name: str) -> str:
     return (
         f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> Hᴇʏ {user_mention},<tg-emoji emoji-id=\"6093854622114390223\">🎀</tg-emoji>\n"
         f"ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪꜰᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ. <tg-emoji emoji-id=\"6066873332618238192\">⛈</tg-emoji></b>\n\n"
-        f"<b>ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ ᴀɴᴅ ʟᴇᴛ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
+        f"<b>ʟᴇᴛ'ꜱ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ ʙᴀʙʏ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
     )
 
 # 🔥 SMART FORCE SUB CHECK: Admin check ke saath 🔥
