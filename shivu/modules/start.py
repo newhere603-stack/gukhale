@@ -283,7 +283,7 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
             kb.append(sudo_row)
 
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
-    return "<b>Sudo:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
+    return "<b>Sᴜᴅᴏ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
 
 async def _ensure_user(user_id, first_name, username):
     try:
