@@ -194,7 +194,7 @@ def menu_view():
                 "ɪɴᴛᴇʀᴀᴄᴛɪᴠᴇ", callback_data="sxc_cat_interactive"
             ),
         ],
-        [InlineKeyboardButton("👑 ᴀᴅᴍɪɴs", callback_data="sxc_cat_admins")],
+        [InlineKeyboardButton("ᴀᴅᴍɪɴs", callback_data="sxc_cat_admins")],
         [InlineKeyboardButton("ᴍᴀɪɴ ᴍᴇɴᴜ", callback_data="sxc_back")],
     ]
     return (
@@ -208,7 +208,7 @@ def category_view(cat_key: str, page: int = 1):
     page = max(1, min(page, total_pages))
     chunk = commands[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
 
-    text = f"<b>{title}</b>  <b>• ᴘᴀɢᴇ {page}/{total_pages} •</b>\n\n" + "\n".join(
+    text = f"<b>{title}</b>  <b>• ᴘᴀɢᴇ {page}/{total_pages} </b>\n\n" + "\n".join(
         f"• <code>{cmd}</code> - <b>{desc}</b>" for cmd, desc in chunk
     )
 
@@ -283,7 +283,7 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
             kb.append(sudo_row)
 
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
-    return "<b>sᴜᴅᴏ ʟɪsᴛ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
+    return "<b>Sudo:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
 
 async def _ensure_user(user_id, first_name, username):
     try:
