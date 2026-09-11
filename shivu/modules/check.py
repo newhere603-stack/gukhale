@@ -286,7 +286,7 @@ def process_search(chars: List[Dict]) -> Dict:
 def card_caption(char: Char, gcount: int) -> str:
     emoji, text = rarity_parts(char.rarity)
     return (
-        f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> {to_small_caps('ultimate w-h info')} <tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji></b>\n"
+        f"<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> {to_small_caps('ultimate w-h info')} <tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji></b>\n"
         "\n"
         f"<tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji> 𝗡𝗔𝗠𝗘: <b>{escape(char.name)}</b>\n"
         f"{emoji} 𝗥𝗔𝗥𝗜𝗧𝗬: <b>{escape(text)}</b>\n"
