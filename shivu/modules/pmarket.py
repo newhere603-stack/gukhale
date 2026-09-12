@@ -859,10 +859,10 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_v:{market_id}:{rarity_key}:{order}:{page}:{user_id}", icon_custom_emoji_id=emoji_id)])
         nav = []
         if page > 0:
-            nav.append(InlineKeyboardButton(sc("◀ prev"), callback_data=f"pm_s:{rarity_key}:{order}:{page-1}:{user_id}"))
+            nav.append(InlineKeyboardButton(sc("⋞"), callback_data=f"pm_s:{rarity_key}:{order}:{page-1}:{user_id}"))
         nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="ignore"))
         if page < total_pages - 1:
-            nav.append(InlineKeyboardButton(sc("next ▶"), callback_data=f"pm_s:{rarity_key}:{order}:{page+1}:{user_id}"))
+            nav.append(InlineKeyboardButton(sc("⋟"), callback_data=f"pm_s:{rarity_key}:{order}:{page+1}:{user_id}"))
         keyboard.append(nav)
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_r:{rarity_key}:{user_id}")])
         sort_text = sc("low to high") if order == "asc" else sc("high to low")
@@ -999,21 +999,22 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         keyboard = [[InlineKeyboardButton(sc("list new character"), callback_data=f"pm_start_s:{user_id}", icon_custom_emoji_id="6109452611893601414")]]
         for item in listings:
             char_name = item['character'].get('name', 'Unknown')
+            price = item.get('price', 0)
             market_id = str(item['_id'])
             keyboard.append([
-                InlineKeyboardButton(sc(char_name), callback_data=f"pm_view_listing:{market_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641"),
+                InlineKeyboardButton(sc(f"{char_name} - {price:,}"), callback_data=f"pm_view_listing:{market_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641"),
                 InlineKeyboardButton(sc("cancel"), callback_data=f"pm_delist:{market_id}:{page}:{user_id}", icon_custom_emoji_id="5472030678633684592")
             ])
         if total_count > 0:
             nav = []
             if page > 0:
-                nav.append(InlineKeyboardButton(sc("◀ prev"), callback_data=f"pm_sm:{page-1}:{user_id}"))
+                nav.append(InlineKeyboardButton(sc("⋞"), callback_data=f"pm_sm:{page-1}:{user_id}"))
             nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="ignore"))
             if page < total_pages - 1:
-                nav.append(InlineKeyboardButton(sc("next ▶"), callback_data=f"pm_sm:{page+1}:{user_id}"))
+                nav.append(InlineKeyboardButton(sc("⋟"), callback_data=f"pm_sm:{page+1}:{user_id}"))
             keyboard.append(nav)
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_m:{user_id}")])
-        await update_menu(query, f"<b>{E_MONEY} {sc('your active listings')}</b>\n\n<i>{sc('manage your current listings or add a new one.')}</i>", InlineKeyboardMarkup(keyboard))
+        await update_menu(query, f"<b>{E_MONEY} {sc('your active listings')}</b>\n\n<i>{sc('manage your current listings or add a new one.')}</i>", InlineKeyboardMarkup(keyboard), change_media=True, photo_url=SHOP_IMG)
 
     elif action == "pm_view_listing":
         market_id = parts[1]
@@ -1042,7 +1043,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ᴄʜᴀʀ ɪᴅ:</b> <code>{display_char.get('id')}</code>"
         )
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(sc("cancel listing"), callback_data=f"pm_delist:{market_id}:{page}:{user_id}", icon_custom_emoji_id="5472030678633684592")],
+            [InlineKeyboardButton(sc("cancel"), callback_data=f"pm_delist:{market_id}:{page}:{user_id}", icon_custom_emoji_id="5472030678633684592")],
             [InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_sm:{page}:{user_id}")]
         ])
         is_video = display_char.get('is_video', False)
@@ -1076,21 +1077,22 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         keyboard = [[InlineKeyboardButton(sc("list new character"), callback_data=f"pm_start_s:{user_id}", icon_custom_emoji_id="6109452611893601414")]]
         for item in listings:
             char_name = item['character'].get('name', 'Unknown')
+            price = item.get('price', 0)
             m_id = str(item['_id'])
             keyboard.append([
-                InlineKeyboardButton(sc(char_name), callback_data=f"pm_view_listing:{m_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641"),
+                InlineKeyboardButton(sc(f"{char_name} - {price:,}"), callback_data=f"pm_view_listing:{m_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641"),
                 InlineKeyboardButton(sc("cancel"), callback_data=f"pm_delist:{m_id}:{page}:{user_id}", icon_custom_emoji_id="5472030678633684592")
             ])
         if total_count > 0:
             nav = []
             if page > 0:
-                nav.append(InlineKeyboardButton(sc("◀ prev"), callback_data=f"pm_sm:{page-1}:{user_id}"))
+                nav.append(InlineKeyboardButton(sc("⋞"), callback_data=f"pm_sm:{page-1}:{user_id}"))
             nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="ignore"))
             if page < total_pages - 1:
-                nav.append(InlineKeyboardButton(sc("next ▶"), callback_data=f"pm_sm:{page+1}:{user_id}"))
+                nav.append(InlineKeyboardButton(sc("⋟"), callback_data=f"pm_sm:{page+1}:{user_id}"))
             keyboard.append(nav)
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_m:{user_id}")])
-        await update_menu(query, f"<b>{E_MONEY} {sc('your active listings')}</b>\n\n<i>{sc('manage your current listings or add a new one.')}</i>", InlineKeyboardMarkup(keyboard))
+        await update_menu(query, f"<b>{E_MONEY} {sc('your active listings')}</b>\n\n<i>{sc('manage your current listings or add a new one.')}</i>", InlineKeyboardMarkup(keyboard), change_media=True, photo_url=SHOP_IMG)
 
     elif action == "pm_exc_conf":
         exc_type = parts[1]
@@ -1596,3 +1598,4 @@ try:
     application._post_init = _pmarket_post_init
 except Exception:
     pass
+    
