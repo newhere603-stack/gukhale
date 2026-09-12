@@ -90,8 +90,16 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
 
     await eco_collection.update_one({'id': receiver_id}, {'$inc': {'balance': amount}}, upsert=True)
 
+    try:
+        receiver_chat = await context.bot.get_chat(receiver_id)
+        receiver_mention = receiver_chat.mention_html()
+    except Exception:
+        receiver_mention = f"<a href='tg://user?id={receiver_id}'>ᴜꜱᴇʀ</a>"
+
     await q.edit_message_text(
-        f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ.</b>",
+        f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji><b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n"
+        f"<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ</b>\n"
+        f"<b>ᴛᴏ</b> {receiver_mention}",
         parse_mode="HTML"
     )
     await q.answer()
@@ -101,7 +109,6 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
             sender_user = await context.bot.get_chat(sender_id)
             sender_name = sender_user.first_name
             receiver_user = await context.bot.get_chat(receiver_id)
-            receiver_mention = receiver_user.mention_html()
             receiver_name = receiver_user.first_name
         except Exception:
             sender_name = "User"
@@ -172,8 +179,16 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
 
     await eco_collection.update_one({'id': receiver_id}, {'$inc': {'tokens': amount}}, upsert=True)
 
+    try:
+        receiver_chat = await context.bot.get_chat(receiver_id)
+        receiver_mention = receiver_chat.mention_html()
+    except Exception:
+        receiver_mention = f"<a href='tg://user?id={receiver_id}'>ᴜꜱᴇʀ</a>"
+
     await q.edit_message_text(
-        f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji> <b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"6332379101231323246\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ.</b>",
+        f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji><b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n"
+        f"<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"6109593993627050230\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ</b>\n"
+        f"<b>ᴛᴏ</b> {receiver_mention}",
         parse_mode="HTML"
     )
     await q.answer()
