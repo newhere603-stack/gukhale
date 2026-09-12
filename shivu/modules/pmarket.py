@@ -22,6 +22,8 @@ E_PARTY = '<tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji>'
 E_INF = '<tg-emoji emoji-id="6105158430576616482">♾</tg-emoji>'
 E_MONEY = '<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji>'
 E_TIME = '<tg-emoji emoji-id="6307488052059053932">🕐</tg-emoji>'
+E_SELL_CHAR = '<tg-emoji emoji-id="6093434630147415641">🃏</tg-emoji>'
+E_BUYER = '<tg-emoji emoji-id="6105159001807267845">⭐</tg-emoji>'
 
 # --- CONFIGURATION ---
 LOG_GROUP_ID = -1003893927065
@@ -960,7 +962,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         )
         await send_market_log(context, "🛒 CHARACTER SOLD", log_details)
 
-        # 🔔 SELLER NOTIFICATION (buyer name only, no mention) 🔔
+        # 🔔 SELLER NOTIFICATION (premium emojis, buyer name only, no mention) 🔔
         _, prem_html, _ = get_rarity_display(char.get('rarity', ''))
         try:
             await context.bot.send_message(
@@ -968,10 +970,10 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                 text=(
                     f"<b>{E_PARTY} {sc('character sold!')}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"<b>🎭 {sc('character:')}</b> {prem_html} <b>{sc(char.get('name', 'Unknown'))}</b>\n"
+                    f"<b>{E_SELL_CHAR} {sc('character:')}</b> {prem_html} <b>{sc(char.get('name', 'Unknown'))}</b>\n"
                     f"<b>🆔 {sc('id:')}</b> <code>{char.get('id')}</code>\n"
                     f"<b>{E_MONEY} {sc('sold for:')}</b> <b><code>{price:,}</code> {sc('coins')}</b>\n"
-                    f"<b>👤 {sc('buyer:')}</b> <b>{sc(buyer_name)}</b>\n"
+                    f"<b>{E_BUYER} {sc('buyer:')}</b> <b>{sc(buyer_name)}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
                     f"<b>{E_TICK} {sc('the amount has been added to your balance!')}</b>"
                 ),
@@ -1002,8 +1004,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             price = item.get('price', 0)
             market_id = str(item['_id'])
             keyboard.append([
-                InlineKeyboardButton(sc(f"{char_name} - {price:,}"), callback_data=f"pm_view_listing:{market_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641"),
-                InlineKeyboardButton(sc("cancel"), callback_data=f"pm_delist:{market_id}:{page}:{user_id}", icon_custom_emoji_id="5472030678633684592")
+                InlineKeyboardButton(sc(f"{char_name} - {price:,}"), callback_data=f"pm_view_listing:{market_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641")
             ])
         if total_count > 0:
             nav = []
@@ -1080,8 +1081,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             price = item.get('price', 0)
             m_id = str(item['_id'])
             keyboard.append([
-                InlineKeyboardButton(sc(f"{char_name} - {price:,}"), callback_data=f"pm_view_listing:{m_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641"),
-                InlineKeyboardButton(sc("cancel"), callback_data=f"pm_delist:{m_id}:{page}:{user_id}", icon_custom_emoji_id="5472030678633684592")
+                InlineKeyboardButton(sc(f"{char_name} - {price:,}"), callback_data=f"pm_view_listing:{m_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641")
             ])
         if total_count > 0:
             nav = []
