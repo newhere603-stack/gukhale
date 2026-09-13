@@ -94,12 +94,12 @@ async def pay_coins_callback(update: Update, context: CallbackContext):
         receiver_chat = await context.bot.get_chat(receiver_id)
         receiver_mention = receiver_chat.mention_html()
     except Exception:
-        receiver_mention = f"<a href='tg://user?id={receiver_id}'>ᴜꜱᴇʀ</a>"
+        receiver_mention = f"<a href='tg://user?id={receiver_id}'><b>ᴜꜱᴇʀ</b></a>"
 
+    # 🔥 FIXED: Success message in single line with bold mention
     await q.edit_message_text(
         f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji><b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n"
-        f"<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ</b>\n"
-        f"<b>ᴛᴏ</b> {receiver_mention}",
+        f"<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> <b>{receiver_mention}</b>",
         parse_mode="HTML"
     )
     await q.answer()
@@ -183,12 +183,12 @@ async def pay_tokens_callback(update: Update, context: CallbackContext):
         receiver_chat = await context.bot.get_chat(receiver_id)
         receiver_mention = receiver_chat.mention_html()
     except Exception:
-        receiver_mention = f"<a href='tg://user?id={receiver_id}'>ᴜꜱᴇʀ</a>"
+        receiver_mention = f"<a href='tg://user?id={receiver_id}'><b>ᴜꜱᴇʀ</b></a>"
 
+    # 🔥 FIXED: Success message in single line with bold mention
     await q.edit_message_text(
         f"<tg-emoji emoji-id=\"5436040291507247633\">🎉</tg-emoji><b>ᴘᴀʏᴍᴇɴᴛ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟ!</b>\n\n"
-        f"<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"6109593993627050230\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ</b>\n"
-        f"<b>ᴛᴏ</b> {receiver_mention}",
+        f"<b>ʏᴏᴜ ꜱᴇɴᴛ <tg-emoji emoji-id=\"6109593993627050230\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> <b>{receiver_mention}</b>",
         parse_mode="HTML"
     )
     await q.answer()
