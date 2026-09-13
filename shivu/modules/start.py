@@ -252,9 +252,8 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     kb.append([
         InlineKeyboardButton(
             **{
-                "text": f"{owner_name}",
-                "url": f"tg://user?id={OWNER_ID}",
-                "icon_custom_emoji_id": "6084374074513957348"
+                "text": f"{owner_name} <tg-emoji emoji-id=\"6084374074513957348\">✅</tg-emoji>",
+                "url": f"tg://user?id={OWNER_ID}"
             }
         )
     ])
@@ -273,9 +272,8 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
                 sudo_row.append(
                     InlineKeyboardButton(
                         **{
-                            "text": f"{name}",
-                            "url": url,
-                            "icon_custom_emoji_id": "6084374074513957348"
+                            "text": f"{name} <tg-emoji emoji-id=\"6084374074513957348\">✅</tg-emoji>",
+                            "url": url
                         }
                     )
                 )
