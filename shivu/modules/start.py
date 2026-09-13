@@ -150,17 +150,14 @@ async def is_force_sub_member(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         user_id = update.effective_user.id
 
-        # Group chats mein bot kaam karega normally (force-sub sirf PM mein mangta hai)
         if update.effective_chat and update.effective_chat.type != ChatType.PRIVATE:
             return True
 
-        # Positive cache check (5 min TTL) — repeat users instant
         now = asyncio.get_event_loop().time()
         cached_ts = _force_sub_cache.get(user_id)
         if cached_ts and (now - cached_ts) < 300:
             return True
 
-        # Check membership (Strict mode)
         member = await context.bot.get_chat_member(
             chat_id=FORCE_SUB_CHAT, user_id=user_id
         )
@@ -413,150 +410,17 @@ def _clean_caption(text: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
-# ✨ PROGRESSIVE HTML ANIMATION (SAME STYLE AS /bal, SUPERFAST)
+# BACKGROUND LOADING ANIMATION (🔥 SUPERFAST TYPING EFFECT 🔥)
 # ══════════════════════════════════════════════════════════════
-
-_TAG_NAME_RE = re.compile(r'</?\s*([a-zA-Z][a-zA-Z0-9]*)')
-_ENTITY_RE = re.compile(r'&[a-zA-Z#0-9]+;$')
-
-
-def _tag_name(tag: str) -> str:
-    m = _TAG_NAME_RE.match(tag)
-    return m.group(1).lower() if m else ''
-
-
-def _wrap_stack(inner: str, stack) -> str:
-    """Wrap `inner` HTML with all currently open tags (properly closed)."""
-    if not stack:
-        return inner
-    opens = ''.join(raw for _, raw in stack)
-    closes = ''.join(f'</{name}>' for name, _ in reversed(stack))
-    return opens + inner + closes
-
-
-def _parse_atoms(html_str: str):
-    """
-    Split HTML into renderable 'atoms' where each atom is a FULL, valid snippet:
-      • <tg-emoji>...</tg-emoji>     → one atom (premium emoji intact)
-      • <a ...>...</a>                → one atom (link intact)
-      • HTML entity (&amp; / &#123;)   → one atom
-      • any other visible char        → one atom
-    Every atom is wrapped with the currently-open tags so it always renders valid.
-    """
-    atoms = []
-    stack = []  # list of (tag_name, raw_open_tag)
-    i, n = 0, len(html_str)
-
-    while i < n:
-        c = html_str[i]
-
-        if c == '<':
-            j = html_str.find('>', i)
-            if j == -1:
-                atoms.append(_wrap_stack(c, stack))
-                i += 1
-                continue
-
-            tag = html_str[i:j + 1]
-            name = _tag_name(tag)
-
-            if tag.startswith('</'):
-                # closing tag → pop matching open
-                for k in range(len(stack) - 1, -1, -1):
-                    if stack[k][0] == name:
-                        del stack[k]
-                        break
-                i = j + 1
-                continue
-
-            if name == 'tg-emoji':
-                close_seq = '</tg-emoji>'
-                k = html_str.find(close_seq, j + 1)
-                if k == -1:
-                    i = j + 1
-                    continue
-                inner = tag + html_str[j + 1:k] + close_seq
-                atoms.append(_wrap_stack(inner, stack))
-                i = k + len(close_seq)
-                continue
-
-            if name == 'a':
-                close_seq = '</a>'
-                k = html_str.find(close_seq, j + 1)
-                if k == -1:
-                    i = j + 1
-                    continue
-                inner = tag + html_str[j + 1:k] + close_seq
-                atoms.append(_wrap_stack(inner, stack))
-                i = k + len(close_seq)
-                continue
-
-            # generic open tag
-            stack.append((name, tag))
-            i = j + 1
-            continue
-
-        if c == '&':
-            semi = html_str.find(';', i, i + 10)
-            if semi != -1:
-                entity = html_str[i:semi + 1]
-                if _ENTITY_RE.match(entity):
-                    atoms.append(_wrap_stack(entity, stack))
-                    i = semi + 1
-                    continue
-            atoms.append(_wrap_stack(c, stack))
-            i += 1
-            continue
-
-        # normal visible character
-        atoms.append(_wrap_stack(c, stack))
-        i += 1
-
-    return atoms
-
-
-def build_start_animation_frames(
-    final_html: str,
-    max_frames: int = 25,
-    min_chunk: int = 4,
-):
-    """
-    Build progressive HTML frames from final_html (caption).
-    Every frame = valid HTML showing first N atoms → identical visual style
-    to /bal animation (premium emoji + bold + link intact).
-    """
-    atoms = _parse_atoms(final_html)
-    total = len(atoms)
-    if total == 0:
-        return [final_html]
-
-    chunk = max(min_chunk, total // max_frames)
-    frames = []
-    i = 0
-    while i < total:
-        i = min(i + chunk, total)
-        frames.append(''.join(atoms[:i]))
-
-    full = ''.join(atoms)
-    if frames[-1] != full:
-        frames.append(full)
-    return frames
-
-
-async def _animate_start_loading(
-    context: ContextTypes.DEFAULT_TYPE,
-    chat_id: int,
-    frames,
-    speed: float = 0.04,
-):
-    """
-    SAME STYLE + SPEED as /bal animation.
-    Progressive formatted frames, non-blocking, cancels gracefully.
-    """
-    if not frames:
-        return
-
+async def _animate_start_loading(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     draft_id = random.randint(1, 2_000_000_000)
+    
+    # Ye wahi STARTING / LOADING wala original text hai
+    frames = [
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ...</b>",
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ ʙᴏᴛ...</b>",
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ʟᴏᴀᴅɪɴɢ ᴍᴇɴᴜ...</b>",
+    ]
     try:
         for frame in frames:
             try:
@@ -574,16 +438,23 @@ async def _animate_start_loading(
             except asyncio.CancelledError:
                 raise
             except Exception:
-                return
-            await asyncio.sleep(speed)
+                continue # Ignore and jump to next for smoothness
+
+            # ⚡ 0.04 sleep - EXACTLY balance ke jaisa superfast
+            await asyncio.sleep(0.04)
+
+        # Jab tak main task load hoke is task ko cancel na karde tab tak draft ko screen par rakho
+        while True:
+            await asyncio.sleep(0.5)
+            
     except asyncio.CancelledError:
-        raise
+        pass
     except Exception:
         pass
 
 
 # ══════════════════════════════════════════════════════════════
-# SEND START MENU (with file_id cache for speed)
+# SEND START MENU
 # ══════════════════════════════════════════════════════════════
 async def send_start_menu(
     update: Update,
@@ -650,16 +521,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             not context.args or str(context.args[0]).startswith("ref_")
         )
 
-        # Build caption ONCE (used for animation + final message)
-        caption_text = get_main_caption(user_id, first_name)
-
-        # ── 1. Start animation IMMEDIATELY as background task ──
-        # Runs while DB/API work happens — superfast response.
+        # ── 1. Start animation IMMEDIATELY (background task) ──
         if should_animate:
-            frames = build_start_animation_frames(caption_text)
-            anim_task = asyncio.create_task(
-                _animate_start_loading(context, chat_id, frames, speed=0.04)
-            )
+            anim_task = asyncio.create_task(_animate_start_loading(context, chat_id))
 
         # ── 2. Group admin check ──
         if update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
@@ -707,14 +571,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _cancel_task(anim_task)
             return
 
-        # ── 5. Wait for animation to finish (if any) then send final menu ──
-        # Awaiting keeps the animation visible end-to-end (like /bal).
-        if anim_task is not None:
-            try:
-                await anim_task
-            except (asyncio.CancelledError, Exception):
-                pass
-
+        # ── 5. Kill animation, send final menu ──
+        _cancel_task(anim_task)
+        caption_text = get_main_caption(user_id, first_name)
         await send_start_menu(update, context, chat_id, caption_text)
 
     except Exception as e:
@@ -745,7 +604,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = query.from_user.username or ""
 
         if data == "sxc_checksub":
-            # Bust cache so we actually re-check
             _force_sub_cache.pop(user_id, None)
 
             if not await is_force_sub_member(update, context):
