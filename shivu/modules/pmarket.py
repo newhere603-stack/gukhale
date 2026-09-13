@@ -570,7 +570,7 @@ async def ask_buy_char_id(update: Update, context: CallbackContext):
     ])
     await update.message.reply_html(
         f"<b>{E_TICK} {sc('character found:')} {sc(live_char.get('name'))}</b>\n"
-        f"<b>{sc('rarity:')} {sc(r)} ({sc('value:')} {coin_price:,} {sc('coins')})</b>\n\n"
+        f"<b>{sc('rarity:')} {sc(RARITIES.get(r, RARITIES['common'])[2])} ({sc('value:')} {coin_price:,} {sc('coins')})</b>\n\n"
         f"<b>{sc(f'send the quantity of this character you want to buy (min: {min_qty}, max: 100).')}</b>\n"
         f"<i>({sc('note: minimum purchase value is 5 inr / 37,500 coins')})</i>",
         reply_markup=kb
