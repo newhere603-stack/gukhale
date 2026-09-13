@@ -60,9 +60,24 @@ class MediaType(Enum):
         return cls.DOCUMENT
 
 
+# 🔥 RARITY ALIASES — "cosmic"/"video"/"video edition" all resolve to same level (2)
+RARITY_ALIASES = {
+    "cosmic": 2,
+    "video": 2,
+    "video edition": 2,
+    "videoedition": 2,
+    "video editing": 2,
+    "videoediting": 2,
+    "video edit": 2,
+    "videoedit": 2,
+    "video edits": 2,
+    "videoedits": 2,
+}
+
+
 class RarityLevel(Enum):
     MYTHIC = (1, "💎 Mythic")
-    COSMIC = (2, "🌌 Cosmic")
+    COSMIC = (2, "🌌 Video Edition")
     CELESTIAL = (3, "🪽 Celestial")
     EXCLUSIVE = (4, "💮 Exclusive")
     LEGENDARY = (5, "🟡 Legendary")
@@ -103,6 +118,37 @@ class RarityLevel(Enum):
         for rarity in cls:
             if rarity.level == num:
                 return rarity
+        return None
+
+    # 🔥 NEW: Accepts both numbers AND text (with alias support for cosmic/video/etc.)
+    @classmethod
+    def from_input(cls, raw_value) -> Optional['RarityLevel']:
+        if raw_value is None:
+            return None
+
+        s = str(raw_value).strip()
+        if not s:
+            return None
+
+        # 1. Direct numeric level
+        if s.isdigit():
+            return cls.from_number(int(s))
+
+        # 2. Alias check (cosmic/video/video edition/video editing etc. → level 2)
+        n = s.lower()
+        if n in RARITY_ALIASES:
+            return cls.from_number(RARITY_ALIASES[n])
+
+        # 3. Match against display name (e.g. "Video Edition", "Mythic", "Rare")
+        for rarity in cls:
+            if rarity.name_only.lower() == n:
+                return rarity
+
+        # 4. Substring match against enum key or display name
+        for rarity in cls:
+            if rarity.name.lower() in n or rarity.name_only.lower() in n:
+                return rarity
+
         return None
 
 
@@ -368,17 +414,17 @@ class TelegramUploader:
                 message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
             except TelegramError as e:
                 error_msg = str(e).lower()
-                
+
                 if "video as photo" in error_msg:
                     character.media_file.media_type = MediaType.VIDEO
                     caption = character.get_caption(is_update)
                     message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
-                    
+
                 elif "photo as video" in error_msg:
                     character.media_file.media_type = MediaType.IMAGE
                     caption = character.get_caption(is_update)
                     message = await TelegramUploader._send_media_url(character.media_file.url, character.media_file.media_type, caption, context)
-                    
+
                 elif "animation" in error_msg:
                     character.media_file.media_type = MediaType.ANIMATION
                     caption = character.get_caption(is_update)
@@ -403,7 +449,7 @@ class TelegramUploader:
         # Insert to MongoDB
         char_dict = character.to_dict()
         await collection.insert_one(char_dict)
-        
+
         # Update Cache instantly for fast drops and checking
         if characters is not None:
             characters.append(char_dict)
@@ -448,12 +494,9 @@ class CharacterFactory:
         character_name = TextFormatter.format_name(args[0])
         anime = TextFormatter.format_name(args[1])
 
-        try:
-            rarity_num = int(args[2])
-            rarity = RarityLevel.from_number(rarity_num)
-            if not rarity:
-                return None
-        except ValueError:
+        # 🔥 UPDATED: Use from_input to support both numbers AND aliases (cosmic/video/video edition)
+        rarity = RarityLevel.from_input(args[2])
+        if not rarity:
             return None
 
         char_id = await SequenceGenerator.get_next_id('character_id')
@@ -504,7 +547,7 @@ class CharacterUploadHandler:
 
         processing_msg = await update.message.reply_text('<b>⏳ Extracting media...</b>', parse_mode='HTML')
         media_file = await CharacterUploadHandler._extract_media_from_reply(reply_msg, update)
-        
+
         if not media_file:
             await processing_msg.edit_text('<b>Failed to extract media!</b>', parse_mode='HTML')
             return
@@ -525,11 +568,11 @@ class CharacterUploadHandler:
         )
 
         if not character:
-            await processing_msg.edit_text('<b>Invalid rarity number (1-15)!</b>', parse_mode='HTML')
+            await processing_msg.edit_text('<b>Invalid rarity (use number 1-15 or name like "video edition")!</b>', parse_mode='HTML')
             return
 
         await TelegramUploader.upload_character(character, context)
-        
+
         size_str = f"{media_file.size / (1024 * 1024):.2f} MB" if media_file.size > 0 else "Unknown"
         await processing_msg.edit_text(
             f'<b>✅ Character uploaded successfully!\n'
@@ -558,7 +601,7 @@ class CharacterUploadHandler:
 
             media_file = MediaFile(url=media_source, file_bytes=file_bytes)
             await processing_msg.edit_text('<b>⏳ Uploading to server...</b>', parse_mode='HTML')
-            
+
             file_url = await MasterUploader.upload_file(file_bytes, media_file.filename, media_file.media_type)
             if not file_url:
                 file_url = media_source
@@ -574,11 +617,11 @@ class CharacterUploadHandler:
         )
 
         if not character:
-            await processing_msg.edit_text('<b>Invalid rarity number (1-15)!</b>', parse_mode='HTML')
+            await processing_msg.edit_text('<b>Invalid rarity (use number 1-15 or name like "video edition")!</b>', parse_mode='HTML')
             return
 
         await TelegramUploader.upload_character(character, context)
-        
+
         size_str = f"{media_file.size / (1024 * 1024):.2f} MB" if media_file.size > 0 else "Unknown"
         await processing_msg.edit_text(
             f'<b>✅ Character uploaded successfully!\n'
@@ -632,7 +675,7 @@ class CharacterDeletionHandler:
         char_id_str = str(char_id)
         query = {'$or': [{'id': char_id_str}, {'id': int(char_id_str) if char_id_str.isdigit() else char_id_str}]}
         character = await collection.find_one_and_delete(query)
-        
+
         # Remove from Cache instantly
         if characters is not None and character:
             for i, c in enumerate(characters):
@@ -691,7 +734,7 @@ class CharacterUpdateHandler:
 
         char_id = args[0]
         field = args[1].lower()
-        
+
         if field == 'img_url':
             field = 'media'
 
@@ -702,44 +745,44 @@ class CharacterUpdateHandler:
         # Fetch using robust query to avoid type mismatch
         query = {'$or': [{'id': char_id}, {'id': int(char_id) if char_id.isdigit() else char_id}]}
         character_data = await collection.find_one(query)
-        
+
         if not character_data:
             await update.message.reply_text(f'<b>Character {char_id} not found.</b>', parse_mode='HTML')
             return
-            
+
         actual_id = character_data['id']
         processing_msg = await update.message.reply_text(f'<b>⏳ Updating {field}...</b>', parse_mode='HTML')
 
         try:
             update_data = {}
-            
+
             if field == 'media':
                 reply_msg = update.message.reply_to_message
-                
+
                 if len(args) >= 3:
                     new_media = args[2]
-                    
+
                     if new_media.startswith(('http://', 'https://')):
                         await processing_msg.edit_text('<b>⏳ Downloading from link...</b>', parse_mode='HTML')
                         file_bytes = await FileDownloader.download_from_url(new_media)
-                        
+
                         if not file_bytes:
                             await processing_msg.edit_text('<b>Failed to download from URL. Check if it is a direct media link.</b>', parse_mode='HTML')
                             return
-                            
+
                         media_file = MediaFile(url=new_media, file_bytes=file_bytes)
                         await processing_msg.edit_text('<b>⏳ Uploading new media to server...</b>', parse_mode='HTML')
                         file_url = await MasterUploader.upload_file(media_file.file_bytes, media_file.filename, media_file.media_type)
-                        
+
                         if not file_url:
                             await processing_msg.edit_text('<b>Server upload failed!</b>', parse_mode='HTML')
                             return
-                            
+
                         update_data['img_url'] = file_url
                         update_data['is_video'] = media_file.is_video
                         update_data['media_type'] = media_file.media_type.value
                         update_data['file_hash'] = media_file.hash
-                        
+
                     else:
                         await processing_msg.edit_text('<b>⏳ Using Telegram File ID...</b>', parse_mode='HTML')
                         update_data['img_url'] = new_media
@@ -750,14 +793,14 @@ class CharacterUpdateHandler:
                     if not media_file:
                         await processing_msg.edit_text('<b>Failed to extract media!</b>', parse_mode='HTML')
                         return
-                    
+
                     await processing_msg.edit_text('<b>⏳ Uploading new media to server...</b>', parse_mode='HTML')
                     file_url = await MasterUploader.upload_file(media_file.file_bytes, media_file.filename, media_file.media_type)
-                    
+
                     if not file_url:
                         await processing_msg.edit_text('<b>Server upload failed!</b>', parse_mode='HTML')
                         return
-                        
+
                     update_data['img_url'] = file_url
                     update_data['is_video'] = media_file.is_video
                     update_data['media_type'] = media_file.media_type.value
@@ -771,15 +814,16 @@ class CharacterUpdateHandler:
                 if len(args) < 3:
                     await processing_msg.edit_text('<b>Please provide the new value!</b>', parse_mode='HTML')
                     return
-                    
+
                 new_value = " ".join(args[2:])
 
                 if field in ['name', 'anime']:
                     update_data[field] = TextFormatter.format_name(new_value)
                 elif field == 'rarity':
-                    rarity = RarityLevel.from_number(int(new_value))
+                    # 🔥 UPDATED: from_input supports numbers, "video edition", "cosmic", "video", etc.
+                    rarity = RarityLevel.from_input(new_value)
                     if not rarity:
-                        await processing_msg.edit_text('<b>Invalid rarity number!</b>', parse_mode='HTML')
+                        await processing_msg.edit_text('<b>Invalid rarity! Use number 1-15 or name like "video edition", "cosmic", "video".</b>', parse_mode='HTML')
                         return
                     update_data[field] = rarity.display_name
 
@@ -787,11 +831,11 @@ class CharacterUpdateHandler:
 
             # Fix: Update document and fetch fresh data to sync with cache
             updated_char = await collection.find_one_and_update(
-                {'id': actual_id}, 
+                {'id': actual_id},
                 {'$set': update_data},
                 return_document=ReturnDocument.AFTER
             )
-            
+
             # 100% Foolproof Cache Update
             if characters is not None and updated_char:
                 for i, c in enumerate(characters):
@@ -805,11 +849,11 @@ class CharacterUpdateHandler:
                     new_caption = CharacterUpdateHandler._generate_update_caption(
                         updated_char, str(update.effective_user.id), update.effective_user.first_name
                     )
-                    
+
                     if field == 'media':
                         m_type = updated_char.get('media_type', 'image')
                         media_url = updated_char.get('img_url')
-                        
+
                         if m_type == 'video':
                             media_obj = InputMediaVideo(media=media_url, caption=new_caption, parse_mode='HTML')
                         elif m_type == 'animation':
@@ -818,7 +862,7 @@ class CharacterUpdateHandler:
                             media_obj = InputMediaDocument(media=media_url, caption=new_caption, parse_mode='HTML')
                         else:
                             media_obj = InputMediaPhoto(media=media_url, caption=new_caption, parse_mode='HTML')
-                            
+
                         await context.bot.edit_message_media(
                             chat_id=CHARA_CHANNEL_ID,
                             message_id=updated_char['message_id'],
