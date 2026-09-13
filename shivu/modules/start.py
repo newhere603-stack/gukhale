@@ -413,15 +413,144 @@ def _clean_caption(text: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
-# BACKGROUND LOADING ANIMATION (runs DURING api/db work)
+# HTML ATOM PROGRESSIVE ANIMATION (SAME STYLE AS BALANCE)
 # ══════════════════════════════════════════════════════════════
-async def _animate_start_loading(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+
+_TAG_NAME_RE = re.compile(r'</?\s*([a-zA-Z][a-zA-Z0-9]*)')
+_ENTITY_RE = re.compile(r'&[a-zA-Z#0-9]+;$')
+
+
+def _tag_name(tag: str) -> str:
+    m = _TAG_NAME_RE.match(tag)
+    return m.group(1).lower() if m else ''
+
+
+def _wrap_stack(stack, inner: str) -> str:
+    """Wrap `inner` HTML with all currently open tags (properly closed)."""
+    if not stack:
+        return inner
+    opens = ''.join(raw for _, raw in stack)
+    closes = ''.join(f'</{name}>' for name, _ in reversed(stack))
+    return opens + inner + closes
+
+
+def _parse_atoms(html_str: str):
+    """
+    Parse an HTML string into a list of 'atoms'.
+
+    Each atom is a complete, valid HTML snippet that renders as one visible unit:
+      • <tg-emoji> → rendered whole (with its own tags + outer open tags)
+      • <a>...</a> → link text rendered whole (keeps link intact)
+      • HTML entity (&amp; etc.) → rendered whole
+      • any other char → rendered individually, wrapped with its open tags
+    """
+    atoms = []
+    stack = []  # list of (tag_name, raw_open_tag)
+    i = 0
+    n = len(html_str)
+
+    while i < n:
+        c = html_str[i]
+
+        if c == '<':
+            j = html_str.find('>', i)
+            if j == -1:
+                atoms.append(_wrap_stack(stack, c))
+                i += 1
+                continue
+
+            tag = html_str[i:j + 1]
+            name = _tag_name(tag)
+
+            if tag.startswith('</'):
+                # closing tag → pop matching open
+                for k in range(len(stack) - 1, -1, -1):
+                    if stack[k][0] == name:
+                        del stack[k]
+                        break
+                i = j + 1
+                continue
+
+            if name == 'tg-emoji':
+                close_seq = '</tg-emoji>'
+                k = html_str.find(close_seq, j + 1)
+                if k == -1:
+                    i = j + 1
+                    continue
+                emoji_char = html_str[j + 1:k]
+                inner = tag + emoji_char + close_seq
+                atoms.append(_wrap_stack(stack, inner))
+                i = k + len(close_seq)
+                continue
+
+            if name == 'a':
+                close_seq = '</a>'
+                k = html_str.find(close_seq, j + 1)
+                if k == -1:
+                    i = j + 1
+                    continue
+                inner_text = html_str[j + 1:k]
+                inner = tag + inner_text + close_seq
+                atoms.append(_wrap_stack(stack, inner))
+                i = k + len(close_seq)
+                continue
+
+            # generic open tag
+            stack.append((name, tag))
+            i = j + 1
+            continue
+
+        if c == '&':
+            semi = html_str.find(';', i, i + 10)
+            if semi != -1:
+                entity = html_str[i:semi + 1]
+                if _ENTITY_RE.match(entity):
+                    atoms.append(_wrap_stack(stack, entity))
+                    i = semi + 1
+                    continue
+            atoms.append(_wrap_stack(stack, c))
+            i += 1
+            continue
+
+        # normal visible char
+        atoms.append(_wrap_stack(stack, c))
+        i += 1
+
+    return atoms
+
+
+def build_start_animation_frames(final_html: str, max_frames: int = 25, min_chunk: int = 3):
+    """
+    Build progressive HTML frames from the final HTML — same visual style as balance
+    (formatted text appears progressively, always valid HTML).
+    """
+    atoms = _parse_atoms(final_html)
+    total = len(atoms)
+    if total == 0:
+        return [final_html]
+
+    chunk = max(min_chunk, total // max_frames)
+    frames = []
+    i = 0
+    while i < total:
+        i = min(i + chunk, total)
+        frames.append(''.join(atoms[:i]))
+
+    full = ''.join(atoms)
+    if frames[-1] != full:
+        frames.append(full)
+    return frames
+
+
+async def _animate_start_loading(context: ContextTypes.DEFAULT_TYPE, chat_id: int, frames, speed: float = 0.04):
+    """
+    Same style + speed as balance animation: progressive formatted frames.
+    Fast, non-blocking, cancels gracefully.
+    """
+    if not frames:
+        return
+
     draft_id = random.randint(1, 2_000_000_000)
-    frames = [
-        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ...</b>",
-        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ ʙᴏᴛ...</b>",
-        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ʟᴏᴀᴅɪɴɢ ᴍᴇɴᴜ...</b>",
-    ]
     try:
         for frame in frames:
             try:
@@ -440,7 +569,7 @@ async def _animate_start_loading(context: ContextTypes.DEFAULT_TYPE, chat_id: in
                 raise
             except Exception:
                 return
-            await asyncio.sleep(0.06)
+            await asyncio.sleep(speed)
     except asyncio.CancelledError:
         pass
     except Exception:
@@ -515,9 +644,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             not context.args or str(context.args[0]).startswith("ref_")
         )
 
+        # Build caption ONCE (used for both animation + final message)
+        caption_text = get_main_caption(user_id, first_name)
+
         # ── 1. Start animation IMMEDIATELY (background task) ──
         if should_animate:
-            anim_task = asyncio.create_task(_animate_start_loading(context, chat_id))
+            frames = build_start_animation_frames(caption_text)
+            anim_task = asyncio.create_task(
+                _animate_start_loading(context, chat_id, frames)
+            )
 
         # ── 2. Group admin check ──
         if update.effective_chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
@@ -567,7 +702,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ── 5. Kill animation, send final menu ──
         _cancel_task(anim_task)
-        caption_text = get_main_caption(user_id, first_name)
         await send_start_menu(update, context, chat_id, caption_text)
 
     except Exception as e:
