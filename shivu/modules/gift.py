@@ -445,7 +445,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             except: pass
         # Cancel dabane par aage ka queue apne aap dead ho jayega!
 
-# 🔥 SUPER INSTANT SPAM DELETE (Ab Reply scan karega!)
+# 🔥 SUPER INSTANT SPAM DELETE (Ab Reply scan karega aur aur bhi strong hai!)
 async def instant_delete_spam(update: Update, context: CallbackContext):
     if not update.effective_message:
         return
@@ -473,17 +473,23 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
                     
         full_text = " ".join(text_parts).lower() 
         
-        # Spam Keywords
-        spam_phrases = ["support our mission", "every donation makes a difference", "spread smiles", "pay ⭐️", "pay ⭐", "donate 💝"]
+        # Spam Keywords - Expanded to catch the specific message in the screenshot
+        spam_phrases = [
+            "support our mission", "every donation makes a difference", 
+            "spread smiles", "pay ⭐️", "pay ⭐", "donate", 
+            "contribute and make an impact", "click to contribute"
+        ]
         
         # Agar text match hua, ud jayega
         if any(phrase in full_text for phrase in spam_phrases):
             try: 
                 await m.delete()
-            except Exception: 
+            except TelegramError as e:
+                LOGGER.error(f"Failed to delete spam message {m.message_id} in {m.chat.id}: {e}")
                 try:
                     await context.bot.delete_message(chat_id=m.chat.id, message_id=m.message_id)
-                except Exception: pass
+                except Exception as e2:
+                    LOGGER.error(f"Fallback deletion failed: {e2}")
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
