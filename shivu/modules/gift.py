@@ -445,64 +445,92 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             except: pass
         # Cancel dabane par aage ka queue apne aap dead ho jayega!
 
-# 🔥 SUPER INSTANT SPAM DELETE (Now with Debug Logs!)
+# 🔥 SUPER INSTANT SPAM DELETE (User's optimized version integrated)
 async def instant_delete_spam(update: Update, context: CallbackContext):
-    if not update.effective_message:
-        return
-        
-    # Check both the current message and the replied message
-    messages_to_check = [update.effective_message]
-    if update.effective_message.reply_to_message:
-        messages_to_check.append(update.effective_message.reply_to_message)
-        
-    for m in messages_to_check:
-        text_parts = []
-        
-        if getattr(m, 'text', None): text_parts.append(m.text)
-        if getattr(m, 'caption', None): text_parts.append(m.caption)
-        
-        if getattr(m, 'invoice', None):
-            if getattr(m.invoice, 'title', None): text_parts.append(m.invoice.title)
-            if getattr(m.invoice, 'description', None): text_parts.append(m.invoice.description)
-            
-        reply_markup = getattr(m, 'reply_markup', None)
-        if reply_markup and hasattr(reply_markup, 'inline_keyboard'):
-            for row in reply_markup.inline_keyboard:
-                for button in row:
-                    if getattr(button, 'text', None): text_parts.append(button.text)
-                    
-        full_text = " ".join(text_parts).lower() 
-        
-        if not full_text.strip():
-            continue
+    message = update.effective_message
 
-        # Spam Keywords (Expanded for 100% match)
-        spam_phrases = [
-            "support our mission", "every donation makes a difference", 
-            "spread smiles", "pay ⭐️", "pay ⭐", "donate", 
-            "contribute and make an impact", "click to contribute",
-            "make a difference", "support our mission and spread smiles"
-        ]
-        
-        if any(phrase in full_text for phrase in spam_phrases):
-            LOGGER.info(f"🚨 SPAM DETECTED! Trying to delete message ID: {m.message_id} in Chat: {m.chat.id}")
-            try: 
-                await m.delete()
-                LOGGER.info(f"✅ Successfully deleted spam message {m.message_id}")
-            except TelegramError as e:
-                # THIS ERROR WILL TELL YOU EXACTLY WHY IT FAILED
-                LOGGER.error(f"❌ Failed to delete spam message {m.message_id}. Reason: {e}")
-                try:
-                    await context.bot.delete_message(chat_id=m.chat.id, message_id=m.message_id)
-                    LOGGER.info(f"✅ Fallback deletion successful for {m.message_id}")
-                except Exception as e2:
-                    LOGGER.error(f"❌ Fallback deletion failed: {e2}")
+    if not message:
+        return
+
+    text_parts = []
+
+    # Normal text
+    if message.text:
+        text_parts.append(message.text)
+
+    # Caption
+    if message.caption:
+        text_parts.append(message.caption)
+
+    # Invoice
+    if message.invoice:
+        invoice = message.invoice
+
+        if invoice.title:
+            text_parts.append(invoice.title)
+
+        if invoice.description:
+            text_parts.append(invoice.description)
+
+    # Inline keyboard
+    if message.reply_markup:
+        for row in message.reply_markup.inline_keyboard:
+            for button in row:
+                if button.text:
+                    text_parts.append(button.text)
+
+    full_text = " ".join(text_parts).casefold()
+
+    if not full_text:
+        return
+
+    spam_phrases = (
+        "support our mission",
+        "every donation makes a difference",
+        "spread smiles",
+        "contribute and make an impact",
+        "click to contribute",
+        "make a difference",
+        "support our mission and spread smiles",
+        "donate",
+        "pay ⭐",
+        "pay ⭐️",
+    )
+
+    detected = any(
+        phrase.casefold() in full_text
+        for phrase in spam_phrases
+    )
+
+    if not detected:
+        return
+
+    LOGGER.warning(
+        f"🚨 STAR DONATION SPAM DETECTED | "
+        f"chat={message.chat.id} | "
+        f"message={message.message_id}"
+    )
+
+    try:
+        await message.delete()
+
+        LOGGER.warning(
+            f"✅ STAR DONATION SPAM DELETED | "
+            f"message={message.message_id}"
+        )
+
+    except TelegramError as e:
+        LOGGER.error(
+            f"❌ DELETE FAILED | "
+            f"chat={message.chat.id} | "
+            f"message={message.message_id} | "
+            f"error={e}"
+        )
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):'))
-# Group -100 ensures this handler runs before any other message handler
-application.add_handler(MessageHandler(filters.ALL, instant_delete_spam), group=-160)
+application.add_handler(MessageHandler(filters.ALL, instant_delete_spam), group=-100)
 
 async def cleanup_stale_gifts():
     while True:
