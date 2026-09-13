@@ -190,8 +190,8 @@ SUDO_USERS = {7657218453}
 PROPOSAL_COST = 2000
 DICE_COOLDOWN = 1800
 PROPOSE_COOLDOWN = 300
-PROPOSE_SUCCESS_RATE = 0.39  # 🔥 Increased by 4% (was 0.35)
-DICE_BONUS_VALUE = 4         # 🔥 "4" now has hidden 24% success → +4% overall
+PROPOSE_SUCCESS_RATE = 0.39
+DICE_BONUS_VALUE = 4
 DICE_BONUS_RATE = 0.24
 
 UPDATE_GROUP_URL = "https://t.me/Anime_Group_hai"
@@ -344,35 +344,16 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
         return False
 
 
+# ✅✅✅ FIXED FUNCTION — Repeats allowed, all enabled rarities (old + new) in pool
 async def get_unique_char(user_id: int, rarity_pattern: str = None):
     """
-    Returns a truly random UNOWNED character belonging to any ENABLED rarity.
-    Includes BOTH old and newly-added characters in the random pool.
-    Uses secrets.choice() for cryptographically-strong randomness so
-    different users / different invocations don't collapse to the same pick.
+    Returns a truly random character from ALL ENABLED rarities (old + new).
+    - Ownership filter REMOVED → repeats are allowed.
+    - When user has all characters, they still get a random character (repeat).
+    - 'No new characters left' error is now impossible.
+    Uses secrets.choice() for cryptographically-strong randomness.
     """
     try:
-        user = await user_collection.find_one({"id": user_id})
-        if not user:
-            await user_collection.update_one(
-                {"id": user_id},
-                {"$setOnInsert": {"characters": [], "balance": 0}},
-                upsert=True
-            )
-            user = {}
-
-        # -------- Build owned id set (handles str/int mismatch) --------
-        raw_owned = [c.get("id") for c in user.get("characters", []) if isinstance(c, dict)]
-        owned_set = set()
-        for oid in raw_owned:
-            if oid is None:
-                continue
-            owned_set.add(str(oid))
-            try:
-                owned_set.add(int(oid))
-            except (ValueError, TypeError):
-                pass
-
         # -------- Load disabled rarities (canonical keys) --------
         settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
         if settings and 'disabled_rarities' in settings:
@@ -380,33 +361,23 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
         else:
             raw_disabled = {"premium", "cosmic", "mythic"}
 
-        normalized_disabled = {get_base_rarity(d) for d in raw_disabled if get_base_rarity(d) in RARITIES}
+        normalized_disabled = {
+            get_base_rarity(d) for d in raw_disabled if get_base_rarity(d) in RARITIES
+        }
 
         # -------- Fetch ALL characters (old + new) --------
-        all_chars = await collection.find({"auction_exclusive": {"$ne": True}}).to_list(length=None)
+        all_chars = await collection.find(
+            {"auction_exclusive": {"$ne": True}}
+        ).to_list(length=None)
 
+        # -------- Build pool from enabled rarities only (no ownership filter) --------
         available_chars = []
         for char in all_chars:
             char_rarity_key = get_base_rarity(char.get("rarity", ""))
-
             # Skip disabled rarities
             if char_rarity_key in normalized_disabled:
                 continue
-
-            # Skip already owned
-            c_id = char.get("id")
-            is_owned = False
-            if c_id in owned_set or str(c_id) in owned_set:
-                is_owned = True
-            else:
-                try:
-                    if int(c_id) in owned_set:
-                        is_owned = True
-                except (ValueError, TypeError):
-                    pass
-
-            if not is_owned:
-                available_chars.append(char)
+            available_chars.append(char)
 
         if not available_chars:
             return None
@@ -559,7 +530,12 @@ async def dice_marry(update: Update, context: CallbackContext):
         char = await get_unique_char(user.id, None)
         if not char:
             try:
-                return await context.bot.send_message(chat_id=chat_id, text=f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>", parse_mode="HTML", reply_to_message_id=msg_id)
+                return await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ᴋᴏɪ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴠᴀɪʟᴀʙʟᴇ ɴᴀʜɪ ʜᴀɪ. ᴘʟᴇᴀsᴇ ᴀᴅᴍɪɴ sᴇ ᴄᴏɴᴛᴀᴄᴛ ᴋᴀʀᴇɪɴ.</b>",
+                    parse_mode="HTML",
+                    reply_to_message_id=msg_id
+                )
             except Exception:
                 return
 
@@ -718,7 +694,7 @@ async def propose(update: Update, context: CallbackContext):
         try:
             return await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʏᴏᴜ ᴡᴏɴ, ʙᴜᴛ ɴᴏ ɴᴇᴡ ᴄʜᴀʀᴀᴄᴛᴇʀs ʟᴇғᴛ ᴛᴏ ᴄʟᴀɪᴍ!</b>",
+                text=f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ᴋᴏɪ ᴄʜᴀʀᴀᴄᴛᴇʀ ᴀᴠᴀɪʟᴀʙʟᴇ ɴᴀʜɪ ʜᴀɪ. ᴘʟᴇᴀsᴇ ᴀᴅᴍɪɴ sᴇ ᴄᴏɴᴛᴀᴄᴛ ᴋᴀʀᴇɪɴ.</b>",
                 parse_mode="HTML",
                 reply_to_message_id=msg_id
             )
