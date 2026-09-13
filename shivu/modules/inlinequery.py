@@ -28,10 +28,10 @@ class Rarity:
     name: str
     value: int
 
-# 🔥 UNIFIED RARITY DICTIONARY WITH PREMIUM EMOJIS & SORTING VALUES
+# 🔥 UNIFIED RARITY DICTIONARY — "cosmic" displayed as "Video Edition"
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic", 1),
-    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Cosmic", 2),
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Video Edition", 2),
     "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🪽</tg-emoji>', "Celestial", 3),
     "exclusive": ("💮", '<tg-emoji emoji-id="6100567406889935797">💮</tg-emoji>', "Exclusive", 4),
     "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🟡</tg-emoji>', "Legendary", 5),
@@ -47,12 +47,31 @@ RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common", 15)
 }
 
-# 🔥 POWERFUL RARITY MATCHER
+# 🔥 RARITY SEARCH ALIASES — "cosmic" / "video" / "video edition" all resolve to same
+RARITY_ALIASES = {
+    "cosmic": "cosmic",
+    "video": "cosmic",
+    "video edition": "cosmic",
+    "videoedition": "cosmic",
+    "video editing": "cosmic",
+    "videoediting": "cosmic",
+    "video edit": "cosmic",
+    "videoedit": "cosmic",
+    "video edits": "cosmic",
+    "videoedits": "cosmic",
+}
+
+# 🔥 POWERFUL RARITY MATCHER (alias-aware)
 def get_base_rarity(rarity_str: str) -> str:
     if not rarity_str or not isinstance(rarity_str, str):
         return "common"
     r_lower = rarity_str.lower().strip()
-    
+
+    # 0. Alias check FIRST (cosmic/video/video edition)
+    alias = RARITY_ALIASES.get(r_lower)
+    if alias:
+        return alias
+
     # 1. Exact Match Check
     for key, (_, _, name, _) in RARITIES.items():
         if key == r_lower or name.lower() == r_lower:
@@ -62,7 +81,7 @@ def get_base_rarity(rarity_str: str) -> str:
     for key, (db_emoji, _, name, _) in RARITIES.items():
         if key in r_lower or name.lower() in r_lower or db_emoji in r_lower:
             return key
-            
+
     return "common"
 
 try:
@@ -70,14 +89,14 @@ try:
     collection.create_index([('rarity', ASCENDING), ('anime', ASCENDING)], background=True)
     user_collection.create_index([('id', ASCENDING)], unique=True, background=True)
     user_collection.create_index([('characters.id', ASCENDING)], background=True, sparse=True)
-except Exception: 
+except Exception:
     pass
 
-# 🔥 Faster Updates
-char_cache = TTLCache(maxsize=100000, ttl=60)
-user_cache = TTLCache(maxsize=60000, ttl=60) 
-query_cache = TTLCache(maxsize=20000, ttl=30) 
-count_cache = TTLCache(maxsize=40000, ttl=60)
+# 🔥 Faster Updates — TTLs tuned for inline perf
+char_cache = TTLCache(maxsize=100000, ttl=120)
+user_cache = TTLCache(maxsize=60000, ttl=90)
+query_cache = TTLCache(maxsize=30000, ttl=45)
+count_cache = TTLCache(maxsize=40000, ttl=90)
 feedback_cache = TTLCache(maxsize=15000, ttl=4800)
 view_cache = TTLCache(maxsize=8000, ttl=900)
 wishlist_cache = TTLCache(maxsize=8000, ttl=2400)
@@ -85,7 +104,7 @@ wishlist_cache = TTLCache(maxsize=8000, ttl=2400)
 CAPS = str.maketrans('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 'ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ')
 
 @lru_cache(maxsize=65536)
-def sc(t: str) -> str: 
+def sc(t: str) -> str:
     return t.translate(CAPS)
 
 @lru_cache(maxsize=32768)
@@ -94,24 +113,35 @@ def parse_rar(r: str) -> Rarity:
     db_emoji, premium_emoji, name, val = RARITIES[base_key]
     return Rarity(db_emoji, premium_emoji, sc(name), val)
 
-def trunc(t: str, l: int = 22) -> str: 
+def trunc(t: str, l: int = 22) -> str:
     return t[:l-2] + '..' if len(t) > l else t
 
-def cache_key(*args) -> str: 
+def cache_key(*args) -> str:
     return hashlib.md5(str(args).encode()).hexdigest()
+
+# 🔥 Slim projection — only fields we actually need
+_CHAR_PROJECTION = {
+    '_id': 0,
+    'id': 1,
+    'name': 1,
+    'anime': 1,
+    'rarity': 1,
+    'img_url': 1,
+    'is_video': 1,
+}
 
 async def get_user(uid: int) -> Optional[Dict]:
     k = f"u{uid}"
-    if k in user_cache: 
+    if k in user_cache:
         return user_cache[k]
     u = await user_collection.find_one({'id': uid}, {'_id': 0})
-    if u: 
+    if u:
         user_cache[k] = u
     return u
 
 async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
     k = f"o{cid}{lim}"
-    if k in count_cache: 
+    if k in count_cache:
         return count_cache[k]
     try:
         pipe = [
@@ -128,29 +158,55 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
     except Exception:
         return []
 
+# 🔥 COMPILED REGEX CACHE for repeated queries
+_regex_cache = {}
+
+def _get_regex(pattern: str, flags=re.IGNORECASE):
+    key = (pattern, flags)
+    rx = _regex_cache.get(key)
+    if rx is None:
+        rx = re.compile(pattern, flags)
+        if len(_regex_cache) > 2000:
+            _regex_cache.clear()
+        _regex_cache[key] = rx
+    return rx
+
 async def search_chars(q: str, lim: int = 1000) -> List[Dict]:
     k = cache_key('search', q, lim)
-    if k in query_cache: 
+    if k in query_cache:
         return query_cache[k]
+
     try:
         if q:
-            rx = re.compile(re.escape(q), re.IGNORECASE)
-            
-            # 🔥 Smart ID Matcher System
+            rx = _get_regex(re.escape(q))
             or_conditions = [{'name': rx}, {'anime': rx}, {'rarity': rx}]
-            
+
+            # 🔥 ALIAS HANDLING — "cosmic"/"video"/"video edition" all match cosmic rarity
+            alias_key = RARITY_ALIASES.get(q.lower().strip())
+            if alias_key:
+                # Match DB-side rarity stored as "cosmic" (or any variant)
+                or_conditions.append({'rarity': _get_regex(alias_key)})
+                # Match DB-side rarity stored as display name (e.g. "Video Edition")
+                display_name = RARITIES[alias_key][2]  # "Video Edition"
+                or_conditions.append({'rarity': _get_regex(re.escape(display_name))})
+
+            # ID-based matching
             if q.isdigit():
                 clean_num = int(q)
-                id_rx = re.compile(rf"^0*{clean_num}$")
+                id_rx = _get_regex(rf"^0*{clean_num}$")
                 or_conditions.append({'id': id_rx})
                 or_conditions.append({'id': str(clean_num)})
                 or_conditions.append({'id': clean_num})
             else:
                 or_conditions.append({'id': q})
-                
-            chars = await collection.find({'$or': or_conditions}, {'_id': 0}).limit(lim).to_list(length=lim)
+
+            chars = await collection.find(
+                {'$or': or_conditions},
+                _CHAR_PROJECTION
+            ).limit(lim).to_list(length=lim)
         else:
-            chars = await collection.find({}, {'_id': 0}).limit(lim).to_list(length=lim)
+            chars = await collection.find({}, _CHAR_PROJECTION).limit(lim).to_list(length=lim)
+
         query_cache[k] = chars
         return chars
     except Exception as e:
@@ -158,11 +214,19 @@ async def search_chars(q: str, lim: int = 1000) -> List[Dict]:
         return []
 
 async def filter_chars(chars: List[Dict], mode: str, uid: int = None) -> List[Dict]:
-    if mode == 'rare': 
+    if mode == 'rare':
         return [c for c in chars if parse_rar(c.get('rarity', '')).value <= 9]
-    elif mode == 'video': 
-        return [c for c in chars if c.get('is_video', False)]
-    elif mode == 'new': 
+    elif mode == 'video':
+        # 🔥 Video Edition = cosmic rarity OR is_video flag
+        out = []
+        for c in chars:
+            if c.get('is_video', False):
+                out.append(c)
+                continue
+            if get_base_rarity(c.get('rarity', '')) == "cosmic":
+                out.append(c)
+        return out
+    elif mode == 'new':
         return sorted(chars, key=lambda x: str(x.get('_id', '')), reverse=True)
     elif mode == 'trending':
         ids = [c.get('id') for c in chars if c.get('id')]
@@ -196,8 +260,7 @@ def dedupe(chars: List[Dict]) -> List[Dict]:
 def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
     cid, nm, an = ch.get('id', '??'), ch.get('name', 'Unknown'), ch.get('anime', 'Unknown')
     r = parse_rar(ch.get('rarity', ''))
-    
-    # Yahan humne normal emoji ki jagah premium (r.premium) laga diya hai
+
     cap = (
         f"<b>{sc('Character Info ')}<tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji></b>\n\n"
         f"<b>{escape(sc(an))}</b>\n"
@@ -210,25 +273,24 @@ def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
     nm = ch.get('name', 'Unknown')
     total = sum(o.get('count', 0) for o in owners)
     cap = f"<b>{escape(sc(nm))}</b>\n\n<b><tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> {len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
-    
+
     medals = {
-        1: "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>", 
-        2: "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>", 
+        1: "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>",
+        2: "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>",
         3: "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>"
     }
-    
+
     USERS_PER_PAGE = 10
     start = page * USERS_PER_PAGE
     end = start + USERS_PER_PAGE
     total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
-    
+
     for i, o in enumerate(owners[start:end], start + 1):
-        # 🔥 FIX: Ab 4, 5, 6 numbers BOLD mein aayenge properly
         medal = medals.get(i, f"<b>{i}.</b>")
         fn = escape(trunc(o.get('first_name', 'User'), 18))
         uid = o.get('id')
         cap += f"{medal} <a href=\"tg://user?id={uid}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
-        
+
     cap += f"\n<tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> <b>{sc(f'page {page+1}/{total_pages}')}</b>"
     return cap
 
@@ -243,11 +305,10 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <code>{len(owners)}</code> {sc('owners')}\n"
         f"<tg-emoji emoji-id=\"5028746137645876535\">📈</tg-emoji> <code>{avg}×</code> {sc('avg')}\n"
     )
-    
-    # 🔥 FIX: Top Collectors section ko Premium Emojis (medals) lagaye gaye
+
     medals = {
-        1: "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>", 
-        2: "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>", 
+        1: "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>",
+        2: "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>",
         3: "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>"
     }
 
@@ -276,7 +337,7 @@ async def inlinequery(update: Update, context) -> None:
     q, off, uid, qid = query.query, int(query.offset) if query.offset else 0, query.from_user.id, query.id
     try:
         is_coll, usr, sq, fm = False, None, q, None
-        
+
         if q.startswith('collection.'):
             is_coll = True
             parts = q.split(' ', 1)
@@ -297,9 +358,13 @@ async def inlinequery(update: Update, context) -> None:
                 return
             cd = {c['id']: c for c in usr.get('characters', []) if isinstance(c, dict) and c.get('id')}
             all_chars = list(cd.values())
-            
+
             if sq:
-                rx = re.compile(re.escape(sq), re.IGNORECASE)
+                rx = _get_regex(re.escape(sq))
+                # 🔥 Alias-aware match on collection search
+                alias_key = RARITY_ALIASES.get(sq.lower().strip())
+                alias_display = RARITIES[alias_key][2].lower() if alias_key else None
+
                 def match_char(c):
                     cid_str = str(c.get('id', ''))
                     if sq.isdigit() and cid_str.isdigit():
@@ -310,16 +375,19 @@ async def inlinequery(update: Update, context) -> None:
                             return True
                     if rx.search(c.get('name', '')) or rx.search(c.get('anime', '')) or rx.search(c.get('rarity', '')):
                         return True
+                    # Alias handling: cosmic/video/video edition all match cosmic-rarity chars
+                    if alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
+                        return True
                     return False
-                
+
                 all_chars = [c for c in all_chars if match_char(c)]
-                
-            if fm: 
+
+            if fm:
                 all_chars = await filter_chars(all_chars, fm, tuid)
             fav = usr.get('favorites')
             if fav and not sq and not fm:
                 fid = fav.get('id') if isinstance(fav, dict) else fav
-                fc = next((c for c in all_chars if c.get('id') == fid), None)  
+                fc = next((c for c in all_chars if c.get('id') == fid), None)
                 if fc:
                     all_chars = [c for c in all_chars if c.get('id') != fid]
                     all_chars.insert(0, fc)
@@ -336,63 +404,64 @@ async def inlinequery(update: Update, context) -> None:
                 anime_filter = am.group(1)
                 sq = sq.replace(am.group(0), '').strip()
                 all_chars = await search_chars(sq, lim=1000)
-                rx = re.compile(re.escape(anime_filter), re.IGNORECASE)
+                rx = _get_regex(re.escape(anime_filter))
                 all_chars = [c for c in all_chars if rx.search(c.get('anime', ''))]
             else:
                 all_chars = await search_chars(sq, lim=1000)
-            if fm: 
+            if fm:
                 all_chars = await filter_chars(all_chars, fm, uid)
             if not fm or fm not in ['new', 'trending']:
                 all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
-        
+
         all_chars = dedupe(all_chars)
         chars = all_chars[off:off+50]
         has_more = len(all_chars) > off + 50
         noff = str(off + 50) if has_more else ""
 
-        # 🔥 FIX: SPEED OPTIMIZATION. Inline query was very slow due to an unnecessary database hit on every scroll.
-        # Now it only fetches if a document actually misses its image URL in the cache!
+        # 🔥 Only fetch from DB for chars whose img_url is missing
         missing_ids = [c.get('id') for c in chars if c.get('id') and not c.get('img_url')]
         if missing_ids:
-            live_docs = await collection.find({'id': {'$in': missing_ids}}, {'_id': 0}).to_list(length=50)
+            live_docs = await collection.find(
+                {'id': {'$in': missing_ids}},
+                _CHAR_PROJECTION
+            ).to_list(length=50)
             live_map = {d['id']: d for d in live_docs}
             for ch in chars:
                 cid = ch.get('id')
                 if cid and cid in live_map:
-                    ch.update(live_map[cid]) 
-        
+                    ch.update(live_map[cid])
+
         results = []
         for i, ch in enumerate(chars):
             cid = ch.get('id')
             img = ch.get('img_url', '')
             vid = ch.get('is_video', False)
-            
-            if not cid or not img: 
+
+            if not cid or not img:
                 continue
-                
+
             nm, an = ch.get('name', '?'), ch.get('anime', '?')
             r = parse_rar(ch.get('rarity', ''))
             fav = False
-            
+
             if is_coll and usr:
                 fv = usr.get('favorites')
                 fid = fv.get('id') if isinstance(fv, dict) else fv
                 fav = (fid == cid)
-            
+
             cap = minimal_caption(ch, fav, uid=uid)
             kbd = create_kbd(cid, uid)
-            
+
             rid = f"{cid}_{off}_{i}_{qid[:8]}"
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
             desc = f"{r.name} • {trunc(an, 20)}"
-            
+
             if vid:
                 results.append(InlineQueryResultVideo(id=rid, video_url=img, mime_type="video/mp4", thumbnail_url=img, title=title, description=desc, caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd))
             else:
                 results.append(InlineQueryResultPhoto(id=rid, photo_url=img, thumbnail_url=img, title=title, description=desc, caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd))
-        
-        # 🔥 FIX: Premium Emoji not showing immediately issue.
-        # Added cache_time=1 and is_personal=True to enforce fresh data mapping and bypass global media cache limitations of Telegram.
+
+        # 🔥 cache_time=1 + is_personal=True → instant fresh results, premium emoji rendered correctly
         await query.answer(results, next_offset=noff, cache_time=1, is_personal=True)
     except Exception as e:
         LOGGER.error(f"Inline query error: {e}")
@@ -416,47 +485,47 @@ async def show_owners(update: Update, context) -> None:
     await q.answer()
     try:
         data = q.data.split('.', 1)[1]
-        
+
         if ':' in data:
             cid, page_str = data.split(':')
             page = int(page_str)
         else:
             cid = data
             page = 0
-            
-        ch = await collection.find_one({'id': cid}, {'_id': 0})
+
+        ch = await collection.find_one({'id': cid}, _CHAR_PROJECTION)
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
-            
+
         owners = await get_owners(cid, 100)
         if not owners:
             await q.answer(sc("no owners"), show_alert=True)
             return
-            
+
         cap = owners_caption(ch, owners, page)
-        
+
         USERS_PER_PAGE = 10
         total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
-        
+
         nav_buttons = []
         if page > 0:
             nav_buttons.append(InlineKeyboardButton(sc("⋞ prev"), callback_data=f"o.{cid}:{page-1}"))
         if page < total_pages - 1:
             nav_buttons.append(InlineKeyboardButton(sc("next ⋟"), callback_data=f"o.{cid}:{page+1}"))
-            
+
         kbd_layout = []
         if nav_buttons:
             kbd_layout.append(nav_buttons)
-            
+
         kbd_layout.append([
-            InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
+            InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"),
             InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
         ])
         kbd_layout.append([
             InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=cid)
         ])
-        
+
         kbd = InlineKeyboardMarkup(kbd_layout)
         await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
     except Exception as e:
@@ -468,7 +537,7 @@ async def back_card(update: Update, context) -> None:
     await q.answer()
     try:
         cid = q.data.split('.', 1)[1]
-        ch = await collection.find_one({'id': cid}, {'_id': 0})
+        ch = await collection.find_one({'id': cid}, _CHAR_PROJECTION)
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
@@ -484,7 +553,7 @@ async def show_stats(update: Update, context) -> None:
     await q.answer()
     try:
         cid = q.data.split('.', 1)[1]
-        ch = await collection.find_one({'id': cid}, {'_id': 0})
+        ch = await collection.find_one({'id': cid}, _CHAR_PROJECTION)
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
@@ -492,9 +561,9 @@ async def show_stats(update: Update, context) -> None:
         cap = stats_caption(ch, owners)
         kbd = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"), 
+                InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"),
                 InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}:0")
-            ], 
+            ],
             [
                 InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=cid)
             ]
