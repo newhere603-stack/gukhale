@@ -12,7 +12,7 @@ from telegram.error import TelegramError
 try:
     from shivu.modules.check import clear_char_cache
 except ImportError:
-    def clear_char_cache(cid): pass 
+    def clear_char_cache(cid): pass
 
 from shivu import LOGGER, application, user_collection, collection, db
 
@@ -20,7 +20,7 @@ from shivu import LOGGER, application, user_collection, collection, db
 delete_collection = db['auto_delete_queue']
 
 # --- CONFIGURATION ---
-LOG_CHANNEL_ID = -1003893927065 
+LOG_CHANNEL_ID = -1003893927065
 GIFT_TIMEOUT = 60
 MAX_INVENTORY_SIZE = 1000 # Ye ab kisi kaam ka nahi hai kyuki limit hata di hai
 pending_gifts = {}
@@ -29,14 +29,14 @@ gift_tasks = {}
 # --- ✨ UNIVERSAL SMALL CAPS CONVERTER ---
 def to_small_caps(text: str) -> str:
     mapping = {
-        'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ', 
-        'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 
-        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 
-        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 
-        'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 
-        'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 
-        'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ', 
-        'Q': 'ǫ', 'R': 'ʀ', 'S': 'ꜱ', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ', 
+        'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ꜰ',
+        'g': 'ɢ', 'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ',
+        'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ',
+        's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x',
+        'y': 'ʏ', 'z': 'ᴢ', 'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ',
+        'E': 'ᴇ', 'F': 'ꜰ', 'G': 'ɢ', 'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ',
+        'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ', 'O': 'ᴏ', 'P': 'ᴘ',
+        'Q': 'ǫ', 'R': 'ʀ', 'S': 'ꜱ', 'T': 'ᴛ', 'U': 'ᴜ', 'V': 'ᴠ',
         'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ', '0': '0', '1': '1',
         '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7',
         '8': '8', '9': '9'
@@ -46,6 +46,62 @@ def to_small_caps(text: str) -> str:
 def bold_sc(text: str) -> str:
     return f"<b>{to_small_caps(text)}</b>"
 
+# 🔥 UNIFIED RARITY DICTIONARY (cosmic → Video Edition)
+RARITIES = {
+    "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Video Edition"),
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🪽</tg-emoji>', "Celestial"),
+    "exclusive": ("💮", '<tg-emoji emoji-id="6100567406889935797">💮</tg-emoji>', "Exclusive"),
+    "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🟡</tg-emoji>', "Legendary"),
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
+    "summer": ("⛱️", '<tg-emoji emoji-id="5433645645376264953">⛱️</tg-emoji>', "Summer"),
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"),
+    "special": ("🔴", '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>', "Medium"),
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">💞</tg-emoji>', "Valentine"),
+    "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
+    "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">🥵</tg-emoji>', "Spicy"),
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
+    "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common")
+}
+
+# 🔥 SEARCH ALIASES — "cosmic"/"video"/"video edition" all resolve to same key
+RARITY_ALIASES = {
+    "cosmic": "cosmic",
+    "video": "cosmic",
+    "video edition": "cosmic",
+    "videoedition": "cosmic",
+    "video editing": "cosmic",
+    "videoediting": "cosmic",
+    "video edit": "cosmic",
+    "videoedit": "cosmic",
+    "video edits": "cosmic",
+    "videoedits": "cosmic",
+}
+
+def canonical_rarity(name: str) -> str:
+    """Returns canonical rarity key (lowercase). Aliases map to same key."""
+    if not name:
+        return "common"
+    n = str(name).strip().lower()
+    # Try alias first
+    if n in RARITY_ALIASES:
+        return RARITY_ALIASES[n]
+    # Exact key match
+    if n in RARITIES:
+        return n
+    # Substring match against known keys/names
+    for key, (_, _, disp) in RARITIES.items():
+        if key in n or disp.lower() in n:
+            return key
+    return "common"
+
+def get_rarity_display(rarity_str) -> str:
+    """Returns full premium emoji + display name string for a rarity."""
+    key = canonical_rarity(rarity_str)
+    _, prem_emoji, disp_name = RARITIES[key]
+    return f"{prem_emoji} <b>{to_small_caps(disp_name)}</b>"
+
 # --- ✨ UPGRADED MODERN UI STYLES ---
 class Style:
     GIFT = '<tg-emoji emoji-id="5255861796350224063">💖</tg-emoji> <b>' + to_small_caps("gift transfer hub") + '</b> <tg-emoji emoji-id="5255861796350224063">💖</tg-emoji>'
@@ -53,6 +109,7 @@ class Style:
     FROM = '<tg-emoji emoji-id="5305699699204837855">🍀</tg-emoji> ' + to_small_caps("sender ⬡")
     CHAR = '<tg-emoji emoji-id="6336972134962697188">🌸</tg-emoji> ' + to_small_caps("name ⬡")
     ID = '<tg-emoji emoji-id="6332443074769196273">🆔</tg-emoji> ' + to_small_caps("chr id ⬡")
+    RARITY = '<tg-emoji emoji-id="6093611479720795757">💫</tg-emoji> ' + to_small_caps("rarity ⬡")
     STATUS = '<tg-emoji emoji-id="6093431129749070651">✨</tg-emoji> ' + to_small_caps("status ⬡")
     LINE = "──────────────────"
     SUCCESS = "✅ " + to_small_caps("success")
@@ -68,7 +125,7 @@ async def reply_media_message(message, media_url, caption, reply_markup=None):
     if not media_url:
         try: return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         except Exception: return await message.chat.send_message(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-        
+
     is_video_url = False
     if isinstance(media_url, str):
         url_lower = media_url.lower()
@@ -93,24 +150,24 @@ async def background_delete_worker(bot):
     global _worker_started
     if _worker_started: return
     _worker_started = True
-    
+
     try: await delete_collection.create_index("delete_at")
     except Exception: pass
-        
+
     while True:
         try:
             now = time.time()
             cursor = delete_collection.find({'delete_at': {'$lte': now}})
             async for doc in cursor:
                 try: await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
-                except Exception: pass 
+                except Exception: pass
                 finally: await delete_collection.delete_one({'_id': doc['_id']})
         except Exception: pass
         await asyncio.sleep(20)
 
 async def schedule_auto_delete(message, delay_seconds: int = 1200):
     if not message: return
-        
+
     global _worker_started
     if not _worker_started:
         asyncio.create_task(background_delete_worker(message.get_bot()))
@@ -134,7 +191,7 @@ async def cleanup_pending_gift(sender_id: int, sent_msg=None):
     if sender_id in gift_tasks:
         gift_tasks[sender_id].cancel()
         gift_tasks.pop(sender_id, None)
-    
+
     if sender_id in pending_gifts:
         if sent_msg:
             try:
@@ -152,7 +209,7 @@ async def get_owned_char_and_global(sender_id, char_id_input_str):
     char_id_input_int = int(char_id_input_str) if char_id_input_str.isdigit() else None
     sender_data = await user_collection.find_one({'id': sender_id})
     if not sender_data: return None, None
-    
+
     owned_char = None
     for c in sender_data.get('characters', []):
         c_id = c.get('id')
@@ -165,9 +222,9 @@ async def get_owned_char_and_global(sender_id, char_id_input_str):
                     owned_char = c
                     break
             except (ValueError, TypeError): pass
-            
+
     if not owned_char: return None, None
-    
+
     global_char = owned_char
     if 'img_url' not in global_char or 'name' not in global_char:
         search_query = [{'id': char_id_input_str}]
@@ -180,16 +237,16 @@ async def get_owned_char_and_global(sender_id, char_id_input_str):
 async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_obj):
     while queue:
         next_id_str = queue.pop(0)
-        
+
         owned_char, global_char = await get_owned_char_and_global(sender_id, next_id_str)
-        
+
         if not owned_char:
             warning_text = f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc(f"you dont own character id {next_id_str}, skipping...")}'
             try: warning_msg = await message_obj.reply_text(warning_text, parse_mode=ParseMode.HTML)
             except Exception: warning_msg = await message_obj.chat.send_message(warning_text, parse_mode=ParseMode.HTML)
             await schedule_auto_delete(warning_msg, 15)
             continue
-        
+
         is_receiver_valid = await check_receiver_inventory_size(receiver_user.id)
         if not is_receiver_valid:
             inv_text = f"receiver inventory is full. stopping bulk gift."
@@ -197,25 +254,27 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
             except Exception: stop_msg = await message_obj.chat.send_message(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
             await schedule_auto_delete(stop_msg, 20)
             break
-        
+
         pending_gifts[sender_id] = {
-            'character': global_char, 
-            'receiver_id': receiver_user.id, 
+            'character': global_char,
+            'receiver_id': receiver_user.id,
             'receiver_name': receiver_user.first_name,
             'receiver_user': receiver_user,
-            'message_id': None, 
+            'message_id': None,
             'created_at': datetime.now(timezone.utc),
             'queue': queue,
             'chat_id': chat_id
         }
-        
+
         timeout_text = to_small_caps(f"confirm within {GIFT_TIMEOUT}s to send.")
+        rarity_display = get_rarity_display(global_char.get('rarity', 'Unknown'))
         caption = (
             f"{Style.GIFT}\n"
             f"{Style.LINE}\n"
             f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_user.id}'>{escape(receiver_user.first_name)}</a>\n"
             f"<b>{Style.CHAR}</b> <b>{escape(global_char.get('name', 'Unknown'))}</b>\n"
             f"<b>{Style.ID}</b> <code>{global_char.get('id')}</code>\n"
+            f"<b>{Style.RARITY}</b> {rarity_display}\n"
             f"{Style.LINE}\n"
             f"<b><i><tg-emoji emoji-id='5451732530048802485'>⏳</tg-emoji> {timeout_text}</i></b>"
         )
@@ -226,15 +285,15 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
         ]]
 
         sent_msg = await reply_media_message(message_obj, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
-        
-        if sent_msg: 
+
+        if sent_msg:
             pending_gifts[sender_id]['message_id'] = sent_msg.message_id
-            await schedule_auto_delete(sent_msg) 
-        
+            await schedule_auto_delete(sent_msg)
+
         async def expire():
             await asyncio.sleep(GIFT_TIMEOUT)
             if sender_id in pending_gifts: await cleanup_pending_gift(sender_id, sent_msg)
-        
+
         gift_tasks[sender_id] = asyncio.create_task(expire())
         break # Loop yahin rukega jab tak banda confirm ya cancel nahi karta!
 
@@ -261,13 +320,13 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             return
 
         # Ek baari me maximum 30 gifts queue kar sakte hain
-        char_ids = [str(arg) for arg in context.args][:30] 
-        
+        char_ids = [str(arg) for arg in context.args][:30]
+
         if sender_id in pending_gifts:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("one gift process is already in progress...")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
-        
+
         # Parallel quick check
         sender_data, is_receiver_valid = await asyncio.gather(
             user_collection.find_one({'id': sender_id}),
@@ -284,20 +343,20 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own any characters.")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
-            
+
         # Bulk Gift Chain Start!
         await trigger_next_gift(sender_id, receiver, char_ids, msg.chat.id, msg)
-        
+
     except Exception as e:
         # Silent Fail
         LOGGER.error(f"Error in handle_gift_command: {e}\n{traceback.format_exc()}")
 
 async def handle_gift_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    
+
     try: await query.answer(to_small_caps("🔄 processing transfer..."), show_alert=False)
     except Exception: pass
-    
+
     try:
         action, sender_id = query.data.split(':')
         sender_id = int(sender_id)
@@ -313,7 +372,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
 
     if not gift_data:
         if query.message:
-            try: 
+            try:
                 await query.message.delete()
                 await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
             except: pass
@@ -325,7 +384,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
     receiver_user = gift_data.get('receiver_user')
     queue = gift_data.get('queue', [])
     chat_id = gift_data.get('chat_id')
-    
+
     char_id_str = str(char.get('id'))
     char_id_int = int(char_id_str) if char_id_str.isdigit() else None
 
@@ -333,16 +392,16 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
         if query.message:
             try: await query.edit_message_reply_markup(reply_markup=None)
             except Exception: pass
-        
+
         try:
             sender_data = await user_collection.find_one({'id': sender_id})
             if not sender_data:
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
                 return
-                
+
             user_characters = sender_data.get('characters', [])
-            
+
             found = False
             owned_char = None
             for i, c in enumerate(user_characters):
@@ -360,7 +419,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                             found = True
                             break
                     except (ValueError, TypeError): pass
-            
+
             if not found:
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
@@ -377,10 +436,10 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             if pull_result.modified_count == 0:
                 if query.message: await query.message.delete()
                 return await query.answer(to_small_caps("❌ gift failed. please try again."), show_alert=True)
-            
+
             try:
                 receiver_data = await user_collection.find_one({'id': receiver_id}, projection={'_id': 1, 'characters': 1})
-                
+
                 if receiver_data:
                     # 1000 limit wala condition hata diya gaya hai
                     await user_collection.update_one({'id': receiver_id}, {'$push': {'characters': owned_char}})
@@ -389,23 +448,25 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                         'id': receiver_id, 'characters': [owned_char],
                         'created_at': datetime.now(timezone.utc), 'last_active': datetime.now(timezone.utc)
                     })
-                
+
                 try: clear_char_cache(owned_char['id'])
                 except: pass
-                
+
+                rarity_display = get_rarity_display(char.get('rarity', 'Unknown'))
                 final_caption = (
                     f'<tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji> <b>{to_small_caps("gift successful")}</b> <tg-emoji emoji-id="5436040291507247633">🎉</tg-emoji>\n'
                     f"{Style.LINE}\n"
                     f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_id}'>{escape(receiver_name)}</a>\n"
                     f"<b>{Style.CHAR}</b> <b>{escape(char.get('name', 'Unknown'))}</b>\n"
                     f"<b>{Style.ID}</b> <code>{char.get('id')}</code>\n"
+                    f"<b>{Style.RARITY}</b> {rarity_display}\n"
                     f"{Style.LINE}\n"
                     f"<b><i>{to_small_caps('✓ character added to recipient harem.')}</i></b>"
                 )
                 if query.message:
                     try: await query.edit_message_caption(caption=final_caption, parse_mode=ParseMode.HTML)
                     except: pass
-                
+
                 timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
                 log_msg = (
                     f"📢 <b>#ɢɪꜰᴛ_ʟᴏɢ</b>\n"
@@ -414,32 +475,33 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                     f"<b>{Style.FROM}</b> {query.from_user.mention_html()}\n"
                     f"<b>{Style.TO}</b> <a href='tg://user?id={receiver_id}'>{escape(receiver_name)}</a>\n"
                     f"<b>{Style.CHAR}</b> {char.get('name')} (ɪᴅ: {char.get('id')})\n"
+                    f"<b>{Style.RARITY}</b> {rarity_display}\n"
                     f"{Style.LINE}\n"
                     f"<b>{Style.STATUS}</b> {Style.SUCCESS}"
                 )
                 asyncio.create_task(send_log(context, log_msg))
-                
+
                 # 🔥 Success hone ke baad check karega ki koi aur gift pending hai ya nahi
                 if queue and receiver_user and query.message:
                     await trigger_next_gift(sender_id, receiver_user, queue, chat_id, query.message)
-                    
+
             except Exception as push_error:
                 LOGGER.error(f"Push error during gift: {push_error}")
                 await user_collection.update_one({'id': sender_id}, {'$push': {'characters': owned_char}})
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
                 return # Inventory full pe aage ka queue band
-        
+
         except Exception as e:
             # Silent Fail
             LOGGER.error(f"Callback gift_z error: {e}")
             if query.message:
                 try: await query.message.delete()
                 except: pass
-    
+
     elif action == "gift_v":
         if query.message:
-            try: 
+            try:
                 await query.message.delete()
                 await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
             except: pass
