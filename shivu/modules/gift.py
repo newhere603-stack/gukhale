@@ -445,7 +445,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             except: pass
         # Cancel dabane par aage ka queue apne aap dead ho jayega!
 
-# 🔥 SUPER INSTANT SPAM DELETE (Ab Reply scan karega aur aur bhi strong hai!)
+# 🔥 SUPER INSTANT SPAM DELETE (Ab aur bhi aggressive aur strict hai)
 async def instant_delete_spam(update: Update, context: CallbackContext):
     if not update.effective_message:
         return
@@ -473,18 +473,21 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
                     
         full_text = " ".join(text_parts).lower() 
         
-        # Spam Keywords - Expanded to catch the specific message in the screenshot
+        # Expanded Spam Keywords - Ye screenshot wale message ko pakad lega
         spam_phrases = [
             "support our mission", "every donation makes a difference", 
             "spread smiles", "pay ⭐️", "pay ⭐", "donate", 
-            "contribute and make an impact", "click to contribute"
+            "contribute and make an impact", "click to contribute",
+            "make a difference", "support our mission and spread smiles"
         ]
         
         # Agar text match hua, ud jayega
         if any(phrase in full_text for phrase in spam_phrases):
             try: 
                 await m.delete()
+                LOGGER.info(f"Successfully deleted spam message {m.message_id} in {m.chat.id}")
             except TelegramError as e:
+                # Ye error tab aayega jab bot admin nahi hoga ya permission nahi hogi
                 LOGGER.error(f"Failed to delete spam message {m.message_id} in {m.chat.id}: {e}")
                 try:
                     await context.bot.delete_message(chat_id=m.chat.id, message_id=m.message_id)
