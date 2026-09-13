@@ -324,7 +324,7 @@ def owners_caption(char: Char, owners: List[Dict], page: int, gcount: int) -> st
             3: '<tg-emoji emoji-id="5453902265922376865">🥉</tg-emoji>'
         }.get(i, f"<b>{i}.</b>")
         link = f"<b><a href='tg://user?id={o['id']}'>{escape(o.get('first_name', 'Unknown'))}</a></b>"
-        lines.append(f"{medal} {link} - <b>x{o['count']}</b>")
+        lines.append(f"{medal} {link} - <code>x{o['count']}</code>")
     lines.append(f"\n<tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> {bold_sc(f'page {page+1}/{total_pages}')} • <tg-emoji emoji-id=\"5224450179368767019\">🌎</tg-emoji> {bold_sc('total:')} <code>{gcount}x</code>")
     return "\n".join(lines)
 
