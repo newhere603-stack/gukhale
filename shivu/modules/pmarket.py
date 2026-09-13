@@ -199,6 +199,11 @@ RARITIES = {
     "premium edition": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
 }
 
+# Only label used on the buy-menu inline button for cosmic key
+RARITY_BUTTON_OVERRIDES = {
+    "cosmic": "Video",
+}
+
 CHAR_PRICES_COINS = {
     "common": 1000, "rare": 10000, "medium": 8000,
     "legendary": 15000, "celestial": 70000, "spicy": 99000,
@@ -208,12 +213,13 @@ CHAR_PRICES_COINS = {
 }
 
 # Keyword-based detection (handles emoji-spelled + old DB names)
+# IMPORTANT: only keys present in RARITIES are allowed here → forces new names everywhere.
 RARITY_KEYWORDS = {
     "premium edition": ["premium edition", "premium", "🔮"],
     "spicy":           ["spicy", "erotic", "🥵"],
     "medium":          ["medium", "special", "🔴"],
     "summer":          ["summer", "pearl", "🏝", "🏖"],
-    "cosmic":          ["cosmic", "🌌"],
+    "cosmic":          ["cosmic", "video edition", "video", "🌌"],
     "celestial":       ["celestial", "🪽"],
     "mythic":          ["mythic", "💎"],
     "exclusive":       ["exclusive", "💮"],
@@ -802,7 +808,9 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         buttons = []
         for key, (db_emoji, prem_html, name) in RARITIES.items():
             emoji_id = extract_emoji_id(prem_html)
-            buttons.append(InlineKeyboardButton(f"{sc(name)}", callback_data=f"pm_r:{key}:{user_id}", icon_custom_emoji_id=emoji_id))
+            # Only on this inline button, use the short override label ("Video" instead of "Video Edition")
+            label = RARITY_BUTTON_OVERRIDES.get(key, name)
+            buttons.append(InlineKeyboardButton(f"{sc(label)}", callback_data=f"pm_r:{key}:{user_id}", icon_custom_emoji_id=emoji_id))
         keyboard = chunk(buttons, 2)
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_m:{user_id}")])
         await update_menu(query, f"<b><tg-emoji emoji-id=\"5312361253610475399\">🛒</tg-emoji> {sc('buy characters from market')}</b>\n\n<i>{sc('select a rarity to view products.')}</i>", InlineKeyboardMarkup(keyboard))
