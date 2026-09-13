@@ -980,7 +980,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                     f"<b>{E_SELL_CHAR} {sc('character:')}</b> {prem_html} <b>{sc(char.get('name', 'Unknown'))}</b>\n"
                     f"<b>{E_CHAR_ID} {sc('id:')}</b> <code>{char.get('id')}</code>\n"
                     f"<b>{E_MONEY} {sc('sold for:')}</b> <b><code>{price:,}</code> {sc('coins')}</b>\n"
-                    f"<b>{E_BUYER} {sc('buyer:')}</b> <b>{sc(buyer_name)}</b>\n"
+                    f"<b>{E_BUYER} {sc('buyer:')}</b> <b>{buyer_name}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
                     f"<b>{E_TICK} {sc('the amount has been added to your balance!')}</b>"
                 ),
