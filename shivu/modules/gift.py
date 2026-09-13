@@ -445,12 +445,12 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             except: pass
         # Cancel dabane par aage ka queue apne aap dead ho jayega!
 
-# 🔥 SUPER INSTANT SPAM DELETE (Ab aur bhi aggressive aur strict hai)
+# 🔥 SUPER INSTANT SPAM DELETE (Now with Debug Logs!)
 async def instant_delete_spam(update: Update, context: CallbackContext):
     if not update.effective_message:
         return
         
-    # List mein current message or replied message dono daal diye
+    # Check both the current message and the replied message
     messages_to_check = [update.effective_message]
     if update.effective_message.reply_to_message:
         messages_to_check.append(update.effective_message.reply_to_message)
@@ -473,7 +473,10 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
                     
         full_text = " ".join(text_parts).lower() 
         
-        # Expanded Spam Keywords - Ye screenshot wale message ko pakad lega
+        if not full_text.strip():
+            continue
+
+        # Spam Keywords (Expanded for 100% match)
         spam_phrases = [
             "support our mission", "every donation makes a difference", 
             "spread smiles", "pay ⭐️", "pay ⭐", "donate", 
@@ -481,23 +484,25 @@ async def instant_delete_spam(update: Update, context: CallbackContext):
             "make a difference", "support our mission and spread smiles"
         ]
         
-        # Agar text match hua, ud jayega
         if any(phrase in full_text for phrase in spam_phrases):
+            LOGGER.info(f"🚨 SPAM DETECTED! Trying to delete message ID: {m.message_id} in Chat: {m.chat.id}")
             try: 
                 await m.delete()
-                LOGGER.info(f"Successfully deleted spam message {m.message_id} in {m.chat.id}")
+                LOGGER.info(f"✅ Successfully deleted spam message {m.message_id}")
             except TelegramError as e:
-                # Ye error tab aayega jab bot admin nahi hoga ya permission nahi hogi
-                LOGGER.error(f"Failed to delete spam message {m.message_id} in {m.chat.id}: {e}")
+                # THIS ERROR WILL TELL YOU EXACTLY WHY IT FAILED
+                LOGGER.error(f"❌ Failed to delete spam message {m.message_id}. Reason: {e}")
                 try:
                     await context.bot.delete_message(chat_id=m.chat.id, message_id=m.message_id)
+                    LOGGER.info(f"✅ Fallback deletion successful for {m.message_id}")
                 except Exception as e2:
-                    LOGGER.error(f"Fallback deletion failed: {e2}")
+                    LOGGER.error(f"❌ Fallback deletion failed: {e2}")
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
 application.add_handler(CallbackQueryHandler(handle_gift_callback, pattern='^gift_(z|v):'))
-application.add_handler(MessageHandler(filters.ALL, instant_delete_spam), group=-99)
+# Group -100 ensures this handler runs before any other message handler
+application.add_handler(MessageHandler(filters.ALL, instant_delete_spam), group=-160)
 
 async def cleanup_stale_gifts():
     while True:
