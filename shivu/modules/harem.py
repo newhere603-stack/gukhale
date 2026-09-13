@@ -14,6 +14,20 @@ from shivu import db, application, LOGGER
 # Nayi collection auto-delete memory ke liye (Taaki bot yaddasht na bhule)
 delete_collection = db['auto_delete_queue']
 
+# ==========================================================
+# 🚀 SPEED CACHES
+# ==========================================================
+_collection_cache = {}         # {user_id: {"data": UserCollection, "ts": float}}
+_COLLECTION_TTL = 3            # seconds
+
+_anime_counts_cache = {}       # {anime: {"count": int, "ts": float}}
+_ANIME_COUNTS_TTL = 300        # 5 minutes
+
+_harem_generation = {}         # {user_id: int} — rapid-click race protection
+
+def _invalidate_collection_cache(user_id: int):
+    _collection_cache.pop(user_id, None)
+
 # --- SMALL CAPS CONVERTER HELPERS ---
 SMALL_CAPS_TRANS = str.maketrans(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -25,16 +39,30 @@ def to_small_caps(text: str) -> str:
         return ""
     return str(text).translate(SMALL_CAPS_TRANS)
 
+
+def _id_variants(raw_id) -> set:
+    """Compact ID variants. Avoids padding explosion for big IDs."""
+    s = str(raw_id).strip()
+    clean = s.lstrip('0') or '0'
+    variants = {s, clean}
+    if clean.isdigit():
+        v = int(clean)
+        variants.add(str(v))
+        if len(clean) <= 3:
+            variants.add(f"{v:02d}")
+            variants.add(f"{v:03d}")
+    return variants
+
+
 # 🔥 PERMANENT AUTO DELETE SYSTEM 🔥
 _worker_started = False
 
 async def background_delete_worker(bot):
-    """Ye worker background me chalega aur restart hone par bhi database check karke delete karega"""
     try:
         await delete_collection.create_index("delete_at")
     except Exception:
         pass
-        
+
     while True:
         try:
             now = time.time()
@@ -43,7 +71,7 @@ async def background_delete_worker(bot):
                 try:
                     await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
                 except Exception:
-                    pass 
+                    pass
                 finally:
                     await delete_collection.delete_one({'_id': doc['_id']})
         except Exception:
@@ -51,9 +79,8 @@ async def background_delete_worker(bot):
         await asyncio.sleep(30)
 
 async def schedule_auto_delete(message, delay_seconds: int = 1200):
-    """Message ko database aur memory queue dono me daalta hai"""
     if not message: return
-        
+
     global _worker_started
     if not _worker_started:
         _worker_started = True
@@ -63,14 +90,12 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
     message_id = message.message_id
     delete_at = time.time() + delay_seconds
 
-    # MongoDB me save karega taki bot crash/restart hone par mission na bhule
     await delete_collection.insert_one({
         'chat_id': chat_id,
         'message_id': message_id,
         'delete_at': delete_at
     })
 
-    # Memory worker taaki smoothly delete ho jaye agar bot chalu rahe to
     async def memory_delete():
         await asyncio.sleep(delay_seconds)
         try:
@@ -82,7 +107,7 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
     asyncio.create_task(memory_delete())
 
 
-# 🔥 UNIFIED RARITY DICTIONARY (Updated as per requested Emojis)
+# 🔥 UNIFIED RARITY DICTIONARY
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Cosmic"),
@@ -173,8 +198,7 @@ class UserCollection:
     def get_filtered_characters(self) -> List[Character]:
         mode = str(self.filter_mode)
         chars = self.characters
-        
-        # 🔥 Remove duplicates perfectly by normalizing IDs (9 == 09)
+
         unique_chars_dict = {}
         if mode == "latest":
             for c in reversed(chars):
@@ -188,8 +212,7 @@ class UserCollection:
                 if c_clean not in unique_chars_dict:
                     unique_chars_dict[c_clean] = c
             unique_list = list(unique_chars_dict.values())
-        
-        # 🔥 Filter on live-synced unique characters
+
         if mode.startswith("anime:"):
             target_anime = mode.split(":", 1)[1]
             filtered = [c for c in unique_list if c.anime == target_anime]
@@ -204,12 +227,12 @@ class UserCollection:
             return sorted(filtered, key=lambda c: (c.anime, c.id))
         if mode == "latest":
             return unique_list
-            
+
         return sorted(unique_list, key=lambda c: (c.anime, c.id))
 
     def count_by_id(self, characters: List[Character]) -> Dict[str, int]:
         counts = {}
-        for char in characters: 
+        for char in characters:
             c_clean = str(char.id).strip().lstrip('0') or '0'
             counts[c_clean] = counts.get(c_clean, 0) + 1
         return counts
@@ -231,7 +254,7 @@ class MediaHelper:
 
     @staticmethod
     async def send_media_message(message, media_url_or_urls, caption: str,
-                                  reply_markup, is_video_or_videos = False,
+                                  reply_markup, is_video_or_videos=False,
                                   display_options: Optional[DisplayOptions] = None):
         opts = display_options or DisplayOptions()
         urls = media_url_or_urls if isinstance(media_url_or_urls, list) else [media_url_or_urls]
@@ -255,25 +278,25 @@ class MediaHelper:
                     try:
                         return await message.reply_photo(photo=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
                     except TelegramError as e:
-                        if "caption" in str(e).lower() or "too long" in str(e).lower(): raise e 
+                        if "caption" in str(e).lower() or "too long" in str(e).lower(): raise e
                         return await message.reply_video(video=url, caption=caption, reply_markup=reply_markup, parse_mode='HTML', supports_streaming=True, read_timeout=120, write_timeout=120)
-                        
+
             except TelegramError as e:
                 err_msg = str(e).lower()
                 LOGGER.warning(f"Media rejected. URL: {url}, Error: {e}")
-                
+
                 if "caption" in err_msg or "too long" in err_msg:
                     try:
                         if is_vid:
                             await message.reply_video(video=url, caption="<b>✨ Harem Collection ✨</b>", parse_mode='HTML', supports_streaming=True)
                         else:
                             await message.reply_photo(photo=url, caption="<b>✨ Harem Collection ✨</b>", parse_mode='HTML')
-                        
+
                         return await message.reply_text(caption, reply_markup=reply_markup, parse_mode='HTML')
                     except Exception:
                         pass
-                continue 
-                
+                continue
+
         try:
             return await message.reply_photo(photo=MediaHelper.GLOBAL_FALLBACK, caption=caption, reply_markup=reply_markup, parse_mode='HTML')
         except TelegramError:
@@ -298,10 +321,10 @@ class HaremMessageBuilder:
 
         for anime_key, chars in grouped.items():
             display_anime = chars[0].anime or "Unknown"
-            
+
             user_unique = {
-                str(c.id).strip().lstrip('0') or '0' 
-                for c in self.collection.characters 
+                str(c.id).strip().lstrip('0') or '0'
+                for c in self.collection.characters
                 if (c.anime or "Unknown").strip().upper() == anime_key
             }
             user_count = len(user_unique)
@@ -334,57 +357,60 @@ class HaremHandler:
         self.collection_db = db['anime_characters_lol']
         self.user_db = db['user_collection_lmaoooo']
 
-    # 🔥 OPTIMIZED 0-DELAY REAL-TIME SYNC (Superfast)
+    # 🔥 Fast live sync — one query per page load (cached via collection cache)
     async def sync_user_characters_with_live_data(self, characters: List[Character]):
         if not characters: return
-        
-        # Ek hi baar mein unique ID map create karna taki database load kam ho
+
         unique_map = {}
         for c in characters:
             c_clean = str(c.id).strip().lstrip('0') or '0'
-            if c_clean not in unique_map:
-                unique_map[c_clean] = []
-            unique_map[c_clean].append(c)
-            
+            unique_map.setdefault(c_clean, []).append(c)
+
         query_ids = set(unique_map.keys())
         for val_str in list(query_ids):
             if val_str.isdigit():
                 val = int(val_str)
                 query_ids.update([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
-        
+
         cursor = self.collection_db.find(
-            {"id": {"$in": list(query_ids)}}, 
+            {"id": {"$in": list(query_ids)}},
             {"id": 1, "name": 1, "anime": 1, "rarity": 1}
         )
         docs = await cursor.to_list(length=None)
-        
+
         live_map = {}
         for doc in docs:
             c_clean = str(doc.get('id', '')).strip().lstrip('0') or '0'
             if c_clean:
                 live_map[c_clean] = doc
-                
-        # Apply real-time live data fast mapping
+
         for c_clean, chars_list in unique_map.items():
-            if c_clean in live_map:
-                live_data = live_map[c_clean]
-                name = live_data.get('name', 'Unknown')
-                anime = live_data.get('anime', 'Unknown')
-                rarity = live_data.get('rarity', '🟢 Common')
+            live = live_map.get(c_clean)
+            if live:
+                name = live.get('name', 'Unknown')
+                anime = live.get('anime', 'Unknown')
+                rarity = live.get('rarity', '🟢 Common')
                 for c in chars_list:
                     c.name = name
                     c.anime = anime
                     c.rarity = rarity
 
     async def load_user_collection(self, user_id: int) -> Optional[UserCollection]:
+        # ⚡ Short cache — rapid pagination reuses same data
+        now = time.time()
+        cached = _collection_cache.get(user_id)
+        if cached and (now - cached['ts']) < _COLLECTION_TTL:
+            return cached['data']
+
         user = await self.user_db.find_one({'id': user_id})
-        if not user: return None
+        if not user:
+            _collection_cache[user_id] = {'data': None, 'ts': now}
+            return None
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
-        
-        # Real-time sync ab superfast ho gaya
+
         await self.sync_user_characters_with_live_data(characters)
-        
+
         fav_data = user.get('favorites')
         favorite = None
         if fav_data:
@@ -394,77 +420,79 @@ class HaremHandler:
                 favorite = Character.from_dict(fav_data)
             else:
                 fav_id_clean = str(fav_data).strip().lstrip('0') or '0'
-                
+
             if not favorite:
                 for c in characters:
                     if (str(c.id).strip().lstrip('0') or '0') == fav_id_clean:
                         favorite = Character(id=c.id, name=c.name, anime=c.anime, rarity=c.rarity, img_url=c.img_url, is_video=c.is_video, event_emoji=c.event_emoji)
                         break
 
-        return UserCollection(
+        collection = UserCollection(
             user_id=user_id, characters=characters, favorite=favorite,
             filter_mode=user.get('hmode', 'default')
         )
+        _collection_cache[user_id] = {'data': collection, 'ts': now}
+        return collection
 
     async def _auto_delete_message(self, message, delay_seconds: int = 1200):
         await schedule_auto_delete(message, delay_seconds)
 
-    # 🔥 SUPERFAST UPDATE IMAGE LIVE DATA
-    async def update_live_data_all(self, characters: List[Character]):
-        if not characters: return
-            
-        unique_map = {}
+    # 🔥 Single-query image fetch for current page + display char
+    async def _fetch_page_images(self, characters: List[Character]) -> Dict[str, dict]:
+        """Returns {clean_id: doc}. One round-trip."""
+        if not characters: return {}
+
+        query_ids = set()
         for c in characters:
-            c_clean = str(c.id).strip().lstrip('0') or '0'
-            if c_clean not in unique_map:
-                unique_map[c_clean] = []
-            unique_map[c_clean].append(c)
-            
-        query_ids = set(unique_map.keys())
-        for val_str in list(query_ids):
-            if val_str.isdigit():
-                val = int(val_str)
-                query_ids.update([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
-        
+            if c:
+                query_ids.update(_id_variants(c.id))
+
+        if not query_ids:
+            return {}
+
         cursor = self.collection_db.find(
             {"id": {"$in": list(query_ids)}},
             {"id": 1, "img_url": 1, "is_video": 1, "gender": 1}
         )
-        live_docs = await cursor.to_list(length=None)
-            
-        live_map = {}
-        for doc in live_docs:
-            doc_id_str = str(doc.get('id', '')).strip()
-            c_clean = doc_id_str.lstrip('0') or '0'
-            if c_clean: live_map[c_clean] = doc
-            
-        for c_clean, chars_list in unique_map.items():
-            if c_clean in live_map:
-                doc = live_map[c_clean]
-                img_url = doc.get('img_url')
-                is_video = doc.get('is_video', False)
-                gender = doc.get('gender')
-                for c in chars_list:
-                    if img_url: c.img_url = img_url
-                    c.is_video = is_video
-                    if gender: c.gender = gender
+        docs = await cursor.to_list(length=None)
 
-    # 🔥 OPTIMIZED ANIME COUNTS
+        result = {}
+        for doc in docs:
+            clean = str(doc.get('id', '')).strip().lstrip('0') or '0'
+            if clean and clean not in result:
+                result[clean] = doc
+        return result
+
+    # 🔥 Cached anime counts (60s → 5min)
     async def get_anime_counts(self, anime_list: List[str]) -> Dict[str, int]:
         if not anime_list: return {}
         unique_animes = list(set(anime_list))
-        
-        async def count_anime(anime):
-            c = await self.collection_db.count_documents({"anime": anime})
-            return anime, c
-            
-        results = await asyncio.gather(*(count_anime(a) for a in unique_animes))
-        return dict(results)
+
+        now = time.time()
+        result = {}
+        to_fetch = []
+        for a in unique_animes:
+            c = _anime_counts_cache.get(a)
+            if c and (now - c['ts']) < _ANIME_COUNTS_TTL:
+                result[a] = c['count']
+            else:
+                to_fetch.append(a)
+
+        if to_fetch:
+            async def count_anime(anime):
+                cnt = await self.collection_db.count_documents({"anime": anime})
+                return anime, cnt
+
+            fetched = await asyncio.gather(*(count_anime(a) for a in to_fetch))
+            for anime, cnt in fetched:
+                _anime_counts_cache[anime] = {'count': cnt, 'ts': now}
+                result[anime] = cnt
+
+        return result
 
     def _build_keyboard(self, page: int, total_pages: int, total_chars: int, user_id: int, step: int = 1) -> InlineKeyboardMarkup:
-        # ✅ FIX: Changed inline button to use premium emoji via icon_custom_emoji_id
         keyboard = [[InlineKeyboardButton(f'ʜᴀʀᴇᴍ ({total_chars})', switch_inline_query_current_chat=f"collection.{user_id}", icon_custom_emoji_id="6093637923834438402")]]
-        
+
         if total_pages > 1:
             nav = []
             if page > 0: nav.append(InlineKeyboardButton("❮", callback_data=f"harem_page:{max(0, page - step)}:{user_id}:{step}"))
@@ -479,18 +507,29 @@ class HaremHandler:
         keyboard.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"harem_close:{user_id}")])
         return InlineKeyboardMarkup(keyboard)
 
-    async def show_harem(self, update: Update, context: CallbackContext, page: int = 0, edit: bool = False, step: int = 1):
+    async def show_harem(self, update: Update, context: CallbackContext, page: int = 0,
+                         edit: bool = False, step: int = 1,
+                         generation: Optional[int] = None, gen_user_id: Optional[int] = None):
         user = update.effective_user
         user_id = user.id
         user_name = user.first_name
         message = update.message or update.callback_query.message
 
         collection = await self.load_user_collection(user_id)
-        if not collection: return await message.reply_text("<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!</b>", parse_mode='HTML')
-        if not collection.characters: return await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
+
+        # ⚡ Generation check after DB load — abort if superseded
+        if generation is not None and gen_user_id is not None:
+            if _harem_generation.get(gen_user_id) != generation:
+                return
+
+        if not collection:
+            return await message.reply_text("<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> ʏᴏᴜ ɴᴇᴇᴅ ᴛᴏ ɢʀᴀʙ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ғɪʀsᴛ ᴜsɪɴɢ /grab ᴄᴏᴍᴍᴀɴᴅ!</b>", parse_mode='HTML')
+        if not collection.characters:
+            return await message.reply_text("<b><tg-emoji emoji-id=\"5433653135799228968\">📁</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ʏᴇᴛ! ᴜsᴇ /grab ᴛᴏ ᴄᴀᴛᴄʜ sᴏᴍᴇ.</b>", parse_mode='HTML')
 
         display_order = collection.get_filtered_characters()
-        if not display_order: return await message.reply_text(f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ɪɴ ᴛʜɪs ᴍᴏᴅᴇ.</b>\n<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /hmode</b>", parse_mode='HTML')
+        if not display_order:
+            return await message.reply_text(f"<b>ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀs ɪɴ ᴛʜɪs ᴍᴏᴅᴇ.</b>\n<b><tg-emoji emoji-id=\"5422439311196834318\">💡</tg-emoji> ᴄʜᴀɴɢᴇ ᴍᴏᴅᴇ ᴜsɪɴɢ /hmode</b>", parse_mode='HTML')
 
         total_pages = math.ceil(len(display_order) / self.CHARACTERS_PER_PAGE)
         page = max(0, min(page, total_pages - 1))
@@ -501,22 +540,33 @@ class HaremHandler:
         if not display_char:
             display_char = current[0] if current else collection.characters[0]
 
+        # 🔥 PARALLEL: fetch page images + anime counts in ONE round-trip each
+        chars_to_fetch = list(current)
+        if display_char and display_char not in chars_to_fetch:
+            chars_to_fetch.append(display_char)
+
+        animes_needed = list({c.anime for c in current if c.anime})
+
+        img_map, anime_counts = await asyncio.gather(
+            self._fetch_page_images(chars_to_fetch),
+            self.get_anime_counts(animes_needed),
+        )
+
+        # ⚡ Another generation check — do NOT send if superseded
+        if generation is not None and gen_user_id is not None:
+            if _harem_generation.get(gen_user_id) != generation:
+                return
+
+        # Apply img data
         if display_char:
             c_clean = str(display_char.id).strip().lstrip('0') or '0'
-            q_ids = [str(display_char.id).strip(), c_clean]
-            if c_clean.isdigit(): 
-                val = int(c_clean)
-                q_ids.extend([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
-            
-            doc = await self.collection_db.find_one({"id": {"$in": q_ids}, "img_url": {"$nin": [None, ""]}})
+            doc = img_map.get(c_clean)
             if doc:
-                display_char.img_url = doc.get("img_url")
+                if doc.get("img_url"):
+                    display_char.img_url = doc.get("img_url")
                 display_char.is_video = doc.get("is_video", False)
-
-        chars_to_update = current.copy()
-        if display_char and display_char not in chars_to_update:
-            chars_to_update.append(display_char)
-        await self.update_live_data_all(chars_to_update)
+                if doc.get("gender"):
+                    display_char.gender = doc.get("gender")
 
         media_urls = []
         is_videos = []
@@ -526,38 +576,47 @@ class HaremHandler:
             is_videos.append(getattr(display_char, 'is_video', False))
 
         for c in current:
+            c_clean = str(c.id).strip().lstrip('0') or '0'
+            doc = img_map.get(c_clean)
+            if doc:
+                if doc.get("img_url"):
+                    c.img_url = doc.get("img_url")
+                c.is_video = doc.get("is_video", False)
+                if doc.get("gender"):
+                    c.gender = doc.get("gender")
+
             if getattr(c, 'img_url', None) and c.img_url not in media_urls:
                 media_urls.append(c.img_url)
                 is_videos.append(getattr(c, 'is_video', False))
 
-        # 🔥 SUPERFAST FALLBACK LOOP IF NO IMAGE
+        # Fallback media search (only if nothing found)
         if not media_urls:
             db_query_ids = set()
             for c in display_order[:15]:
-                c_clean = str(c.id).strip().lstrip('0') or '0'
-                db_query_ids.add(c_clean)
-                if c_clean.isdigit():
-                    val = int(c_clean)
-                    db_query_ids.update([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
-                
-            valid_docs = await self.collection_db.find({
-                "id": {"$in": list(db_query_ids)},
-                "img_url": {"$type": "string", "$ne": ""}
-            }).limit(3).to_list(length=None)
-            
-            for doc in valid_docs:
-                url = doc.get("img_url")
-                if url and url not in media_urls:
-                    media_urls.append(url)
-                    is_videos.append(doc.get("is_video", False))
+                db_query_ids.update(_id_variants(c.id))
+
+            if db_query_ids:
+                valid_docs = await self.collection_db.find({
+                    "id": {"$in": list(db_query_ids)},
+                    "img_url": {"$type": "string", "$ne": ""}
+                }).limit(3).to_list(length=None)
+
+                for doc in valid_docs:
+                    url = doc.get("img_url")
+                    if url and url not in media_urls:
+                        media_urls.append(url)
+                        is_videos.append(doc.get("is_video", False))
 
         style, options = DEFAULT_STYLE, DEFAULT_OPTIONS
-        anime_counts = await self.get_anime_counts(list({c.anime for c in current}))
         builder = HaremMessageBuilder(collection, page, total_pages, style, options, user_name, user_id)
         text = builder.build_message(current, anime_counts)
         markup = self._build_keyboard(page, total_pages, len(display_order), user_id, step)
 
         if edit:
+            # Final check right before edit — drop stale
+            if generation is not None and gen_user_id is not None:
+                if _harem_generation.get(gen_user_id) != generation:
+                    return
             try:
                 if message.photo or message.video or message.animation or message.document:
                     await message.edit_caption(caption=text, reply_markup=markup, parse_mode='HTML')
@@ -566,21 +625,22 @@ class HaremHandler:
                 return
             except TelegramError as e:
                 err_msg = str(e).lower()
-                if "not modified" in err_msg: return
+                if "not modified" in err_msg:
+                    return
                 if "too long" in err_msg or "caption" in err_msg:
                     await message.delete()
                     sent_msg = await MediaHelper.send_media_message(
-                        message=message, media_url_or_urls=media_urls, caption=text, 
+                        message=message, media_url_or_urls=media_urls, caption=text,
                         reply_markup=markup, is_video_or_videos=is_videos, display_options=options
                     )
                     if sent_msg: asyncio.create_task(self._auto_delete_message(sent_msg, 1200))
-                return 
+                return
 
         sent_msg = await MediaHelper.send_media_message(
-            message=message, media_url_or_urls=media_urls, caption=text, 
+            message=message, media_url_or_urls=media_urls, caption=text,
             reply_markup=markup, is_video_or_videos=is_videos, display_options=options
         )
-            
+
         if sent_msg:
             asyncio.create_task(self._auto_delete_message(sent_msg, 1200))
 
@@ -603,7 +663,7 @@ class ModeHandler:
             if key == "waifus" and str(current).startswith("char:"): return f"{text} ✓"
             return text
 
-        rarity_label = label("rarity", "ʀᴀʀɪᴛʏ") 
+        rarity_label = label("rarity", "ʀᴀʀɪᴛʏ")
         rows = [
             [InlineKeyboardButton(label("default", "ᴅᴇғᴀᴜʟᴛ"), callback_data=f"harem_mode:default:{user_id}"),
              InlineKeyboardButton(rarity_label, callback_data=f"harem_mode:rarity:{user_id}")],
@@ -620,7 +680,6 @@ class ModeHandler:
         if update.callback_query: await update.callback_query.edit_message_caption(caption=caption, reply_markup=markup, parse_mode='HTML')
         else: await update.message.reply_photo(self.IMG, caption=caption, reply_markup=markup, parse_mode='HTML')
 
-    # 🔥 EXACT 5x3 GRID LAYOUT REQUESTED (UPDATED WITH PREMIUM EMOJIS)
     async def show_rarity_menu(self, query, user_id: int):
         grid_layout = [
             ["common", "special", "rare"],
@@ -629,27 +688,26 @@ class ModeHandler:
             ["celestial", "valentine", "erotic"],
             ["mythic", "premium", "cosmic"]
         ]
-        
+
         keyboard = []
         for row in grid_layout:
             btn_row = []
             for key in row:
                 db_emoji = RARITIES[key][0]
                 prem_emoji_html = RARITIES[key][1]
-                # Dynamic premium emoji id extract karna taaki manually likhna na pade
                 emoji_id = prem_emoji_html.split('emoji-id="')[1].split('"')[0]
                 btn_row.append(InlineKeyboardButton(db_emoji, callback_data=f"harem_mode:{key}:{user_id}", icon_custom_emoji_id=emoji_id))
             keyboard.append(btn_row)
-            
+
         keyboard.append([InlineKeyboardButton("↻ ʙᴀᴄᴋ", callback_data=f"harem_mode:back:{user_id}")])
-        
+
         await query.edit_message_caption(caption="<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> sᴇʟᴇᴄᴛ ᴀ ʀᴀʀɪᴛʏ ᴛᴏ ғɪʟᴛᴇʀ:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='HTML')
 
     async def show_anime_menu(self, query, user_id: int, page: int):
         user = await self.user_db.find_one({'id': user_id})
         chars = [Character.from_dict(c) for c in (user.get('characters', []) if user else []) if c]
         await harem_handler.sync_user_characters_with_live_data(chars)
-        
+
         unique_animes = sorted(list({c.anime for c in chars if c.anime and c.anime != "Unknown"}))
         if not unique_animes: return await query.answer("ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀɴʏ ᴀɴɪᴍᴇs ʏᴇᴛ!", show_alert=True)
 
@@ -701,12 +759,13 @@ class ModeHandler:
 
     async def set_mode(self, user_id: int, mode: str):
         await self.user_db.update_one({'id': user_id}, {'$set': {'hmode': mode}}, upsert=True)
+        _invalidate_collection_cache(user_id)
 
     async def handle_mode_callback(self, update: Update, context: CallbackContext):
         query = update.callback_query
         parts = query.data.split(':')
         if len(parts) < 3: return await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ", show_alert=True)
-            
+
         action, owner_id_str = parts[1], parts[2]
         user_id = await verify_owner(query, owner_id_str, "ʙᴀᴋᴀ! ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ ʜᴍᴏᴅᴇ ᴜsɪɴɢ /hmode !")
         if user_id is None: return
@@ -717,10 +776,10 @@ class ModeHandler:
         if action == "back": await query.answer(); return await self.show_mode_menu(update, user_id)
         if action == "close": await query.answer(); return await query.message.delete()
 
-        if action == "alist": 
+        if action == "alist":
             await query.answer()
             return await self.show_anime_menu(query, user_id, int(parts[3]))
-        if action == "clist": 
+        if action == "clist":
             await query.answer()
             return await self.show_char_menu(query, user_id, int(parts[3]))
 
@@ -730,7 +789,7 @@ class ModeHandler:
             chars = [Character.from_dict(c) for c in (user.get('characters', []) if user else []) if c]
             await harem_handler.sync_user_characters_with_live_data(chars)
             unique_animes = sorted(list({c.anime for c in chars if c.anime and c.anime != "Unknown"}))
-            
+
             if idx < len(unique_animes):
                 await self.set_mode(user_id, f"anime:{unique_animes[idx]}")
                 safe_name = unique_animes[idx][:20] + "..." if len(unique_animes[idx]) > 20 else unique_animes[idx]
@@ -744,7 +803,7 @@ class ModeHandler:
             chars = [Character.from_dict(c) for c in (user.get('characters', []) if user else []) if c]
             await harem_handler.sync_user_characters_with_live_data(chars)
             unique_names = sorted(list({c.name for c in chars if c.name and c.name != "Unknown"}))
-            
+
             if idx < len(unique_names):
                 await self.set_mode(user_id, f"char:{unique_names[idx]}")
                 safe_name = unique_names[idx][:20] + "..." if len(unique_names[idx]) > 20 else unique_names[idx]
@@ -778,17 +837,13 @@ class UnfavHandler:
                     if (str(c.id).strip().lstrip('0') or '0') == fav_id_clean:
                         fav = c
                         break
-        
+
         if not fav: return await update.message.reply_text("<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴀ ғᴀᴠᴏʀɪᴛᴇ ᴄʜᴀʀᴀᴄᴛᴇʀ sᴇᴛ!</b>", parse_mode='HTML')
 
         buttons = [[InlineKeyboardButton("✓ ʏᴇs", callback_data=f"harem_unfav_yes:{user_id}"), InlineKeyboardButton("⤬ ɴᴏ", callback_data=f"harem_unfav_no:{user_id}")]]
         caption = f"<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ᴅᴏ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ʀᴇᴍᴏᴠᴇ ᴛʜɪs ғᴀᴠᴏʀɪᴛᴇ?</b>\n\n<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> ɴᴀᴍᴇ:</b> <code>{escape(to_small_caps(fav.name))}</code>\n<b><tg-emoji emoji-id=\"6312254267461739671\">⛩</tg-emoji> ᴀɴɪᴍᴇ:</b> <code>{escape(to_small_caps(fav.anime))}</code>\n<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ɪᴅ:</b> <code>{fav.id}</code>"
-        
-        c_clean = str(fav.id).strip().lstrip('0') or '0'
-        q_ids = [str(fav.id).strip(), c_clean]
-        if c_clean.isdigit(): 
-            val = int(c_clean)
-            q_ids.extend([str(val), f"{val:02d}", f"{val:03d}", f"{val:04d}"])
+
+        q_ids = list(_id_variants(fav.id))
         live_doc = await db['anime_characters_lol'].find_one({"id": {"$in": q_ids}})
         if live_doc and live_doc.get('img_url'):
             fav.img_url = live_doc.get('img_url')
@@ -807,6 +862,7 @@ class UnfavHandler:
             user = await self.user_db.find_one({'id': user_id})
             if not user or not user.get('favorites'): return await query.answer("ɴᴏ ғᴀᴠᴏʀɪᴛᴇ ғᴏᴜɴᴅ!", show_alert=True)
             await self.user_db.update_one({'id': user_id}, {'$unset': {'favorites': ""}})
+            _invalidate_collection_cache(user_id)
             await query.edit_message_caption(caption=f"<b><tg-emoji emoji-id=\"5278454020111887994\">💔</tg-emoji> ғᴀᴠᴏʀɪᴛᴇ ʀᴇᴍᴏᴠᴇᴅ!</b>\n\n<b><i><tg-emoji emoji-id=\"5276239041052828276\">🎭</tg-emoji> ʏᴏᴜ ᴄᴀɴ sᴇᴛ ᴀ ɴᴇᴡ ғᴀᴠᴏʀɪᴛᴇ ᴜsɪɴɢ /fav</i></b>", parse_mode='HTML')
         elif action == 'harem_unfav_no': await query.edit_message_caption(caption="<b>ᴀᴄᴛɪᴏɴ ᴄᴀɴᴄᴇʟᴇᴅ. ғᴀᴠᴏʀɪᴛᴇ ᴋᴇᴘᴛ.</b>", parse_mode='HTML')
 
@@ -824,7 +880,10 @@ mode_handler = ModeHandler()
 unfav_handler = UnfavHandler()
 
 async def harem_command(update: Update, context: CallbackContext):
-    try: await harem_handler.show_harem(update, context)
+    try:
+        # Fresh command → clear cache so user gets latest
+        _invalidate_collection_cache(update.effective_user.id)
+        await harem_handler.show_harem(update, context)
     except TelegramError as e:
         LOGGER.error(f"Error in harem_command: {e}", exc_info=True)
         await update.message.reply_text("<b><tg-emoji emoji-id=\"6307488052059053932\">🕐</tg-emoji> ʟᴏᴀᴅɪɴɢ ʜᴀʀᴇᴍ. ᴘʟᴇᴀsᴇ ᴛʀʏ ᴀɢᴀɪɴ.</b>", parse_mode='HTML')
@@ -833,12 +892,33 @@ async def harem_page_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     try:
         parts = query.data.split(':')
-        if await verify_owner(query, parts[2]) is None: return
+        # sync owner check + answer FIRST
+        try:
+            owner_id = int(parts[2])
+        except (IndexError, ValueError):
+            await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ!", show_alert=True)
+            return
+        if query.from_user.id != owner_id:
+            await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ʙᴀᴋᴀ!", show_alert=True)
+            return
+
+        # bump generation → previous in-flight edits get dropped
+        gen = _harem_generation.get(owner_id, 0) + 1
+        _harem_generation[owner_id] = gen
+
         await query.answer()
-        await harem_handler.show_harem(update, context, int(parts[1]), edit=True, step=int(parts[3]) if len(parts) > 3 else 1)
+
+        page = int(parts[1])
+        step = int(parts[3]) if len(parts) > 3 else 1
+
+        await harem_handler.show_harem(
+            update, context, page, edit=True, step=step,
+            generation=gen, gen_user_id=owner_id
+        )
     except Exception as e:
         LOGGER.error(f"Error in harem_page_callback: {e}", exc_info=True)
-        await query.answer("ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴘᴀɢᴇ", show_alert=True)
+        try: await query.answer("ᴇʀʀᴏʀ ʟᴏᴀᴅɪɴɢ ᴘᴀɢᴇ", show_alert=True)
+        except Exception: pass
 
 async def hmode_command(update: Update, context: CallbackContext):
     try: await mode_handler.show_mode_menu(update, update.effective_user.id)
@@ -860,17 +940,33 @@ async def harem_2x_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     try:
         parts = query.data.split(':')
-        if await verify_owner(query, parts[2]) is None: return
+        try:
+            owner_id = int(parts[2])
+        except (IndexError, ValueError):
+            await query.answer("ɪɴᴠᴀʟɪᴅ ᴅᴀᴛᴀ!", show_alert=True)
+            return
+        if query.from_user.id != owner_id:
+            await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ʙᴀᴋᴀ!", show_alert=True)
+            return
+
+        gen = _harem_generation.get(owner_id, 0) + 1
+        _harem_generation[owner_id] = gen
+
         target_step = int(parts[3]) if len(parts) > 3 else 2
         await query.answer("2x ᴘᴀɢᴇ sᴋɪᴘ ᴏɴ" if target_step == 2 else "1x (ɴᴏʀᴍᴀʟ) sᴋɪᴘ ᴏɴ")
-        await harem_handler.show_harem(update, context, int(parts[1]) + target_step, edit=True, step=target_step)
-    except Exception as e: LOGGER.error(f"Error in harem_2x_callback: {e}", exc_info=True)
+
+        await harem_handler.show_harem(
+            update, context, int(parts[1]) + target_step, edit=True, step=target_step,
+            generation=gen, gen_user_id=owner_id
+        )
+    except Exception as e:
+        LOGGER.error(f"Error in harem_2x_callback: {e}", exc_info=True)
 
 async def harem_close_callback(update: Update, context: CallbackContext):
     if await verify_owner(update.callback_query, update.callback_query.data.partition(':')[2]) is not None:
         await update.callback_query.answer()
         await update.callback_query.message.delete()
-    
+
 async def ignore_callback(update: Update, context: CallbackContext):
     await update.callback_query.answer()
 
