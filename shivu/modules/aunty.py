@@ -1,5 +1,5 @@
 # ============================================================
-# 🏦  BANK OF AUNTY — 4% Daily Interest Savings System
+# 🏦  BANK OF ALISA — 4% Daily Interest Savings System
 # Prefix: bka_  (no conflict with existing bk_ from tasks)
 # Logs: -1003893927065 (full transaction details)
 # ============================================================
@@ -23,7 +23,7 @@ from shivu.Database.db import eco_collection
 # ============================================================
 # ⚙️  Config
 # ============================================================
-BANK_NAME    = "Bank Of Aunty"
+BANK_NAME    = "Bank Of Alisa"
 DAILY_RATE   = 0.04
 DAY_SECONDS  = 86400
 MIN_DEPOSIT  = 100
@@ -33,6 +33,9 @@ LOG_GROUP_ID = -1003893927065
 IST          = timezone(timedelta(hours=5, minutes=30))
 
 WALLET_KEYS = ['balance', 'coins', 'wallet', 'money', 'gold', 'bal']
+
+# track last bank page message per user → (chat_id, message_id)
+USER_BANK_MSGS = {}
 
 
 # ============================================================
@@ -84,6 +87,17 @@ def bank_balance(doc):
         return 0
 
 
+async def delete_old_bank_msg(context, user_id):
+    old = USER_BANK_MSGS.get(user_id)
+    if not old:
+        return
+    try:
+        await context.bot.delete_message(chat_id=old[0], message_id=old[1])
+    except Exception:
+        pass
+    USER_BANK_MSGS.pop(user_id, None)
+
+
 # ============================================================
 # 📡 Logger — Full Transaction Details
 # ============================================================
@@ -97,16 +111,16 @@ async def send_bank_log(
     ts = datetime.now(IST).strftime("%I:%M %p • %d/%m/%y")
 
     name = escape(user.first_name or "User")
-    uname = f"@{user.username}" if user.username else "—"
+    uname = f"@{user.username}" if getattr(user, "username", None) else "—"
 
     lines = [
         f"<b>{action_icon} {action_title}</b>",
         "",
-        f"<b>├ {sc('ᴜsᴇʀ')} :</b> <a href='tg://user?id={user.id}'>{name}</a>",
+        f"<b>├ {sc('ᴜsᴇʀ')} :</b> <b><a href='tg://user?id={user.id}'>{name}</a></b>",
         f"<b>├ {sc('ᴜsᴇʀɴᴀᴍᴇ')} :</b> {uname}",
         f"<b>├ {sc('ᴜsᴇʀ ɪᴅ')} :</b> <code>{user.id}</code>",
         f"<b>├ {sc('ᴀᴍᴏᴜɴᴛ')} :</b> <b>{fmt(amount)}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>",
-        f"<b>├ {sc('ᴡᴀʟʟᴇᴛ')} :</b> <b>{fmt(wallet_before)}</b> → <b>{fmt(wallet_after)}</b>",
+        f"<b>├ {sc('ᴄᴏɪɴs')} :</b> <b>{fmt(wallet_before)}</b> → <b>{fmt(wallet_after)}</b>",
         f"<b>├ {sc('ʙᴀɴᴋ')} :</b> <b>{fmt(bank_before)}</b> → <b>{fmt(bank_after)}</b>",
     ]
 
@@ -117,7 +131,7 @@ async def send_bank_log(
     if interest_earned is not None and interest_earned > 0:
         lines.append(f"<b>├ {sc('ɪɴᴛᴇʀᴇsᴛ ᴊᴜsᴛ ᴄʀᴇᴅɪᴛᴇᴅ')} :</b> <b>+{fmt(interest_earned)}</b>")
 
-    lines.append(f"<b>├ {sc('ᴍᴏᴅᴇ')} :</b> <b>{sc(mode)}</b>")
+    lines.append(f"<b>├ {sc('ᴍᴏᴅᴇ')} :</b> <b>{mode}</b>")
     lines.append(f"<b>╰ {sc('ᴛɪᴍᴇ')} :</b> <b>{ts}</b>")
 
     try:
@@ -258,6 +272,9 @@ async def withdraw_coins(user_id, amount):
 # 🖼 Renderer
 # ============================================================
 async def send_or_edit(update, context, text, kb, edit=False):
+    user = update.effective_user
+    user_id = user.id if user else None
+
     if edit and update.callback_query:
         q = update.callback_query
         try:
@@ -265,30 +282,44 @@ async def send_or_edit(update, context, text, kb, edit=False):
                 media=InputMediaPhoto(media=BANK_BANNER, caption=text, parse_mode='HTML'),
                 reply_markup=kb
             )
+            if user_id:
+                USER_BANK_MSGS[user_id] = (q.message.chat_id, q.message.message_id)
             return
         except BadRequest as e:
             if "not modified" in str(e).lower():
+                if user_id:
+                    USER_BANK_MSGS[user_id] = (q.message.chat_id, q.message.message_id)
                 return
         except Exception:
             pass
 
+        # fallback: delete old & resend
+        if user_id:
+            await delete_old_bank_msg(context, user_id)
         try:
             await q.message.delete()
         except Exception:
             pass
         try:
-            await context.bot.send_photo(
+            msg = await context.bot.send_photo(
                 chat_id=update.effective_chat.id,
                 photo=BANK_BANNER, caption=text,
                 parse_mode='HTML', reply_markup=kb
             )
+            if user_id:
+                USER_BANK_MSGS[user_id] = (msg.chat_id, msg.message_id)
         except Exception:
             pass
     else:
-        await update.message.reply_photo(
+        # non-edit: delete previous page of this user first
+        if user_id:
+            await delete_old_bank_msg(context, user_id)
+        msg = await update.message.reply_photo(
             photo=BANK_BANNER, caption=text,
             parse_mode='HTML', reply_markup=kb
         )
+        if user_id:
+            USER_BANK_MSGS[user_id] = (msg.chat_id, msg.message_id)
 
 
 # ============================================================
@@ -302,7 +333,7 @@ async def bank_page(update, context, edit=False, notice=None):
     if not doc:
         text = (
             f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> "
-            f"<b>{sc('bank of aunty')}</b>\n"
+            f"<b>{sc('bank of alisa')}</b>\n"
             f"<b>{sc('please start the bot first to use the bank.')}</b>"
         )
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(
@@ -326,14 +357,14 @@ async def bank_page(update, context, edit=False, notice=None):
 
     text = (
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> "
-        f"<b>{sc('bank of aunty')}</b> "
+        f"<b>{sc('bank of alisa')}</b> "
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<tg-emoji emoji-id=\"5217822164362739968\">👑</tg-emoji> "
-        f"<b>{user.mention_html()}</b>  •  <code>{user.id}</code>\n"
+        f"<b>{user.mention_html()}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> "
-        f"<b>{sc('wallet')} :</b> <b>{fmt(wallet)}</b>\n"
+        f"<b>{sc('coins')} :</b> <b>{fmt(wallet)}</b>\n"
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> "
         f"<b>{sc('bank')} :</b> <b>{fmt(bank)}</b>\n"
         f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> "
@@ -385,8 +416,8 @@ async def deposit_menu(update, context, edit=False):
         f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> "
         f"<b>{sc('deposit coins')}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> "
-        f"<b>{sc('wallet')} :</b> <b>{fmt(wallet)}</b>\n"
+        f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> "
+        f"<b>{sc('coins')} :</b> <b>{fmt(wallet)}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>{sc('choose amount or use')}</b> <code>/deposit &lt;amt&gt;</code>\n"
         f"<i>{sc('minimum')} : {MIN_DEPOSIT}</i>"
@@ -450,7 +481,7 @@ async def bank_rules(update, context, edit=False):
     uid = update.callback_query.from_user.id if edit else update.effective_user.id
     text = (
         f"<tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji> "
-        f"<b>{sc('bank of aunty — rules')}</b>\n"
+        f"<b>{sc('bank of alisa — rules')}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<b>1.</b> {sc('min deposit')} : <b>{MIN_DEPOSIT}</b>\n"
         f"<b>2.</b> {sc('min withdraw')} : <b>{MIN_WITHDRAW}</b>\n"
@@ -498,7 +529,7 @@ async def top_bankers(update, context, edit=False):
                 link = escape(str(name))
             bal = bank_balance(u)
             rows.append(
-                f"<b>{i}.</b> {link} — "
+                f"<b>{i}.</b> <b>{link}</b> — "
                 f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> "
                 f"<b>{fmt(bal)}</b>"
             )
@@ -541,10 +572,9 @@ async def deposit_cmd(update, context):
             return await update.message.reply_text(
                 f"<b>{sc('please start the bot first!')}</b>", parse_mode='HTML')
         return await update.message.reply_text(
-            f"<b>{sc('insufficient wallet')} : {fmt(res.get('wallet',0))}</b>",
+            f"<b>{sc('insufficient coins')} : {fmt(res.get('wallet',0))}</b>",
             parse_mode='HTML')
 
-    # ---------- LOG ----------
     asyncio.create_task(send_bank_log(
         context,
         "<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji>",
@@ -557,7 +587,8 @@ async def deposit_cmd(update, context):
         mode="ᴄᴏᴍᴍᴀɴᴅ"
     ))
 
-    notice = (f"✅ <b>{sc('deposit successful')}</b>\n"
+    notice = (f"<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji> "
+              f"<b>{sc('deposit successful')}</b>\n"
               f"<b>+{fmt(amount)}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>")
     await bank_page(update, context, edit=False, notice=notice)
 
@@ -598,7 +629,8 @@ async def withdraw_cmd(update, context):
         mode="ᴄᴏᴍᴍᴀɴᴅ"
     ))
 
-    notice = (f"✅ <b>{sc('withdraw successful')}</b>\n"
+    notice = (f"<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji> "
+              f"<b>{sc('withdraw successful')}</b>\n"
               f"<b>+{fmt(amount)}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>")
     await bank_page(update, context, edit=False, notice=notice)
 
@@ -612,7 +644,89 @@ async def banktop_cmd(update, context):
 
 
 # ============================================================
-# 🔔 Text Trigger — "Bank Of Aunty"
+# 🛑 Owner: Remove coins from user's bank (no refund to wallet)
+# ============================================================
+async def remove_bank_cmd(update, context):
+    u = update.effective_user
+    if not is_sudo(u.id):
+        return await update.message.reply_text(
+            f"<b>{sc('ᴏᴡɴᴇʀ ᴏɴʟʏ ᴄᴏᴍᴍᴀɴᴅ.')}</b>", parse_mode='HTML')
+
+    args = context.args or []
+    if len(args) < 2:
+        return await update.message.reply_text(
+            "<b>ᴜꜱᴀɢᴇ :</b> <code>/removebank &lt;user_id&gt; &lt;amount&gt;</code>",
+            parse_mode='HTML')
+
+    try:
+        target_id = int(args[0])
+        amount = int(args[1].replace(",", "").replace("_", ""))
+    except Exception:
+        return await update.message.reply_text(
+            "<b>ɪɴᴠᴀʟɪᴅ ᴀʀɢᴜᴍᴇɴᴛs.</b>", parse_mode='HTML')
+
+    if amount <= 0:
+        return await update.message.reply_text(
+            "<b>ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ &gt; 0.</b>", parse_mode='HTML')
+
+    await settle_interest(target_id)
+    doc = await eco_collection.find_one({'id': target_id})
+    if not doc:
+        return await update.message.reply_text(
+            f"<b>{sc('ᴜsᴇʀ ɴᴏᴛ ꜰᴏᴜɴᴅ ɪɴ ᴅᴀᴛᴀʙᴀsᴇ.')}</b>", parse_mode='HTML')
+
+    bank_before = bank_balance(doc)
+    if bank_before <= 0:
+        return await update.message.reply_text(
+            f"<b>{sc('ʙᴀɴᴋ ʙᴀʟᴀɴᴄᴇ ɪs 0.')}</b>", parse_mode='HTML')
+
+    removed = min(amount, bank_before)
+    new_bank = bank_before - removed
+
+    updates = {'bank_balance': new_bank}
+    if new_bank <= 0:
+        updates['bank_last_interest'] = None
+    await eco_collection.update_one({'id': target_id}, {'$set': updates})
+
+    # try to resolve target user info for logging / mention
+    try:
+        target_chat = await context.bot.get_chat(target_id)
+    except Exception:
+        class _U:  # minimal fallback
+            id = target_id
+            first_name = "Unknown"
+            username = None
+        target_chat = _U()
+
+    asyncio.create_task(send_bank_log(
+        context,
+        "<tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji>",
+        sc("ᴏᴡɴᴇʀ ʀᴇᴍᴏᴠᴇᴅ ʙᴀɴᴋ ᴄᴏɪɴs"),
+        target_chat, removed,
+        extract_balance(doc), extract_balance(doc),   # wallet unchanged
+        bank_before, new_bank,
+        int(doc.get('bank_total_deposited', 0) or 0),
+        int(doc.get('bank_total_withdrawn', 0) or 0),
+        None,
+        mode="ᴏᴡɴᴇʀ ᴄᴏᴍᴍᴀɴᴅ"
+    ))
+
+    try:
+        target_link = mention_html(target_id, escape(getattr(target_chat, 'first_name', 'User')))
+    except Exception:
+        target_link = f"<code>{target_id}</code>"
+
+    await update.message.reply_text(
+        f"<b><tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji> "
+        f"{sc('ʙᴀɴᴋ ᴄᴏɪɴs ʀᴇᴍᴏᴠᴇᴅ')}</b>\n"
+        f"<b>{sc('ᴜsᴇʀ')} :</b> <b>{target_link}</b>\n"
+        f"<b>{sc('ʀᴇᴍᴏᴠᴇᴅ')} :</b> <b>{fmt(removed)}</b>\n"
+        f"<b>{sc('ɴᴇᴡ ʙᴀɴᴋ ʙᴀʟᴀɴᴄᴇ')} :</b> <b>{fmt(new_bank)}</b>",
+        parse_mode='HTML')
+
+
+# ============================================================
+# 🔔 Text Trigger — "Bank Of Alisa"
 # ============================================================
 async def bank_text_trigger(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
@@ -649,6 +763,7 @@ async def bank_callback(update: Update, context: CallbackContext):
             await q.message.delete()
         except Exception:
             pass
+        USER_BANK_MSGS.pop(clicker.id, None)
         return
 
     # ---------- Rules (public) ----------
@@ -697,7 +812,7 @@ async def bank_callback(update: Update, context: CallbackContext):
         u = clicker
         res = await deposit_coins(u.id, amount)
         if not res['ok']:
-            return await q.answer(sc("insufficient wallet balance"), show_alert=True)
+            return await q.answer(sc("insufficient coins balance"), show_alert=True)
 
         await q.answer(sc("deposited"))
 
@@ -713,7 +828,8 @@ async def bank_callback(update: Update, context: CallbackContext):
             mode="ǫᴜɪᴄᴋ ʙᴜᴛᴛᴏɴ"
         ))
 
-        notice = (f"✅ <b>{sc('deposit successful')}</b>\n"
+        notice = (f"<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji> "
+                  f"<b>{sc('deposit successful')}</b>\n"
                   f"<b>+{fmt(amount)}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>")
         return await bank_page(update, context, edit=True, notice=notice)
 
@@ -751,7 +867,8 @@ async def bank_callback(update: Update, context: CallbackContext):
             mode="ǫᴜɪᴄᴋ ʙᴜᴛᴛᴏɴ"
         ))
 
-        notice = (f"✅ <b>{sc('withdraw successful')}</b>\n"
+        notice = (f"<tg-emoji emoji-id=\"6100397639717625616\">✔️</tg-emoji> "
+                  f"<b>{sc('withdraw successful')}</b>\n"
                   f"<b>+{fmt(amount)}</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji>")
         return await bank_page(update, context, edit=True, notice=notice)
 
@@ -761,13 +878,14 @@ async def bank_callback(update: Update, context: CallbackContext):
 # ============================================================
 # 📌 Register Handlers
 # ============================================================
-application.add_handler(CommandHandler(['bank', 'aunty', 'boa'], bank_cmd, block=False))
+application.add_handler(CommandHandler(['bank', 'alisa', 'boa'], bank_cmd, block=False))
 application.add_handler(CommandHandler('deposit', deposit_cmd, block=False))
 application.add_handler(CommandHandler('withdraw', withdraw_cmd, block=False))
 application.add_handler(CommandHandler('bankrules', bank_rules_cmd, block=False))
 application.add_handler(CommandHandler('banktop', banktop_cmd, block=False))
+application.add_handler(CommandHandler(['removebank', 'bankremove'], remove_bank_cmd, block=False))
 application.add_handler(CallbackQueryHandler(bank_callback, pattern="^bka_", block=False))
 application.add_handler(MessageHandler(
-    filters.TEXT & ~filters.COMMAND & filters.Regex(r"(?i)^\s*bank[\s_]+of[\s_]+aunty\s*$"),
+    filters.TEXT & ~filters.COMMAND & filters.Regex(r"(?i)^\s*bank[\s_]+of[\s_]+alisa\s*$"),
     bank_text_trigger, block=False
 ))
