@@ -24,6 +24,7 @@ E_MONEY = '<tg-emoji emoji-id="5472030678633684592">💸</tg-emoji>'
 E_TIME = '<tg-emoji emoji-id="6307488052059053932">🕐</tg-emoji>'
 E_SELL_CHAR = '<tg-emoji emoji-id="6093434630147415641">🃏</tg-emoji>'
 E_BUYER = '<tg-emoji emoji-id="6105159001807267845">⭐</tg-emoji>'
+E_CHAR_ID = '<tg-emoji emoji-id="6332443074769196273">🆔</tg-emoji>'
 
 # --- CONFIGURATION ---
 LOG_GROUP_ID = -1003893927065
@@ -172,6 +173,10 @@ def to_small_caps(text: str) -> str:
     return str(text).translate(SMALL_CAPS_TRANS)
 
 sc = to_small_caps
+
+# Pagination arrows with small-caps text (⋞/⋟ pass through sc unchanged)
+PAG_PREV = sc("⋞ ᴘʀᴇᴠ")
+PAG_NEXT = sc("ɴᴇxᴛ ⋟")
 
 # ============================================================
 # UNIFIED RARITY MAP (keys now MATCH CHAR_PRICES_COINS)
@@ -657,7 +662,7 @@ async def receive_buy_screenshot(update: Update, context: CallbackContext):
     admin_text = (
         f"<b>🛒 ɴᴇᴡ ᴘᴜʀᴄʜᴀsᴇ ʀᴇǫᴜᴇsᴛ</b>\n"
         f"<b>👤 ᴜsᴇʀ:</b> <a href='tg://user?id={user_id}'>{html.escape(update.message.from_user.first_name)}</a> (<code>{user_id}</code>)\n"
-        f"<b>🆔 ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n"
+        f"<b>{E_CHAR_ID} ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n"
         f"<b>📦 ɪᴛᴇᴍ:</b> {disp_txt}\n"
         f"<b>{E_MONEY} ᴘᴀʏᴀʙʟᴇ:</b> <b>{price_inr:.2f} ɪɴʀ</b>"
     )
@@ -728,7 +733,7 @@ async def admin_buy_callback(update: Update, context: CallbackContext):
         new_caption = (
             f"<b>🛒 ɴᴇᴡ ᴘᴜʀᴄʜᴀsᴇ ʀᴇǫᴜᴇsᴛ</b>\n"
             f"<b>👤 ᴜsᴇʀ:</b> <a href='tg://user?id={target_user_id}'>{html.escape(order['user_name'])}</a> (<code>{target_user_id}</code>)\n"
-            f"<b>🆔 ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n"
+            f"<b>{E_CHAR_ID} ᴏʀᴅᴇʀ ɪᴅ:</b> <code>{order_id}</code>\n"
             f"<b>📦 ɪᴛᴇᴍ:</b> {disp_txt}\n"
             f"<b>{E_MONEY} ᴘᴀʏᴀʙʟᴇ:</b> <b>{new_price:.2f} ɪɴʀ</b>"
         )
@@ -859,13 +864,15 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             emoji_id = extract_emoji_id(prem_html)
             btn_text = f"{sc(char_name)} - {price:,}"
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pm_v:{market_id}:{rarity_key}:{order}:{page}:{user_id}", icon_custom_emoji_id=emoji_id)])
-        nav = []
-        if page > 0:
-            nav.append(InlineKeyboardButton(sc("⋞"), callback_data=f"pm_s:{rarity_key}:{order}:{page-1}:{user_id}"))
-        nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="ignore"))
-        if page < total_pages - 1:
-            nav.append(InlineKeyboardButton(sc("⋟"), callback_data=f"pm_s:{rarity_key}:{order}:{page+1}:{user_id}"))
-        keyboard.append(nav)
+        # 🔥 Pagination row ONLY when there's more than 1 page 🔥
+        if total_pages > 1:
+            nav = []
+            if page > 0:
+                nav.append(InlineKeyboardButton(PAG_PREV, callback_data=f"pm_s:{rarity_key}:{order}:{page-1}:{user_id}"))
+            nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="ignore"))
+            if page < total_pages - 1:
+                nav.append(InlineKeyboardButton(PAG_NEXT, callback_data=f"pm_s:{rarity_key}:{order}:{page+1}:{user_id}"))
+            keyboard.append(nav)
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_r:{rarity_key}:{user_id}")])
         sort_text = sc("low to high") if order == "asc" else sc("high to low")
         await update_menu(query, f"<b>{prem_emoji} {sc('characters for sale')}</b>\n\n<i>{sc('sorted by price (')} {sort_text} {sc(')')}</i>", InlineKeyboardMarkup(keyboard), change_media=True, photo_url=SHOP_IMG)
@@ -898,7 +905,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ:</b> {sc(display_char.get('anime', 'Unknown'))}\n"
             f"<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> ʀᴀʀɪᴛʏ:</b> {prem_html} {sc(name)}\n"
             f"<b>{E_MONEY} ᴘʀɪᴄᴇ:</b> <code>{price:,}</code>\n"
-            f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> sᴇʟʟᴇʀ:</b> <code>{seller_id}</code>"
+            f"<b>{E_CHAR_ID} sᴇʟʟᴇʀ:</b> <code>{seller_id}</code>"
         )
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(sc("buy now"), callback_data=f"pm_buy:{market_id}:{user_id}", icon_custom_emoji_id="5312361253610475399")],
@@ -962,7 +969,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
         )
         await send_market_log(context, "🛒 CHARACTER SOLD", log_details)
 
-        # 🔔 SELLER NOTIFICATION (premium emojis, buyer name only, no mention) 🔔
+        # 🔔 SELLER NOTIFICATION (all premium emojis, buyer name only, no mention) 🔔
         _, prem_html, _ = get_rarity_display(char.get('rarity', ''))
         try:
             await context.bot.send_message(
@@ -971,7 +978,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
                     f"<b>{E_PARTY} {sc('character sold!')}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
                     f"<b>{E_SELL_CHAR} {sc('character:')}</b> {prem_html} <b>{sc(char.get('name', 'Unknown'))}</b>\n"
-                    f"<b>🆔 {sc('id:')}</b> <code>{char.get('id')}</code>\n"
+                    f"<b>{E_CHAR_ID} {sc('id:')}</b> <code>{char.get('id')}</code>\n"
                     f"<b>{E_MONEY} {sc('sold for:')}</b> <b><code>{price:,}</code> {sc('coins')}</b>\n"
                     f"<b>{E_BUYER} {sc('buyer:')}</b> <b>{sc(buyer_name)}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -1006,13 +1013,14 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             keyboard.append([
                 InlineKeyboardButton(sc(f"{char_name} - {price:,}"), callback_data=f"pm_view_listing:{market_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641")
             ])
-        if total_count > 0:
+        # 🔥 Pagination row ONLY when there's more than 1 page 🔥
+        if total_pages > 1:
             nav = []
             if page > 0:
-                nav.append(InlineKeyboardButton(sc("⋞"), callback_data=f"pm_sm:{page-1}:{user_id}"))
+                nav.append(InlineKeyboardButton(PAG_PREV, callback_data=f"pm_sm:{page-1}:{user_id}"))
             nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="ignore"))
             if page < total_pages - 1:
-                nav.append(InlineKeyboardButton(sc("⋟"), callback_data=f"pm_sm:{page+1}:{user_id}"))
+                nav.append(InlineKeyboardButton(PAG_NEXT, callback_data=f"pm_sm:{page+1}:{user_id}"))
             keyboard.append(nav)
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_m:{user_id}")])
         await update_menu(query, f"<b>{E_MONEY} {sc('your active listings')}</b>\n\n<i>{sc('manage your current listings or add a new one.')}</i>", InlineKeyboardMarkup(keyboard), change_media=True, photo_url=SHOP_IMG)
@@ -1041,7 +1049,7 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             f"<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> ᴀɴɪᴍᴇ:</b> {sc(display_char.get('anime', 'Unknown'))}\n"
             f"<b><tg-emoji emoji-id=\"5260426225599405269\">🪄</tg-emoji> ʀᴀʀɪᴛʏ:</b> {prem_html} {sc(name)}\n"
             f"<b>{E_MONEY} ʏᴏᴜʀ ᴘʀɪᴄᴇ:</b> <code>{price:,}</code>\n"
-            f"<b><tg-emoji emoji-id=\"6332443074769196273\">🆔</tg-emoji> ᴄʜᴀʀ ɪᴅ:</b> <code>{display_char.get('id')}</code>"
+            f"<b>{E_CHAR_ID} ᴄʜᴀʀ ɪᴅ:</b> <code>{display_char.get('id')}</code>"
         )
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(sc("cancel"), callback_data=f"pm_delist:{market_id}:{page}:{user_id}", icon_custom_emoji_id="5472030678633684592")],
@@ -1083,13 +1091,14 @@ async def pmarket_callbacks(update: Update, context: CallbackContext):
             keyboard.append([
                 InlineKeyboardButton(sc(f"{char_name} - {price:,}"), callback_data=f"pm_view_listing:{m_id}:{page}:{user_id}", icon_custom_emoji_id="6093434630147415641")
             ])
-        if total_count > 0:
+        # 🔥 Pagination row ONLY when there's more than 1 page 🔥
+        if total_pages > 1:
             nav = []
             if page > 0:
-                nav.append(InlineKeyboardButton(sc("⋞"), callback_data=f"pm_sm:{page-1}:{user_id}"))
+                nav.append(InlineKeyboardButton(PAG_PREV, callback_data=f"pm_sm:{page-1}:{user_id}"))
             nav.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="ignore"))
             if page < total_pages - 1:
-                nav.append(InlineKeyboardButton(sc("⋟"), callback_data=f"pm_sm:{page+1}:{user_id}"))
+                nav.append(InlineKeyboardButton(PAG_NEXT, callback_data=f"pm_sm:{page+1}:{user_id}"))
             keyboard.append(nav)
         keyboard.append([InlineKeyboardButton(sc("↻ back"), callback_data=f"pm_m:{user_id}")])
         await update_menu(query, f"<b>{E_MONEY} {sc('your active listings')}</b>\n\n<i>{sc('manage your current listings or add a new one.')}</i>", InlineKeyboardMarkup(keyboard), change_media=True, photo_url=SHOP_IMG)
@@ -1598,4 +1607,3 @@ try:
     application._post_init = _pmarket_post_init
 except Exception:
     pass
-    
