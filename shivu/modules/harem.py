@@ -18,10 +18,13 @@ delete_collection = db['auto_delete_queue']
 # 🚀 SPEED CACHES
 # ==========================================================
 _collection_cache = {}         # {user_id: {"data": UserCollection, "ts": float}}
-_COLLECTION_TTL = 3            # seconds
+_COLLECTION_TTL = 60           # 60 seconds — rapid page clicks reuse
 
 _anime_counts_cache = {}       # {anime: {"count": int, "ts": float}}
 _ANIME_COUNTS_TTL = 300        # 5 minutes
+
+_page_data_cache = {}          # {clean_id: {"doc": dict, "ts": float}}
+_PAGE_DATA_TTL = 60            # 60 seconds — character master data (name/anime/rarity/img)
 
 _harem_generation = {}         # {user_id: int} — rapid-click race protection
 
@@ -107,10 +110,10 @@ async def schedule_auto_delete(message, delay_seconds: int = 1200):
     asyncio.create_task(memory_delete())
 
 
-# 🔥 UNIFIED RARITY DICTIONARY
+# 🔥 UNIFIED RARITY DICTIONARY (cosmic → Video Edition renamed)
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
-    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Cosmic"),
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Video Edition"),
     "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🪽</tg-emoji>', "Celestial"),
     "exclusive": ("💮", '<tg-emoji emoji-id="6100567406889935797">💮</tg-emoji>', "Exclusive"),
     "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🟡</tg-emoji>', "Legendary"),
@@ -126,9 +129,26 @@ RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common")
 }
 
+# 🔥 SEARCH ALIASES — so "cosmic", "video", "video edition" all map to same key
+RARITY_ALIASES = {
+    "cosmic": "cosmic",
+    "video": "cosmic",
+    "video edition": "cosmic",
+    "videoedition": "cosmic",
+    "video editing": "cosmic",
+    "videoediting": "cosmic",
+    "video edit": "cosmic",
+    "videoedit": "cosmic",
+}
+
 def get_base_rarity(rarity_str: str) -> str:
     if not rarity_str or not isinstance(rarity_str, str): return "common"
     r_lower = rarity_str.lower().strip()
+
+    # Fast alias path (cosmic / video / video edition etc.)
+    alias = RARITY_ALIASES.get(r_lower)
+    if alias: return alias
+
     for key, (_, _, name) in RARITIES.items():
         if key == r_lower or name.lower() == r_lower: return key
     for key, (db_emoji, _, name) in RARITIES.items():
@@ -221,10 +241,19 @@ class UserCollection:
             target_char_name = mode.split(":", 1)[1]
             filtered = [c for c in unique_list if c.name == target_char_name]
             return sorted(filtered, key=lambda c: (c.anime, c.id))
-        if mode in RARITIES:
-            target_key = mode.lower()
-            filtered = [c for c in unique_list if get_base_rarity(c.rarity) == target_key]
+
+        # 🔥 Rarity filter (also handles aliases like "video" / "video edition")
+        mode_lower = mode.lower()
+        rarity_key = None
+        if mode_lower in RARITIES:
+            rarity_key = mode_lower
+        elif mode_lower in RARITY_ALIASES:
+            rarity_key = RARITY_ALIASES[mode_lower]
+
+        if rarity_key:
+            filtered = [c for c in unique_list if get_base_rarity(c.rarity) == rarity_key]
             return sorted(filtered, key=lambda c: (c.anime, c.id))
+
         if mode == "latest":
             return unique_list
 
@@ -357,7 +386,7 @@ class HaremHandler:
         self.collection_db = db['anime_characters_lol']
         self.user_db = db['user_collection_lmaoooo']
 
-    # 🔥 Fast live sync — one query per page load (cached via collection cache)
+    # 🔥 Used ONLY by mode menus (rare clicks). Kept intact.
     async def sync_user_characters_with_live_data(self, characters: List[Character]):
         if not characters: return
 
@@ -395,8 +424,8 @@ class HaremHandler:
                     c.anime = anime
                     c.rarity = rarity
 
+    # 🔥 FAST PATH: no full sync — just user doc fetch (cached 60s)
     async def load_user_collection(self, user_id: int) -> Optional[UserCollection]:
-        # ⚡ Short cache — rapid pagination reuses same data
         now = time.time()
         cached = _collection_cache.get(user_id)
         if cached and (now - cached['ts']) < _COLLECTION_TTL:
@@ -408,8 +437,6 @@ class HaremHandler:
             return None
 
         characters = [c for c in (Character.from_dict(char) for char in user.get('characters', [])) if c]
-
-        await self.sync_user_characters_with_live_data(characters)
 
         fav_data = user.get('favorites')
         favorite = None
@@ -437,33 +464,66 @@ class HaremHandler:
     async def _auto_delete_message(self, message, delay_seconds: int = 1200):
         await schedule_auto_delete(message, delay_seconds)
 
-    # 🔥 Single-query image fetch for current page + display char
-    async def _fetch_page_images(self, characters: List[Character]) -> Dict[str, dict]:
-        """Returns {clean_id: doc}. One round-trip."""
+    # 🔥 THE BIG ONE: sync ONLY current page + fetch images in a SINGLE query
+    async def _fetch_page_data(self, characters: List[Character]) -> Dict[str, dict]:
+        """Returns {clean_id: doc}. One query per page, cache-boosted."""
         if not characters: return {}
 
+        # Build ID variants
         query_ids = set()
+        clean_to_chars = {}
         for c in characters:
-            if c:
-                query_ids.update(_id_variants(c.id))
+            if not c: continue
+            variants = _id_variants(c.id)
+            query_ids.update(variants)
+            clean = str(c.id).strip().lstrip('0') or '0'
+            clean_to_chars.setdefault(clean, []).append(c)
 
-        if not query_ids:
-            return {}
-
-        cursor = self.collection_db.find(
-            {"id": {"$in": list(query_ids)}},
-            {"id": 1, "img_url": 1, "is_video": 1, "gender": 1}
-        )
-        docs = await cursor.to_list(length=None)
-
+        # Check page data cache first
+        now = time.time()
         result = {}
-        for doc in docs:
-            clean = str(doc.get('id', '')).strip().lstrip('0') or '0'
-            if clean and clean not in result:
-                result[clean] = doc
+        to_fetch_ids = set()
+        for clean in clean_to_chars.keys():
+            cached = _page_data_cache.get(clean)
+            if cached and (now - cached['ts']) < _PAGE_DATA_TTL:
+                result[clean] = cached['doc']
+            else:
+                to_fetch_ids.update(_id_variants(clean))
+
+        if to_fetch_ids:
+            cursor = self.collection_db.find(
+                {"id": {"$in": list(to_fetch_ids)}},
+                {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "is_video": 1, "gender": 1}
+            )
+            docs = await cursor.to_list(length=None)
+
+            for doc in docs:
+                clean = str(doc.get('id', '')).strip().lstrip('0') or '0'
+                if clean and clean not in result:
+                    result[clean] = doc
+                    _page_data_cache[clean] = {'doc': doc, 'ts': now}
+
+        # Apply live data to Character objects
+        for clean, chars_list in clean_to_chars.items():
+            doc = result.get(clean)
+            if not doc: continue
+            name = doc.get('name')
+            anime = doc.get('anime')
+            rarity = doc.get('rarity')
+            img_url = doc.get('img_url')
+            is_video = doc.get('is_video', False)
+            gender = doc.get('gender')
+            for c in chars_list:
+                if name: c.name = name
+                if anime: c.anime = anime
+                if rarity: c.rarity = rarity
+                if img_url: c.img_url = img_url
+                c.is_video = is_video
+                if gender: c.gender = gender
+
         return result
 
-    # 🔥 Cached anime counts (60s → 5min)
+    # 🔥 Cached anime counts
     async def get_anime_counts(self, anime_list: List[str]) -> Dict[str, int]:
         if not anime_list: return {}
         unique_animes = list(set(anime_list))
@@ -515,9 +575,9 @@ class HaremHandler:
         user_name = user.first_name
         message = update.message or update.callback_query.message
 
+        # ⚡ Load (cached)
         collection = await self.load_user_collection(user_id)
 
-        # ⚡ Generation check after DB load — abort if superseded
         if generation is not None and gen_user_id is not None:
             if _harem_generation.get(gen_user_id) != generation:
                 return
@@ -540,34 +600,25 @@ class HaremHandler:
         if not display_char:
             display_char = current[0] if current else collection.characters[0]
 
-        # 🔥 PARALLEL: fetch page images + anime counts in ONE round-trip each
+        # 🔥 ONLY sync current page + display char (not all user chars!)
         chars_to_fetch = list(current)
         if display_char and display_char not in chars_to_fetch:
             chars_to_fetch.append(display_char)
 
         animes_needed = list({c.anime for c in current if c.anime})
 
-        img_map, anime_counts = await asyncio.gather(
-            self._fetch_page_images(chars_to_fetch),
+        # 🔥 PARALLEL: page data + anime counts
+        _, anime_counts = await asyncio.gather(
+            self._fetch_page_data(chars_to_fetch),
             self.get_anime_counts(animes_needed),
         )
 
-        # ⚡ Another generation check — do NOT send if superseded
+        # ⚡ Generation check
         if generation is not None and gen_user_id is not None:
             if _harem_generation.get(gen_user_id) != generation:
                 return
 
-        # Apply img data
-        if display_char:
-            c_clean = str(display_char.id).strip().lstrip('0') or '0'
-            doc = img_map.get(c_clean)
-            if doc:
-                if doc.get("img_url"):
-                    display_char.img_url = doc.get("img_url")
-                display_char.is_video = doc.get("is_video", False)
-                if doc.get("gender"):
-                    display_char.gender = doc.get("gender")
-
+        # Collect media URLs (data already applied in-place by _fetch_page_data)
         media_urls = []
         is_videos = []
 
@@ -576,20 +627,11 @@ class HaremHandler:
             is_videos.append(getattr(display_char, 'is_video', False))
 
         for c in current:
-            c_clean = str(c.id).strip().lstrip('0') or '0'
-            doc = img_map.get(c_clean)
-            if doc:
-                if doc.get("img_url"):
-                    c.img_url = doc.get("img_url")
-                c.is_video = doc.get("is_video", False)
-                if doc.get("gender"):
-                    c.gender = doc.get("gender")
-
             if getattr(c, 'img_url', None) and c.img_url not in media_urls:
                 media_urls.append(c.img_url)
                 is_videos.append(getattr(c, 'is_video', False))
 
-        # Fallback media search (only if nothing found)
+        # Fallback media (only if nothing found)
         if not media_urls:
             db_query_ids = set()
             for c in display_order[:15]:
@@ -613,7 +655,6 @@ class HaremHandler:
         markup = self._build_keyboard(page, total_pages, len(display_order), user_id, step)
 
         if edit:
-            # Final check right before edit — drop stale
             if generation is not None and gen_user_id is not None:
                 if _harem_generation.get(gen_user_id) != generation:
                     return
@@ -881,7 +922,6 @@ unfav_handler = UnfavHandler()
 
 async def harem_command(update: Update, context: CallbackContext):
     try:
-        # Fresh command → clear cache so user gets latest
         _invalidate_collection_cache(update.effective_user.id)
         await harem_handler.show_harem(update, context)
     except TelegramError as e:
@@ -892,7 +932,6 @@ async def harem_page_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     try:
         parts = query.data.split(':')
-        # sync owner check + answer FIRST
         try:
             owner_id = int(parts[2])
         except (IndexError, ValueError):
@@ -902,7 +941,6 @@ async def harem_page_callback(update: Update, context: CallbackContext):
             await query.answer("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ ʙᴀᴋᴀ!", show_alert=True)
             return
 
-        # bump generation → previous in-flight edits get dropped
         gen = _harem_generation.get(owner_id, 0) + 1
         _harem_generation[owner_id] = gen
 
