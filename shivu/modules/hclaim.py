@@ -34,38 +34,88 @@ OWNER_ID = 7657218453 # Added Owner ID
 
 # Anti-spam & Fast Queue locks
 active_claims = set()
-play_again_cooldowns = {} 
+play_again_cooldowns = {}
 mines_locks = {}
 tic_locks = {}
 
 RARITIES = {
-    "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common"), 
-    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"), 
+    "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common"),
+    "rare": ("🟠", '<tg-emoji emoji-id="5339390195768774311">🟠</tg-emoji>', "Rare"),
     "legendary": ("🟡", '<tg-emoji emoji-id="6084550327086883643">🔥</tg-emoji>', "Legendary"),
-    "special": ("🔴", '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>', "Medium"), 
-    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"), 
+    "special": ("🔴", '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>', "Medium"),
+    "celestial": ("🪽", '<tg-emoji emoji-id="5434121252874756456">🕊</tg-emoji>', "Celestial"),
     "erotic": ("🥵", '<tg-emoji emoji-id="6093490292923574796">❤️‍🔥</tg-emoji>', "Spicy"),
-    "exclusive": ("💮", '<tg-emoji emoji-id="6100567406889935797">🤴</tg-emoji>', "Exclusive"), 
-    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"), 
+    "exclusive": ("💮", '<tg-emoji emoji-id="6100567406889935797">🤴</tg-emoji>', "Exclusive"),
+    "premium": ("🔮", '<tg-emoji emoji-id="6093919703753831564">🔮</tg-emoji>', "Premium Edition"),
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
-    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"), 
-    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"), 
+    "sweet": ("🍭", '<tg-emoji emoji-id="6222115531122546353">🍭</tg-emoji>', "Sweet"),
+    "valentine": ("💞", '<tg-emoji emoji-id="5255861796350224063">❤️</tg-emoji>', "Valentine"),
     "winter": ("❄️", '<tg-emoji emoji-id="5431895003821513760">❄️</tg-emoji>', "Winter"),
-    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"), 
-    "pearl": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"), 
-    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Cosmic"),
+    "neon": ("⚡", '<tg-emoji emoji-id="6093708348413189642">⚡️</tg-emoji>', "Neon"),
+    "pearl": ("🏖️", '<tg-emoji emoji-id="5433645645376264953">🏖</tg-emoji>', "Summer"),
+    "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🎆</tg-emoji>', "Video Edition"),
 }
+
+# 🔥 RARITY SEARCH ALIASES — "cosmic"/"video"/"video edition" all resolve to same canonical key
+RARITY_ALIASES = {
+    "cosmic": "cosmic",
+    "video": "cosmic",
+    "video edition": "cosmic",
+    "videoedition": "cosmic",
+    "video editing": "cosmic",
+    "videoediting": "cosmic",
+    "video edit": "cosmic",
+    "videoedit": "cosmic",
+    "video edits": "cosmic",
+    "videoedits": "cosmic",
+}
+
+def canonical_rarity(name) -> str:
+    """Returns canonical rarity key. Aliases (cosmic/video/video edition) → 'cosmic'.
+    Returns input unchanged if nothing matches (preserves unknown rarities)."""
+    if not name:
+        return ""
+    n = str(name).strip().lower()
+
+    # 1. Alias check first
+    if n in RARITY_ALIASES:
+        return RARITY_ALIASES[n]
+
+    # 2. Exact key match
+    if n in RARITIES:
+        return n
+
+    # 3. Substring match against keys and display names
+    for key, (_, _, disp) in RARITIES.items():
+        if key in n or disp.lower() in n:
+            return key
+
+    return n
 
 def get_rarity_key(rarity_str):
     if not isinstance(rarity_str, str):
         return None
     rarity_str = rarity_str.strip()
+
+    # 🔥 Canonical first (handles cosmic/video/video edition + emoji prefix)
+    canon = canonical_rarity(rarity_str)
+    if canon in RARITIES:
+        return canon
+
+    # Fallback: original DB-format parsing
     db_emoji, name = (rarity_str.split(' ', 1) + [''])[:2] if ' ' in rarity_str else (rarity_str, '')
     name = name.strip().lower()
     for key, (r_db_emoji, _, r_name) in RARITIES.items():
         if rarity_str.lower() == key or db_emoji == r_db_emoji or name == r_name.lower():
             return key
     return None
+
+def get_rarity_display_name(rarity_str) -> str:
+    """Returns display name (e.g., cosmic → Video Edition). Falls back to raw."""
+    key = canonical_rarity(rarity_str)
+    if key in RARITIES:
+        return RARITIES[key][2]
+    return str(rarity_str)
 
 def to_small_caps(text: str) -> str:
     if not text:
@@ -105,7 +155,7 @@ async def background_delete_worker(bot):
         await delete_collection.create_index("delete_at")
     except Exception:
         pass
-        
+
     while True:
         try:
             now = time.time()
@@ -114,7 +164,7 @@ async def background_delete_worker(bot):
                 try:
                     await bot.delete_message(chat_id=doc['chat_id'], message_id=doc['message_id'])
                 except Exception:
-                    pass 
+                    pass
                 finally:
                     await delete_collection.delete_one({'_id': doc['_id']})
         except Exception:
@@ -123,7 +173,7 @@ async def background_delete_worker(bot):
 
 async def silent_auto_delete(message, delay_seconds: int = 1200):
     if not message: return
-        
+
     global _worker_started
     if not _worker_started:
         _worker_started = True
@@ -153,20 +203,20 @@ async def silent_auto_delete(message, delay_seconds: int = 1200):
 def can_claim_today(last_claim_utc) -> bool:
     if not last_claim_utc:
         return True
-    
+
     if last_claim_utc.tzinfo is None:
         last_claim_utc = last_claim_utc.replace(tzinfo=timezone.utc)
-    
+
     last_claim_ist = last_claim_utc.astimezone(IST)
     now_ist = datetime.now(IST)
-    
+
     today_4am = now_ist.replace(hour=4, minute=0, second=0, microsecond=0)
-    
+
     if now_ist < today_4am:
         reset_threshold = today_4am - timedelta(days=1)
     else:
         reset_threshold = today_4am
-        
+
     return last_claim_ist < reset_threshold
 
 async def get_allowed_rarities():
@@ -180,13 +230,13 @@ async def swaifu(update: Update, context: CallbackContext):
     if user_id in active_claims:
         return
     active_claims.add(user_id)
-    
+
     try:
         raw_first_name = update.effective_user.first_name or "User"
         safe_first_name = html.escape(raw_first_name)
         now_utc = datetime.now(timezone.utc)
         user_data = await user_collection.find_one({'id': user_id})
-        
+
         if user_data and 'last_swaifu_claim' in user_data:
             last_claim = user_data['last_swaifu_claim']
             if not can_claim_today(last_claim):
@@ -195,13 +245,17 @@ async def swaifu(update: Update, context: CallbackContext):
                 return
 
         allowed_rarities = await get_allowed_rarities()
+        allowed_canon = {canonical_rarity(a) for a in allowed_rarities}
+
         cursor = collection.find({})
         all_chars = await cursor.to_list(length=None)
 
         valid_chars = []
         for c in all_chars:
             rarity_str = str(c.get('rarity', '')).strip().lower()
-            if any(allowed in rarity_str for allowed in allowed_rarities):
+            c_canon = canonical_rarity(rarity_str)
+            # 🔥 Match if legacy substring matches OR canonical rarity matches
+            if any(allowed in rarity_str for allowed in allowed_rarities) or c_canon in allowed_canon:
                 valid_chars.append(c)
 
         if not valid_chars:
@@ -213,7 +267,7 @@ async def swaifu(update: Update, context: CallbackContext):
         anime = html.escape(sc(character.get('anime', 'Unknown')))
         rarity_str = character.get('rarity', '🟢 Common')
         r_key = get_rarity_key(rarity_str)
-        
+
         if r_key and r_key in RARITIES:
             _, r_display_emoji, r_name = RARITIES[r_key]
             rarity = f"{r_display_emoji} <b>{html.escape(sc(r_name))}</b>"
@@ -243,7 +297,7 @@ async def swaifu(update: Update, context: CallbackContext):
                 sent_msg = await update.message.reply_photo(photo=img_url, caption=caption, parse_mode=ParseMode.HTML)
             else:
                 sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
-            
+
             asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
 
         except Exception as img_err:
@@ -251,11 +305,13 @@ async def swaifu(update: Update, context: CallbackContext):
             sent_msg = await update.message.reply_text(caption, parse_mode=ParseMode.HTML)
             asyncio.create_task(silent_auto_delete(sent_msg, delay_seconds=1200))
 
+        # 🔥 Log uses display name (cosmic → Video Edition)
+        display_rarity = get_rarity_display_name(character.get('rarity', 'Common'))
         log_data = {
             sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
             sc("ɪᴅ"): f"<code>{user_id}</code>",
             sc("ᴄʜᴀʀᴀᴄᴛᴇʀ"): f"<b>{character.get('name', 'Unknown')}</b>",
-            sc("ʀᴀʀɪᴛʏ"): f"<b>{character.get('rarity', 'Common')}</b>"
+            sc("ʀᴀʀɪᴛʏ"): f"<b>{display_rarity}</b>"
         }
         asyncio.create_task(send_log(context, create_log_message(f"˹ {sc('sᴡᴀɪꜰᴜ ᴄʟᴀɪᴍᴇᴅ')} ˼ <tg-emoji emoji-id=\"6336972134962697188\">🌸</tg-emoji>", log_data)))
 
@@ -271,12 +327,12 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
     if user_id in active_claims:
         return
     active_claims.add(user_id)
-    
+
     try:
         raw_first_name = update.effective_user.first_name or "User"
         now_utc = datetime.now(timezone.utc)
         user_data = await eco_collection.find_one({'id': user_id})
-        
+
         if user_data and 'last_coin_claim' in user_data:
             last_claim = user_data['last_coin_claim']
             if not can_claim_today(last_claim):
@@ -303,7 +359,7 @@ async def daily_claim_coins(update: Update, context: CallbackContext):
         )
 
         await update.message.reply_text(msg_text, parse_mode=ParseMode.HTML)
-        
+
         log_data = {
             sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{raw_first_name}</a></b>",
             sc("ɪᴅ"): f"<code>{user_id}</code>",
@@ -330,7 +386,7 @@ PREMIUM_WIN  = '<tg-emoji emoji-id="6053140037250323814">🏆</tg-emoji>'
 PREMIUM_DRAW = '<tg-emoji emoji-id="6053383162464050605">🤝</tg-emoji>'
 PREMIUM_CRY  = '<tg-emoji emoji-id="5922641759518593935">😭</tg-emoji>'
 
-PREMIUM_P1 = '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>' 
+PREMIUM_P1 = '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>'
 PREMIUM_P2 = '<tg-emoji emoji-id="6093741664474504699">🔴</tg-emoji>'
 
 SYMBOL_P1 = '🟢'
@@ -350,7 +406,7 @@ def get_tic_board(game):
         for j in range(3):
             val = board[i+j]
             cb_data = f"tic_move_{i+j}" if game['status'] == 'playing' else "tic_ignore"
-            
+
             if val == SYMBOL_P1:
                 row.append(InlineKeyboardButton(EMPTY, callback_data=cb_data, icon_custom_emoji_id="6093865707424980866"))
             elif val == SYMBOL_P2:
@@ -399,7 +455,7 @@ async def tic_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
-    
+
     if data == "tic_ignore":
         await query.answer()
         return
@@ -412,8 +468,8 @@ async def tic_callback(update: Update, context: CallbackContext):
                 remaining = int(10 - time_passed)
                 await query.answer(sc(f"Please wait {remaining} seconds before playing again!"), show_alert=True)
                 return
-        
-        await query.answer(sc("New game started below!")) 
+
+        await query.answer(sc("New game started below!"))
         play_again_cooldowns[user_id] = now
         safe_name = html.escape(query.from_user.first_name or "User")
 
@@ -446,10 +502,10 @@ async def tic_callback(update: Update, context: CallbackContext):
         return
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
-    
+
     if key not in tic_locks:
         tic_locks[key] = asyncio.Lock()
-        
+
     async with tic_locks[key]:
         game = await tic_collection.find_one({'key': key})
         if not game:
@@ -464,7 +520,7 @@ async def tic_callback(update: Update, context: CallbackContext):
                 await query.answer(sc("The game has already started!"), show_alert=True)
                 return
 
-            await query.answer(sc("✅ You have joined the game!")) 
+            await query.answer(sc("✅ You have joined the game!"))
             game['player_2_id'] = user_id
             game['player_2_name'] = html.escape(query.from_user.first_name or "User")
             game['status'] = 'playing'
@@ -475,11 +531,11 @@ async def tic_callback(update: Update, context: CallbackContext):
                 f"{PREMIUM_P2} <b>{game['player_2_name']}</b>\n\n"
                 f"{PREMIUM_TURN} <b>{sc('Turn')}: {game['player_1_name']} ({PREMIUM_P1})</b>"
             )
-            
+
             try:
                 await query.edit_message_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
             except Exception: pass
-            
+
             game_data = game.copy()
             game_data.pop('_id', None)
             asyncio.create_task(tic_collection.update_one({'key': key}, {'$set': game_data}))
@@ -501,12 +557,12 @@ async def tic_callback(update: Update, context: CallbackContext):
                 await query.answer(sc("This box is already filled!"), show_alert=True)
                 return
 
-            await query.answer() 
-            
+            await query.answer()
+
             symbol = game['player_1_sym'] if user_id == game['player_1_id'] else game['player_2_sym']
             game['board'][index] = symbol
             winner = check_win(game['board'])
-            
+
             if winner:
                 game['status'] = 'finished'
                 if winner == "Draw":
@@ -532,13 +588,13 @@ async def tic_callback(update: Update, context: CallbackContext):
                     )
 
                 replay_markup = InlineKeyboardMarkup([[InlineKeyboardButton(f"{sc('Play Again')} ⟳", callback_data="tic_play_again")]])
-                
+
                 try:
                     await query.edit_message_text(text, reply_markup=replay_markup, parse_mode=ParseMode.HTML)
                 except Exception: pass
-                
+
                 asyncio.create_task(tic_collection.delete_one({'key': key}))
-                tic_locks.pop(key, None) 
+                tic_locks.pop(key, None)
                 return
 
             if user_id == game['player_1_id']:
@@ -552,11 +608,11 @@ async def tic_callback(update: Update, context: CallbackContext):
                 f"{PREMIUM_P2} <b>{game['player_2_name']}</b>\n\n"
                 f"{PREMIUM_TURN} <b>{sc('Turn')}: {next_turn_name} ({next_symbol})</b>"
             )
-            
+
             try:
                 await query.edit_message_text(text, reply_markup=get_tic_board(game), parse_mode=ParseMode.HTML)
             except Exception: pass
-            
+
             game_data = game.copy()
             game_data.pop('_id', None)
             asyncio.create_task(tic_collection.update_one({'key': key}, {'$set': game_data}))
@@ -578,14 +634,14 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
     keyboard = []
     board = game['board']
     revealed = game['revealed']
-    boom_idx = game.get('boom_idx', -1) 
-    
+    boom_idx = game.get('boom_idx', -1)
+
     for i in range(0, 25, 5):
         row = []
         for j in range(5):
             idx = i + j
             cb_data = f"mines_click_{idx}" if game['status'] == 'playing' and not revealed[idx] else "mines_ignore"
-            
+
             if show_all or revealed[idx]:
                 if board[idx] == 'mine':
                     if idx == boom_idx:
@@ -597,7 +653,7 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
             else:
                 row.append(InlineKeyboardButton("\u200b", callback_data=cb_data))
         keyboard.append(row)
-    
+
     if game['status'] == 'playing':
         if game['found'] > 0:
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
@@ -610,12 +666,12 @@ def get_mines_keyboard(game: dict, show_all: bool = False):
         keyboard.append([InlineKeyboardButton(sc("Game Over - Busted!"), callback_data="mines_ignore", icon_custom_emoji_id="5276032951342088188")])
     elif game['status'] == 'cashed_out':
         keyboard.append([InlineKeyboardButton(sc("Game Over - Cashed Out!"), callback_data="mines_ignore", icon_custom_emoji_id="6053140037250323814")])
-        
+
     return InlineKeyboardMarkup(keyboard)
 
 async def start_mines(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
-    
+
     if not context.args or not context.args[0].isdigit():
         msg = (
             f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
@@ -624,7 +680,7 @@ async def start_mines(update: Update, context: CallbackContext):
         )
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
-        
+
     bet = int(context.args[0])
     if bet < 10 or bet > 20000:
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> {sc('Bet amount must be between 10 and 20,000 coins!')}</b>", parse_mode=ParseMode.HTML)
@@ -657,7 +713,7 @@ async def start_mines(update: Update, context: CallbackContext):
         'status': 'playing',
         'found': 0,
         'mines_count': mines_count,
-        'boom_idx': -1 
+        'boom_idx': -1
     }
 
     text = (
@@ -670,12 +726,12 @@ async def start_mines(update: Update, context: CallbackContext):
     )
 
     photo_url = "https://files.catbox.moe/ewtw4l.png"
-    
+
     try:
         msg = await update.message.reply_photo(
-            photo=photo_url, 
-            caption=text, 
-            reply_markup=get_mines_keyboard(game), 
+            photo=photo_url,
+            caption=text,
+            reply_markup=get_mines_keyboard(game),
             parse_mode=ParseMode.HTML
         )
     except Exception as e:
@@ -693,7 +749,7 @@ async def start_mines(update: Update, context: CallbackContext):
     for i in range(0, 25, 5):
         row = board[i:i+5]
         board_grid += " ".join(["💣" if x == 'mine' else "💸" for x in row]) + "\n"
-        
+
     log_data = {
         sc("ᴜsᴇʀ"): f"<b><a href='tg://user?id={user_id}'>{game['user_name']}</a></b>",
         sc("ɪᴅ"): f"<code>{user_id}</code>",
@@ -710,23 +766,23 @@ async def mines_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     user_id = query.from_user.id
     data = query.data
-    
+
     if data == "mines_ignore":
         await query.answer()
         return
 
     key = f"{query.message.chat.id}_{query.message.message_id}"
-    
+
     if key not in mines_locks:
         mines_locks[key] = asyncio.Lock()
-        
+
     async with mines_locks[key]:
         game = await mines_collection.find_one({'key': key})
-        
+
         if not game:
-            await query.answer() 
+            await query.answer()
             return
-            
+
         if user_id != game['user_id']:
             await query.answer(sc("You cannot play someone else's game!"), show_alert=True)
             return
@@ -735,12 +791,12 @@ async def mines_callback(update: Update, context: CallbackContext):
             return
 
         if data == "mines_cashout":
-            await query.answer("Cashed out! 💸", show_alert=False) 
-            
+            await query.answer("Cashed out! 💸", show_alert=False)
+
             mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
             win_amount = int(game['bet'] * mult)
             game['status'] = 'cashed_out'
-            
+
             text = (
                 f"<b><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {sc('Cashed Out!')} <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji></b>\n"
                 f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
@@ -748,71 +804,71 @@ async def mines_callback(update: Update, context: CallbackContext):
                 f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
                 f"<b>{sc('Final Board')}:</b></blockquote>"
             )
-            
+
             try:
                 await query.edit_message_caption(
-                    caption=text, 
-                    reply_markup=get_mines_keyboard(game, show_all=True), 
+                    caption=text,
+                    reply_markup=get_mines_keyboard(game, show_all=True),
                     parse_mode=ParseMode.HTML
                 )
             except Exception: pass
-            
+
             asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
             asyncio.create_task(mines_collection.delete_one({'key': key}))
-            mines_locks.pop(key, None) 
+            mines_locks.pop(key, None)
             return
 
         if data.startswith("mines_click_"):
             idx = int(data.split("_")[2])
-            
+
             if game['revealed'][idx]:
                 await query.answer(sc("Already clicked!"), show_alert=False)
                 return
 
             if game['board'][idx] == 'mine':
-                await query.answer("BOOM! You lost the bet. 💥", show_alert=True) 
-                
+                await query.answer("BOOM! You lost the bet. 💥", show_alert=True)
+
                 game['status'] = 'busted'
                 game['revealed'][idx] = True
-                game['boom_idx'] = idx 
-                
+                game['boom_idx'] = idx
+
                 text = (
                     f"<b><tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji> {sc('BOOM! You hit a mine!')} <tg-emoji emoji-id=\"5276032951342088188\">💥</tg-emoji></b>\n"
                     f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Lost Bet')}:</b> {game['bet']} {sc('coins')}\n"
                     f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Found before boom')}:</b> {game['found']}\n\n"
                     f"<b>{sc('Final Board')}:</b></blockquote>"
                 )
-                
+
                 try:
                     await query.edit_message_caption(
-                        caption=text, 
-                        reply_markup=get_mines_keyboard(game, show_all=True), 
+                        caption=text,
+                        reply_markup=get_mines_keyboard(game, show_all=True),
                         parse_mode=ParseMode.HTML
                     )
                 except Exception: pass
-                
+
                 asyncio.create_task(mines_collection.delete_one({'key': key}))
-                mines_locks.pop(key, None) 
+                mines_locks.pop(key, None)
                 return
-                
+
             else:
-                await query.answer("Safe! 💸", show_alert=False) 
-                
+                await query.answer("Safe! 💸", show_alert=False)
+
                 revealed_list = game['revealed']
                 revealed_list[idx] = True
-                
+
                 game['found'] += 1
                 mult = get_mines_multiplier(game['found'], mines=game['mines_count'])
                 win_amount = int(game['bet'] * mult)
-                
+
                 await mines_collection.update_one(
-                    {'key': key}, 
+                    {'key': key},
                     {'$set': {'revealed': revealed_list, 'found': game['found']}}
                 )
-                
+
                 if game['found'] == (25 - game['mines_count']):
                     game['status'] = 'cashed_out'
-                    
+
                     text = (
                         f"<b><tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji> {sc('PERFECT GAME!')} <tg-emoji emoji-id=\"6091375330767938412\">🎉</tg-emoji></b>\n"
                         f"<blockquote><tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> <b>{sc('Original Bet')}:</b> {game['bet']}\n"
@@ -820,18 +876,18 @@ async def mines_callback(update: Update, context: CallbackContext):
                         f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> <b>{sc('Winnings')}:</b> {win_amount} {sc('coins!')}\n\n"
                         f"<b>{sc('Final Board')}:</b></blockquote>"
                     )
-                    
+
                     try:
                         await query.edit_message_caption(
-                            caption=text, 
-                            reply_markup=get_mines_keyboard(game, show_all=True), 
+                            caption=text,
+                            reply_markup=get_mines_keyboard(game, show_all=True),
                             parse_mode=ParseMode.HTML
                         )
                     except Exception: pass
-                        
+
                     asyncio.create_task(eco_collection.update_one({'id': user_id}, {'$inc': {'balance': win_amount}}))
                     asyncio.create_task(mines_collection.delete_one({'key': key}))
-                    mines_locks.pop(key, None) 
+                    mines_locks.pop(key, None)
                     return
 
                 text = (
@@ -842,11 +898,11 @@ async def mines_callback(update: Update, context: CallbackContext):
                     f"<tg-emoji emoji-id=\"6091566211999474713\">📈</tg-emoji> <b>{sc('Multiplier')}:</b> {mult}x\n\n"
                     f"<b>{sc('Potential Winnings')}:</b> <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {win_amount}</blockquote>"
                 )
-                
+
                 try:
                     await query.edit_message_caption(
-                        caption=text, 
-                        reply_markup=get_mines_keyboard(game), 
+                        caption=text,
+                        reply_markup=get_mines_keyboard(game),
                         parse_mode=ParseMode.HTML
                     )
                 except Exception: pass
@@ -859,7 +915,7 @@ async def mines_callback(update: Update, context: CallbackContext):
 async def drarity_on(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
         return
-        
+
     if not context.args:
         msg = (
             f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
@@ -868,11 +924,16 @@ async def drarity_on(update: Update, context: CallbackContext):
         )
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
-        
+
     target_rarity = " ".join(context.args).lower()
+    # 🔥 Normalize alias so "video", "video edition", "cosmic" all become canonical "cosmic"
+    canonical_target = canonical_rarity(target_rarity)
     current_allowed = await get_allowed_rarities()
-    
-    if target_rarity not in current_allowed:
+
+    # Normalize existing list to compare canonically
+    current_canon = {canonical_rarity(a) for a in current_allowed}
+
+    if canonical_target not in current_canon:
         current_allowed.append(target_rarity)
         await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': current_allowed}}, upsert=True)
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> {sc('Successfully ENABLED')} '{target_rarity}' {sc('in swaifu!')}</b>", parse_mode=ParseMode.HTML)
@@ -882,7 +943,7 @@ async def drarity_on(update: Update, context: CallbackContext):
 async def drarity_off(update: Update, context: CallbackContext):
     if update.effective_user.id != OWNER_ID:
         return
-        
+
     if not context.args:
         msg = (
             f"<b><tg-emoji emoji-id=\"5258500400918587241\">✍️</tg-emoji> {sc('Usage')}</b>\n"
@@ -891,13 +952,16 @@ async def drarity_off(update: Update, context: CallbackContext):
         )
         await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
         return
-        
+
     target_rarity = " ".join(context.args).lower()
+    canonical_target = canonical_rarity(target_rarity)
     current_allowed = await get_allowed_rarities()
-    
-    if target_rarity in current_allowed:
-        current_allowed.remove(target_rarity)
-        await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': current_allowed}}, upsert=True)
+
+    # Find any entries that canonically match the target and remove them
+    new_allowed = [a for a in current_allowed if canonical_rarity(a) != canonical_target]
+
+    if len(new_allowed) < len(current_allowed):
+        await settings_collection.update_one({'setting': 'swaifu_rarities'}, {'$set': {'allowed': new_allowed}}, upsert=True)
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> {sc('Successfully DISABLED')} '{target_rarity}' {sc('in swaifu!')}</b>", parse_mode=ParseMode.HTML)
     else:
         await update.message.reply_text(f"<b><tg-emoji emoji-id=\"5420323339723881652\">⚠️</tg-emoji> '{target_rarity}' {sc('is already disabled or not in the list.')}</b>", parse_mode=ParseMode.HTML)
