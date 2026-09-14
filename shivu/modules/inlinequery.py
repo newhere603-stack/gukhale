@@ -4,7 +4,7 @@ import time
 import hashlib
 import logging
 from html import escape
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from cachetools import TTLCache
 from pymongo import ASCENDING
@@ -12,6 +12,7 @@ from functools import lru_cache
 
 from telegram import (
     Update, InlineQueryResultPhoto, InlineQueryResultVideo,
+    InlineQueryResultCachedPhoto, InlineQueryResultCachedVideo,
     InlineKeyboardButton, InlineKeyboardMarkup,
     InlineQueryResultArticle, InputTextMessageContent,
 )
@@ -102,12 +103,12 @@ except Exception as e:
 # =========================================================
 char_cache     = TTLCache(maxsize=200000, ttl=600)
 user_cache     = TTLCache(maxsize=100000, ttl=300)
-query_cache    = TTLCache(maxsize=100000, ttl=300)
+query_cache    = TTLCache(maxsize=100000, ttl=120)
 count_cache    = TTLCache(maxsize=80000,  ttl=180)
 feedback_cache = TTLCache(maxsize=30000,  ttl=4800)
 view_cache     = TTLCache(maxsize=8000,   ttl=900)
 wishlist_cache = TTLCache(maxsize=8000,   ttl=2400)
-result_id_map  = TTLCache(maxsize=50000,  ttl=1800)   # rid -> cid
+result_id_map  = TTLCache(maxsize=50000,  ttl=1800)
 
 CAPS = str.maketrans(
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
@@ -136,83 +137,114 @@ def cache_key(*args) -> str:
 
 
 # =========================================================
-# URL / Media extraction  (*** MOST ROBUST ***)
+# Media detection: URL vs Telegram file_id
 # =========================================================
 _IMG_FIELDS = (
     'img_url', 'image_url', 'img', 'photo', 'photo_url',
+    'file_id', 'photo_file_id', 'video_file_id', 'file',
     'url', 'thumbnail', 'thumbnail_url', 'image', 'picture',
     'pic', 'link', 'media_url', 'file_url', 'video_url',
-    'preview_url', 'src', 'href',
+    'preview_url', 'src', 'href', 'imgUrl', 'imageUrl',
+    'photoUrl', 'videoUrl', 'thumbnailUrl', 'fileId', 'photoFileId',
 )
-_NESTED_KEYS = ('url', 'src', 'link', 'href', 'image', 'img_url', 'image_url')
+_NESTED_KEYS = ('url', 'src', 'link', 'href', 'image', 'img_url',
+                'image_url', 'imgUrl', 'imageUrl', 'photo_url',
+                'file_id', 'fileId')
 
 
-def _valid_url(u) -> bool:
-    if not u or not isinstance(u, str):
+def _is_http_url(s) -> bool:
+    if not s or not isinstance(s, str):
         return False
-    u = u.strip()
-    return u.startswith('https://') or u.startswith('http://')
+    s = s.strip().lower()
+    return s.startswith('http://') or s.startswith('https://')
 
 
-def _extract_url(v) -> str:
-    """Extract a valid URL from any structure (str, list, dict)."""
-    if _valid_url(v):
-        return v.strip()
+def _looks_like_file_id(s) -> bool:
+    """Check if string looks like a Telegram file_id."""
+    if not s or not isinstance(s, str):
+        return False
+    s = s.strip()
+    if not s or _is_http_url(s):
+        return False
+    # Telegram file_ids: typically 40+ chars, base64url-ish, no spaces
+    if len(s) < 20:
+        return False
+    if any(c.isspace() for c in s):
+        return False
+    # Must be alnum + `_-`
+    return bool(re.match(r'^[A-Za-z0-9_\-]+$', s))
+
+
+def _extract_media(v) -> Tuple[str, str]:
+    """Returns (value, kind) — kind = 'url' | 'file_id' | ''."""
+    if isinstance(v, str):
+        v = v.strip()
+        if _is_http_url(v):
+            return v, 'url'
+        if _looks_like_file_id(v):
+            return v, 'file_id'
+        return "", ""
 
     if isinstance(v, list):
         for item in v:
-            r = _extract_url(item)
+            r, k = _extract_media(item)
             if r:
-                return r
-        return ""
+                return r, k
+        return "", ""
 
     if isinstance(v, dict):
-        for k in _NESTED_KEYS:
-            r = _extract_url(v.get(k))
+        for kk in _NESTED_KEYS:
+            r, k = _extract_media(v.get(kk))
             if r:
-                return r
-        # last resort: any value in dict
+                return r, k
         for vv in v.values():
-            if _valid_url(vv):
-                return vv.strip()
-        return ""
+            r, k = _extract_media(vv)
+            if r:
+                return r, k
+        return "", ""
 
-    return ""
+    return "", ""
 
 
-def _img_of(ch: Dict) -> str:
-    """Find ANY usable image/video URL from a character document."""
+def _media_of(ch: Dict) -> Tuple[str, str]:
+    """Extract media from a character doc. Returns (value, kind)."""
     if not isinstance(ch, dict):
-        return ""
+        return "", ""
     for k in _IMG_FIELDS:
         v = ch.get(k)
         if not v:
             continue
-        r = _extract_url(v)
+        r, kind = _extract_media(v)
         if r:
-            return r
-    return ""
+            return r, kind
+    return "", ""
 
 
-_VIDEO_EXTS = ('.mp4', '.mov', '.webm', '.mkv', '.m4v', '.gif')
+_VIDEO_EXTS = ('.mp4', '.mov', '.webm', '.mkv', '.m4v')
 
 
-def _is_video(ch: Dict, url: str) -> bool:
-    if not url:
+def _is_video(ch: Dict, media: str, kind: str) -> bool:
+    if not media:
         return False
-    ul = url.lower().split('?', 1)[0].split('#', 1)[0]
-    if ul.endswith(_VIDEO_EXTS):
+    # Explicit field
+    if ch.get('is_video') or ch.get('type') == 'video':
         return True
-    return bool(ch.get('is_video', False)) and ul.endswith(('.mp4', '.mov', '.webm'))
+    if kind == 'url':
+        ul = media.lower().split('?', 1)[0].split('#', 1)[0]
+        return ul.endswith(_VIDEO_EXTS)
+    if kind == 'file_id':
+        # video file_ids commonly start with BAAC / CgAC
+        return media.startswith(('BAAC', 'CgAC'))
+    return False
 
 
 # =========================================================
-# In-memory char cache  (*** FETCH FULL DOCS — no projection ***)
+# In-memory char cache
 # =========================================================
 _ALL_CHARS: Optional[List[Dict]] = None
 _ALL_CHARS_LOADED_AT: float = 0.0
 _ALL_CHARS_LOCK = asyncio.Lock()
-_ALL_CHARS_TTL = 900
+_ALL_CHARS_TTL = 120
 _LOAD_TASK: Optional[asyncio.Task] = None
 
 
@@ -221,16 +253,16 @@ async def _load_all_chars() -> List[Dict]:
     async with _ALL_CHARS_LOCK:
         try:
             t0 = time.time()
-            # *** NO PROJECTION — fetch everything, miss kuch nahi hoga ***
             chars = await collection.find({}).to_list(length=None)
             _ALL_CHARS = chars or []
             _ALL_CHARS_LOADED_AT = time.time()
 
-            # diagnostics: count how many have usable images
-            with_img = sum(1 for c in _ALL_CHARS if _img_of(c))
+            with_media = sum(1 for c in _ALL_CHARS if _media_of(c)[0])
             LOGGER.info(
                 f"[INLINE] Loaded {len(_ALL_CHARS)} chars "
-                f"({with_img} with image) in {time.time()-t0:.2f}s"
+                f"({with_media} with media, "
+                f"{len(_ALL_CHARS)-with_media} no media) "
+                f"in {time.time()-t0:.2f}s"
             )
         except Exception as e:
             LOGGER.error(f"[INLINE] Cache load error: {e}")
@@ -247,6 +279,20 @@ def _schedule_load():
         return
     if _LOAD_TASK is None or _LOAD_TASK.done():
         _LOAD_TASK = loop.create_task(_load_all_chars())
+
+
+def _merge_into_cache(docs: List[Dict]) -> None:
+    global _ALL_CHARS
+    if _ALL_CHARS is None:
+        _ALL_CHARS = list(docs)
+        return
+    by_id = {c.get('id'): c for c in _ALL_CHARS if c.get('id') is not None}
+    for d in docs:
+        cid = d.get('id')
+        if cid is None:
+            continue
+        by_id[cid] = d
+    _ALL_CHARS = list(by_id.values())
 
 
 # =========================================================
@@ -273,13 +319,18 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
     if cached is not None:
         return cached
     try:
+        candidates = [cid]
+        try:
+            candidates.append(int(cid))
+        except Exception:
+            pass
         pipe = [
-            {'$match': {'characters.id': cid}},
+            {'$match': {'characters.id': {'$in': candidates}}},
             {'$project': {
                 'id': 1, 'first_name': 1, 'username': 1,
                 'characters': {'$filter': {
                     'input': '$characters', 'as': 'c',
-                    'cond': {'$eq': ['$$c.id', cid]},
+                    'cond': {'$in': ['$$c.id', candidates]},
                 }},
             }},
             {'$addFields': {'count': {'$size': '$characters'}}},
@@ -296,14 +347,14 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
 
 
 # =========================================================
-# Direct DB search fallback  (no projection = no miss)
+# Direct DB search
 # =========================================================
-async def _db_search(q: str, lim: int = 200) -> List[Dict]:
+async def _db_search(q: str, lim: int = 500) -> List[Dict]:
     try:
         if not q:
             return await collection.find({}).limit(lim).to_list(lim)
 
-        conds = []
+        conds: List[Dict] = []
         if q.isdigit():
             conds.append({'id': q})
             try:
@@ -327,10 +378,28 @@ async def _db_search(q: str, lim: int = 200) -> List[Dict]:
         return []
 
 
+async def _db_fetch_by_id(cid) -> Optional[Dict]:
+    try:
+        doc = await collection.find_one({'id': cid})
+        if doc:
+            return doc
+        try:
+            doc = await collection.find_one({'id': int(cid)})
+            if doc:
+                return doc
+        except Exception:
+            pass
+        doc = await collection.find_one({'id': str(cid)})
+        return doc
+    except Exception as e:
+        LOGGER.error(f"_db_fetch_by_id: {e}")
+        return None
+
+
 # =========================================================
-# Search (memory-first)
+# Search (memory + DB fallback)
 # =========================================================
-async def search_chars(q: str, lim: int = 200) -> List[Dict]:
+async def search_chars(q: str, lim: int = 2000) -> List[Dict]:
     k = cache_key('search', q, lim)
     cached = query_cache.get(k)
     if cached is not None:
@@ -338,18 +407,16 @@ async def search_chars(q: str, lim: int = 200) -> List[Dict]:
 
     all_chars = _ALL_CHARS
 
-    # first-time: load synchronously so no "not found"
     if all_chars is None:
         try:
             await asyncio.wait_for(_load_all_chars(), timeout=8.0)
         except asyncio.TimeoutError:
             LOGGER.warning("[INLINE] Initial load timeout — DB fallback")
             chars = await _db_search(q, lim)
+            _merge_into_cache(chars)
             query_cache[k] = chars
             return chars
         all_chars = _ALL_CHARS or []
-
-    # stale: refresh in background, don't block
     elif (time.time() - _ALL_CHARS_LOADED_AT) > _ALL_CHARS_TTL:
         _schedule_load()
 
@@ -370,7 +437,6 @@ async def search_chars(q: str, lim: int = 200) -> List[Dict]:
         matched = False
 
         if is_digit:
-            # match id: try str and int
             if cid_str == q:
                 matched = True
             else:
@@ -394,6 +460,20 @@ async def search_chars(q: str, lim: int = 200) -> List[Dict]:
             if len(result) >= lim:
                 break
 
+    # DB fallback when memory misses OR numeric lookup (guarantee specific char)
+    if (not result) or (is_digit and len(result) < 2):
+        LOGGER.info(f"[INLINE] DB fallback for q={q!r} (mem={len(result)})")
+        db_res = await _db_search(q, lim)
+        if db_res:
+            _merge_into_cache(db_res)
+            # rebuild result from memory to keep dedupe consistent
+            existing_ids = {c.get('id') for c in result}
+            for d in db_res:
+                did = d.get('id')
+                if did not in existing_ids:
+                    result.append(d)
+                    existing_ids.add(did)
+
     query_cache[k] = result
     return result
 
@@ -405,7 +485,8 @@ async def filter_chars(chars: List[Dict], mode: str, uid: int = None) -> List[Di
     elif mode == 'video':
         out = []
         for c in chars:
-            if c.get('is_video', False):
+            media, kind = _media_of(c)
+            if _is_video(c, media, kind):
                 out.append(c)
                 continue
             if get_base_rarity(c.get('rarity', '')) == "cosmic":
@@ -654,11 +735,11 @@ async def _build_results(query, off: int, uid: int, qid: str):
         if am:
             anime_filter = am.group(1).lower()
             sq = sq.replace(am.group(0), '').strip()
-            all_chars = await search_chars(sq, lim=500)
+            all_chars = await search_chars(sq, lim=2000)
             all_chars = [c for c in all_chars
                          if anime_filter in str(c.get('anime', '')).lower()]
         else:
-            all_chars = await search_chars(sq, lim=500)
+            all_chars = await search_chars(sq, lim=2000)
 
         if fm:
             all_chars = await filter_chars(all_chars, fm, uid)
@@ -682,14 +763,7 @@ async def _build_results(query, off: int, uid: int, qid: str):
             if cid is None:
                 continue
 
-            img = _img_of(ch)
-            if not img:
-                LOGGER.warning(
-                    f"[INLINE] skip cid={cid} no image. keys={list(ch.keys())[:20]}"
-                )
-                continue
-
-            vid = _is_video(ch, img)
+            media, kind = _media_of(ch)
             nm = str(ch.get('name', '?'))
             an = str(ch.get('anime', '?'))
             r = parse_rar(ch.get('rarity', ''))
@@ -704,18 +778,64 @@ async def _build_results(query, off: int, uid: int, qid: str):
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
             desc = f"{r.name} • {trunc(an, 20)}"
 
-            if vid:
-                results.append(InlineQueryResultVideo(
-                    id=rid, video_url=img, mime_type="video/mp4",
-                    thumbnail_url=img, title=title, description=desc,
-                    caption=cap, parse_mode=ParseMode.HTML,
+            # ---------- NO MEDIA ----------
+            if not media:
+                results.append(InlineQueryResultArticle(
+                    id=rid,
+                    title=title,
+                    description=desc,
+                    input_message_content=InputTextMessageContent(
+                        cap, parse_mode=ParseMode.HTML,
+                    ),
                     reply_markup=kbd,
                 ))
+                continue
+
+            vid = _is_video(ch, media, kind)
+
+            # ---------- URL ----------
+            if kind == 'url':
+                if vid:
+                    results.append(InlineQueryResultVideo(
+                        id=rid, video_url=media, mime_type="video/mp4",
+                        thumbnail_url=media, title=title, description=desc,
+                        caption=cap, parse_mode=ParseMode.HTML,
+                        reply_markup=kbd,
+                    ))
+                else:
+                    results.append(InlineQueryResultPhoto(
+                        id=rid, photo_url=media, thumbnail_url=media,
+                        title=title, description=desc,
+                        caption=cap, parse_mode=ParseMode.HTML,
+                        reply_markup=kbd,
+                    ))
+
+            # ---------- TELEGRAM FILE_ID ----------
+            elif kind == 'file_id':
+                if vid:
+                    results.append(InlineQueryResultCachedVideo(
+                        id=rid, video_file_id=media,
+                        title=title, description=desc,
+                        caption=cap, parse_mode=ParseMode.HTML,
+                        reply_markup=kbd,
+                    ))
+                else:
+                    results.append(InlineQueryResultCachedPhoto(
+                        id=rid, photo_file_id=media,
+                        title=title, description=desc,
+                        caption=cap, parse_mode=ParseMode.HTML,
+                        reply_markup=kbd,
+                    ))
+
+            # ---------- UNKNOWN ----------
             else:
-                results.append(InlineQueryResultPhoto(
-                    id=rid, photo_url=img, thumbnail_url=img,
-                    title=title, description=desc,
-                    caption=cap, parse_mode=ParseMode.HTML,
+                results.append(InlineQueryResultArticle(
+                    id=rid,
+                    title=title,
+                    description=desc,
+                    input_message_content=InputTextMessageContent(
+                        cap, parse_mode=ParseMode.HTML,
+                    ),
                     reply_markup=kbd,
                 ))
         except Exception as e:
@@ -802,13 +922,7 @@ async def show_owners(update: Update, context) -> None:
             cid = data
             page = 0
 
-        ch = await collection.find_one({'id': cid})
-        if not ch:
-            try:
-                if cid.isdigit():
-                    ch = await collection.find_one({'id': int(cid)})
-            except Exception:
-                pass
+        ch = await _db_fetch_by_id(cid)
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
@@ -860,13 +974,7 @@ async def back_card(update: Update, context) -> None:
     q = update.callback_query
     try:
         cid = q.data.split('.', 1)[1]
-        ch = await collection.find_one({'id': cid})
-        if not ch:
-            try:
-                if cid.isdigit():
-                    ch = await collection.find_one({'id': int(cid)})
-            except Exception:
-                pass
+        ch = await _db_fetch_by_id(cid)
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
@@ -889,13 +997,7 @@ async def show_stats(update: Update, context) -> None:
     q = update.callback_query
     try:
         cid = q.data.split('.', 1)[1]
-        ch = await collection.find_one({'id': cid})
-        if not ch:
-            try:
-                if cid.isdigit():
-                    ch = await collection.find_one({'id': int(cid)})
-            except Exception:
-                pass
+        ch = await _db_fetch_by_id(cid)
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
