@@ -136,6 +136,13 @@ def cache_key(*args) -> str:
     return hashlib.md5(str(args).encode()).hexdigest()
 
 
+# *** CORE FIX: canonical string id for dedup/compare ***
+def _id_key(cid) -> str:
+    if cid is None:
+        return ''
+    return str(cid).strip()
+
+
 # =========================================================
 # Media detection: URL vs Telegram file_id
 # =========================================================
@@ -160,23 +167,19 @@ def _is_http_url(s) -> bool:
 
 
 def _looks_like_file_id(s) -> bool:
-    """Check if string looks like a Telegram file_id."""
     if not s or not isinstance(s, str):
         return False
     s = s.strip()
     if not s or _is_http_url(s):
         return False
-    # Telegram file_ids: typically 40+ chars, base64url-ish, no spaces
     if len(s) < 20:
         return False
     if any(c.isspace() for c in s):
         return False
-    # Must be alnum + `_-`
     return bool(re.match(r'^[A-Za-z0-9_\-]+$', s))
 
 
 def _extract_media(v) -> Tuple[str, str]:
-    """Returns (value, kind) — kind = 'url' | 'file_id' | ''."""
     if isinstance(v, str):
         v = v.strip()
         if _is_http_url(v):
@@ -207,7 +210,6 @@ def _extract_media(v) -> Tuple[str, str]:
 
 
 def _media_of(ch: Dict) -> Tuple[str, str]:
-    """Extract media from a character doc. Returns (value, kind)."""
     if not isinstance(ch, dict):
         return "", ""
     for k in _IMG_FIELDS:
@@ -226,14 +228,12 @@ _VIDEO_EXTS = ('.mp4', '.mov', '.webm', '.mkv', '.m4v')
 def _is_video(ch: Dict, media: str, kind: str) -> bool:
     if not media:
         return False
-    # Explicit field
     if ch.get('is_video') or ch.get('type') == 'video':
         return True
     if kind == 'url':
         ul = media.lower().split('?', 1)[0].split('#', 1)[0]
         return ul.endswith(_VIDEO_EXTS)
     if kind == 'file_id':
-        # video file_ids commonly start with BAAC / CgAC
         return media.startswith(('BAAC', 'CgAC'))
     return False
 
@@ -248,20 +248,43 @@ _ALL_CHARS_TTL = 120
 _LOAD_TASK: Optional[asyncio.Task] = None
 
 
+def _rarity_sort_key(c: Dict):
+    """Sort key: rarer first, then id (as str) for stability."""
+    return (parse_rar(c.get('rarity', '')).value, _id_key(c.get('id')))
+
+
 async def _load_all_chars() -> List[Dict]:
     global _ALL_CHARS, _ALL_CHARS_LOADED_AT
     async with _ALL_CHARS_LOCK:
         try:
             t0 = time.time()
             chars = await collection.find({}).to_list(length=None)
-            _ALL_CHARS = chars or []
+            chars = chars or []
+
+            # *** DEDUPE at load (by canonical id) ***
+            by_key = {}
+            for c in chars:
+                if not isinstance(c, dict):
+                    continue
+                k = _id_key(c.get('id'))
+                if not k:
+                    continue
+                if k not in by_key:
+                    by_key[k] = c
+            deduped = list(by_key.values())
+
+            # *** PRE-SORT by rarity so empty-query & search are instantly ready ***
+            deduped.sort(key=_rarity_sort_key)
+
+            _ALL_CHARS = deduped
             _ALL_CHARS_LOADED_AT = time.time()
 
-            with_media = sum(1 for c in _ALL_CHARS if _media_of(c)[0])
+            with_media = sum(1 for c in deduped if _media_of(c)[0])
             LOGGER.info(
-                f"[INLINE] Loaded {len(_ALL_CHARS)} chars "
+                f"[INLINE] Loaded {len(deduped)} chars "
+                f"(dropped {len(chars) - len(deduped)} dupes) "
                 f"({with_media} with media, "
-                f"{len(_ALL_CHARS)-with_media} no media) "
+                f"{len(deduped)-with_media} no media) "
                 f"in {time.time()-t0:.2f}s"
             )
         except Exception as e:
@@ -282,17 +305,20 @@ def _schedule_load():
 
 
 def _merge_into_cache(docs: List[Dict]) -> None:
+    """Merge docs into memory using canonical string id."""
     global _ALL_CHARS
-    if _ALL_CHARS is None:
-        _ALL_CHARS = list(docs)
+    if not docs:
         return
-    by_id = {c.get('id'): c for c in _ALL_CHARS if c.get('id') is not None}
+    if _ALL_CHARS is None:
+        _ALL_CHARS = []
+    by_key = {_id_key(c.get('id')): c for c in _ALL_CHARS if _id_key(c.get('id'))}
     for d in docs:
-        cid = d.get('id')
-        if cid is None:
+        k = _id_key(d.get('id'))
+        if not k:
             continue
-        by_id[cid] = d
-    _ALL_CHARS = list(by_id.values())
+        # prefer the newer doc
+        by_key[k] = d
+    _ALL_CHARS = list(by_key.values())
 
 
 # =========================================================
@@ -324,6 +350,10 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
             candidates.append(int(cid))
         except Exception:
             pass
+        candidates.append(str(cid))
+        # de-dupe candidates
+        candidates = list(dict.fromkeys(candidates))
+
         pipe = [
             {'$match': {'characters.id': {'$in': candidates}}},
             {'$project': {
@@ -349,7 +379,7 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
 # =========================================================
 # Direct DB search
 # =========================================================
-async def _db_search(q: str, lim: int = 500) -> List[Dict]:
+async def _db_search(q: str, lim: int = 5000) -> List[Dict]:
     try:
         if not q:
             return await collection.find({}).limit(lim).to_list(lim)
@@ -399,7 +429,7 @@ async def _db_fetch_by_id(cid) -> Optional[Dict]:
 # =========================================================
 # Search (memory + DB fallback)
 # =========================================================
-async def search_chars(q: str, lim: int = 2000) -> List[Dict]:
+async def search_chars(q: str, lim: int = 5000) -> List[Dict]:
     k = cache_key('search', q, lim)
     cached = query_cache.get(k)
     if cached is not None:
@@ -407,23 +437,33 @@ async def search_chars(q: str, lim: int = 2000) -> List[Dict]:
 
     all_chars = _ALL_CHARS
 
+    # *** FAST FIRST-QUERY: don't block on full load ***
     if all_chars is None:
+        _schedule_load()
         try:
-            await asyncio.wait_for(_load_all_chars(), timeout=8.0)
+            chars = await asyncio.wait_for(_db_search(q, lim), timeout=3.0)
         except asyncio.TimeoutError:
-            LOGGER.warning("[INLINE] Initial load timeout — DB fallback")
-            chars = await _db_search(q, lim)
-            _merge_into_cache(chars)
-            query_cache[k] = chars
-            return chars
-        all_chars = _ALL_CHARS or []
-    elif (time.time() - _ALL_CHARS_LOADED_AT) > _ALL_CHARS_TTL:
+            chars = []
+        _merge_into_cache(chars)
+        # dedupe by id_key
+        seen, uniq = set(), []
+        for c in chars:
+            kk = _id_key(c.get('id'))
+            if kk and kk not in seen:
+                seen.add(kk)
+                uniq.append(c)
+        uniq.sort(key=_rarity_sort_key)
+        query_cache[k] = uniq
+        return uniq
+
+    # background refresh if stale
+    if (time.time() - _ALL_CHARS_LOADED_AT) > _ALL_CHARS_TTL:
         _schedule_load()
 
     if not q:
-        result = all_chars[:lim]
-        query_cache[k] = result
-        return result
+        # already pre-sorted, no copy needed (dedupe in caller safe)
+        query_cache[k] = all_chars
+        return all_chars
 
     ql = q.lower().strip()
     alias_key = RARITY_ALIASES.get(ql)
@@ -431,48 +471,52 @@ async def search_chars(q: str, lim: int = 2000) -> List[Dict]:
     qnum = int(q) if is_digit else None
 
     result = []
+    seen = set()
+
     for c in all_chars:
-        cid = c.get('id')
-        cid_str = str(cid) if cid is not None else ''
+        ckey = _id_key(c.get('id'))
         matched = False
 
         if is_digit:
-            if cid_str == q:
+            if ckey == q:
                 matched = True
             else:
                 try:
-                    if int(cid_str) == qnum:
+                    if int(ckey) == qnum:
                         matched = True
-                except Exception:
+                except (ValueError, TypeError):
                     pass
-        if not matched and cid_str == q:
-            matched = True
         if not matched:
-            if (ql in str(c.get('name', '')).lower()
-                    or ql in str(c.get('anime', '')).lower()
-                    or ql in str(c.get('rarity', '')).lower()):
+            if ql in str(c.get('name', '')).lower():
+                matched = True
+            elif ql in str(c.get('anime', '')).lower():
+                matched = True
+            elif ql in str(c.get('rarity', '')).lower():
                 matched = True
             elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
                 matched = True
 
-        if matched:
+        if matched and ckey not in seen:
+            seen.add(ckey)
             result.append(c)
             if len(result) >= lim:
                 break
 
-    # DB fallback when memory misses OR numeric lookup (guarantee specific char)
-    if (not result) or (is_digit and len(result) < 2):
-        LOGGER.info(f"[INLINE] DB fallback for q={q!r} (mem={len(result)})")
-        db_res = await _db_search(q, lim)
+    # *** DB fallback ONLY if memory returned nothing ***
+    if not result:
+        try:
+            db_res = await asyncio.wait_for(_db_search(q, lim), timeout=3.0)
+        except asyncio.TimeoutError:
+            db_res = []
         if db_res:
             _merge_into_cache(db_res)
-            # rebuild result from memory to keep dedupe consistent
-            existing_ids = {c.get('id') for c in result}
             for d in db_res:
-                did = d.get('id')
-                if did not in existing_ids:
+                dkey = _id_key(d.get('id'))
+                if dkey and dkey not in seen:
+                    seen.add(dkey)
                     result.append(d)
-                    existing_ids.add(did)
+            # re-sort fallback results
+            result.sort(key=_rarity_sort_key)
 
     query_cache[k] = result
     return result
@@ -499,39 +543,42 @@ async def filter_chars(chars: List[Dict], mode: str, uid: int = None) -> List[Di
     elif mode == 'trending':
         ids = [c.get('id') for c in chars if c.get('id')]
         if ids:
-            picks = {cid: feedback_cache.get(f'pick_{cid}', 0)
+            picks = {_id_key(cid): feedback_cache.get(f'pick_{cid}', 0)
                      for cid in ids
                      if feedback_cache.get(f'pick_{cid}', 0) > 0}
-            return sorted(chars, key=lambda x: picks.get(x.get('id'), 0), reverse=True)
+            return sorted(chars, key=lambda x: picks.get(_id_key(x.get('id')), 0), reverse=True)
 
     elif mode == 'owned' and uid:
         usr = await get_user(uid)
         if usr:
-            owned = {c.get('id') for c in usr.get('characters', [])
+            owned = {_id_key(c.get('id')) for c in usr.get('characters', [])
                      if isinstance(c, dict) and c.get('id')}
-            return [c for c in chars if c.get('id') in owned]
+            return [c for c in chars if _id_key(c.get('id')) in owned]
 
     elif mode == 'notowned' and uid:
         usr = await get_user(uid)
         if usr:
-            owned = {c.get('id') for c in usr.get('characters', [])
+            owned = {_id_key(c.get('id')) for c in usr.get('characters', [])
                      if isinstance(c, dict) and c.get('id')}
-            return [c for c in chars if c.get('id') not in owned]
+            return [c for c in chars if _id_key(c.get('id')) not in owned]
 
     elif mode == 'wishlist' and uid:
         wl = wishlist_cache.get(f'wl_{uid}', set())
-        return [c for c in chars if c.get('id') in wl]
+        wl_keys = {_id_key(x) for x in wl}
+        return [c for c in chars if _id_key(c.get('id')) in wl_keys]
 
     return chars
 
 
 def dedupe(chars: List[Dict]) -> List[Dict]:
+    """Dedupe by canonical string id (fixes 108 vs '108' dup)."""
     seen, result = set(), []
     for c in chars:
-        cid = c.get('id')
-        if cid and cid not in seen:
-            seen.add(cid)
-            result.append(c)
+        k = _id_key(c.get('id'))
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        result.append(c)
     return result
 
 
@@ -680,8 +727,16 @@ async def _build_results(query, off: int, uid: int, qid: str):
             )
             return [article], ""
 
-        cd = {c['id']: c for c in usr.get('characters', [])
-              if isinstance(c, dict) and c.get('id')}
+        # *** use _id_key for dedupe in collection ***
+        cd: Dict[str, Dict] = {}
+        for c in usr.get('characters', []):
+            if not isinstance(c, dict):
+                continue
+            kk = _id_key(c.get('id'))
+            if not kk:
+                continue
+            if kk not in cd:
+                cd[kk] = c
         all_chars = list(cd.values())
 
         if sq:
@@ -691,14 +746,22 @@ async def _build_results(query, off: int, uid: int, qid: str):
             qnum = int(sq) if is_digit else None
 
             filtered = []
+            seen = set()
             for c in all_chars:
-                cid_str = str(c.get('id', ''))
+                ckey = _id_key(c.get('id'))
+                if ckey in seen:
+                    continue
                 matched = False
-                if is_digit and cid_str.isdigit() and int(cid_str) == qnum:
-                    matched = True
-                elif cid_str == sq:
-                    matched = True
-                else:
+                if is_digit:
+                    if ckey == sq:
+                        matched = True
+                    else:
+                        try:
+                            if int(ckey) == qnum:
+                                matched = True
+                        except (ValueError, TypeError):
+                            pass
+                if not matched:
                     if (sql in str(c.get('name', '')).lower()
                             or sql in str(c.get('anime', '')).lower()
                             or sql in str(c.get('rarity', '')).lower()):
@@ -706,6 +769,7 @@ async def _build_results(query, off: int, uid: int, qid: str):
                     elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
                         matched = True
                 if matched:
+                    seen.add(ckey)
                     filtered.append(c)
             all_chars = filtered
 
@@ -714,14 +778,14 @@ async def _build_results(query, off: int, uid: int, qid: str):
 
         fav = usr.get('favorites')
         if fav and not sq and not fm:
-            fid = fav.get('id') if isinstance(fav, dict) else fav
-            fc = next((c for c in all_chars if c.get('id') == fid), None)
+            fid = _id_key(fav.get('id') if isinstance(fav, dict) else fav)
+            fc = next((c for c in all_chars if _id_key(c.get('id')) == fid), None)
             if fc:
-                all_chars = [c for c in all_chars if c.get('id') != fid]
+                all_chars = [c for c in all_chars if _id_key(c.get('id')) != fid]
                 all_chars.insert(0, fc)
 
         if not fm or fm not in ('new', 'trending'):
-            all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
+            all_chars.sort(key=_rarity_sort_key)
 
     else:
         for m in ('rare', 'video', 'new', 'trending',
@@ -734,19 +798,20 @@ async def _build_results(query, off: int, uid: int, qid: str):
         am = re.search(r'-anime:(\S+)', sq)
         if am:
             anime_filter = am.group(1).lower()
-            sq = sq.replace(am.group(0), '').strip()
-            all_chars = await search_chars(sq, lim=2000)
+            sq = sq.replace(am.group(0), '', 1).strip()
+            all_chars = await search_chars(sq, lim=5000)
             all_chars = [c for c in all_chars
                          if anime_filter in str(c.get('anime', '')).lower()]
         else:
-            all_chars = await search_chars(sq, lim=2000)
+            all_chars = await search_chars(sq, lim=5000)
 
         if fm:
             all_chars = await filter_chars(all_chars, fm, uid)
 
         if not fm or fm not in ('new', 'trending'):
-            all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
+            all_chars.sort(key=_rarity_sort_key)
 
+    # *** final safety dedupe (canonical id) ***
     all_chars = dedupe(all_chars)
     page_chars = all_chars[off:off + 50]
     has_more = len(all_chars) > off + 50
@@ -755,7 +820,7 @@ async def _build_results(query, off: int, uid: int, qid: str):
     fav_id = None
     if is_coll and usr:
         fv = usr.get('favorites')
-        fav_id = fv.get('id') if isinstance(fv, dict) else fv
+        fav_id = _id_key(fv.get('id') if isinstance(fv, dict) else fv)
 
     for i, ch in enumerate(page_chars):
         try:
@@ -767,18 +832,17 @@ async def _build_results(query, off: int, uid: int, qid: str):
             nm = str(ch.get('name', '?'))
             an = str(ch.get('anime', '?'))
             r = parse_rar(ch.get('rarity', ''))
-            fav = (fav_id == cid)
+            fav = (_id_key(cid) == fav_id) if fav_id else False
 
             cap = minimal_caption(ch, fav, uid=uid)
             kbd = create_kbd(cid, uid)
 
-            rid = hashlib.md5(f"{cid}|{off}|{i}|{qid}".encode()).hexdigest()
-            result_id_map[rid] = str(cid)
+            rid = hashlib.md5(f"{_id_key(cid)}|{off}|{i}|{qid}".encode()).hexdigest()
+            result_id_map[rid] = _id_key(cid)
 
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
             desc = f"{r.name} • {trunc(an, 20)}"
 
-            # ---------- NO MEDIA ----------
             if not media:
                 results.append(InlineQueryResultArticle(
                     id=rid,
@@ -793,7 +857,6 @@ async def _build_results(query, off: int, uid: int, qid: str):
 
             vid = _is_video(ch, media, kind)
 
-            # ---------- URL ----------
             if kind == 'url':
                 if vid:
                     results.append(InlineQueryResultVideo(
@@ -809,8 +872,6 @@ async def _build_results(query, off: int, uid: int, qid: str):
                         caption=cap, parse_mode=ParseMode.HTML,
                         reply_markup=kbd,
                     ))
-
-            # ---------- TELEGRAM FILE_ID ----------
             elif kind == 'file_id':
                 if vid:
                     results.append(InlineQueryResultCachedVideo(
@@ -826,8 +887,6 @@ async def _build_results(query, off: int, uid: int, qid: str):
                         caption=cap, parse_mode=ParseMode.HTML,
                         reply_markup=kbd,
                     ))
-
-            # ---------- UNKNOWN ----------
             else:
                 results.append(InlineQueryResultArticle(
                     id=rid,
@@ -1038,9 +1097,40 @@ application.add_handler(CallbackQueryHandler(show_stats, pattern=r'^s\.', block=
 
 
 # =========================================================
-# Background warm-up
+# Background warm-up: post_init + import fallback
 # =========================================================
+async def _post_init(app):
+    # chain any existing post_init
+    try:
+        prev = getattr(app, '_prev_post_init', None)
+        if prev:
+            r = prev(app)
+            if asyncio.iscoroutine(r):
+                await r
+    except Exception as e:
+        LOGGER.warning(f"prev post_init error: {e}")
+    try:
+        asyncio.create_task(_load_all_chars())
+    except Exception as e:
+        LOGGER.warning(f"post_init preload error: {e}")
+
+
+def _install_post_init():
+    try:
+        existing = getattr(application, 'post_init', None)
+        # stash original once
+        if existing is not None and not getattr(application, '_prev_post_init', None):
+            application._prev_post_init = existing
+        application.post_init = _post_init
+    except Exception as e:
+        LOGGER.warning(f"post_init install: {e}")
+
+
+_install_post_init()
+
+
 def _bootstrap_preload():
+    """Try to start loading immediately if loop already exists."""
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_load_all_chars())
