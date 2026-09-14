@@ -4,7 +4,7 @@ import time
 import hashlib
 import logging
 from html import escape
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 from cachetools import TTLCache
 from pymongo import ASCENDING
@@ -136,9 +136,15 @@ def cache_key(*args) -> str:
 
 
 # =========================================================
-# URL / Media validation  (*** FIX: projection ab complete hai ***)
+# URL / Media extraction  (*** MOST ROBUST ***)
 # =========================================================
-_IMG_FIELDS = ('img_url', 'image_url', 'img', 'photo', 'photo_url', 'url', 'thumbnail')
+_IMG_FIELDS = (
+    'img_url', 'image_url', 'img', 'photo', 'photo_url',
+    'url', 'thumbnail', 'thumbnail_url', 'image', 'picture',
+    'pic', 'link', 'media_url', 'file_url', 'video_url',
+    'preview_url', 'src', 'href',
+)
+_NESTED_KEYS = ('url', 'src', 'link', 'href', 'image', 'img_url', 'image_url')
 
 
 def _valid_url(u) -> bool:
@@ -148,21 +154,47 @@ def _valid_url(u) -> bool:
     return u.startswith('https://') or u.startswith('http://')
 
 
+def _extract_url(v) -> str:
+    """Extract a valid URL from any structure (str, list, dict)."""
+    if _valid_url(v):
+        return v.strip()
+
+    if isinstance(v, list):
+        for item in v:
+            r = _extract_url(item)
+            if r:
+                return r
+        return ""
+
+    if isinstance(v, dict):
+        for k in _NESTED_KEYS:
+            r = _extract_url(v.get(k))
+            if r:
+                return r
+        # last resort: any value in dict
+        for vv in v.values():
+            if _valid_url(vv):
+                return vv.strip()
+        return ""
+
+    return ""
+
+
 def _img_of(ch: Dict) -> str:
+    """Find ANY usable image/video URL from a character document."""
     if not isinstance(ch, dict):
         return ""
     for k in _IMG_FIELDS:
         v = ch.get(k)
-        if _valid_url(v):
-            return v.strip()
-        if isinstance(v, list) and v:
-            for item in v:
-                if _valid_url(item):
-                    return item.strip()
+        if not v:
+            continue
+        r = _extract_url(v)
+        if r:
+            return r
     return ""
 
 
-_VIDEO_EXTS = ('.mp4', '.mov', '.webm', '.mkv', '.m4v')
+_VIDEO_EXTS = ('.mp4', '.mov', '.webm', '.mkv', '.m4v', '.gif')
 
 
 def _is_video(ch: Dict, url: str) -> bool:
@@ -171,25 +203,17 @@ def _is_video(ch: Dict, url: str) -> bool:
     ul = url.lower().split('?', 1)[0].split('#', 1)[0]
     if ul.endswith(_VIDEO_EXTS):
         return True
-    return bool(ch.get('is_video', False)) and ul.endswith(_VIDEO_EXTS)
+    return bool(ch.get('is_video', False)) and ul.endswith(('.mp4', '.mov', '.webm'))
 
 
 # =========================================================
-# In-memory char cache  (*** FIX: projection expanded ***)
+# In-memory char cache  (*** FETCH FULL DOCS — no projection ***)
 # =========================================================
 _ALL_CHARS: Optional[List[Dict]] = None
 _ALL_CHARS_LOADED_AT: float = 0.0
 _ALL_CHARS_LOCK = asyncio.Lock()
-_ALL_CHARS_TTL = 600
+_ALL_CHARS_TTL = 900
 _LOAD_TASK: Optional[asyncio.Task] = None
-
-# *** Yehi tha asli bug — pehle sirf 'img_url' aa raha tha ***
-_CHAR_PROJECTION = {
-    'id': 1, 'name': 1, 'anime': 1, 'rarity': 1,
-    'img_url': 1, 'is_video': 1,
-    'image_url': 1, 'img': 1, 'photo': 1,
-    'photo_url': 1, 'url': 1, 'thumbnail': 1,
-}
 
 
 async def _load_all_chars() -> List[Dict]:
@@ -197,12 +221,16 @@ async def _load_all_chars() -> List[Dict]:
     async with _ALL_CHARS_LOCK:
         try:
             t0 = time.time()
-            chars = await collection.find({}, _CHAR_PROJECTION).to_list(length=None)
+            # *** NO PROJECTION — fetch everything, miss kuch nahi hoga ***
+            chars = await collection.find({}).to_list(length=None)
             _ALL_CHARS = chars or []
             _ALL_CHARS_LOADED_AT = time.time()
+
+            # diagnostics: count how many have usable images
+            with_img = sum(1 for c in _ALL_CHARS if _img_of(c))
             LOGGER.info(
-                f"[INLINE] Loaded {len(_ALL_CHARS)} characters "
-                f"in {time.time()-t0:.2f}s"
+                f"[INLINE] Loaded {len(_ALL_CHARS)} chars "
+                f"({with_img} with image) in {time.time()-t0:.2f}s"
             )
         except Exception as e:
             LOGGER.error(f"[INLINE] Cache load error: {e}")
@@ -268,17 +296,20 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
 
 
 # =========================================================
-# Direct DB search fallback
+# Direct DB search fallback  (no projection = no miss)
 # =========================================================
 async def _db_search(q: str, lim: int = 200) -> List[Dict]:
     try:
         if not q:
-            return await collection.find({}, _CHAR_PROJECTION).limit(lim).to_list(lim)
+            return await collection.find({}).limit(lim).to_list(lim)
 
         conds = []
         if q.isdigit():
             conds.append({'id': q})
-            conds.append({'id': int(q)})
+            try:
+                conds.append({'id': int(q)})
+            except Exception:
+                pass
 
         rx = re.compile(re.escape(q), re.IGNORECASE)
         conds.append({'name': rx})
@@ -290,16 +321,14 @@ async def _db_search(q: str, lim: int = 200) -> List[Dict]:
             conds.append({'rarity': re.compile(re.escape(alias), re.IGNORECASE)})
             conds.append({'rarity': re.compile(re.escape(RARITIES[alias][2]), re.IGNORECASE)})
 
-        return await collection.find(
-            {'$or': conds}, _CHAR_PROJECTION
-        ).limit(lim).to_list(lim)
+        return await collection.find({'$or': conds}).limit(lim).to_list(lim)
     except Exception as e:
         LOGGER.error(f"_db_search: {e}")
         return []
 
 
 # =========================================================
-# Search (memory-first, non-blocking refresh)  *** FIX ***
+# Search (memory-first)
 # =========================================================
 async def search_chars(q: str, lim: int = 200) -> List[Dict]:
     k = cache_key('search', q, lim)
@@ -309,10 +338,10 @@ async def search_chars(q: str, lim: int = 200) -> List[Dict]:
 
     all_chars = _ALL_CHARS
 
-    # *** Pehli baar: cache load hone tak wait — "not found" fix ***
+    # first-time: load synchronously so no "not found"
     if all_chars is None:
         try:
-            await asyncio.wait_for(_load_all_chars(), timeout=6.0)
+            await asyncio.wait_for(_load_all_chars(), timeout=8.0)
         except asyncio.TimeoutError:
             LOGGER.warning("[INLINE] Initial load timeout — DB fallback")
             chars = await _db_search(q, lim)
@@ -320,7 +349,7 @@ async def search_chars(q: str, lim: int = 200) -> List[Dict]:
             return chars
         all_chars = _ALL_CHARS or []
 
-    # *** Stale: background refresh, block mat karo ***
+    # stale: refresh in background, don't block
     elif (time.time() - _ALL_CHARS_LOADED_AT) > _ALL_CHARS_TTL:
         _schedule_load()
 
@@ -336,18 +365,26 @@ async def search_chars(q: str, lim: int = 200) -> List[Dict]:
 
     result = []
     for c in all_chars:
-        cid = c.get('id', '')
-        cid_str = str(cid)
+        cid = c.get('id')
+        cid_str = str(cid) if cid is not None else ''
         matched = False
 
-        if is_digit and cid_str.isdigit() and int(cid_str) == qnum:
+        if is_digit:
+            # match id: try str and int
+            if cid_str == q:
+                matched = True
+            else:
+                try:
+                    if int(cid_str) == qnum:
+                        matched = True
+                except Exception:
+                    pass
+        if not matched and cid_str == q:
             matched = True
-        elif cid_str == q:
-            matched = True
-        else:
-            if (ql in c.get('name', '').lower()
-                    or ql in c.get('anime', '').lower()
-                    or ql in c.get('rarity', '').lower()):
+        if not matched:
+            if (ql in str(c.get('name', '')).lower()
+                    or ql in str(c.get('anime', '')).lower()
+                    or ql in str(c.get('rarity', '')).lower()):
                 matched = True
             elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
                 matched = True
@@ -581,9 +618,9 @@ async def _build_results(query, off: int, uid: int, qid: str):
                 elif cid_str == sq:
                     matched = True
                 else:
-                    if (sql in c.get('name', '').lower()
-                            or sql in c.get('anime', '').lower()
-                            or sql in c.get('rarity', '').lower()):
+                    if (sql in str(c.get('name', '')).lower()
+                            or sql in str(c.get('anime', '')).lower()
+                            or sql in str(c.get('rarity', '')).lower()):
                         matched = True
                     elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
                         matched = True
@@ -617,11 +654,11 @@ async def _build_results(query, off: int, uid: int, qid: str):
         if am:
             anime_filter = am.group(1).lower()
             sq = sq.replace(am.group(0), '').strip()
-            all_chars = await search_chars(sq, lim=200)
+            all_chars = await search_chars(sq, lim=500)
             all_chars = [c for c in all_chars
-                         if anime_filter in c.get('anime', '').lower()]
+                         if anime_filter in str(c.get('anime', '')).lower()]
         else:
-            all_chars = await search_chars(sq, lim=200)
+            all_chars = await search_chars(sq, lim=500)
 
         if fm:
             all_chars = await filter_chars(all_chars, fm, uid)
@@ -634,8 +671,6 @@ async def _build_results(query, off: int, uid: int, qid: str):
     has_more = len(all_chars) > off + 50
     noff = str(off + 50) if has_more else ""
 
-    # *** PER-PAGE DB FETCH HATA DIYA — yehi first-page slow kar raha tha ***
-
     fav_id = None
     if is_coll and usr:
         fv = usr.get('favorites')
@@ -644,11 +679,14 @@ async def _build_results(query, off: int, uid: int, qid: str):
     for i, ch in enumerate(page_chars):
         try:
             cid = ch.get('id')
-            if not cid:
+            if cid is None:
                 continue
 
             img = _img_of(ch)
             if not img:
+                LOGGER.warning(
+                    f"[INLINE] skip cid={cid} no image. keys={list(ch.keys())[:20]}"
+                )
                 continue
 
             vid = _is_video(ch, img)
@@ -764,7 +802,13 @@ async def show_owners(update: Update, context) -> None:
             cid = data
             page = 0
 
-        ch = await collection.find_one({'id': cid}, _CHAR_PROJECTION)
+        ch = await collection.find_one({'id': cid})
+        if not ch:
+            try:
+                if cid.isdigit():
+                    ch = await collection.find_one({'id': int(cid)})
+            except Exception:
+                pass
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
@@ -816,7 +860,13 @@ async def back_card(update: Update, context) -> None:
     q = update.callback_query
     try:
         cid = q.data.split('.', 1)[1]
-        ch = await collection.find_one({'id': cid}, _CHAR_PROJECTION)
+        ch = await collection.find_one({'id': cid})
+        if not ch:
+            try:
+                if cid.isdigit():
+                    ch = await collection.find_one({'id': int(cid)})
+            except Exception:
+                pass
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
@@ -839,7 +889,13 @@ async def show_stats(update: Update, context) -> None:
     q = update.callback_query
     try:
         cid = q.data.split('.', 1)[1]
-        ch = await collection.find_one({'id': cid}, _CHAR_PROJECTION)
+        ch = await collection.find_one({'id': cid})
+        if not ch:
+            try:
+                if cid.isdigit():
+                    ch = await collection.find_one({'id': int(cid)})
+            except Exception:
+                pass
         if not ch:
             await q.answer(sc("not found"), show_alert=True)
             return
@@ -880,7 +936,7 @@ application.add_handler(CallbackQueryHandler(show_stats, pattern=r'^s\.', block=
 
 
 # =========================================================
-# Background warm-up (non-blocking)
+# Background warm-up
 # =========================================================
 def _bootstrap_preload():
     try:
