@@ -34,7 +34,7 @@ IST          = timezone(timedelta(hours=5, minutes=30))
 
 WALLET_KEYS = ['balance', 'coins', 'wallet', 'money', 'gold', 'bal']
 
-# track last bank page message per user → (chat_id, message_id)
+# track last bank page message per PAGE-OWNER → (chat_id, message_id)
 USER_BANK_MSGS = {}
 
 
@@ -96,6 +96,29 @@ async def delete_old_bank_msg(context, user_id):
     except Exception:
         pass
     USER_BANK_MSGS.pop(user_id, None)
+
+
+def page_owner_id(update):
+    """Return the id of the user whose page is being displayed.
+    Prefers the id embedded in callback data (`bka_<uid>_...`).
+    Falls back to the effective user (commands)."""
+    if update.callback_query:
+        try:
+            return int(update.callback_query.data.split("_")[1])
+        except Exception:
+            pass
+    u = update.effective_user
+    return u.id if u else None
+
+
+def safe_mention(user, user_id=None):
+    """Build an HTML mention for a User OR Chat object safely."""
+    try:
+        return user.mention_html()
+    except Exception:
+        uid = user_id or getattr(user, "id", 0)
+        name = escape(getattr(user, "first_name", "User") or "User")
+        return f"<a href='tg://user?id={uid}'>{name}</a>"
 
 
 # ============================================================
@@ -182,7 +205,7 @@ async def settle_interest(user_id):
 
 
 # ============================================================
-# 💰 Deposit / Withdraw (returns full before/after)
+# 💰 Deposit / Withdraw
 # ============================================================
 async def deposit_coins(user_id, amount):
     doc = await eco_collection.find_one({'id': user_id})
@@ -271,9 +294,10 @@ async def withdraw_coins(user_id, amount):
 # ============================================================
 # 🖼 Renderer
 # ============================================================
-async def send_or_edit(update, context, text, kb, edit=False):
-    user = update.effective_user
-    user_id = user.id if user else None
+async def send_or_edit(update, context, text, kb, edit=False, owner_id=None):
+    """owner_id = the user whose bank page this is (used for cleanup tracking)."""
+    if owner_id is None:
+        owner_id = page_owner_id(update)
 
     if edit and update.callback_query:
         q = update.callback_query
@@ -282,20 +306,20 @@ async def send_or_edit(update, context, text, kb, edit=False):
                 media=InputMediaPhoto(media=BANK_BANNER, caption=text, parse_mode='HTML'),
                 reply_markup=kb
             )
-            if user_id:
-                USER_BANK_MSGS[user_id] = (q.message.chat_id, q.message.message_id)
+            if owner_id:
+                USER_BANK_MSGS[owner_id] = (q.message.chat_id, q.message.message_id)
             return
         except BadRequest as e:
             if "not modified" in str(e).lower():
-                if user_id:
-                    USER_BANK_MSGS[user_id] = (q.message.chat_id, q.message.message_id)
+                if owner_id:
+                    USER_BANK_MSGS[owner_id] = (q.message.chat_id, q.message.message_id)
                 return
         except Exception:
             pass
 
         # fallback: delete old & resend
-        if user_id:
-            await delete_old_bank_msg(context, user_id)
+        if owner_id:
+            await delete_old_bank_msg(context, owner_id)
         try:
             await q.message.delete()
         except Exception:
@@ -306,27 +330,34 @@ async def send_or_edit(update, context, text, kb, edit=False):
                 photo=BANK_BANNER, caption=text,
                 parse_mode='HTML', reply_markup=kb
             )
-            if user_id:
-                USER_BANK_MSGS[user_id] = (msg.chat_id, msg.message_id)
+            if owner_id:
+                USER_BANK_MSGS[owner_id] = (msg.chat_id, msg.message_id)
         except Exception:
             pass
     else:
-        # non-edit: delete previous page of this user first
-        if user_id:
-            await delete_old_bank_msg(context, user_id)
+        if owner_id:
+            await delete_old_bank_msg(context, owner_id)
         msg = await update.message.reply_photo(
             photo=BANK_BANNER, caption=text,
             parse_mode='HTML', reply_markup=kb
         )
-        if user_id:
-            USER_BANK_MSGS[user_id] = (msg.chat_id, msg.message_id)
+        if owner_id:
+            USER_BANK_MSGS[owner_id] = (msg.chat_id, msg.message_id)
 
 
 # ============================================================
 # 🏦 Bank Home Page
 # ============================================================
-async def bank_page(update, context, edit=False, notice=None):
-    user = update.effective_user
+async def bank_page(update, context, edit=False, notice=None, target_user=None):
+    """
+    target_user = user whose page to render.
+    If None → uses effective_user (normal case).
+    For non-owner clicks on refresh/top/rules back, we pass the owner's Chat/User.
+    """
+    if target_user is None:
+        target_user = update.effective_user
+
+    user = target_user
     await settle_interest(user.id)
     doc = await eco_collection.find_one({'id': user.id})
 
@@ -338,7 +369,7 @@ async def bank_page(update, context, edit=False, notice=None):
         )
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(
             "ᴄʟᴏsᴇ", callback_data=f"bka_{user.id}_close")]])
-        return await send_or_edit(update, context, text, kb, edit)
+        return await send_or_edit(update, context, text, kb, edit, owner_id=user.id)
 
     wallet  = extract_balance(doc)
     bank    = bank_balance(doc)
@@ -354,6 +385,7 @@ async def bank_page(update, context, edit=False, notice=None):
     daily = int(bank * DAILY_RATE) if bank > 0 else 0
 
     note = f"\n<blockquote>{notice}</blockquote>\n" if notice else ""
+    mention = safe_mention(user, user.id)
 
     text = (
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji> "
@@ -361,7 +393,7 @@ async def bank_page(update, context, edit=False, notice=None):
         f"<tg-emoji emoji-id=\"5264895611517300926\">🏦</tg-emoji>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<tg-emoji emoji-id=\"5217822164362739968\">👑</tg-emoji> "
-        f"<b>{user.mention_html()}</b>\n"
+        f"<b>{mention}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> "
         f"<b>{sc('coins')} :</b> <b>{fmt(wallet)}</b>\n"
@@ -383,33 +415,34 @@ async def bank_page(update, context, edit=False, notice=None):
         f"<i><b>{sc('deposit now and earn 4% daily!')}</b></i>"
     )
 
+    uid = user.id
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("ᴅᴇᴘᴏsɪᴛ", callback_data=f"bka_{user.id}_dep",
+            InlineKeyboardButton("ᴅᴇᴘᴏsɪᴛ", callback_data=f"bka_{uid}_dep",
                                  icon_custom_emoji_id="5472030678633684592"),
-            InlineKeyboardButton("ᴡɪᴛʜᴅʀᴀᴡ", callback_data=f"bka_{user.id}_wd",
+            InlineKeyboardButton("ᴡɪᴛʜᴅʀᴀᴡ", callback_data=f"bka_{uid}_wd",
                                  icon_custom_emoji_id="5264895611517300926"),
         ],
         [
-            InlineKeyboardButton("ʀᴜʟᴇs", callback_data=f"bka_{user.id}_rules",
+            InlineKeyboardButton("ʀᴜʟᴇs", callback_data=f"bka_{uid}_rules",
                                  icon_custom_emoji_id="6093434630147415641"),
-            InlineKeyboardButton("ᴛᴏᴘ", callback_data=f"bka_{user.id}_top",
+            InlineKeyboardButton("ᴛᴏᴘ", callback_data=f"bka_{uid}_top",
                                  icon_custom_emoji_id="6093755816391745206"),
         ],
         [
-            InlineKeyboardButton("⟳", callback_data=f"bka_{user.id}_refresh"),
-            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"bka_{user.id}_close"),
+            InlineKeyboardButton("⟳", callback_data=f"bka_{uid}_refresh"),
+            InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data=f"bka_{uid}_close"),
         ],
     ])
-    await send_or_edit(update, context, text, kb, edit)
+    await send_or_edit(update, context, text, kb, edit, owner_id=uid)
 
 
 # ============================================================
 # 💸 Deposit Menu
 # ============================================================
 async def deposit_menu(update, context, edit=False):
-    user = update.effective_user
-    doc = await eco_collection.find_one({'id': user.id})
+    owner_id = page_owner_id(update)
+    doc = await eco_collection.find_one({'id': owner_id})
     wallet = extract_balance(doc) if doc else 0
 
     text = (
@@ -422,30 +455,29 @@ async def deposit_menu(update, context, edit=False):
         f"<b>{sc('choose amount or use')}</b> <code>/deposit &lt;amt&gt;</code>\n"
         f"<i>{sc('minimum')} : {MIN_DEPOSIT}</i>"
     )
-    uid = user.id
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("500", callback_data=f"bka_{uid}_dp_500"),
-            InlineKeyboardButton("1ᴋ", callback_data=f"bka_{uid}_dp_1000"),
-            InlineKeyboardButton("5ᴋ", callback_data=f"bka_{uid}_dp_5000"),
+            InlineKeyboardButton("500", callback_data=f"bka_{owner_id}_dp_500"),
+            InlineKeyboardButton("1ᴋ", callback_data=f"bka_{owner_id}_dp_1000"),
+            InlineKeyboardButton("5ᴋ", callback_data=f"bka_{owner_id}_dp_5000"),
         ],
         [
-            InlineKeyboardButton("10ᴋ", callback_data=f"bka_{uid}_dp_10000"),
-            InlineKeyboardButton("50ᴋ", callback_data=f"bka_{uid}_dp_50000"),
-            InlineKeyboardButton("ᴀʟʟ", callback_data=f"bka_{uid}_dp_all"),
+            InlineKeyboardButton("10ᴋ", callback_data=f"bka_{owner_id}_dp_10000"),
+            InlineKeyboardButton("50ᴋ", callback_data=f"bka_{owner_id}_dp_50000"),
+            InlineKeyboardButton("ᴀʟʟ", callback_data=f"bka_{owner_id}_dp_all"),
         ],
-        [InlineKeyboardButton("≼ ʙᴀᴄᴋ", callback_data=f"bka_{uid}_refresh")],
+        [InlineKeyboardButton("≼ ʙᴀᴄᴋ", callback_data=f"bka_{owner_id}_refresh")],
     ])
-    await send_or_edit(update, context, text, kb, edit)
+    await send_or_edit(update, context, text, kb, edit, owner_id=owner_id)
 
 
 # ============================================================
 # 🏧 Withdraw Menu
 # ============================================================
 async def withdraw_menu(update, context, edit=False):
-    user = update.effective_user
-    await settle_interest(user.id)
-    doc = await eco_collection.find_one({'id': user.id})
+    owner_id = page_owner_id(update)
+    await settle_interest(owner_id)
+    doc = await eco_collection.find_one({'id': owner_id})
     bank = bank_balance(doc) if doc else 0
 
     text = (
@@ -458,27 +490,27 @@ async def withdraw_menu(update, context, edit=False):
         f"<b>{sc('choose amount or use')}</b> <code>/withdraw &lt;amt&gt;</code>\n"
         f"<i>{sc('minimum')} : {MIN_WITHDRAW}</i>"
     )
-    uid = user.id
     kb = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("500", callback_data=f"bka_{uid}_wq_500"),
-            InlineKeyboardButton("1ᴋ", callback_data=f"bka_{uid}_wq_1000"),
-            InlineKeyboardButton("5ᴋ", callback_data=f"bka_{uid}_wq_5000"),
+            InlineKeyboardButton("500", callback_data=f"bka_{owner_id}_wq_500"),
+            InlineKeyboardButton("1ᴋ", callback_data=f"bka_{owner_id}_wq_1000"),
+            InlineKeyboardButton("5ᴋ", callback_data=f"bka_{owner_id}_wq_5000"),
         ],
         [
-            InlineKeyboardButton("10ᴋ", callback_data=f"bka_{uid}_wq_10000"),
-            InlineKeyboardButton("ᴀʟʟ", callback_data=f"bka_{uid}_wq_all"),
+            InlineKeyboardButton("10ᴋ", callback_data=f"bka_{owner_id}_wq_10000"),
+            InlineKeyboardButton("ᴀʟʟ", callback_data=f"bka_{owner_id}_wq_all"),
         ],
-        [InlineKeyboardButton("≼ ʙᴀᴄᴋ", callback_data=f"bka_{uid}_refresh")],
+        [InlineKeyboardButton("≼ ʙᴀᴄᴋ", callback_data=f"bka_{owner_id}_refresh")],
     ])
-    await send_or_edit(update, context, text, kb, edit)
+    await send_or_edit(update, context, text, kb, edit, owner_id=owner_id)
 
 
 # ============================================================
 # 📜 Rules Page (public)
 # ============================================================
 async def bank_rules(update, context, edit=False):
-    uid = update.callback_query.from_user.id if edit else update.effective_user.id
+    # KEEP the ORIGINAL page owner in the back button — never the clicker
+    owner_id = page_owner_id(update)
     text = (
         f"<tg-emoji emoji-id=\"6093434630147415641\">🃏</tg-emoji> "
         f"<b>{sc('bank of alisa — rules')}</b>\n"
@@ -492,8 +524,9 @@ async def bank_rules(update, context, edit=False):
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"<i><b>{sc('deposit today, grow every single day!')}</b></i>"
     )
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("≼ ʙᴀᴄᴋ", callback_data=f"bka_{uid}_refresh")]])
-    await send_or_edit(update, context, text, kb, edit)
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+        "≼ ʙᴀᴄᴋ", callback_data=f"bka_{owner_id}_refresh")]])
+    await send_or_edit(update, context, text, kb, edit, owner_id=owner_id)
 
 
 # ============================================================
@@ -505,7 +538,8 @@ async def fetch_top_bankers():
 
 
 async def top_bankers(update, context, edit=False):
-    uid = update.callback_query.from_user.id if edit else update.effective_user.id
+    # KEEP the ORIGINAL page owner in the back button — never the clicker
+    owner_id = page_owner_id(update)
     data = await fetch_top_bankers()
 
     if not data:
@@ -535,13 +569,14 @@ async def top_bankers(update, context, edit=False):
             )
         text = (
             f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> "
-            f"<b>{sc('top 10 bankers')}</b> "
+            f"<b>𝗧𝗢𝗣 𝟭𝟬 𝗕𝗔𝗡𝗞𝗘𝗥𝗦</b> "
             f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji>\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             + "\n".join(rows)
         )
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("≼ ʙᴀᴄᴋ", callback_data=f"bka_{uid}_refresh")]])
-    await send_or_edit(update, context, text, kb, edit)
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+        "≼ ʙᴀᴄᴋ", callback_data=f"bka_{owner_id}_refresh")]])
+    await send_or_edit(update, context, text, kb, edit, owner_id=owner_id)
 
 
 # ============================================================
@@ -644,7 +679,7 @@ async def banktop_cmd(update, context):
 
 
 # ============================================================
-# 🛑 Owner: Remove coins from user's bank (no refund to wallet)
+# 🛑 Owner: Remove coins from user's bank
 # ============================================================
 async def remove_bank_cmd(update, context):
     u = update.effective_user
@@ -688,11 +723,10 @@ async def remove_bank_cmd(update, context):
         updates['bank_last_interest'] = None
     await eco_collection.update_one({'id': target_id}, {'$set': updates})
 
-    # try to resolve target user info for logging / mention
     try:
         target_chat = await context.bot.get_chat(target_id)
     except Exception:
-        class _U:  # minimal fallback
+        class _U:
             id = target_id
             first_name = "Unknown"
             username = None
@@ -703,7 +737,7 @@ async def remove_bank_cmd(update, context):
         "<tg-emoji emoji-id=\"6105189427355589893\">⚠️</tg-emoji>",
         sc("ᴏᴡɴᴇʀ ʀᴇᴍᴏᴠᴇᴅ ʙᴀɴᴋ ᴄᴏɪɴs"),
         target_chat, removed,
-        extract_balance(doc), extract_balance(doc),   # wallet unchanged
+        extract_balance(doc), extract_balance(doc),
         bank_before, new_bank,
         int(doc.get('bank_total_deposited', 0) or 0),
         int(doc.get('bank_total_withdrawn', 0) or 0),
@@ -754,7 +788,7 @@ async def bank_callback(update: Update, context: CallbackContext):
     action = parts[2]
     extra = parts[3] if len(parts) > 3 else None
 
-    # ---------- Close ----------
+    # ---------- Close (owner only) ----------
     if action == "close":
         if clicker.id != owner_uid:
             return await q.answer(sc("not your page"), show_alert=True)
@@ -766,15 +800,27 @@ async def bank_callback(update: Update, context: CallbackContext):
         USER_BANK_MSGS.pop(clicker.id, None)
         return
 
-    # ---------- Rules (public) ----------
+    # ---------- Rules (PUBLIC — anyone can view) ----------
     if action == "rules":
         await q.answer()
         return await bank_rules(update, context, edit=True)
 
-    # ---------- Top (public) ----------
+    # ---------- Top (PUBLIC — anyone can view) ----------
     if action == "top":
         await q.answer()
         return await top_bankers(update, context, edit=True)
+
+    # ---------- Refresh (PUBLIC — always renders the ORIGINAL owner's page) ----------
+    if action == "refresh":
+        await q.answer(sc("refreshed"))
+        if clicker.id == owner_uid:
+            target = clicker
+        else:
+            try:
+                target = await context.bot.get_chat(owner_uid)
+            except Exception:
+                target = clicker
+        return await bank_page(update, context, edit=True, target_user=target)
 
     # ---------- Owner-locked from here ----------
     if clicker.id != owner_uid:
@@ -782,10 +828,6 @@ async def bank_callback(update: Update, context: CallbackContext):
             sc("ᴛʜɪs ɪs ɴᴏᴛ ʏᴏᴜʀ ᴘᴀɢᴇ · ᴜsᴇ /bank ᴛᴏ ᴏᴘᴇɴ ʏᴏᴜʀ ᴏᴡɴ"),
             show_alert=True
         )
-
-    if action == "refresh":
-        await q.answer(sc("refreshed"))
-        return await bank_page(update, context, edit=True)
 
     if action == "dep":
         await q.answer()
