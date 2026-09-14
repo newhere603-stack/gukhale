@@ -200,7 +200,7 @@ class DisplayOptions:
 
 # 🔥 EXACT STYLE WITH "⚋" LINES ON BOTH SIDES
 DEFAULT_STYLE = {
-    'header': "<b>{user_mention}'s Harem</b>\n\n",
+    'header': "<b>{user_mention}'s ʜᴀʀᴇᴍ</b>\n\n",
     'anime_header': "<b><tg-emoji emoji-id=\"6314494724266796319\">🟠</tg-emoji> {anime} {user_count}/{total_count}</b>\n",
     'separator': "⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋⚋\n",
     'character': "➥ {id} | {rarity} | {name}{event} x{count}\n",
