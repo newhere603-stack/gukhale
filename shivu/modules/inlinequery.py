@@ -7,7 +7,7 @@ from html import escape
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from cachetools import TTLCache
-from pymongo import ASCENDING, TEXT
+from pymongo import ASCENDING
 from functools import lru_cache
 
 from telegram import (
@@ -98,7 +98,7 @@ except Exception as e:
 
 
 # =========================================================
-# Caches — bigger TTLs = fewer DB hits
+# Caches
 # =========================================================
 char_cache     = TTLCache(maxsize=200000, ttl=600)
 user_cache     = TTLCache(maxsize=100000, ttl=300)
@@ -107,6 +107,7 @@ count_cache    = TTLCache(maxsize=80000,  ttl=180)
 feedback_cache = TTLCache(maxsize=30000,  ttl=4800)
 view_cache     = TTLCache(maxsize=8000,   ttl=900)
 wishlist_cache = TTLCache(maxsize=8000,   ttl=2400)
+result_id_map  = TTLCache(maxsize=50000,  ttl=1800)   # rid -> cid
 
 CAPS = str.maketrans(
     'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
@@ -141,12 +142,52 @@ _CHAR_PROJECTION = {
 
 
 # =========================================================
-# 🔥 IN-MEMORY CHARACTER CACHE (kills slow regex DB search)
+# URL / Media validation (biggest failure fix)
+# =========================================================
+_IMG_FIELDS = ('img_url', 'image_url', 'img', 'photo', 'photo_url', 'url', 'thumbnail')
+
+
+def _valid_url(u) -> bool:
+    if not u or not isinstance(u, str):
+        return False
+    u = u.strip()
+    return u.startswith('https://') or u.startswith('http://')
+
+
+def _img_of(ch: Dict) -> str:
+    if not isinstance(ch, dict):
+        return ""
+    for k in _IMG_FIELDS:
+        v = ch.get(k)
+        if _valid_url(v):
+            return v.strip()
+        if isinstance(v, list) and v:
+            for item in v:
+                if _valid_url(item):
+                    return item.strip()
+    return ""
+
+
+_VIDEO_EXTS = ('.mp4', '.mov', '.webm', '.mkv', '.m4v')
+
+
+def _is_video(ch: Dict, url: str) -> bool:
+    if not url:
+        return False
+    ul = url.lower().split('?', 1)[0].split('#', 1)[0]
+    if ul.endswith(_VIDEO_EXTS):
+        return True
+    return bool(ch.get('is_video', False)) and ul.endswith(_VIDEO_EXTS)
+
+
+# =========================================================
+# In-memory char cache
 # =========================================================
 _ALL_CHARS: Optional[List[Dict]] = None
 _ALL_CHARS_LOADED_AT: float = 0.0
 _ALL_CHARS_LOCK = asyncio.Lock()
-_ALL_CHARS_TTL = 300  # refresh every 5 minutes
+_ALL_CHARS_TTL = 300
+_LOAD_TASK: Optional[asyncio.Task] = None
 
 
 async def _load_all_chars() -> List[Dict]:
@@ -162,15 +203,28 @@ async def _load_all_chars() -> List[Dict]:
         try:
             chars = await collection.find({}, _CHAR_PROJECTION).to_list(length=None)
             _ALL_CHARS = chars or []
-            _ALL_CHARS_LOADED_AT = now
-            LOGGER.info(f"Loaded {len(_ALL_CHARS)} characters into memory cache")
+            _ALL_CHARS_LOADED_AT = time.time()
+            LOGGER.info(f"[INLINE] Loaded {len(_ALL_CHARS)} characters into memory")
         except Exception as e:
-            LOGGER.error(f"Char cache load error: {e}")
+            LOGGER.error(f"[INLINE] Cache load error: {e}")
             if _ALL_CHARS is None:
                 _ALL_CHARS = []
         return _ALL_CHARS
 
 
+def _schedule_load():
+    global _LOAD_TASK
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    if _LOAD_TASK is None or _LOAD_TASK.done():
+        _LOAD_TASK = loop.create_task(_load_all_chars())
+
+
+# =========================================================
+# User / Owners
+# =========================================================
 async def get_user(uid: int) -> Optional[Dict]:
     k = f"u{uid}"
     cached = user_cache.get(k)
@@ -211,7 +265,38 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
 
 
 # =========================================================
-# 🔥 FAST IN-MEMORY SEARCH (no DB regex scan)
+# Direct DB search fallback
+# =========================================================
+async def _db_search(q: str, lim: int = 200) -> List[Dict]:
+    try:
+        if not q:
+            return await collection.find({}, _CHAR_PROJECTION).limit(lim).to_list(lim)
+
+        conds = []
+        if q.isdigit():
+            conds.append({'id': q})
+            conds.append({'id': int(q)})
+
+        rx = re.compile(re.escape(q), re.IGNORECASE)
+        conds.append({'name': rx})
+        conds.append({'anime': rx})
+        conds.append({'rarity': rx})
+
+        alias = RARITY_ALIASES.get(q.lower().strip())
+        if alias:
+            conds.append({'rarity': re.compile(re.escape(alias), re.IGNORECASE)})
+            conds.append({'rarity': re.compile(re.escape(RARITIES[alias][2]), re.IGNORECASE)})
+
+        return await collection.find(
+            {'$or': conds}, _CHAR_PROJECTION
+        ).limit(lim).to_list(lim)
+    except Exception as e:
+        LOGGER.error(f"_db_search: {e}")
+        return []
+
+
+# =========================================================
+# Search (memory-first, DB fallback)
 # =========================================================
 async def search_chars(q: str, lim: int = 200) -> List[Dict]:
     k = cache_key('search', q, lim)
@@ -219,49 +304,48 @@ async def search_chars(q: str, lim: int = 200) -> List[Dict]:
     if cached is not None:
         return cached
 
-    try:
-        all_chars = await _load_all_chars()
+    all_chars = _ALL_CHARS
+    if all_chars is None or (time.time() - _ALL_CHARS_LOADED_AT) > _ALL_CHARS_TTL:
+        _schedule_load()
+        chars = await _db_search(q, lim)
+        query_cache[k] = chars
+        return chars
 
-        if not q:
-            result = all_chars[:lim]
-            query_cache[k] = result
-            return result
-
-        ql = q.lower().strip()
-        alias_key = RARITY_ALIASES.get(ql)
-        is_digit = q.isdigit()
-        qnum = int(q) if is_digit else None
-
-        result = []
-        for c in all_chars:
-            cid = c.get('id', '')
-            cid_str = str(cid)
-
-            matched = False
-
-            if is_digit and cid_str.isdigit() and int(cid_str) == qnum:
-                matched = True
-            elif cid_str == q:
-                matched = True
-            else:
-                name_l = c.get('name', '').lower()
-                anime_l = c.get('anime', '').lower()
-                rarity_l = c.get('rarity', '').lower()
-                if ql in name_l or ql in anime_l or ql in rarity_l:
-                    matched = True
-                elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
-                    matched = True
-
-            if matched:
-                result.append(c)
-                if len(result) >= lim:
-                    break
-
+    if not q:
+        result = all_chars[:lim]
         query_cache[k] = result
         return result
-    except Exception as e:
-        LOGGER.error(f"Search error: {e}")
-        return []
+
+    ql = q.lower().strip()
+    alias_key = RARITY_ALIASES.get(ql)
+    is_digit = q.isdigit()
+    qnum = int(q) if is_digit else None
+
+    result = []
+    for c in all_chars:
+        cid = c.get('id', '')
+        cid_str = str(cid)
+        matched = False
+
+        if is_digit and cid_str.isdigit() and int(cid_str) == qnum:
+            matched = True
+        elif cid_str == q:
+            matched = True
+        else:
+            if (ql in c.get('name', '').lower()
+                    or ql in c.get('anime', '').lower()
+                    or ql in c.get('rarity', '').lower()):
+                matched = True
+            elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
+                matched = True
+
+        if matched:
+            result.append(c)
+            if len(result) >= lim:
+                break
+
+    query_cache[k] = result
+    return result
 
 
 async def filter_chars(chars: List[Dict], mode: str, uid: int = None) -> List[Dict]:
@@ -321,28 +405,28 @@ def dedupe(chars: List[Dict]) -> List[Dict]:
 
 
 # =========================================================
-# Caption builders
+# Captions
 # =========================================================
 def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
-    cid = ch.get('id', '??')
-    nm = ch.get('name', 'Unknown')
-    an = ch.get('anime', 'Unknown')
+    cid = escape(str(ch.get('id', '??')))
+    nm = escape(sc(str(ch.get('name', 'Unknown'))))
+    an = escape(sc(str(ch.get('anime', 'Unknown'))))
     r = parse_rar(ch.get('rarity', ''))
 
     return (
         f"<b>{sc('Character Info ')}"
         f"<tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji></b>\n\n"
-        f"<b>{escape(sc(an))}</b>\n"
-        f"<b>{cid}: {escape(sc(nm))}</b>\n"
+        f"<b>{an}</b>\n"
+        f"<b>{cid}: {nm}</b>\n"
         f"({r.premium} <b>{sc('RARITY:')}</b> {r.name})"
     )
 
 
 def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
-    nm = ch.get('name', 'Unknown')
+    nm = escape(sc(str(ch.get('name', 'Unknown'))))
     total = sum(o.get('count', 0) for o in owners)
     cap = (
-        f"<b>{escape(sc(nm))}</b>\n\n"
+        f"<b>{nm}</b>\n\n"
         f"<b><tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> "
         f"{len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
     )
@@ -353,14 +437,14 @@ def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
         3: "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>",
     }
 
-    USERS_PER_PAGE = 10
-    start = page * USERS_PER_PAGE
-    end = start + USERS_PER_PAGE
-    total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
+    UPP = 10
+    start = page * UPP
+    end = start + UPP
+    total_pages = max(1, (len(owners) + UPP - 1) // UPP)
 
     for i, o in enumerate(owners[start:end], start + 1):
         medal = medals.get(i, f"<b>{i}.</b>")
-        fn = escape(trunc(o.get('first_name', 'User'), 18))
+        fn = escape(trunc(str(o.get('first_name', 'User')), 18))
         uid = o.get('id')
         cap += (f"{medal} <a href=\"tg://user?id={uid}\">"
                 f"<b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n")
@@ -371,12 +455,12 @@ def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
 
 
 def stats_caption(ch: Dict, owners: List[Dict]) -> str:
-    nm = ch.get('name', 'Unknown')
+    nm = escape(sc(str(ch.get('name', 'Unknown'))))
     total = sum(o.get('count', 0) for o in owners)
     avg = round(total / len(owners), 1) if owners else 0
 
     cap = (
-        f"<b>{escape(sc(nm))}</b>\n\n"
+        f"<b>{nm}</b>\n\n"
         f"<tg-emoji emoji-id=\"5231200819986047254\">📊</tg-emoji> "
         f"<b>{sc('statistics')}</b>\n"
         f"<tg-emoji emoji-id=\"5310278924616356636\">🎯</tg-emoji> "
@@ -397,7 +481,7 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
         cap += (f"\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> "
                 f"<b>{sc('top collectors')}</b>\n")
         for i, o in enumerate(owners[:3], 1):
-            fn = escape(trunc(o.get('first_name', 'User'), 18))
+            fn = escape(trunc(str(o.get('first_name', 'User')), 18))
             uid = o.get('id')
             medal = medals.get(i, f"<b>{i}.</b>")
             cap += (f"{medal} <a href=\"tg://user?id={uid}\">"
@@ -406,180 +490,181 @@ def stats_caption(ch: Dict, owners: List[Dict]) -> str:
 
 
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+    cid = str(cid)
+    rows = [
         [
             InlineKeyboardButton(sc("♔ owners"), callback_data=f"o.{cid}:0"),
             InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}"),
         ],
-        [
+    ]
+    # Only attach switch_inline if cid is safe (no whitespace / no control chars)
+    if cid and len(cid) <= 200 and not any(ch.isspace() for ch in cid):
+        rows.append([
             InlineKeyboardButton(sc("⤿ inline"),
                                  switch_inline_query_current_chat=cid),
-        ],
-    ])
+        ])
+    return InlineKeyboardMarkup(rows)
 
 
 # =========================================================
 # Inline Query
 # =========================================================
-async def inlinequery(update: Update, context) -> None:
-    query = update.inline_query
+async def _build_results(query, off: int, uid: int, qid: str):
     q = query.query or ""
-    off = int(query.offset) if query.offset else 0
-    uid = query.from_user.id
-    qid = query.id
-
     results = []
     noff = ""
 
-    try:
-        is_coll = False
-        usr = None
-        sq = q
-        fm = None
+    is_coll = False
+    usr = None
+    sq = q
+    fm = None
 
-        if q.startswith('collection.'):
-            is_coll = True
-            parts = q.split(' ', 1)
-            tid = parts[0].split('.', 1)[1]
-            sq = parts[1].strip() if len(parts) > 1 else ''
+    if q.startswith('collection.'):
+        is_coll = True
+        parts = q.split(' ', 1)
+        tid = parts[0].split('.', 1)[1]
+        sq = parts[1].strip() if len(parts) > 1 else ''
 
-            for m in ('rare', 'video', 'new', 'trending',
-                      'owned', 'notowned', 'wishlist'):
-                if sq.startswith(f'-{m}'):
-                    fm = m
-                    sq = sq.replace(f'-{m}', '').strip()
-                    break
+        for m in ('rare', 'video', 'new', 'trending',
+                  'owned', 'notowned', 'wishlist'):
+            if sq.startswith(f'-{m}'):
+                fm = m
+                sq = sq.replace(f'-{m}', '').strip()
+                break
 
-            if not tid.isdigit():
-                await query.answer([], cache_time=1, is_personal=True)
-                return
+        if not tid.isdigit():
+            return [], ""
 
-            tuid = int(tid)
-            usr = await get_user(tuid)
-            if not usr:
-                await query.answer(
-                    [InlineQueryResultArticle(
-                        id="nouser",
-                        title=sc("no collection"),
-                        description=sc("start your journey"),
-                        input_message_content=InputTextMessageContent(
-                            f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> "
-                            f"{sc('start collecting!')}</b>",
-                            parse_mode=ParseMode.HTML,
-                        ),
-                    )],
-                    cache_time=1, is_personal=True,
-                )
-                return
+        tuid = int(tid)
+        usr = await get_user(tuid)
+        if not usr:
+            article = InlineQueryResultArticle(
+                id=hashlib.md5(f"nouser{qid}".encode()).hexdigest(),
+                title=sc("no collection"),
+                description=sc("start your journey"),
+                input_message_content=InputTextMessageContent(
+                    f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> "
+                    f"{sc('start collecting!')}</b>",
+                    parse_mode=ParseMode.HTML,
+                ),
+            )
+            return [article], ""
 
-            cd = {c['id']: c for c in usr.get('characters', [])
-                  if isinstance(c, dict) and c.get('id')}
-            all_chars = list(cd.values())
+        cd = {c['id']: c for c in usr.get('characters', [])
+              if isinstance(c, dict) and c.get('id')}
+        all_chars = list(cd.values())
 
-            if sq:
-                sql = sq.lower().strip()
-                alias_key = RARITY_ALIASES.get(sql)
-                is_digit = sq.isdigit()
-                qnum = int(sq) if is_digit else None
+        if sq:
+            sql = sq.lower().strip()
+            alias_key = RARITY_ALIASES.get(sql)
+            is_digit = sq.isdigit()
+            qnum = int(sq) if is_digit else None
 
-                filtered = []
-                for c in all_chars:
-                    cid_str = str(c.get('id', ''))
-                    matched = False
-                    if is_digit and cid_str.isdigit() and int(cid_str) == qnum:
+            filtered = []
+            for c in all_chars:
+                cid_str = str(c.get('id', ''))
+                matched = False
+                if is_digit and cid_str.isdigit() and int(cid_str) == qnum:
+                    matched = True
+                elif cid_str == sq:
+                    matched = True
+                else:
+                    if (sql in c.get('name', '').lower()
+                            or sql in c.get('anime', '').lower()
+                            or sql in c.get('rarity', '').lower()):
                         matched = True
-                    elif cid_str == sq:
+                    elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
                         matched = True
-                    else:
-                        if (sql in c.get('name', '').lower()
-                                or sql in c.get('anime', '').lower()
-                                or sql in c.get('rarity', '').lower()):
-                            matched = True
-                        elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
-                            matched = True
-                    if matched:
-                        filtered.append(c)
-                all_chars = filtered
+                if matched:
+                    filtered.append(c)
+            all_chars = filtered
 
-            if fm:
-                all_chars = await filter_chars(all_chars, fm, tuid)
+        if fm:
+            all_chars = await filter_chars(all_chars, fm, tuid)
 
-            fav = usr.get('favorites')
-            if fav and not sq and not fm:
-                fid = fav.get('id') if isinstance(fav, dict) else fav
-                fc = next((c for c in all_chars if c.get('id') == fid), None)
-                if fc:
-                    all_chars = [c for c in all_chars if c.get('id') != fid]
-                    all_chars.insert(0, fc)
+        fav = usr.get('favorites')
+        if fav and not sq and not fm:
+            fid = fav.get('id') if isinstance(fav, dict) else fav
+            fc = next((c for c in all_chars if c.get('id') == fid), None)
+            if fc:
+                all_chars = [c for c in all_chars if c.get('id') != fid]
+                all_chars.insert(0, fc)
 
-            if not fm or fm not in ('new', 'trending'):
-                all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
+        if not fm or fm not in ('new', 'trending'):
+            all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
 
+    else:
+        for m in ('rare', 'video', 'new', 'trending',
+                  'owned', 'notowned', 'wishlist'):
+            if sq.startswith(f'-{m}'):
+                fm = m
+                sq = sq.replace(f'-{m}', '').strip()
+                break
+
+        am = re.search(r'-anime:(\S+)', sq)
+        if am:
+            anime_filter = am.group(1).lower()
+            sq = sq.replace(am.group(0), '').strip()
+            all_chars = await search_chars(sq, lim=200)
+            all_chars = [c for c in all_chars
+                         if anime_filter in c.get('anime', '').lower()]
         else:
-            for m in ('rare', 'video', 'new', 'trending',
-                      'owned', 'notowned', 'wishlist'):
-                if sq.startswith(f'-{m}'):
-                    fm = m
-                    sq = sq.replace(f'-{m}', '').strip()
-                    break
+            all_chars = await search_chars(sq, lim=200)
 
-            am = re.search(r'-anime:(\S+)', sq)
-            if am:
-                anime_filter = am.group(1).lower()
-                sq = sq.replace(am.group(0), '').strip()
-                all_chars = await search_chars(sq, lim=200)
-                all_chars = [c for c in all_chars
-                             if anime_filter in c.get('anime', '').lower()]
-            else:
-                all_chars = await search_chars(sq, lim=200)
+        if fm:
+            all_chars = await filter_chars(all_chars, fm, uid)
 
-            if fm:
-                all_chars = await filter_chars(all_chars, fm, uid)
+        if not fm or fm not in ('new', 'trending'):
+            all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
 
-            if not fm or fm not in ('new', 'trending'):
-                all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
+    all_chars = dedupe(all_chars)
+    page_chars = all_chars[off:off + 50]
+    has_more = len(all_chars) > off + 50
+    noff = str(off + 50) if has_more else ""
 
-        all_chars = dedupe(all_chars)
-        page_chars = all_chars[off:off + 50]
-        has_more = len(all_chars) > off + 50
-        noff = str(off + 50) if has_more else ""
-
-        # Only hit DB for any chars missing img_url
-        missing_ids = [c.get('id') for c in page_chars
-                       if c.get('id') and not c.get('img_url')]
-        if missing_ids:
+    missing_ids = [c.get('id') for c in page_chars
+                   if c.get('id') and not _img_of(c)]
+    if missing_ids:
+        try:
             live_docs = await collection.find(
-                {'id': {'$in': missing_ids}},
-                _CHAR_PROJECTION,
+                {'id': {'$in': missing_ids}}, _CHAR_PROJECTION,
             ).to_list(length=50)
             live_map = {d['id']: d for d in live_docs}
             for ch in page_chars:
                 cid = ch.get('id')
                 if cid and cid in live_map:
                     ch.update(live_map[cid])
+        except Exception:
+            pass
 
-        fav_id = None
-        if is_coll and usr:
-            fv = usr.get('favorites')
-            fav_id = fv.get('id') if isinstance(fv, dict) else fv
+    fav_id = None
+    if is_coll and usr:
+        fv = usr.get('favorites')
+        fav_id = fv.get('id') if isinstance(fv, dict) else fv
 
-        for i, ch in enumerate(page_chars):
+    for i, ch in enumerate(page_chars):
+        try:
             cid = ch.get('id')
-            img = ch.get('img_url', '')
-            vid = ch.get('is_video', False)
-
-            if not cid or not img:
+            if not cid:
                 continue
 
-            nm = ch.get('name', '?')
-            an = ch.get('anime', '?')
+            img = _img_of(ch)
+            if not img:
+                continue
+
+            vid = _is_video(ch, img)
+            nm = str(ch.get('name', '?'))
+            an = str(ch.get('anime', '?'))
             r = parse_rar(ch.get('rarity', ''))
             fav = (fav_id == cid)
 
             cap = minimal_caption(ch, fav, uid=uid)
             kbd = create_kbd(cid, uid)
 
-            rid = f"{cid}|{off}|{i}|{qid[:8]}"
+            # SAFE result id: pure md5 hex (32 chars)
+            rid = hashlib.md5(f"{cid}|{off}|{i}|{qid}".encode()).hexdigest()
+            result_id_map[rid] = str(cid)
+
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
             desc = f"{r.name} • {trunc(an, 20)}"
 
@@ -597,17 +682,57 @@ async def inlinequery(update: Update, context) -> None:
                     caption=cap, parse_mode=ParseMode.HTML,
                     reply_markup=kbd,
                 ))
+        except Exception as e:
+            LOGGER.error(f"[INLINE] result build: {e}")
+            continue
 
-        # cache_time=3 gives freshness + avoids Telegram rate limiting
-        await query.answer(
-            results,
-            next_offset=noff,
-            cache_time=3,
-            is_personal=True,
-        )
+    return results, noff
+
+
+async def inlinequery(update: Update, context) -> None:
+    query = update.inline_query
+    qid = query.id
+    uid = query.from_user.id
+    off = int(query.offset) if query.offset else 0
+
+    results = []
+    noff = ""
+
+    try:
+        try:
+            results, noff = await asyncio.wait_for(
+                _build_results(query, off, uid, qid), timeout=8.0,
+            )
+        except asyncio.TimeoutError:
+            LOGGER.warning("[INLINE] build timeout — answering empty")
+            results, noff = [], ""
+        except Exception as e:
+            LOGGER.exception(f"[INLINE] build error: {e}")
+            results, noff = [], ""
+
+        # Guarantee at least one result so Telegram never spins forever
+        if not results:
+            results = [InlineQueryResultArticle(
+                id=hashlib.md5(f"empty{qid}".encode()).hexdigest(),
+                title=sc("no results"),
+                description=sc("try another keyword"),
+                input_message_content=InputTextMessageContent(
+                    f"<b>{sc('no characters found')}</b>",
+                    parse_mode=ParseMode.HTML,
+                ),
+            )]
+
+        kwargs = {
+            'cache_time': 3,
+            'is_personal': True,
+        }
+        if noff:
+            kwargs['next_offset'] = noff
+
+        await query.answer(results, **kwargs)
 
     except Exception as e:
-        LOGGER.exception(f"Inline query error: {e}")
+        LOGGER.exception(f"[INLINE] answer failed: {e}")
         try:
             await query.answer([], cache_time=1, is_personal=True)
         except Exception:
@@ -618,21 +743,23 @@ async def chosen_inline_result(update: Update, context) -> None:
     try:
         result = update.chosen_inline_result
         rid = result.result_id
-        cid_raw = rid.split('|', 1)[0]
-        cidc = ''.join(filter(str.isalnum, cid_raw))
-        fk = f'pick_{cidc}'
-        feedback_cache[fk] = feedback_cache.get(fk, 0) + 1
+        cid = result_id_map.get(rid)
+        if cid:
+            fk = f'pick_{cid}'
+            feedback_cache[fk] = feedback_cache.get(fk, 0) + 1
         qk = f'query_{result.from_user.id}'
         feedback_cache[qk] = result.query
     except Exception as e:
         LOGGER.error(f"chosen_inline_result: {e}")
 
 
+# =========================================================
+# Callbacks
+# =========================================================
 async def show_owners(update: Update, context) -> None:
     q = update.callback_query
     try:
         data = q.data.split('.', 1)[1]
-
         if ':' in data:
             cid, page_str = data.split(':', 1)
             page = int(page_str)
@@ -653,32 +780,31 @@ async def show_owners(update: Update, context) -> None:
         await q.answer()
 
         cap = owners_caption(ch, owners, page)
+        UPP = 10
+        total_pages = max(1, (len(owners) + UPP - 1) // UPP)
 
-        USERS_PER_PAGE = 10
-        total_pages = max(1, (len(owners) + USERS_PER_PAGE - 1) // USERS_PER_PAGE)
-
-        nav_buttons = []
+        nav = []
         if page > 0:
-            nav_buttons.append(InlineKeyboardButton(
-                sc("⋞ prev"), callback_data=f"o.{cid}:{page-1}"))
+            nav.append(InlineKeyboardButton(sc("⋞ prev"),
+                                            callback_data=f"o.{cid}:{page-1}"))
         if page < total_pages - 1:
-            nav_buttons.append(InlineKeyboardButton(
-                sc("next ⋟"), callback_data=f"o.{cid}:{page+1}"))
+            nav.append(InlineKeyboardButton(sc("next ⋟"),
+                                            callback_data=f"o.{cid}:{page+1}"))
 
-        kbd_layout = []
-        if nav_buttons:
-            kbd_layout.append(nav_buttons)
-
-        kbd_layout.append([
+        layout = []
+        if nav:
+            layout.append(nav)
+        layout.append([
             InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"),
             InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}"),
         ])
-        kbd_layout.append([
-            InlineKeyboardButton(sc("⤿ inline"),
-                                 switch_inline_query_current_chat=cid),
-        ])
+        if cid and len(str(cid)) <= 200 and not any(ch.isspace() for ch in str(cid)):
+            layout.append([
+                InlineKeyboardButton(sc("⤿ inline"),
+                                     switch_inline_query_current_chat=str(cid)),
+            ])
 
-        kbd = InlineKeyboardMarkup(kbd_layout)
+        kbd = InlineKeyboardMarkup(layout)
         await q.edit_message_caption(
             caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
     except Exception as e:
@@ -699,7 +825,6 @@ async def back_card(update: Update, context) -> None:
             return
 
         await q.answer()
-
         uid = q.from_user.id
         cap = minimal_caption(ch, uid=uid)
         kbd = create_kbd(cid, uid)
@@ -723,20 +848,20 @@ async def show_stats(update: Update, context) -> None:
             return
 
         owners = await get_owners(cid, 100)
-
         await q.answer()
 
         cap = stats_caption(ch, owners)
-        kbd = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"),
-                InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}:0"),
-            ],
-            [
+        layout = [[
+            InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"),
+            InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}:0"),
+        ]]
+        if cid and len(str(cid)) <= 200 and not any(ch.isspace() for ch in str(cid)):
+            layout.append([
                 InlineKeyboardButton(sc("⤿ inline"),
-                                     switch_inline_query_current_chat=cid),
-            ],
-        ])
+                                     switch_inline_query_current_chat=str(cid)),
+            ])
+
+        kbd = InlineKeyboardMarkup(layout)
         await q.edit_message_caption(
             caption=cap, parse_mode=ParseMode.HTML, reply_markup=kbd)
     except Exception as e:
@@ -748,10 +873,27 @@ async def show_stats(update: Update, context) -> None:
 
 
 # =========================================================
-# Handlers — InlineQuery uses default block=True (reliable)
+# Handler registration
 # =========================================================
 application.add_handler(InlineQueryHandler(inlinequery))
 application.add_handler(ChosenInlineResultHandler(chosen_inline_result, block=False))
 application.add_handler(CallbackQueryHandler(show_owners, pattern=r'^o\.', block=False))
 application.add_handler(CallbackQueryHandler(back_card, pattern=r'^b\.', block=False))
 application.add_handler(CallbackQueryHandler(show_stats, pattern=r'^s\.', block=False))
+
+
+# =========================================================
+# Background warm-up (non-blocking)
+# =========================================================
+def _bootstrap_preload():
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_load_all_chars())
+    except RuntimeError:
+        pass
+
+
+try:
+    _bootstrap_preload()
+except Exception:
+    pass
