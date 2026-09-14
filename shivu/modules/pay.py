@@ -60,7 +60,7 @@ async def pay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"py_n_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
+        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"5472030678633684592\">💸</tg-emoji> {amount} ᴄᴏɪɴꜱ ᴛᴏ {receiver.mention_html()}?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
@@ -149,7 +149,7 @@ async def tpay_cmd(update: Update, context: CallbackContext):
         InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"pt_n_{sender.id}")
     ]]
     await update.message.reply_text(
-        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"6109593993627050230\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ</b> {receiver.mention_html()}<b>?</b>",
+        f"<b>ᴀʀᴇ ʏᴏᴜ ꜱᴜʀᴇ ᴛᴏ ꜱᴇɴᴅ <tg-emoji emoji-id=\"6109593993627050230\">💠</tg-emoji> {amount} ᴛᴏᴋᴇɴꜱ ᴛᴏ {receiver.mention_html()}?</b>",
         reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
     )
 
