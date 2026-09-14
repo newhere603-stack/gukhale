@@ -99,6 +99,28 @@ def get_rarity_display(rarity_str) -> str:
     _, prem_emoji, disp_name = RARITIES[key]
     return f"{prem_emoji} <b>{to_small_caps(disp_name)}</b>"
 
+# 🔥 NEW: Normalize ID (09 → 9) for perfect matching (check code jaisa)
+def normalize_id(cid) -> str:
+    cid_str = str(cid).strip()
+    if cid_str.isdigit():
+        return cid_str.lstrip('0') or '0'
+    return cid_str
+
+def get_search_ids(cid) -> list:
+    """Generates all possible ID combos (string + int) to match DB perfectly."""
+    cid_str = str(cid)
+    search_ids = [cid_str]
+    if cid_str.isdigit():
+        cleaned = cid_str.lstrip('0') or '0'
+        search_ids.extend([
+            cleaned,              # "9"
+            cleaned.zfill(2),     # "09"
+            cleaned.zfill(3),     # "009"
+            cleaned.zfill(4),     # "0009"
+            int(cleaned)          # 9 (Integer)
+        ])
+    return list(set(search_ids))
+
 # --- ✨ UPGRADED MODERN UI STYLES ---
 class Style:
     GIFT = '<tg-emoji emoji-id="5255861796350224063">💖</tg-emoji> <b>' + to_small_caps("gift transfer hub") + '</b> <tg-emoji emoji-id="5255861796350224063">💖</tg-emoji>'
@@ -117,14 +139,16 @@ async def send_log(context: CallbackContext, text: str):
     except Exception as e:
         LOGGER.error(f"Log failed: {e}")
 
-# 🔥 ADVANCED MEDIA HANDLER (Bulletproof with fallbacks)
-async def reply_media_message(message, media_url, caption, reply_markup=None):
+# 🔥 ADVANCED MEDIA HANDLER (Bulletproof with fallbacks + is_video hint support)
+async def reply_media_message(message, media_url, caption, reply_markup=None, is_video_hint=None):
     if not media_url:
         try: return await message.reply_text(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         except Exception: return await message.chat.send_message(text=caption, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
     is_video_url = False
-    if isinstance(media_url, str):
+    if is_video_hint is True:
+        is_video_url = True
+    elif isinstance(media_url, str):
         url_lower = media_url.lower()
         if any(url_lower.endswith(ext) for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v']) or any(pattern in url_lower for pattern in ['/video/', '/videos/', 'video=', 'v=', '.mp4?', '/stream/']):
             is_video_url = True
@@ -201,8 +225,15 @@ async def check_receiver_inventory_size(receiver_id: int) -> bool:
     # Hamesha True bypass unlimited ke liye
     return True
 
-# --- 🔥 BULK GIFT CORE LOGIC ---
+# --- 🔥 BULK GIFT CORE LOGIC (LIVE UPDATE FIX) ---
 async def get_owned_char_and_global(sender_id, char_id_input_str, owned_map=None):
+    """
+    Step 1: Ownership validate karne ke liye owned_char dhoondo.
+    Step 2: Display/Media ke liye ALWAYS fresh global collection se fetch karo
+            (isliye photo/rarity/name change hote hi turant live update dikhega).
+    """
+    # ---------- STEP 1: Find owned_char (ownership only) ----------
+    owned_char = None
     if owned_map and char_id_input_str in owned_map:
         owned_char = owned_map[char_id_input_str]
     else:
@@ -210,7 +241,6 @@ async def get_owned_char_and_global(sender_id, char_id_input_str, owned_map=None
         sender_data = await user_collection.find_one({'id': sender_id})
         if not sender_data: return None, None
 
-        owned_char = None
         for c in sender_data.get('characters', []):
             c_id = c.get('id')
             if str(c_id) == char_id_input_str:
@@ -225,14 +255,17 @@ async def get_owned_char_and_global(sender_id, char_id_input_str, owned_map=None
 
     if not owned_char: return None, None
 
-    global_char = owned_char
-    if 'img_url' not in global_char or 'name' not in global_char:
-        search_query = [{'id': char_id_input_str}]
-        char_id_input_int = int(char_id_input_str) if char_id_input_str.isdigit() else None
-        if char_id_input_int is not None:
-            search_query.extend([{'id': char_id_input_int}, {'id': str(char_id_input_int)}])
-        db_char = await collection.find_one({'$or': search_query})
-        if db_char: global_char = db_char
+    # ---------- STEP 2: ALWAYS fetch fresh display data from global collection ----------
+    global_char = dict(owned_char)  # fallback if global missing
+    try:
+        search_ids = get_search_ids(char_id_input_str)
+        db_char = await collection.find_one({'id': {'$in': search_ids}})
+        if db_char:
+            # Fresh global data use karo (live photo/name/rarity/anime update ke liye)
+            global_char = dict(db_char)
+    except Exception as e:
+        LOGGER.error(f"Global char fetch failed: {e}")
+
     return owned_char, global_char
 
 async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_obj, owned_map):
@@ -242,7 +275,6 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
         owned_char, global_char = await get_owned_char_and_global(sender_id, next_id_str, owned_map)
 
         if not owned_char:
-            # Ye fallback case hai, pre-validation ke baad ye kabhi nahi hona chahiye
             warning_text = f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc(f"you dont own character id {next_id_str}, skipping...")}'
             try: warning_msg = await message_obj.reply_text(warning_text, parse_mode=ParseMode.HTML)
             except Exception: warning_msg = await message_obj.chat.send_message(warning_text, parse_mode=ParseMode.HTML)
@@ -258,7 +290,7 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
             break
 
         pending_gifts[sender_id] = {
-            'character': global_char,
+            'character': global_char,               # Fresh global data (live)
             'receiver_id': receiver_user.id,
             'receiver_name': receiver_user.first_name,
             'receiver_user': receiver_user,
@@ -266,7 +298,7 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
             'created_at': datetime.now(timezone.utc),
             'queue': queue,
             'chat_id': chat_id,
-            'owned_map': owned_map # Passed for next iterations
+            'owned_map': owned_map
         }
 
         timeout_text = to_small_caps(f"confirm within {GIFT_TIMEOUT}s to send.")
@@ -287,7 +319,14 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
             InlineKeyboardButton(to_small_caps("cancel"), callback_data=f"gift_v:{sender_id}")
         ]]
 
-        sent_msg = await reply_media_message(message_obj, global_char.get('img_url'), caption, InlineKeyboardMarkup(keyboard))
+        # is_video hint bhi pass kar rahe hain (agar DB me set hai to)
+        sent_msg = await reply_media_message(
+            message_obj,
+            global_char.get('img_url'),
+            caption,
+            InlineKeyboardMarkup(keyboard),
+            is_video_hint=global_char.get('is_video')
+        )
 
         if sent_msg:
             pending_gifts[sender_id]['message_id'] = sent_msg.message_id
@@ -298,7 +337,7 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
             if sender_id in pending_gifts: await cleanup_pending_gift(sender_id, sent_msg)
 
         gift_tasks[sender_id] = asyncio.create_task(expire())
-        break # Loop yahin rukega jab tak banda confirm ya cancel nahi karta!
+        break
 
 # --- HANDLERS ---
 async def handle_gift_command(update: Update, context: CallbackContext):
@@ -322,7 +361,6 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
 
-        # Ek baari me maximum 30 gifts queue kar sakte hain
         char_ids = [str(arg) for arg in context.args][:30]
 
         if sender_id in pending_gifts:
@@ -330,24 +368,26 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
 
-        # Fetch sender data ONCE to optimize speed and avoid multiple DB calls
         sender_data = await user_collection.find_one({'id': sender_id})
         if not sender_data:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own any characters.")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
 
-        # Create a quick lookup map for owned characters (O(1) lookup)
+        # 🔥 Owned map with powerful ID normalization (09, 9, 009 sab match)
         owned_map = {}
         for c in sender_data.get('characters', []):
-            cid = str(c.get('id'))
+            cid_raw = c.get('id')
+            cid = str(cid_raw)
             owned_map[cid] = c
-            try:
-                owned_map[str(int(cid))] = c # Handle integer ID edge cases
-            except ValueError:
-                pass
+            if cid.isdigit():
+                cleaned = cid.lstrip('0') or '0'
+                owned_map[cleaned] = c
+                owned_map[cleaned.zfill(2)] = c
+                owned_map[cleaned.zfill(3)] = c
+                owned_map[cleaned.zfill(4)] = c
 
-        # Pre-validate all IDs to prevent MULTIPLE warning messages (Fixes Double Response)
+        # Pre-validate all IDs (single warning for all invalid)
         valid_queue = []
         invalid_ids = []
         for arg in char_ids:
@@ -357,15 +397,13 @@ async def handle_gift_command(update: Update, context: CallbackContext):
                 invalid_ids.append(arg)
 
         if invalid_ids:
-            # Single warning message for all invalid IDs
             warn_text = f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own character id(s): " + ", ".join(invalid_ids) + ". skipping...")}'
             sent_msg = await msg.reply_text(warn_text, parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg, 15)
 
         if not valid_queue:
-            return # No valid characters to gift, stop here
+            return
 
-        # Bulk Gift Chain Start with valid characters only!
         await trigger_next_gift(sender_id, receiver, valid_queue, msg.chat.id, msg, owned_map)
 
     except Exception as e:
@@ -500,7 +538,6 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 )
                 asyncio.create_task(send_log(context, log_msg))
 
-                # 🔥 Success hone ke baad check karega ki koi aur gift pending hai ya nahi
                 if queue and receiver_user and query.message:
                     await trigger_next_gift(sender_id, receiver_user, queue, chat_id, query.message, owned_map)
 
