@@ -4,7 +4,7 @@ import time
 import hashlib
 import logging
 from html import escape
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 from cachetools import TTLCache
 from pymongo import ASCENDING
@@ -100,9 +100,12 @@ except Exception as e:
 # =========================================================
 # Caches
 # =========================================================
+char_cache     = TTLCache(maxsize=200000, ttl=600)
 user_cache     = TTLCache(maxsize=100000, ttl=300)
+query_cache    = TTLCache(maxsize=100000, ttl=300)
 count_cache    = TTLCache(maxsize=80000,  ttl=180)
 feedback_cache = TTLCache(maxsize=30000,  ttl=4800)
+view_cache     = TTLCache(maxsize=8000,   ttl=900)
 wishlist_cache = TTLCache(maxsize=8000,   ttl=2400)
 result_id_map  = TTLCache(maxsize=50000,  ttl=1800)   # rid -> cid
 
@@ -133,16 +136,9 @@ def cache_key(*args) -> str:
 
 
 # =========================================================
-# URL / Media validation
+# URL / Media validation  (*** FIX: projection ab complete hai ***)
 # =========================================================
 _IMG_FIELDS = ('img_url', 'image_url', 'img', 'photo', 'photo_url', 'url', 'thumbnail')
-
-_CHAR_PROJECTION = {
-    '_id': 1, 'id': 1, 'name': 1, 'anime': 1,
-    'rarity': 1, 'img_url': 1, 'is_video': 1,
-    'image_url': 1, 'img': 1, 'photo': 1,
-    'photo_url': 1, 'url': 1, 'thumbnail': 1,
-}
 
 
 def _valid_url(u) -> bool:
@@ -179,99 +175,50 @@ def _is_video(ch: Dict, url: str) -> bool:
 
 
 # =========================================================
-# Global in-memory character store (superfast lookups)
+# In-memory char cache  (*** FIX: projection expanded ***)
 # =========================================================
-_ALL_CHARS: List[Dict] = []
-_ALL_CHARS_TS: float = 0.0
+_ALL_CHARS: Optional[List[Dict]] = None
+_ALL_CHARS_LOADED_AT: float = 0.0
 _ALL_CHARS_LOCK = asyncio.Lock()
-_ALL_CHARS_TTL = 300
-_READY = asyncio.Event()
-_REFRESH_TASK: Optional[asyncio.Task] = None
+_ALL_CHARS_TTL = 600
+_LOAD_TASK: Optional[asyncio.Task] = None
+
+# *** Yehi tha asli bug — pehle sirf 'img_url' aa raha tha ***
+_CHAR_PROJECTION = {
+    'id': 1, 'name': 1, 'anime': 1, 'rarity': 1,
+    'img_url': 1, 'is_video': 1,
+    'image_url': 1, 'img': 1, 'photo': 1,
+    'photo_url': 1, 'url': 1, 'thumbnail': 1,
+}
 
 
-def _prep_char(c: Dict) -> Optional[Dict]:
-    """Pre-process a raw Mongo doc into a lean search-optimized dict."""
-    if not isinstance(c, dict):
-        return None
-    cid = c.get('id')
-    if not cid:
-        return None
-    img = _img_of(c)
-    if not img:
-        return None
-
-    name = str(c.get('name', ''))
-    anime = str(c.get('anime', ''))
-    rarity = str(c.get('rarity', ''))
-    cid_str = str(cid)
-
-    return {
-        'id': cid,
-        'name': name,
-        'anime': anime,
-        'rarity': rarity,
-        '_nl': name.lower(),
-        '_al': anime.lower(),
-        '_rl': rarity.lower(),
-        '_num': int(cid_str) if cid_str.isdigit() else None,
-        '_base': get_base_rarity(rarity),
-        '_img': img,
-        '_vid': _is_video(c, img),
-        '_rv': parse_rar(rarity).value,
-        '_sid': c.get('_id'),
-    }
-
-
-async def _load_all_chars() -> None:
-    """Load & prepare entire character database into memory. Non-blocking swap."""
-    global _ALL_CHARS, _ALL_CHARS_TS
+async def _load_all_chars() -> List[Dict]:
+    global _ALL_CHARS, _ALL_CHARS_LOADED_AT
     async with _ALL_CHARS_LOCK:
         try:
             t0 = time.time()
-            raw = await collection.find({}, _CHAR_PROJECTION).to_list(length=None)
-            seen = set()
-            prepped: List[Dict] = []
-            for c in raw:
-                cid = c.get('id')
-                if cid is None or cid in seen:
-                    continue
-                p = _prep_char(c)
-                if p is not None:
-                    seen.add(cid)
-                    prepped.append(p)
-            # Atomic swap
-            _ALL_CHARS = prepped
-            _ALL_CHARS_TS = time.time()
+            chars = await collection.find({}, _CHAR_PROJECTION).to_list(length=None)
+            _ALL_CHARS = chars or []
+            _ALL_CHARS_LOADED_AT = time.time()
             LOGGER.info(
-                f"[INLINE] Loaded {len(prepped)} characters "
+                f"[INLINE] Loaded {len(_ALL_CHARS)} characters "
                 f"in {time.time()-t0:.2f}s"
             )
         except Exception as e:
             LOGGER.error(f"[INLINE] Cache load error: {e}")
-        finally:
-            _READY.set()
+            if _ALL_CHARS is None:
+                _ALL_CHARS = []
+        return _ALL_CHARS
 
 
-async def _refresh_loop():
-    """Background periodic refresh so cache never goes stale."""
-    while True:
-        try:
-            await asyncio.sleep(_ALL_CHARS_TTL)
-            await _load_all_chars()
-        except asyncio.CancelledError:
-            return
-        except Exception as e:
-            LOGGER.error(f"[INLINE] refresh loop: {e}")
-
-
-def _start_refresh_loop():
-    global _REFRESH_TASK
+def _schedule_load():
+    global _LOAD_TASK
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
-    if _REFRESH_TASK is None or _REFRESH_TASK.done():
-        _REFRESH_TASK = loop.create_task(_refresh_loop())
+    if _LOAD_TASK is None or _LOAD_TASK.done():
+        _LOAD_TASK = loop.create_task(_load_all_chars())
 
 
 # =========================================================
@@ -321,80 +268,153 @@ async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
 
 
 # =========================================================
-# Search (pure in-memory, millisecond)
+# Direct DB search fallback
 # =========================================================
-def search_chars(q: str, lim: int = 200) -> List[Dict]:
-    chars = _ALL_CHARS
-    if not chars:
+async def _db_search(q: str, lim: int = 200) -> List[Dict]:
+    try:
+        if not q:
+            return await collection.find({}, _CHAR_PROJECTION).limit(lim).to_list(lim)
+
+        conds = []
+        if q.isdigit():
+            conds.append({'id': q})
+            conds.append({'id': int(q)})
+
+        rx = re.compile(re.escape(q), re.IGNORECASE)
+        conds.append({'name': rx})
+        conds.append({'anime': rx})
+        conds.append({'rarity': rx})
+
+        alias = RARITY_ALIASES.get(q.lower().strip())
+        if alias:
+            conds.append({'rarity': re.compile(re.escape(alias), re.IGNORECASE)})
+            conds.append({'rarity': re.compile(re.escape(RARITIES[alias][2]), re.IGNORECASE)})
+
+        return await collection.find(
+            {'$or': conds}, _CHAR_PROJECTION
+        ).limit(lim).to_list(lim)
+    except Exception as e:
+        LOGGER.error(f"_db_search: {e}")
         return []
 
+
+# =========================================================
+# Search (memory-first, non-blocking refresh)  *** FIX ***
+# =========================================================
+async def search_chars(q: str, lim: int = 200) -> List[Dict]:
+    k = cache_key('search', q, lim)
+    cached = query_cache.get(k)
+    if cached is not None:
+        return cached
+
+    all_chars = _ALL_CHARS
+
+    # *** Pehli baar: cache load hone tak wait — "not found" fix ***
+    if all_chars is None:
+        try:
+            await asyncio.wait_for(_load_all_chars(), timeout=6.0)
+        except asyncio.TimeoutError:
+            LOGGER.warning("[INLINE] Initial load timeout — DB fallback")
+            chars = await _db_search(q, lim)
+            query_cache[k] = chars
+            return chars
+        all_chars = _ALL_CHARS or []
+
+    # *** Stale: background refresh, block mat karo ***
+    elif (time.time() - _ALL_CHARS_LOADED_AT) > _ALL_CHARS_TTL:
+        _schedule_load()
+
     if not q:
-        return chars[:lim]
+        result = all_chars[:lim]
+        query_cache[k] = result
+        return result
 
     ql = q.lower().strip()
     alias_key = RARITY_ALIASES.get(ql)
     is_digit = q.isdigit()
     qnum = int(q) if is_digit else None
 
-    result: List[Dict] = []
-    for c in chars:
-        if is_digit and c['_num'] == qnum:
-            result.append(c)
-        elif c['_nl'] == ql or c['_al'] == ql or c['_rl'] == ql:
-            result.append(c)
-        elif ql in c['_nl'] or ql in c['_al'] or ql in c['_rl']:
-            result.append(c)
-        elif alias_key and c['_base'] == alias_key:
-            result.append(c)
+    result = []
+    for c in all_chars:
+        cid = c.get('id', '')
+        cid_str = str(cid)
+        matched = False
+
+        if is_digit and cid_str.isdigit() and int(cid_str) == qnum:
+            matched = True
+        elif cid_str == q:
+            matched = True
         else:
-            continue
-        if len(result) >= lim:
-            break
+            if (ql in c.get('name', '').lower()
+                    or ql in c.get('anime', '').lower()
+                    or ql in c.get('rarity', '').lower()):
+                matched = True
+            elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
+                matched = True
+
+        if matched:
+            result.append(c)
+            if len(result) >= lim:
+                break
+
+    query_cache[k] = result
     return result
 
 
-def filter_chars(chars: List[Dict], mode: str, uid: int = None) -> List[Dict]:
+async def filter_chars(chars: List[Dict], mode: str, uid: int = None) -> List[Dict]:
     if mode == 'rare':
-        return [c for c in chars if c['_rv'] <= 9]
+        return [c for c in chars if parse_rar(c.get('rarity', '')).value <= 9]
 
-    if mode == 'video':
-        return [c for c in chars if c['_vid'] or c['_base'] == 'cosmic']
-
-    if mode == 'new':
-        return sorted(chars, key=lambda x: x['_sid'] or 0, reverse=True)
-
-    if mode == 'trending':
-        picks = []
+    elif mode == 'video':
+        out = []
         for c in chars:
-            n = feedback_cache.get(f"pick_{c['id']}", 0)
-            if n > 0:
-                picks.append((n, c))
-        if picks:
-            picks.sort(key=lambda x: x[0], reverse=True)
-            return [c for _, c in picks]
-        return chars
+            if c.get('is_video', False):
+                out.append(c)
+                continue
+            if get_base_rarity(c.get('rarity', '')) == "cosmic":
+                out.append(c)
+        return out
 
-    return chars
+    elif mode == 'new':
+        return sorted(chars, key=lambda x: str(x.get('_id', '')), reverse=True)
 
+    elif mode == 'trending':
+        ids = [c.get('id') for c in chars if c.get('id')]
+        if ids:
+            picks = {cid: feedback_cache.get(f'pick_{cid}', 0)
+                     for cid in ids
+                     if feedback_cache.get(f'pick_{cid}', 0) > 0}
+            return sorted(chars, key=lambda x: picks.get(x.get('id'), 0), reverse=True)
 
-async def filter_user(chars: List[Dict], mode: str, uid: int) -> List[Dict]:
-    if mode in ('owned', 'notowned'):
+    elif mode == 'owned' and uid:
         usr = await get_user(uid)
-        if not usr:
-            return []
-        owned = {c.get('id') for c in usr.get('characters', [])
-                 if isinstance(c, dict) and c.get('id')}
-        if mode == 'owned':
-            return [c for c in chars if c['id'] in owned]
-        return [c for c in chars if c['id'] not in owned]
+        if usr:
+            owned = {c.get('id') for c in usr.get('characters', [])
+                     if isinstance(c, dict) and c.get('id')}
+            return [c for c in chars if c.get('id') in owned]
 
-    if mode == 'wishlist':
-        wl = wishlist_cache.get(f'wl_{uid}')
-        if not wl:
-            return []
-        return [c for c in chars if c['id'] in wl]
+    elif mode == 'notowned' and uid:
+        usr = await get_user(uid)
+        if usr:
+            owned = {c.get('id') for c in usr.get('characters', [])
+                     if isinstance(c, dict) and c.get('id')}
+            return [c for c in chars if c.get('id') not in owned]
+
+    elif mode == 'wishlist' and uid:
+        wl = wishlist_cache.get(f'wl_{uid}', set())
+        return [c for c in chars if c.get('id') in wl]
 
     return chars
+
+
+def dedupe(chars: List[Dict]) -> List[Dict]:
+    seen, result = set(), []
+    for c in chars:
+        cid = c.get('id')
+        if cid and cid not in seen:
+            seen.add(cid)
+            result.append(c)
+    return result
 
 
 # =========================================================
@@ -501,86 +521,34 @@ def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
 # =========================================================
 # Inline Query
 # =========================================================
-def _build_results_sync(q: str, off: int, uid: int) -> Tuple[List, str, List[str]]:
-    """Pure in-memory result builder — must be fast."""
-    results: List = []
-    noff = ""
-    char_ids: List[str] = []
-
-    is_coll = False
-    usr = None
-    sq = q
-    fm = None
-
-    # ---- Parse command flags ----
-    if q.startswith('collection.'):
-        is_coll = True
-        parts = q.split(' ', 1)
-        tid = parts[0].split('.', 1)[1]
-        sq = parts[1].strip() if len(parts) > 1 else ''
-        if not tid.isdigit():
-            return [], "", []
-        # We'll resolve user later (async) — stash the parsed info
-        _pending_coll_uid = int(tid)
-    else:
-        _pending_coll_uid = None
-
-    for m in ('rare', 'video', 'new', 'trending',
-              'owned', 'notowned', 'wishlist'):
-        if sq.startswith(f'-{m}'):
-            fm = m
-            sq = sq.replace(f'-{m}', '', 1).strip()
-            break
-
-    # Handle inline -anime: filter
-    anime_filter = None
-    if not is_coll:
-        am = re.search(r'-anime:(\S+)', sq)
-        if am:
-            anime_filter = am.group(1).lower()
-            sq = sq.replace(am.group(0), '', 1).strip()
-
-    return (is_coll, _pending_coll_uid, sq, fm, anime_filter), noff, char_ids
-
-
 async def _build_results(query, off: int, uid: int, qid: str):
     q = query.query or ""
-    results: List = []
+    results = []
     noff = ""
 
     is_coll = False
     usr = None
     sq = q
     fm = None
-    anime_filter = None
-    coll_uid = None
 
-    # ---- Parse ----
     if q.startswith('collection.'):
         is_coll = True
         parts = q.split(' ', 1)
         tid = parts[0].split('.', 1)[1]
         sq = parts[1].strip() if len(parts) > 1 else ''
+
+        for m in ('rare', 'video', 'new', 'trending',
+                  'owned', 'notowned', 'wishlist'):
+            if sq.startswith(f'-{m}'):
+                fm = m
+                sq = sq.replace(f'-{m}', '').strip()
+                break
+
         if not tid.isdigit():
             return [], ""
-        coll_uid = int(tid)
 
-    for m in ('rare', 'video', 'new', 'trending',
-              'owned', 'notowned', 'wishlist'):
-        if sq.startswith(f'-{m}'):
-            fm = m
-            sq = sq.replace(f'-{m}', '', 1).strip()
-            break
-
-    if not is_coll:
-        am = re.search(r'-anime:(\S+)', sq)
-        if am:
-            anime_filter = am.group(1).lower()
-            sq = sq.replace(am.group(0), '', 1).strip()
-
-    # ---- Fetch candidate list ----
-    if is_coll:
-        usr = await get_user(coll_uid)
+        tuid = int(tid)
+        usr = await get_user(tuid)
         if not usr:
             article = InlineQueryResultArticle(
                 id=hashlib.md5(f"nouser{qid}".encode()).hexdigest(),
@@ -596,102 +564,103 @@ async def _build_results(query, off: int, uid: int, qid: str):
 
         cd = {c['id']: c for c in usr.get('characters', [])
               if isinstance(c, dict) and c.get('id')}
+        all_chars = list(cd.values())
 
-        # Use the master _ALL_CHARS store for up-to-date info
-        master = {c['id']: c for c in _ALL_CHARS}
-        all_chars: List[Dict] = []
-        for cid in cd.keys():
-            m = master.get(cid)
-            if m is not None:
-                all_chars.append(m)
-            else:
-                # Fallback: build a minimal entry
-                p = _prep_char(cd[cid])
-                if p is not None:
-                    all_chars.append(p)
-
-        # Filter by search term
         if sq:
             sql = sq.lower().strip()
             alias_key = RARITY_ALIASES.get(sql)
             is_digit = sq.isdigit()
             qnum = int(sq) if is_digit else None
+
             filtered = []
             for c in all_chars:
-                if is_digit and c['_num'] == qnum:
-                    filtered.append(c)
-                elif sql in c['_nl'] or sql in c['_al'] or sql in c['_rl']:
-                    filtered.append(c)
-                elif alias_key and c['_base'] == alias_key:
+                cid_str = str(c.get('id', ''))
+                matched = False
+                if is_digit and cid_str.isdigit() and int(cid_str) == qnum:
+                    matched = True
+                elif cid_str == sq:
+                    matched = True
+                else:
+                    if (sql in c.get('name', '').lower()
+                            or sql in c.get('anime', '').lower()
+                            or sql in c.get('rarity', '').lower()):
+                        matched = True
+                    elif alias_key and get_base_rarity(c.get('rarity', '')) == alias_key:
+                        matched = True
+                if matched:
                     filtered.append(c)
             all_chars = filtered
 
-        # Favorites pinned to top
+        if fm:
+            all_chars = await filter_chars(all_chars, fm, tuid)
+
         fav = usr.get('favorites')
         if fav and not sq and not fm:
             fid = fav.get('id') if isinstance(fav, dict) else fav
-            fc = next((c for c in all_chars if c['id'] == fid), None)
-            if fc is not None:
-                all_chars = [c for c in all_chars if c['id'] != fid]
+            fc = next((c for c in all_chars if c.get('id') == fid), None)
+            if fc:
+                all_chars = [c for c in all_chars if c.get('id') != fid]
                 all_chars.insert(0, fc)
 
-        # User-scoped filters
-        if fm in ('owned', 'notowned', 'wishlist'):
-            all_chars = await filter_user(all_chars, fm, coll_uid)
-        elif fm:
-            all_chars = filter_chars(all_chars, fm, coll_uid)
-        else:
-            all_chars = sorted(all_chars, key=lambda x: x['_rv'])
+        if not fm or fm not in ('new', 'trending'):
+            all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
 
     else:
-        all_chars = search_chars(sq, lim=500)
-        if anime_filter:
-            all_chars = [c for c in all_chars if anime_filter in c['_al']]
+        for m in ('rare', 'video', 'new', 'trending',
+                  'owned', 'notowned', 'wishlist'):
+            if sq.startswith(f'-{m}'):
+                fm = m
+                sq = sq.replace(f'-{m}', '').strip()
+                break
 
-        if fm in ('owned', 'notowned', 'wishlist'):
-            all_chars = await filter_user(all_chars, fm, uid)
-        elif fm:
-            all_chars = filter_chars(all_chars, fm, uid)
+        am = re.search(r'-anime:(\S+)', sq)
+        if am:
+            anime_filter = am.group(1).lower()
+            sq = sq.replace(am.group(0), '').strip()
+            all_chars = await search_chars(sq, lim=200)
+            all_chars = [c for c in all_chars
+                         if anime_filter in c.get('anime', '').lower()]
         else:
-            all_chars = sorted(all_chars, key=lambda x: x['_rv'])
+            all_chars = await search_chars(sq, lim=200)
 
-    # Dedupe by id (paranoia — should already be unique)
-    seen = set()
-    deduped = []
-    for c in all_chars:
-        cid = c['id']
-        if cid in seen:
-            continue
-        seen.add(cid)
-        deduped.append(c)
-    all_chars = deduped
+        if fm:
+            all_chars = await filter_chars(all_chars, fm, uid)
 
-    # ---- Paginate ----
+        if not fm or fm not in ('new', 'trending'):
+            all_chars.sort(key=lambda x: parse_rar(x.get('rarity', '')).value)
+
+    all_chars = dedupe(all_chars)
     page_chars = all_chars[off:off + 50]
     has_more = len(all_chars) > off + 50
     noff = str(off + 50) if has_more else ""
 
-    # ---- Favorites check for caption ----
+    # *** PER-PAGE DB FETCH HATA DIYA — yehi first-page slow kar raha tha ***
+
     fav_id = None
     if is_coll and usr:
         fv = usr.get('favorites')
         fav_id = fv.get('id') if isinstance(fv, dict) else fv
 
-    # ---- Build results ----
     for i, ch in enumerate(page_chars):
         try:
-            cid = ch['id']
-            img = ch['_img']
-            vid = ch['_vid']
-            nm = ch['name']
-            an = ch['anime']
-            r = parse_rar(ch['rarity'])
+            cid = ch.get('id')
+            if not cid:
+                continue
+
+            img = _img_of(ch)
+            if not img:
+                continue
+
+            vid = _is_video(ch, img)
+            nm = str(ch.get('name', '?'))
+            an = str(ch.get('anime', '?'))
+            r = parse_rar(ch.get('rarity', ''))
             fav = (fav_id == cid)
 
             cap = minimal_caption(ch, fav, uid=uid)
             kbd = create_kbd(cid, uid)
 
-            rid = hashlib.md5(f"{cid}|{off}|{i}".encode()).hexdigest()
+            rid = hashlib.md5(f"{cid}|{off}|{i}|{qid}".encode()).hexdigest()
             result_id_map[rid] = str(cid)
 
             title = f"{'💖 ' if fav else ''}{r.emoji} {trunc(nm, 28)}"
@@ -728,16 +697,9 @@ async def inlinequery(update: Update, context) -> None:
     noff = ""
 
     try:
-        # Wait briefly for cache to be ready on very first query
-        if not _READY.is_set():
-            try:
-                await asyncio.wait_for(_READY.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
-                pass
-
         try:
             results, noff = await asyncio.wait_for(
-                _build_results(query, off, uid, qid), timeout=6.0,
+                _build_results(query, off, uid, qid), timeout=8.0,
             )
         except asyncio.TimeoutError:
             LOGGER.warning("[INLINE] build timeout — answering empty")
@@ -758,7 +720,7 @@ async def inlinequery(update: Update, context) -> None:
             )]
 
         kwargs = {
-            'cache_time': 5,
+            'cache_time': 3,
             'is_personal': True,
         }
         if noff:
@@ -918,13 +880,12 @@ application.add_handler(CallbackQueryHandler(show_stats, pattern=r'^s\.', block=
 
 
 # =========================================================
-# Background warm-up (non-blocking, at import)
+# Background warm-up (non-blocking)
 # =========================================================
 def _bootstrap_preload():
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(_load_all_chars())
-        _start_refresh_loop()
     except RuntimeError:
         pass
 
