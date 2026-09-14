@@ -17,6 +17,7 @@ from shivu.Database.db import eco_collection as user_collection
 
 # 🔥 SETTINGS
 MAX_BET_LIMIT = 1000000
+HIGH_BET_THRESHOLD = 200000  # 2 lakh: upar 10% win, yahan aur neeche 40% win
 
 def to_small_caps(text: str) -> str:
     small_caps_map = {
@@ -80,6 +81,7 @@ class PendingRiddle:
 class GameState:
     cooldowns: Dict[int, datetime] = field(default_factory=dict)
     riddles: Dict[int, PendingRiddle] = field(default_factory=dict)
+    info_cooldowns: Dict[int, datetime] = field(default_factory=dict)
 
     def check_cooldown(self, user_id: int) -> Optional[float]:
         if last := self.cooldowns.get(user_id):
@@ -90,6 +92,16 @@ class GameState:
 
     def set_cooldown(self, user_id: int):
         self.cooldowns[user_id] = datetime.now(timezone.utc)
+
+    def check_info_cooldown(self, user_id: int) -> Optional[float]:
+        if last := self.info_cooldowns.get(user_id):
+            elapsed = (datetime.now(timezone.utc) - last).total_seconds()
+            if elapsed < CONFIG.cooldown:
+                return CONFIG.cooldown - elapsed
+        return None
+
+    def set_info_cooldown(self, user_id: int):
+        self.info_cooldowns[user_id] = datetime.now(timezone.utc)
 
 
 CONFIG = GameConfig()
@@ -182,9 +194,10 @@ class GameLogic:
     @staticmethod
     def is_win(amount: int) -> bool:
         roll = random.randint(1, 100)
-        if amount > 10000:
+        # 2 lakh se zyada = 10% win, 2 lakh aur usse kam = 40% win
+        if amount > HIGH_BET_THRESHOLD:
             return roll <= 10
-        return roll <= 50
+        return roll <= 40
 
     @staticmethod
     def _get_random_rewards() -> tuple[int, int]:
@@ -246,12 +259,14 @@ class GameLogic:
     def darts(amount: int) -> GameResult:
         roll = random.randint(1, 100)
         
-        if amount > 10000:
+        # same 2 lakh rule: total win chance 10% (high) / 40% (normal)
+        # bullseye is a slice of that total (3% / 12%), rest is normal hit
+        if amount > HIGH_BET_THRESHOLD:
             bullseye_chance = 3
             hit_chance = 10
         else:
-            bullseye_chance = 15
-            hit_chance = 50
+            bullseye_chance = 12
+            hit_chance = 40
             
         if roll <= bullseye_chance:
             bonus_c, bonus_t = GameLogic._get_random_rewards()
@@ -286,8 +301,11 @@ async def send_or_edit_response(update: Update, context: CallbackContext, text: 
         try:
             await update.callback_query.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
             return
-        except Exception:
-            pass
+        except Exception as e:
+            # same text dubara edit = Telegram error, uspe naya message MAT bhejo (spam band)
+            err = str(e).lower()
+            if "not modified" in err or "message is not modified" in err:
+                return
     
     msg = update.callback_query.message if update.callback_query else update.message
     if msg:
@@ -637,8 +655,24 @@ async def games_callback(update: Update, context: CallbackContext):
     action = parts[1]
 
     if action == "info":
-        try: await query.answer()
-        except Exception: pass
+        # pehle cooldown check — popup only, koi extra text message nahi
+        if remaining := game_state.check_info_cooldown(user_id):
+            try:
+                await query.answer(
+                    f"⏱️ ᴡᴀɪᴛ {remaining:.1f}s ʙᴇғᴏʀᴇ ᴄʟɪᴄᴋɪɴɢ ᴀɢᴀɪɴ!",
+                    show_alert=True
+                )
+            except Exception:
+                pass
+            return
+
+        game_state.set_info_cooldown(user_id)
+
+        try:
+            await query.answer()
+        except Exception:
+            pass
+
         game_cmd = parts[2]
         info_texts = {
             "sbet": "<b><tg-emoji emoji-id=\"5379600444098093058\">🪙</tg-emoji> ᴄᴏɪɴ ғʟɪᴘ</b>\nUsage: <code>/sbet &lt;amount&gt; heads|tails</code>",
@@ -649,7 +683,12 @@ async def games_callback(update: Update, context: CallbackContext):
             "stour": f"<b><tg-emoji emoji-id=\"6332514633219315005\">🤝</tg-emoji> ᴄᴏɴᴛʀᴀᴄᴛ</b>\nUsage: <code>/stour</code>\nFee: {CONFIG.stour_entry_fee} coins",
             "riddle": "<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> ʀɪᴅᴅʟᴇ</b>\nUsage: <code>/riddle</code>"
         }
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=info_texts.get(game_cmd, "Unknown Game"), parse_mode="HTML")
+        # naya message MAT bhejo — same message edit hoga, buttons same rahenge
+        await send_or_edit_response(
+            update, context,
+            info_texts.get(game_cmd, "Unknown Game"),
+            GameUI.menu()
+        )
 
     elif action == "repeat":
         if remaining := game_state.check_cooldown(user_id):
