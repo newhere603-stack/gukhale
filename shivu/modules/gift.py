@@ -22,7 +22,7 @@ delete_collection = db['auto_delete_queue']
 # --- CONFIGURATION ---
 LOG_CHANNEL_ID = -1003893927065
 GIFT_TIMEOUT = 60
-MAX_INVENTORY_SIZE = 1000 # Ye ab kisi kaam ka nahi hai kyuki limit hata di hai
+MAX_INVENTORY_SIZE = 1000 
 pending_gifts = {}
 gift_tasks = {}
 
@@ -84,13 +84,10 @@ def canonical_rarity(name: str) -> str:
     if not name:
         return "common"
     n = str(name).strip().lower()
-    # Try alias first
     if n in RARITY_ALIASES:
         return RARITY_ALIASES[n]
-    # Exact key match
     if n in RARITIES:
         return n
-    # Substring match against known keys/names
     for key, (_, _, disp) in RARITIES.items():
         if key in n or disp.lower() in n:
             return key
@@ -205,42 +202,47 @@ async def check_receiver_inventory_size(receiver_id: int) -> bool:
     return True
 
 # --- 🔥 BULK GIFT CORE LOGIC ---
-async def get_owned_char_and_global(sender_id, char_id_input_str):
-    char_id_input_int = int(char_id_input_str) if char_id_input_str.isdigit() else None
-    sender_data = await user_collection.find_one({'id': sender_id})
-    if not sender_data: return None, None
+async def get_owned_char_and_global(sender_id, char_id_input_str, owned_map=None):
+    if owned_map and char_id_input_str in owned_map:
+        owned_char = owned_map[char_id_input_str]
+    else:
+        char_id_input_int = int(char_id_input_str) if char_id_input_str.isdigit() else None
+        sender_data = await user_collection.find_one({'id': sender_id})
+        if not sender_data: return None, None
 
-    owned_char = None
-    for c in sender_data.get('characters', []):
-        c_id = c.get('id')
-        if str(c_id) == char_id_input_str:
-            owned_char = c
-            break
-        if char_id_input_int is not None:
-            try:
-                if int(c_id) == char_id_input_int:
-                    owned_char = c
-                    break
-            except (ValueError, TypeError): pass
+        owned_char = None
+        for c in sender_data.get('characters', []):
+            c_id = c.get('id')
+            if str(c_id) == char_id_input_str:
+                owned_char = c
+                break
+            if char_id_input_int is not None:
+                try:
+                    if int(c_id) == char_id_input_int:
+                        owned_char = c
+                        break
+                except (ValueError, TypeError): pass
 
     if not owned_char: return None, None
 
     global_char = owned_char
     if 'img_url' not in global_char or 'name' not in global_char:
         search_query = [{'id': char_id_input_str}]
+        char_id_input_int = int(char_id_input_str) if char_id_input_str.isdigit() else None
         if char_id_input_int is not None:
             search_query.extend([{'id': char_id_input_int}, {'id': str(char_id_input_int)}])
         db_char = await collection.find_one({'$or': search_query})
         if db_char: global_char = db_char
     return owned_char, global_char
 
-async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_obj):
+async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_obj, owned_map):
     while queue:
         next_id_str = queue.pop(0)
 
-        owned_char, global_char = await get_owned_char_and_global(sender_id, next_id_str)
+        owned_char, global_char = await get_owned_char_and_global(sender_id, next_id_str, owned_map)
 
         if not owned_char:
+            # Ye fallback case hai, pre-validation ke baad ye kabhi nahi hona chahiye
             warning_text = f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc(f"you dont own character id {next_id_str}, skipping...")}'
             try: warning_msg = await message_obj.reply_text(warning_text, parse_mode=ParseMode.HTML)
             except Exception: warning_msg = await message_obj.chat.send_message(warning_text, parse_mode=ParseMode.HTML)
@@ -263,7 +265,8 @@ async def trigger_next_gift(sender_id, receiver_user, queue, chat_id, message_ob
             'message_id': None,
             'created_at': datetime.now(timezone.utc),
             'queue': queue,
-            'chat_id': chat_id
+            'chat_id': chat_id,
+            'owned_map': owned_map # Passed for next iterations
         }
 
         timeout_text = to_small_caps(f"confirm within {GIFT_TIMEOUT}s to send.")
@@ -327,28 +330,45 @@ async def handle_gift_command(update: Update, context: CallbackContext):
             await schedule_auto_delete(sent_msg)
             return
 
-        # Parallel quick check
-        sender_data, is_receiver_valid = await asyncio.gather(
-            user_collection.find_one({'id': sender_id}),
-            check_receiver_inventory_size(receiver.id)
-        )
-
-        if not is_receiver_valid:
-            inv_text = f"receiver inventory is full."
-            sent_msg = await msg.reply_text(f"📦 {bold_sc(inv_text)}", parse_mode=ParseMode.HTML)
-            await schedule_auto_delete(sent_msg)
-            return
-
+        # Fetch sender data ONCE to optimize speed and avoid multiple DB calls
+        sender_data = await user_collection.find_one({'id': sender_id})
         if not sender_data:
             sent_msg = await msg.reply_text(f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own any characters.")}', parse_mode=ParseMode.HTML)
             await schedule_auto_delete(sent_msg)
             return
 
-        # Bulk Gift Chain Start!
-        await trigger_next_gift(sender_id, receiver, char_ids, msg.chat.id, msg)
+        # Create a quick lookup map for owned characters (O(1) lookup)
+        owned_map = {}
+        for c in sender_data.get('characters', []):
+            cid = str(c.get('id'))
+            owned_map[cid] = c
+            try:
+                owned_map[str(int(cid))] = c # Handle integer ID edge cases
+            except ValueError:
+                pass
+
+        # Pre-validate all IDs to prevent MULTIPLE warning messages (Fixes Double Response)
+        valid_queue = []
+        invalid_ids = []
+        for arg in char_ids:
+            if arg in owned_map:
+                valid_queue.append(arg)
+            else:
+                invalid_ids.append(arg)
+
+        if invalid_ids:
+            # Single warning message for all invalid IDs
+            warn_text = f'<tg-emoji emoji-id="6309717264639726942">⚠️</tg-emoji> {bold_sc("you dont own character id(s): " + ", ".join(invalid_ids) + ". skipping...")}'
+            sent_msg = await msg.reply_text(warn_text, parse_mode=ParseMode.HTML)
+            await schedule_auto_delete(sent_msg, 15)
+
+        if not valid_queue:
+            return # No valid characters to gift, stop here
+
+        # Bulk Gift Chain Start with valid characters only!
+        await trigger_next_gift(sender_id, receiver, valid_queue, msg.chat.id, msg, owned_map)
 
     except Exception as e:
-        # Silent Fail
         LOGGER.error(f"Error in handle_gift_command: {e}\n{traceback.format_exc()}")
 
 async def handle_gift_callback(update: Update, context: CallbackContext):
@@ -384,6 +404,7 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
     receiver_user = gift_data.get('receiver_user')
     queue = gift_data.get('queue', [])
     chat_id = gift_data.get('chat_id')
+    owned_map = gift_data.get('owned_map', {})
 
     char_id_str = str(char.get('id'))
     char_id_int = int(char_id_str) if char_id_str.isdigit() else None
@@ -423,9 +444,8 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
             if not found:
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ character no longer available."), show_alert=True)
-                # Agar character id missing thi par aage queue bachi hai to aage badhao
                 if queue and receiver_user and query.message:
-                    await trigger_next_gift(sender_id, receiver_user, queue, chat_id, query.message)
+                    await trigger_next_gift(sender_id, receiver_user, queue, chat_id, query.message, owned_map)
                 return
 
             pull_result = await user_collection.update_one(
@@ -441,7 +461,6 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 receiver_data = await user_collection.find_one({'id': receiver_id}, projection={'_id': 1, 'characters': 1})
 
                 if receiver_data:
-                    # 1000 limit wala condition hata diya gaya hai
                     await user_collection.update_one({'id': receiver_id}, {'$push': {'characters': owned_char}})
                 else:
                     await user_collection.insert_one({
@@ -483,17 +502,16 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
 
                 # 🔥 Success hone ke baad check karega ki koi aur gift pending hai ya nahi
                 if queue and receiver_user and query.message:
-                    await trigger_next_gift(sender_id, receiver_user, queue, chat_id, query.message)
+                    await trigger_next_gift(sender_id, receiver_user, queue, chat_id, query.message, owned_map)
 
             except Exception as push_error:
                 LOGGER.error(f"Push error during gift: {push_error}")
                 await user_collection.update_one({'id': sender_id}, {'$push': {'characters': owned_char}})
                 if query.message: await query.message.delete()
                 await query.answer(to_small_caps("❌ inventory full or transfer failed."), show_alert=True)
-                return # Inventory full pe aage ka queue band
+                return
 
         except Exception as e:
-            # Silent Fail
             LOGGER.error(f"Callback gift_z error: {e}")
             if query.message:
                 try: await query.message.delete()
@@ -505,89 +523,43 @@ async def handle_gift_callback(update: Update, context: CallbackContext):
                 await query.message.delete()
                 await delete_collection.delete_one({'chat_id': query.message.chat.id, 'message_id': query.message.message_id})
             except: pass
-        # Cancel dabane par aage ka queue apne aap dead ho jayega!
 
-# 🔥 SUPER INSTANT SPAM DELETE (User's optimized version integrated)
+# 🔥 SUPER INSTANT SPAM DELETE
 async def instant_delete_spam(update: Update, context: CallbackContext):
     message = update.effective_message
-
-    if not message:
-        return
+    if not message: return
 
     text_parts = []
-
-    # Normal text
-    if message.text:
-        text_parts.append(message.text)
-
-    # Caption
-    if message.caption:
-        text_parts.append(message.caption)
-
-    # Invoice
+    if message.text: text_parts.append(message.text)
+    if message.caption: text_parts.append(message.caption)
     if message.invoice:
         invoice = message.invoice
+        if invoice.title: text_parts.append(invoice.title)
+        if invoice.description: text_parts.append(invoice.description)
 
-        if invoice.title:
-            text_parts.append(invoice.title)
-
-        if invoice.description:
-            text_parts.append(invoice.description)
-
-    # Inline keyboard
     if message.reply_markup:
         for row in message.reply_markup.inline_keyboard:
             for button in row:
-                if button.text:
-                    text_parts.append(button.text)
+                if button.text: text_parts.append(button.text)
 
     full_text = " ".join(text_parts).casefold()
-
-    if not full_text:
-        return
+    if not full_text: return
 
     spam_phrases = (
-        "support our mission",
-        "every donation makes a difference",
-        "spread smiles",
-        "contribute and make an impact",
-        "click to contribute",
-        "make a difference",
-        "support our mission and spread smiles",
-        "donate",
-        "pay ⭐",
-        "pay ⭐️",
+        "support our mission", "every donation makes a difference", "spread smiles",
+        "contribute and make an impact", "click to contribute", "make a difference",
+        "support our mission and spread smiles", "donate", "pay ⭐", "pay ⭐️",
     )
 
-    detected = any(
-        phrase.casefold() in full_text
-        for phrase in spam_phrases
-    )
+    detected = any(phrase.casefold() in full_text for phrase in spam_phrases)
+    if not detected: return
 
-    if not detected:
-        return
-
-    LOGGER.warning(
-        f"🚨 STAR DONATION SPAM DETECTED | "
-        f"chat={message.chat.id} | "
-        f"message={message.message_id}"
-    )
-
+    LOGGER.warning(f"🚨 STAR DONATION SPAM DETECTED | chat={message.chat.id} | message={message.message_id}")
     try:
         await message.delete()
-
-        LOGGER.warning(
-            f"✅ STAR DONATION SPAM DELETED | "
-            f"message={message.message_id}"
-        )
-
+        LOGGER.warning(f"✅ STAR DONATION SPAM DELETED | message={message.message_id}")
     except TelegramError as e:
-        LOGGER.error(
-            f"❌ DELETE FAILED | "
-            f"chat={message.chat.id} | "
-            f"message={message.message_id} | "
-            f"error={e}"
-        )
+        LOGGER.error(f"❌ DELETE FAILED | chat={message.chat.id} | message={message.message_id} | error={e}")
 
 # --- HANDLERS REGISTRATION ---
 application.add_handler(CommandHandler("gift", handle_gift_command))
