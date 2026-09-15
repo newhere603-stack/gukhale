@@ -11,6 +11,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from shivu import db, user_collection, application
 from shivu.modules.database.sudo import is_user_sudo
 
+# Economy DB (Wordseek points ke liye zaroori hai)
+from shivu.Database.db import eco_collection
+
 # 🔥 FIX: check module se clear_char_cache import kiya taaki /give ke baad cache turant clear ho jaye
 try:
     from shivu.modules.check import clear_char_cache
@@ -93,7 +96,6 @@ async def give_character(receiver_id: int, character_id: str) -> CharacterGiftRe
         {'$push': {'characters': character}}
     )
     
-    # 🔥 Instant Cache Invalidation: Jaise hi character mile, cache clear karo
     clear_char_cache(str(character['id']))
     
     char_name = html.escape(character['name'])
@@ -162,45 +164,102 @@ async def give_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
-# 🔥 YAHAN TERA NAYA TRANSFER DB COMMAND HAI
+# ==========================================
+# 🔥 TRANSFER DATABASES (CHARACTERS ONLY)
+# ==========================================
 async def transfer_db_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Sirf OWNER_ID use kar sakta hai
-    if update.effective_user.id != OWNER_ID:
-        return
-
+    if update.effective_user.id != OWNER_ID: return
     if not context.args:
-        await update.message.reply_text("<b>⚠️ Naya URL nahi diya!</b>\nUsage: <code>/transferdb [NAYA_MONGO_URL]</code>", parse_mode=ParseMode.HTML)
-        return
+        return await update.message.reply_text("<b>⚠️ Usage:</b> <code>/transferdb [NEW_MONGO_URL]</code>", parse_mode=ParseMode.HTML)
 
     new_mongo_url = context.args[0]
-    msg = await update.message.reply_text("⏳ <b>Database transfer started in background...</b>\n<i>Fetching characters from old DB...</i>", parse_mode=ParseMode.HTML)
+    msg = await update.message.reply_text("⏳ <b>Transferring Characters...</b>", parse_mode=ParseMode.HTML)
 
     try:
-        # Purane characters fetch karo
         all_chars = await collection.find({}).to_list(length=None)
-        total_chars = len(all_chars)
+        if not all_chars:
+            return await msg.edit_text("❌ <b>No characters found in old database!</b>", parse_mode=ParseMode.HTML)
 
-        if total_chars == 0:
-            await msg.edit_text("❌ <b>Purane database mein koi characters nahi hain!</b>", parse_mode=ParseMode.HTML)
-            return
-
-        await msg.edit_text(f"📦 <b>{total_chars} characters found!</b>\n<i>Connecting to new Database & transferring...</i>", parse_mode=ParseMode.HTML)
-
-        # Naya database connect karo
         new_client = AsyncIOMotorClient(new_mongo_url)
-        new_db = new_client["GRABBING_YOUR_WAIFU"] # Tumhare database ka naam
-        new_col = new_db["anime_characters_lol"]
+        new_col = new_client["GRABBING_YOUR_WAIFU"]["anime_characters_lol"]
 
-        # Pehle naya collection clear karo taaki duplicate ID error na aaye
         await new_col.delete_many({})
-        
-        # Ek sath sara data naye DB mein daal do!
         await new_col.insert_many(all_chars)
 
-        await msg.edit_text(f"✅ <b>BINGO! {total_chars} characters successfully naye MongoDB mein transfer ho gaye!</b> 🎉", parse_mode=ParseMode.HTML)
-
+        await msg.edit_text(f"✅ <b>Successfully transferred {len(all_chars)} characters to the new MongoDB!</b> 🎉", parse_mode=ParseMode.HTML)
     except Exception as e:
         await msg.edit_text(f"❌ <b>Transfer Failed:</b> <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
 
+
+# ==========================================
+# 🔥 TRANSFER GAMES DATA (Active Games + Settings)
+# ==========================================
+async def transfer_games_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID: return
+    if not context.args:
+        return await update.message.reply_text("<b>⚠️ Usage:</b> <code>/transfergames [NEW_MONGO_URL]</code>", parse_mode=ParseMode.HTML)
+
+    new_mongo_url = context.args[0]
+    msg = await update.message.reply_text("⏳ <b>Transferring Games Data (WordSeek & WordGrid)...</b>", parse_mode=ParseMode.HTML)
+
+    try:
+        new_client = AsyncIOMotorClient(new_mongo_url)
+        new_db = new_client[db.name] 
+
+        collections = ['wordseek_games', 'grid_games', 'grid_settings']
+        log_txt = ""
+
+        for col_name in collections:
+            data = await db[col_name].find({}).to_list(length=None)
+            if data:
+                await new_db[col_name].delete_many({})
+                await new_db[col_name].insert_many(data)
+                log_txt += f"✅ <b>{col_name}:</b> {len(data)} items transferred.\n"
+            else:
+                log_txt += f"⚠️ <b>{col_name}:</b> Empty, skipped.\n"
+
+        await msg.edit_text(f"🎮 <b>GAMES DATA TRANSFER COMPLETE!</b>\n\n{log_txt}", parse_mode=ParseMode.HTML)
+    except Exception as e:
+        await msg.edit_text(f"❌ <b>Games Transfer Failed:</b> <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+
+
+# ==========================================
+# 🔥 TRANSFER USERS & POINTS (Harem, Eco, Grid/Seek Points)
+# ==========================================
+async def transfer_users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID: return
+    if not context.args:
+        return await update.message.reply_text("<b>⚠️ Usage:</b> <code>/transferusers [NEW_MONGO_URL]</code>\n\n<i>Note: This moves all Harems and Game Points!</i>", parse_mode=ParseMode.HTML)
+
+    new_mongo_url = context.args[0]
+    msg = await update.message.reply_text("⏳ <b>Transferring Users Data & Points... This might take a moment!</b>", parse_mode=ParseMode.HTML)
+
+    try:
+        new_client = AsyncIOMotorClient(new_mongo_url)
+        new_db = new_client[db.name]
+        
+        # In do collections mein Users ka Harem aur unke saare game points save hote hain
+        collections = [
+            ('user_collection_lmaoooo', user_collection), 
+            ('economy_users', eco_collection)
+        ]
+        log_txt = ""
+
+        for col_name, old_col in collections:
+            data = await old_col.find({}).to_list(length=None)
+            if data:
+                await new_db[col_name].delete_many({})
+                await new_db[col_name].insert_many(data)
+                log_txt += f"✅ <b>{col_name}:</b> {len(data)} users transferred.\n"
+            else:
+                log_txt += f"⚠️ <b>{col_name}:</b> Empty, skipped.\n"
+
+        await msg.edit_text(f"🏆 <b>USERS & POINTS TRANSFER COMPLETE!</b>\n\n{log_txt}", parse_mode=ParseMode.HTML)
+    except Exception as e:
+        await msg.edit_text(f"❌ <b>Users Transfer Failed:</b> <code>{html.escape(str(e))}</code>", parse_mode=ParseMode.HTML)
+
+
 application.add_handler(CommandHandler("give", give_cmd, block=False))
 application.add_handler(CommandHandler("transferdb", transfer_db_cmd, block=False))
+application.add_handler(CommandHandler("transfergames", transfer_games_cmd, block=False))
+application.add_handler(CommandHandler("transferusers", transfer_users_cmd, block=False))
