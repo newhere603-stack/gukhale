@@ -7,13 +7,13 @@ class Config(object):
     GROUP_ID = "-1003087506512"
     
     # ⚠️ APNA NAYA TOKEN AUR PASSWORD YAHAN DAALNA ⚠️
-    TOKEN = "8823720702:AAH9zvRygapkAlJYPnG-NlRRDMgb0xyWRvw"
+    TOKEN = "8752444024:AAG5V5HCISMrMEEjF1hTCXxe1EKWAij3YkQ"
     mongo_url = "mongodb+srv://newhere603_db_user:0nI0LwDqmctiXmi4@cluster0.enqfatp.mongodb.net/?appName=Cluster0"
     
     PHOTO_URL = ["https://files.catbox.moe/sgo9in.png", "https://files.catbox.moe/kgcrnb.jpeg"]
     SUPPORT_CHAT = "ANIME_GROUP_HAI"
     UPDATE_CHAT = "SAND_VILLAGE"
-    BOT_USERNAME = "AlisaWaifusBot"
+    BOT_USERNAME = "WordFounderbot"
     CHARA_CHANNEL_ID = "-1004310255455"
     api_id = "10658015"
     api_hash = "a0087bca748f86698c53d291c9e5b3af"
