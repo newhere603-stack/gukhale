@@ -17,12 +17,7 @@ loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
 import shivu.modules.wordgrid
-import shivu.modules.task
-import shivu.modules.aunty
 import wordle_game
-import shivu.modules.gift
-import shivu.modules.pmarket
-import shivu.modules.balance
 import shivu.modules.chatlog
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
