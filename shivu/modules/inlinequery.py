@@ -220,44 +220,85 @@ async def build_mongo_query(q: str, fm: str, uid: int) -> dict:
     return match
 
 # =========================================================
-# Captions & Keyboards (With Medals & Styling)
+# Captions & Keyboards (WITH ORIGINAL PREMIUM EMOJIS RESTORED)
 # =========================================================
 def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
-    cid, nm, an = escape(str(ch.get('id', '??'))), escape(sc(str(ch.get('name', '?')))), escape(sc(str(ch.get('anime', '?'))))
+    cid = escape(str(ch.get('id', '??')))
+    nm = escape(sc(str(ch.get('name', 'Unknown'))))
+    an = escape(sc(str(ch.get('anime', 'Unknown'))))
     r = parse_rar(ch.get('rarity', ''))
-    return f"<b>{sc('Character Info ')}✨</b>\n\n<b>{an}</b>\n<b>{cid}: {nm}</b>\n({r.premium} <b>{sc('RARITY:')}</b> {r.name})"
+
+    return (
+        f"<b>{sc('Character Info ')}"
+        f"<tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji></b>\n\n"
+        f"<b>{an}</b>\n"
+        f"<b>{cid}: {nm}</b>\n"
+        f"({r.premium} <b>{sc('RARITY:')}</b> {r.name})"
+    )
 
 def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
     nm = escape(sc(str(ch.get('name', 'Unknown'))))
     total = sum(o.get('count', 0) for o in owners)
-    cap = f"<b>{nm}</b>\n\n<b>🏆 {len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
-    
-    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-    start = page * 10
-    end = start + 10
-    total_pages = max(1, (len(owners) + 9) // 10)
+    cap = (
+        f"<b>{nm}</b>\n\n"
+        f"<b><tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> "
+        f"{len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
+    )
+
+    medals = {
+        1: "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>",
+        2: "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>",
+        3: "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>",
+    }
+
+    UPP = 10
+    start = page * UPP
+    end = start + UPP
+    total_pages = max(1, (len(owners) + UPP - 1) // UPP)
 
     for i, o in enumerate(owners[start:end], start + 1):
         medal = medals.get(i, f"<b>{i}.</b>")
         fn = escape(trunc(str(o.get('first_name', 'User')), 18))
-        cap += f"{medal} <a href=\"tg://user?id={o.get('id')}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
+        uid = o.get('id')
+        cap += (f"{medal} <a href=\"tg://user?id={uid}\">"
+                f"<b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n")
 
-    cap += f"\n✍️ <b>{sc(f'page {page+1}/{total_pages}')}</b>"
+    cap += (f"\n<tg-emoji emoji-id=\"5197269100878907942\">✍️</tg-emoji> "
+            f"<b>{sc(f'page {page+1}/{total_pages}')}</b>")
     return cap
 
 def stats_caption(ch: Dict, owners: List[Dict]) -> str:
     nm = escape(sc(str(ch.get('name', 'Unknown'))))
     total = sum(o.get('count', 0) for o in owners)
     avg = round(total / len(owners), 1) if owners else 0
-    cap = f"<b>{nm}</b>\n\n📊 <b>{sc('statistics')}</b>\n🎯 <code>{total}×</code> {sc('grabbed')}\n🏆 <code>{len(owners)}</code> {sc('owners')}\n📈 <code>{avg}×</code> {sc('avg')}\n"
-    
+
+    cap = (
+        f"<b>{nm}</b>\n\n"
+        f"<tg-emoji emoji-id=\"5231200819986047254\">📊</tg-emoji> "
+        f"<b>{sc('statistics')}</b>\n"
+        f"<tg-emoji emoji-id=\"5310278924616356636\">🎯</tg-emoji> "
+        f"<code>{total}×</code> {sc('grabbed')}\n"
+        f"<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> "
+        f"<code>{len(owners)}</code> {sc('owners')}\n"
+        f"<tg-emoji emoji-id=\"5028746137645876535\">📈</tg-emoji> "
+        f"<code>{avg}×</code> {sc('avg')}\n"
+    )
+
+    medals = {
+        1: "<tg-emoji emoji-id=\"5440539497383087970\">🥇</tg-emoji>",
+        2: "<tg-emoji emoji-id=\"5447203607294265305\">🥈</tg-emoji>",
+        3: "<tg-emoji emoji-id=\"5453902265922376865\">🥉</tg-emoji>",
+    }
+
     if owners:
-        cap += f"\n🏆 <b>{sc('top collectors')}</b>\n"
-        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        cap += (f"\n<tg-emoji emoji-id=\"6053140037250323814\">🏆</tg-emoji> "
+                f"<b>{sc('top collectors')}</b>\n")
         for i, o in enumerate(owners[:3], 1):
             fn = escape(trunc(str(o.get('first_name', 'User')), 18))
+            uid = o.get('id')
             medal = medals.get(i, f"<b>{i}.</b>")
-            cap += f"{medal} <a href=\"tg://user?id={o.get('id')}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
+            cap += (f"{medal} <a href=\"tg://user?id={uid}\">"
+                    f"<b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n")
     return cap
 
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
@@ -306,7 +347,10 @@ async def _build_results(query, off: int, uid: int, qid: str):
             return [InlineQueryResultArticle(
                 id=hashlib.md5(f"nouser{qid}".encode()).hexdigest(),
                 title=sc("no collection"), description=sc("start your journey"),
-                input_message_content=InputTextMessageContent(f"<b>🧩 {sc('start collecting!')}</b>", parse_mode=ParseMode.HTML)
+                input_message_content=InputTextMessageContent(
+                    f"<b><tg-emoji emoji-id=\"5265120027853481187\">🧩</tg-emoji> {sc('start collecting!')}</b>",
+                    parse_mode=ParseMode.HTML
+                )
             )], ""
             
         fav = usr.get('favorites')
@@ -388,7 +432,6 @@ async def inlinequery(update: Update, context) -> None:
     off = int(query.offset) if query.offset else 0
 
     try:
-        # Timeout badha diya gaya hai 7s tak taaki Telegram server images properly load kar sake bina "dead" hue
         results, noff = await asyncio.wait_for(_build_results(query, off, uid, qid), timeout=7.0)
         
         if not results:
@@ -412,7 +455,7 @@ async def chosen_inline_result(update: Update, context):
     except: pass
 
 # =========================================================
-# Button Callbacks (Owners, Stats, Back) - 100% Fixed
+# Button Callbacks (Owners, Stats, Back)
 # =========================================================
 async def show_owners(update: Update, context) -> None:
     q = update.callback_query
@@ -502,7 +545,6 @@ application.add_handler(CallbackQueryHandler(show_owners, pattern=r'^o\.', block
 application.add_handler(CallbackQueryHandler(back_card, pattern=r'^b\.', block=False))
 application.add_handler(CallbackQueryHandler(show_stats, pattern=r'^s\.', block=False))
 
-# Optional DB Warm-up (Connection jagane ke liye taaki pehla query instantly chale)
 async def _warmup_db():
     try: await collection.find_one()
     except: pass
