@@ -38,7 +38,6 @@ from shivu.Database.db import eco_collection
 OWNER_ID = 7657218453
 SUDO_USERS = [7657218453]
 
-# 🔥 Authorization Check Upar Move Kiya Taaki Flood Control Mein Use Ho Sake
 def is_authorized(user_id):
     return user_id == OWNER_ID or user_id in SUDO_USERS
 
@@ -53,7 +52,6 @@ chat_message_counts_collection = db['chat_message_counts_db']
 pending_deletes_collection = db['pending_deletes_db']
 
 MESSAGE_FREQUENCY = 70
-DESPAWN_TIME = 300
 AMV_ALLOWED_GROUP_ID = -1003100468240
 
 # 🔥 UNIFIED RARITY DICTIONARY (cosmic → Video Edition)
@@ -75,7 +73,6 @@ RARITIES = {
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Video Edition"),
 }
 
-# 🔥 RARITY ALIASES — "cosmic"/"video"/"video edition" all resolve to same canonical key
 RARITY_ALIASES = {
     "cosmic": "cosmic",
     "video": "cosmic",
@@ -123,7 +120,6 @@ sent_characters = {}
 last_grabbed = {}
 grab_locks = {}
 active_spawns_cache = {}
-
 currently_spawning = {}
 
 _cached_characters = []
@@ -200,24 +196,20 @@ for module_name in ALL_MODULES:
     except Exception:
         LOGGER.exception(f"Failed loading module {module_name}")
 
-# 🔥 ALIAS-AWARE RARITY MATCHER (cosmic/video/video edition all → "cosmic")
 def get_base_rarity(rarity_str):
     if not isinstance(rarity_str, str) or not rarity_str:
         return "common"
 
     rarity_lower = rarity_str.lower().strip()
 
-    # 0. Alias check FIRST
     alias = RARITY_ALIASES.get(rarity_lower)
     if alias:
         return alias
 
-    # 1. Exact key / display name match
     for key, (r_db_emoji, _, r_name) in RARITIES.items():
         if key == rarity_lower or r_name.lower() == rarity_lower:
             return key
 
-    # 2. Substring match
     for key, (r_db_emoji, _, r_name) in RARITIES.items():
         if key in rarity_lower or r_name.lower() in rarity_lower or r_db_emoji in rarity_lower:
             return key
@@ -236,6 +228,7 @@ def format_time_taken(seconds):
 async def load_rarity_status():
     global disabled_rarities_cache
     try:
+        # Main game settings
         settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
         if settings and 'disabled_rarities' in settings:
             disabled_rarities_cache = set(get_base_rarity(r) for r in settings['disabled_rarities'])
@@ -319,42 +312,26 @@ async def load_pending_deletes(bot):
 
 async def load_spawns_and_counts(bot):
     global message_counts, active_spawns_cache
-
     try:
         counts = await chat_message_counts_collection.find({}).to_list(length=None)
         for doc in counts:
             message_counts[int(doc['chat_id'])] = doc.get('count', 0)
         LOGGER.info(f"⚡ [YADDASHT RESTORED] Message Counts loaded for {len(message_counts)} chats.")
 
-        class DummyContext:
-            def __init__(self, bot_instance):
-                self.bot = bot_instance
-
         spawns = await spawns_collection.find({}).to_list(length=None)
-        now = time.time()
         for spawn in spawns:
             chat_id = int(spawn['chat_id'])
+            if 'miss_count' not in spawn:
+                spawn['miss_count'] = 0
             active_spawns_cache[chat_id] = spawn
-
-            spawn_time = spawn.get('spawn_time', 0)
-            time_left = DESPAWN_TIME - (now - spawn_time)
-
-            if time_left < 0:
-                time_left = 2
-
-            asyncio.create_task(despawn_character(chat_id, spawn['message_id'], spawn['character'], DummyContext(bot), delay=time_left))
 
         LOGGER.info(f"⚡ [YADDASHT RESTORED] Loaded {len(active_spawns_cache)} Active Spawns.")
     except Exception as e:
         LOGGER.error(f"Memory restore failed: {e}")
 
-async def despawn_character(chat_id, message_id, character, context, delay=DESPAWN_TIME):
-    await asyncio.sleep(delay)
+async def despawn_character(chat_id, message_id, character, context):
     try:
-        active_spawns_cache.pop(chat_id, None)
-
         active_spawn = await spawns_collection.find_one_and_delete({'chat_id': chat_id, 'message_id': message_id})
-
         if not active_spawn:
             return
 
@@ -403,23 +380,24 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
     if await check_and_handle_flood(update, context):
         return
 
-    # 🔥 Ghost Waifu Failsafe Engine
-    if chat_id in active_spawns_cache:
-        spawn_info = active_spawns_cache[chat_id]
-        spawn_time = spawn_info.get('spawn_time', 0)
-        if time.time() - spawn_time > DESPAWN_TIME:
-            active_spawns_cache.pop(chat_id, None)
-            await spawns_collection.delete_one({'chat_id': chat_id})
-            LOGGER.info(f"Ghost waifu cleared forcefully in Chat ID: {chat_id}")
-        else:
-            return
-
     locks.setdefault(chat_id, asyncio.Lock())
 
     async with locks[chat_id]:
+        # 🔥 MISS LOGIC: 20 messages check
         if chat_id in active_spawns_cache:
-            return
+            spawn_info = active_spawns_cache[chat_id]
+            spawn_info['miss_count'] = spawn_info.get('miss_count', 0) + 1
+            
+            await spawns_collection.update_one(
+                {'chat_id': chat_id},
+                {'$set': {'miss_count': spawn_info['miss_count']}}
+            )
 
+            if spawn_info['miss_count'] >= 20:
+                active_spawns_cache.pop(chat_id, None)
+                asyncio.create_task(despawn_character(chat_id, spawn_info['message_id'], spawn_info['character'], context))
+
+        # 🔥 MESSAGE COUNTING LOGIC (Hamesha apna alag count karega)
         if chat_id not in message_counts:
             try:
                 doc = await chat_message_counts_collection.find_one({'chat_id': chat_id})
@@ -430,24 +408,22 @@ async def message_counter(update: Update, context: CallbackContext) -> None:
                 message_counts[chat_id] = 0
 
         message_counts[chat_id] += 1
-
         await chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': message_counts[chat_id]}}, upsert=True)
 
         try:
             chat_data = await user_totals_collection.find_one({'chat_id': chat_id})
             if not chat_data:
                 chat_data = await user_totals_collection.find_one({'chat_id': str(chat_id)})
-
             target_frequency = chat_data.get('message_frequency', MESSAGE_FREQUENCY) if chat_data else MESSAGE_FREQUENCY
         except Exception:
             target_frequency = MESSAGE_FREQUENCY
 
         LOGGER.info(f"[LIVE LOG] Chat ID: {chat_id} | Message Count: {message_counts[chat_id]} / {target_frequency}")
 
-        if message_counts[chat_id] >= target_frequency and not currently_spawning.get(chat_id):
+        # 🔥 SPAWN TRIGGER LOGIC
+        if message_counts[chat_id] >= target_frequency and chat_id not in active_spawns_cache and not currently_spawning.get(chat_id):
             currently_spawning[chat_id] = True
             message_counts[chat_id] = 0
-
             await chat_message_counts_collection.update_one({'chat_id': chat_id}, {'$set': {'count': 0}}, upsert=True)
 
             LOGGER.info(f"[SPAWN TRIGGERED] Target reached in Chat ID: {chat_id}. Starting send_image...")
@@ -461,7 +437,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         LOGGER.info(f"[SPAWN PROCESS] Fetching character details for Chat ID: {chat_id}")
         all_characters = await get_cached_characters()
         if not all_characters:
-            LOGGER.warning(f"[SPAWN FAILED] Database me koi character nahi mila ya cache khali hai. Chat ID: {chat_id}")
             return
 
         sent_characters.setdefault(chat_id, [])
@@ -472,7 +447,6 @@ async def send_image(update: Update, context: CallbackContext) -> None:
         allowed = [c for c in available if await is_character_allowed(c, chat_id)]
 
         if not allowed:
-            LOGGER.warning(f"[SPAWN FAILED] Koi allowed character nahi mila (maybe sab rarities disabled hain). Chat ID: {chat_id}")
             return
 
         character = random.choice(allowed)
@@ -487,10 +461,7 @@ async def send_image(update: Update, context: CallbackContext) -> None:
 
         caption = f"<b>{r_display_emoji} ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs ᴀʀʀɪᴠᴇᴅ!\nᴄʟᴀɪᴍ ᴛʜᴇᴍ ᴡɪᴛʜ /grab <code>ɴᴀᴍᴇ</code></b>"
 
-        LOGGER.info(f"[SPAWN ATTEMPT] Sending media for '{character.get('name')}' in Chat ID: {chat_id}")
         spawn_msg = await _send_media(context, chat_id, character, caption)
-
-        LOGGER.info(f"[SPAWN SUCCESS] Character '{character.get('name')}' successfully spawned in Chat ID: {chat_id} (Message ID: {spawn_msg.message_id})")
 
         asyncio.create_task(auto_delete_msg(context, chat_id, spawn_msg.message_id, 1800))
 
@@ -505,13 +476,12 @@ async def send_image(update: Update, context: CallbackContext) -> None:
             'character': character,
             'message_id': spawn_msg.message_id,
             'spawn_time': time.time(),
-            'message_link': spawn_message_link
+            'message_link': spawn_message_link,
+            'miss_count': 0
         }
 
         active_spawns_cache[chat_id] = spawn_data
         await spawns_collection.update_one({'chat_id': chat_id}, {'$set': spawn_data}, upsert=True)
-
-        asyncio.create_task(despawn_character(chat_id, spawn_msg.message_id, character, context))
 
     except Exception as e:
         LOGGER.error(f"[SPAWN ERROR] Failed to spawn character in Chat ID: {chat_id}. Error: {e}")
@@ -551,10 +521,6 @@ async def guess(update: Update, context: CallbackContext) -> None:
                 return await update.message.reply_html('<b>ɴᴏ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀs sᴘᴀᴡɴᴇᴅ ʏᴇᴛ!</b>')
 
             spawn_time = active_spawn.get('spawn_time', 0)
-            if time.time() - spawn_time > DESPAWN_TIME:
-                active_spawns_cache.pop(chat_id, None)
-                await spawns_collection.delete_one({'chat_id': chat_id})
-                return await update.message.reply_html('''<b><tg-emoji emoji-id="5413704112220949842">⏰</tg-emoji> ᴛɪᴍᴇ's ᴜᴘ! ʏᴏᴜ ᴀʟʟ ᴍɪssᴇᴅ ᴛʜɪs ᴡᴀɪғᴜ! (ᴇxᴘɪʀᴇᴅ)</b>''')
 
             guess_text = ' '.join(context.args).lower() if context.args else ''
             if not guess_text:
@@ -698,6 +664,8 @@ async def toggle_miss_delete_cmd(update: Update, context: CallbackContext) -> No
 
 async def rarity_status_cmd(update: Update, context: CallbackContext) -> None:
     global disabled_rarities_cache
+    if not is_authorized(update.effective_user.id):
+        return
     lines = ["<b><tg-emoji emoji-id=\"5256131095094652290\">🎯</tg-emoji> ʀᴀʀɪᴛʏ sᴘᴀᴡɴ sᴛᴀᴛᴜs</b>\n"]
     for key, (_, display_emoji, name) in RARITIES.items():
         is_on = key not in disabled_rarities_cache
@@ -726,16 +694,16 @@ async def _rarity_toggle_cmd(update: Update, context: CallbackContext, enable: b
         if base_key in disabled_rarities_cache:
             disabled_rarities_cache.remove(base_key)
             await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities_cache)}}, upsert=True)
-            await update.message.reply_html(f"✅ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>")
+            await update.message.reply_html(f"<b><tg-emoji emoji-id=\"6118676380579274277\">✅</tg-emoji> ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>")
         else:
-            await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>")
+            await update.message.reply_html(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>")
     else:
         if base_key not in disabled_rarities_cache:
             disabled_rarities_cache.add(base_key)
             await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(disabled_rarities_cache)}}, upsert=True)
-            await update.message.reply_html(f"❌ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>")
+            await update.message.reply_html(f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ʀᴀʀɪᴛʏ '{escape(name)}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>")
         else:
-            await update.message.reply_html(f"⚠️ <b>ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>")
+            await update.message.reply_html(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ʀᴀʀɪᴛʏ '{escape(name)}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>")
 
 async def rarity_on_cmd(update, context):
     await _rarity_toggle_cmd(update, context, True)
@@ -761,9 +729,9 @@ async def name_cmd(update: Update, context: CallbackContext) -> None:
 
     if r_key and r_key in RARITIES:
         _, r_display_emoji, r_name = RARITIES[r_key]
-        display_rarity = f"{r_display_emoji} {escape(r_name)}"
     else:
-        display_rarity = escape(rarity_str)
+        r_display_emoji = rarity_str.split(' ')[0] if isinstance(rarity_str, str) and ' ' in rarity_str else '🟢'
+        r_name = escape(rarity_str)
 
     text = (
         "<b><tg-emoji emoji-id=\"5359441070201513074\">🎭</tg-emoji> ᴄᴜʀʀᴇɴᴛ sᴘᴀᴡɴᴇᴅ ᴄʜᴀʀᴀᴄᴛᴇʀ:</b>\n\n"
@@ -779,7 +747,6 @@ async def main():
     try:
         await setup_database_indexes()
         await load_rarity_status()
-
         await load_spawns_and_counts(application.bot)
         await load_pending_deletes(application.bot)
 
@@ -793,14 +760,14 @@ async def main():
         application.add_handler(CommandHandler(["rarity_off"], rarity_off_cmd, block=False))
         application.add_handler(CommandHandler(["name"], name_cmd, block=False))
 
-        # 🔥 FIX: Priority super high set kar di (-999)
+        # 🔥 Priority super high set kar di (-999)
         application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, message_counter, block=False), group=-999)
 
         await application.initialize()
         await application.start()
         await application.updater.start_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
-        LOGGER.info("✅ ʀᴀɴᴅɪ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
+        LOGGER.info("✅ ʙᴏᴛ sᴛᴀʀᴛᴇᴅ")
 
         try:
             from shivu.modules.chatlog import send_log_to_group, create_log_message
