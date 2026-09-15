@@ -1,4 +1,4 @@
-import logging  # 🔥 FIX: 'import' ka 'i' small kar diya hai
+import logging  # 🔥 FIX: 'import' ka 'i' small kar diya hai taaki syntax error na aaye
 import os
 from pyrogram import Client 
 from telegram.ext import Application, PicklePersistence
@@ -41,33 +41,44 @@ shivuu = Client("Shivu", api_id=api_id, api_hash=api_hash, bot_token=TOKEN)
 # ==========================================
 # 1. MAIN DATABASE (Harem, Economy, Settings - via config.py mongo_url)
 # ==========================================
-# 🔥 FIX: Added Connection Pooling for Ultra-Fast & Stable DB queries
+# 🔥 FIX: Super Fast Connection Pooling for Main DB
 eco_client = AsyncIOMotorClient(
     mongo_url,
-    maxPoolSize=50,
-    serverSelectionTimeoutMS=5000
+    maxPoolSize=200,
+    minPoolSize=20,
+    serverSelectionTimeoutMS=3000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=5000,
+    waitQueueTimeoutMS=3000
 )
 eco_db = eco_client['Character_catcher']
 
 # ==========================================
-# 2. GLOBAL CHARACTER DATABASE (teamdaxx123 cluster)
+# 2. GLOBAL CHARACTER DATABASE (New Cluster)
 # ==========================================
-CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://teamdaxx123:teamdaxx123@cluster0.ysbpgcp.mongodb.net/?retryWrites=true&w=majority")
+# 🔥 FIX: Yahan tera NAYA database URL update kar diya gaya hai!
+CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://itsmefroxy_db_user:82pRCH3TA0sr17iP@cluster0.7s0o0go.mongodb.net/?appName=Cluster0")
+
+# 🔥 FIX: Super Fast Connection Pooling for Characters DB
 chara_client = AsyncIOMotorClient(
     CHARA_MONGO_URI,
-    maxPoolSize=50,
-    serverSelectionTimeoutMS=5000
+    maxPoolSize=200,
+    minPoolSize=20,
+    serverSelectionTimeoutMS=3000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=5000,
+    waitQueueTimeoutMS=3000
 )
 chara_db = chara_client['GRABBING_YOUR_WAIFU']
 
 # --- COLLECTIONS MAPPING ---
 db = eco_db 
 
-# 🔥 Harem aur player data wapas Main DB me set kar diya
+# 🔥 Harem aur player data Main DB me set kar diya
 user_collection = eco_db["user_collection_lmaoooo"] 
 
-# 🔥 Global Characters wali collection teamdaxx123 se aayegi
-collection = chara_db['users'] 
+# 🔥 FIX: 'users' ko hata kar sahi collection 'anime_characters_lol' set kiya hai
+collection = chara_db['anime_characters_lol'] 
 
 # Economy aur baki sab kuch Main DB me rahega
 eco_collection = eco_db['economy_users'] 
