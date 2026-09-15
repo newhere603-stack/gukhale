@@ -7,7 +7,7 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from cachetools import TTLCache
 from pymongo import ASCENDING, DESCENDING
-from functools import lru_cache # ADDED FOR SUPERFAST PERFORMANCE
+from functools import lru_cache
 
 from telegram import (
     Update, InlineQueryResultPhoto, InlineQueryResultVideo,
@@ -28,7 +28,7 @@ collection = db['anime_characters_lol']
 user_collection = db['user_collection_lmaoooo']
 
 # =========================================================
-# Rarity System
+# Rarity System & Universal Aliases
 # =========================================================
 @dataclass
 class Rarity:
@@ -55,21 +55,30 @@ RARITIES = {
     "common":    ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common", 15),
 }
 
+# FULLY MAPPED: Koi bhi variant search karega, backend sahi base key detect kar lega
 RARITY_ALIASES = {
-    "cosmic": "cosmic", "video": "cosmic", "video edition": "cosmic",
-    "videoedition": "cosmic", "video editing": "cosmic", "videoediting": "cosmic",
-    "video edit": "cosmic", "videoedit": "cosmic", "video edits": "cosmic",
-    "videoedits": "cosmic",
+    "mythic": "mythic",
+    "cosmic": "cosmic", "video": "cosmic", "video edition": "cosmic", "videoedition": "cosmic", "video edit": "cosmic",
+    "celestial": "celestial",
+    "exclusive": "exclusive",
+    "legendary": "legendary",
+    "premium": "premium", "premium edition": "premium", "premiumedition": "premium",
+    "neon": "neon",
+    "summer": "summer",
+    "sweet": "sweet",
+    "special": "special", "medium": "special",
+    "valentine": "valentine",
+    "winter": "winter",
+    "erotic": "erotic", "spicy": "erotic",
+    "rare": "rare",
+    "common": "common"
 }
 
-# OPTIMIZED: Memoize the output so string parsing doesn't hang the bot
-@lru_cache(maxsize=1024)
+@lru_cache(maxsize=2048)
 def get_base_rarity(rarity_str: str) -> str:
     if not rarity_str or not isinstance(rarity_str, str): return "common"
     r_lower = rarity_str.lower().strip()
     if alias := RARITY_ALIASES.get(r_lower): return alias
-    for key, (_, _, name, _) in RARITIES.items():
-        if key == r_lower or name.lower() == r_lower: return key
     for key, (db_emoji, _, name, _) in RARITIES.items():
         if key in r_lower or name.lower() in r_lower or db_emoji in r_lower: return key
     return "common"
@@ -98,8 +107,7 @@ CAPS = str.maketrans('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
 
 def sc(t: str) -> str: return t.translate(CAPS)
 
-# OPTIMIZED: Cache the rarity parsing so it executes instantly
-@lru_cache(maxsize=1024)
+@lru_cache(maxsize=2048)
 def parse_rar(r: str) -> Rarity:
     base_key = get_base_rarity(r)
     db_emoji, premium_emoji, name, val = RARITIES[base_key]
@@ -144,15 +152,15 @@ def _is_video(ch: Dict, media: str, kind: str) -> bool:
     return False
 
 def _rarity_sort_key(c: Dict):
-    # This is now blazingly fast because of lru_cache on parse_rar
     return (parse_rar(c.get('rarity', '')).value, _id_key(c.get('id')))
 
 # =========================================================
 # Database Queries & Owners System
 # =========================================================
-async def get_user(uid: int) -> dict:
+# OPTIMIZED: Added bypass_cache so inline collections show newly grabbed chars instantly!
+async def get_user(uid: int, bypass_cache: bool = False) -> dict:
     k = f"u{uid}"
-    if k in user_cache: return user_cache[k]
+    if not bypass_cache and k in user_cache: return user_cache[k]
     u = await user_collection.find_one({'id': uid}, {'_id': 0})
     if u: user_cache[k] = u
     return u or {}
@@ -196,22 +204,25 @@ async def build_mongo_query(q: str, fm: str, uid: int) -> dict:
     conds = []
     
     if q:
-        if q.isdigit():
-            conds.extend([{'id': q}, {'id': int(q)}])
+        q_lower = q.lower().strip()
+        if q_lower.isdigit():
+            conds.extend([{'id': q_lower}, {'id': int(q_lower)}])
         
         rx = re.compile(re.escape(q), re.IGNORECASE)
         conds.extend([{'name': rx}, {'anime': rx}])
         
-        alias = RARITY_ALIASES.get(q.lower())
-        if alias and alias in RARITIES:
-            conds.append({'rarity': re.compile(re.escape(alias), re.IGNORECASE)})
-            conds.append({'rarity': re.compile(re.escape(RARITIES[alias][2]), re.IGNORECASE)})
+        # OPTIMIZED: Accurate Universal Rarity Filtering for Global Search
+        matched_rarity = RARITY_ALIASES.get(q_lower)
+        if matched_rarity:
+            r_name = RARITIES[matched_rarity][2]
+            conds.append({'rarity': re.compile(re.escape(matched_rarity), re.IGNORECASE)})
+            conds.append({'rarity': re.compile(re.escape(r_name), re.IGNORECASE)})
             
         match['$or'] = conds
 
     if fm == 'rare':
-        rare_names = [re.compile(r[2], re.IGNORECASE) for r in RARITIES.values() if r[3] <= 9]
-        rare_keys = [re.compile(k, re.IGNORECASE) for k, r in RARITIES.items() if r[3] <= 9]
+        rare_names = [re.compile(re.escape(r[2]), re.IGNORECASE) for r in RARITIES.values() if r[3] <= 9]
+        rare_keys = [re.compile(re.escape(k), re.IGNORECASE) for k, r in RARITIES.items() if r[3] <= 9]
         match['rarity'] = {'$in': rare_names + rare_keys}
     elif fm in ('owned', 'notowned'):
         usr = await get_user(uid)
@@ -348,7 +359,8 @@ async def _build_results(query, off: int, uid: int, qid: str):
     
     if is_coll and tid.isdigit():
         tuid = int(tid)
-        usr = await get_user(tuid)
+        # CRITICAL FIX: bypass_cache=True forces MongoDB fetch so new grabs show up INSTANTLY
+        usr = await get_user(tuid, bypass_cache=True)
         if not usr:
             return [InlineQueryResultArticle(
                 id=hashlib.md5(f"nouser{qid}".encode()).hexdigest(),
@@ -362,9 +374,7 @@ async def _build_results(query, off: int, uid: int, qid: str):
         fav = usr.get('favorites')
         fav_id = _id_key(fav.get('id') if isinstance(fav, dict) else fav)
         
-        # OPTIMIZED: Much faster way to filter unique characters 
         seen_ids = set()
-        all_chars = []
         for c in usr.get('characters', []):
             if isinstance(c, dict) and (cid := c.get('id')):
                 if cid not in seen_ids:
@@ -373,7 +383,19 @@ async def _build_results(query, off: int, uid: int, qid: str):
         
         if sq:
             ql = sq.lower()
-            all_chars = [c for c in all_chars if ql in str(c.get('name', '')).lower() or ql in str(c.get('anime', '')).lower() or ql == str(c.get('id'))]
+            mapped_rarity = RARITY_ALIASES.get(ql) # Universal Rarity Check
+            filtered = []
+            
+            for c in all_chars:
+                # FIX: Check if search query matches name, anime, ID, OR Rarity Key!
+                if (ql in str(c.get('name', '')).lower() or 
+                    ql in str(c.get('anime', '')).lower() or 
+                    ql == str(c.get('id'))):
+                    filtered.append(c)
+                elif mapped_rarity and get_base_rarity(c.get('rarity', '')) == mapped_rarity:
+                    filtered.append(c)
+            
+            all_chars = filtered
         
         if fm == 'rare': all_chars = [c for c in all_chars if parse_rar(c.get('rarity', '')).value <= 9]
         elif fm == 'video': all_chars = [c for c in all_chars if _is_video(c, *_media_of(c)) or parse_rar(c.get('rarity')).value == 2]
@@ -444,8 +466,8 @@ async def inlinequery(update: Update, context) -> None:
     off = int(query.offset) if query.offset else 0
 
     try:
-        # OPTIMIZED: Reduced timeout so Telegram UI doesn't hang. Returns faster.
-        results, noff = await asyncio.wait_for(_build_results(query, off, uid, qid), timeout=4.5)
+        # OPTIMIZED: Increased timeout to 6.5s so massive user collections never hang or throw 'No Results' falsely.
+        results, noff = await asyncio.wait_for(_build_results(query, off, uid, qid), timeout=6.5)
         
         if not results:
             results = [InlineQueryResultArticle(
@@ -456,7 +478,6 @@ async def inlinequery(update: Update, context) -> None:
             
         await query.answer(results, cache_time=2, is_personal=True, next_offset=noff)
     except asyncio.TimeoutError:
-        # Graceful handling so loading doesn't get stuck forever
         results = [InlineQueryResultArticle(
             id=hashlib.md5(f"timeout{qid}".encode()).hexdigest(),
             title=sc("collection is too big!"), description=sc("please type a name to search"),
