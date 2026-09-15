@@ -16,11 +16,11 @@ from shivu.Database.db import eco_collection
 collection = db['anime_characters_lol']
 bot_settings_collection = db['bot_settings']
 delete_collection = db['auto_delete_queue']
-user_tasks_collection = db['user_tasks']  # 🔥 For task tracking
+user_tasks_collection = db['user_tasks']
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# ---------------- CUSTOM RARITIES (cosmic → Video Edition) ----------------
+# ---------------- CUSTOM RARITIES ----------------
 RARITIES = {
     "mythic": ("💎", '<tg-emoji emoji-id="5471952986970267163">💎</tg-emoji>', "Mythic"),
     "cosmic": ("🌌", '<tg-emoji emoji-id="5431783411981228752">🌌</tg-emoji>', "Video Edition"),
@@ -39,7 +39,6 @@ RARITIES = {
     "common": ("🟢", '<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', "Common")
 }
 
-# 🔥 SEARCH ALIASES — "cosmic"/"video"/"video edition" all resolve to same canonical key
 RARITY_ALIASES = {
     "cosmic": "cosmic",
     "video": "cosmic",
@@ -53,9 +52,7 @@ RARITY_ALIASES = {
     "videoedits": "cosmic",
 }
 
-
 def canonical_rarity(name) -> str:
-    """Normalize rarity string → canonical key. Handles aliases like cosmic/video/video edition."""
     if not name:
         return ""
     n = str(name).strip().lower()
@@ -68,48 +65,39 @@ def canonical_rarity(name) -> str:
             return key
     return n
 
-
 def get_rarity_details(rarity_str):
     if not rarity_str:
         return ('<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', 'Common')
-
     canon = canonical_rarity(rarity_str)
     if canon in RARITIES:
         _, prem_emoji, r_name = RARITIES[canon]
         return (prem_emoji, r_name)
-
     rarity_lower = str(rarity_str).lower().strip()
     for key, (r_emoji, prem_emoji, r_name) in RARITIES.items():
         if key in rarity_lower or r_name.lower() in rarity_lower or r_emoji in rarity_lower:
             return (prem_emoji, r_name)
     return ('<tg-emoji emoji-id="6093865707424980866">🟢</tg-emoji>', rarity_str.title())
 
-
 def get_base_rarity(rarity_str):
     if not rarity_str:
         return "common"
-
     canon = canonical_rarity(rarity_str)
     if canon in RARITIES:
         return canon
-
     rarity_lower = str(rarity_str).lower().strip()
     for key, (r_emoji, prem_emoji, r_name) in RARITIES.items():
         if key in rarity_lower or r_name.lower() in rarity_lower or r_emoji in rarity_lower:
             return key
     return rarity_lower
 
-
 # 🔥 PERMANENT AUTO DELETE SYSTEM
 _worker_started = False
-
 
 async def background_delete_worker(bot):
     try:
         await delete_collection.create_index("delete_at")
     except Exception:
         pass
-
     while True:
         try:
             now = time.time()
@@ -125,26 +113,21 @@ async def background_delete_worker(bot):
             pass
         await asyncio.sleep(30)
 
-
 async def auto_delete_msg(message, delay: int):
     if not message:
         return
-
     global _worker_started
     if not _worker_started:
         _worker_started = True
         asyncio.create_task(background_delete_worker(message.get_bot()))
-
     chat_id = message.chat.id
     message_id = message.message_id
     delete_at = time.time() + delay
-
     await delete_collection.insert_one({
         'chat_id': chat_id,
         'message_id': message_id,
         'delete_at': delete_at
     })
-
     async def memory_delete():
         await asyncio.sleep(delay)
         try:
@@ -152,25 +135,20 @@ async def auto_delete_msg(message, delay: int):
             await delete_collection.delete_one({'chat_id': chat_id, 'message_id': message_id})
         except Exception:
             pass
-
     asyncio.create_task(memory_delete())
-
 
 # 🔥 SMART MEDIA SENDER
 async def send_media_smart(context, chat_id, media, caption, reply_to_msg_id=None):
     media_str = str(media).lower()
     is_video_ext = any(media_str.endswith(ext) for ext in ['.mp4', '.gif', '.mov', '.webm'])
-
     kwargs = {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"}
     if reply_to_msg_id:
         kwargs["reply_to_message_id"] = reply_to_msg_id
-
     if is_video_ext:
         try:
             return await context.bot.send_video(video=media, **kwargs)
         except Exception:
             return await context.bot.send_animation(animation=media, **kwargs)
-
     try:
         return await context.bot.send_photo(photo=media, **kwargs)
     except Exception:
@@ -182,11 +160,9 @@ async def send_media_smart(context, chat_id, media, caption, reply_to_msg_id=Non
             except Exception as e:
                 raise e
 
-
 # ---------------- CONFIG ----------------
 OWNER_ID = 7657218453
 SUDO_USERS = {7657218453}
-
 PROPOSAL_COST = 2000
 DICE_COOLDOWN = 1800
 PROPOSE_COOLDOWN = 300
@@ -242,7 +218,6 @@ PROPOSING_LOADING_TEXTS = [
     "<b><tg-emoji emoji-id=\"5339145893734001606\">🕊️</tg-emoji> ʜᴏᴘɪɴɢ ғᴏʀ ᴀ ʏᴇs....<tg-emoji emoji-id=\"5469741319330996757\">💫</tg-emoji></b>"
 ]
 
-# 🔥 DICE REJECT TEXTS — 30 funny, clean (no abuse)
 DICE_REJECT_TEXTS = [
     "<b>ᴘʀᴏᴘᴏsᴀʟ ʀᴇᴊᴇᴄᴛ ʜᴏ ɢᴀʏᴀ ᴀᴜʀ ᴡᴏ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
     "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴇᴡᴡ, ɴᴏ!' ᴀᴜʀ sᴀʙ ᴊᴀɢᴀʜ sᴇ ʙʟᴏᴄᴋ ᴋᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
@@ -276,7 +251,6 @@ DICE_REJECT_TEXTS = [
     "<b>ᴅɪᴄᴇ ɴᴇ ʜɪ ʙᴏʟ ᴅɪʏᴀ 'ɪsᴋᴇ sᴀᴀᴛʜ ɴᴀʜɪ ʜᴏɴᴀ ᴄʜᴀʜɪʏᴇ ᴛᴜᴍʜᴇ'! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>"
 ]
 
-# 🔥 PROPOSE REJECT TEXTS — 35 funny, clean (no abuse)
 PROPOSE_REJECT_TEXTS = [
     "<b>ᴜsɴᴇ ʙᴏʟᴀ ᴡᴏ ᴛᴜᴍsᴇ ᴀɢʟᴇ ᴊᴀɴᴀᴍ ᴍᴇɪɴ ᴘᴀᴛᴇɢɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
     "<b>ᴛᴜᴍ ɪᴛɴɪ ʙᴜʀɪ ᴛᴀʀᴀʜ ғʀɪᴇɴᴅ-ᴢᴏɴᴇ ʜᴜᴇ ʜᴏ ᴋɪ ᴀʙ ᴛᴜᴍ ᴡᴀʜᴀɴ ᴋᴇ ᴍᴀʏᴏʀ ʜᴏ! <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
@@ -287,10 +261,10 @@ PROPOSE_REJECT_TEXTS = [
     "<b>'ᴇᴡᴡ, ɴᴏ!' ʙᴏʟᴋᴀʀ ᴜsɴᴇ ʙʟᴏᴄᴋ ᴋᴀʀ ᴅɪʏᴀ! <tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji></b>",
     "<b>ᴜsɴᴇ ɪɢɴᴏʀᴇ ᴋɪʏᴀ ᴀᴜʀ ᴋɪsɪ ᴏʀ ᴋᴇ sᴀᴛʜ ɴɪᴋᴀʟ ɢᴀʏɪ! <tg-emoji emoji-id=\"5424885441100782420\">👀</tg-emoji></b>",
     "<b>ᴘʀᴏᴘᴏsᴀʟ ғᴀɪʟᴇᴅ! ᴜsʜᴇ ᴛᴜᴍʜᴀʀᴇ ʙᴀᴊᴀʏᴇ 𝟸ᴅ ʜᴜsʙᴀɴᴅᴏs ᴢʏᴀᴅᴀ ᴘᴀsᴀɴᴅ ʜᴀɪɴ. <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
-    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴄʀᴇᴇᴘ ʙᴏʟᴀ ᴀᴜʀ ᴅᴀʀʀ ᴋᴇ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴇ ᴄʀᴇᴇ Gh ʙᴏʟᴀ ᴀᴜʀ ᴅᴀʀʀ ᴋᴇ ʙʜᴀɢ ɢᴀʏɪ! <tg-emoji emoji-id=\"5444893443169983691\">🚓</tg-emoji><tg-emoji emoji-id=\"6078051040840653263\">💨</tg-emoji></b>",
     "<b>ʙʜᴀɪ ᴛᴇʀᴀ ᴛᴏ 𝟺ᴋ ᴍᴇɪɴ ᴋᴀᴛ ɢᴀʏᴀ! <tg-emoji emoji-id=\"6332083912424036002\">😂</tg-emoji></b>",
     "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴍᴀɪɴ ᴛᴜᴍsᴇ ᴘʏᴀʀ ᴋᴀʀᴛɪ ʜᴜ... ᴘᴀʀ ᴇᴋ ʙʜᴀɪ ᴋɪ ᴛᴀʀᴀʜ!' <tg-emoji emoji-id=\"6159082552431746788\">🫂</tg-emoji></b>",
-    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴀʀᴀ ʙᴀɴᴋ ʙᴀʟᴀɴᴄᴇ ᴅᴇᴋʜᴀ ᴀᴜʀ ᴄʜᴀʟɪ ɢᴀʏɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
+    "<b>ᴜsɴᴇ ᴛᴜᴍʜᴀʀᴀ ʙᴀɴᴋ ʙᴀʟᴀɴ calculation ᴅᴇᴋʜᴀ ᴀᴜʀ ᴄʜᴀʟɪ ɢᴀʏɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
     "<b>ᴜsɴᴇ ᴘʀᴏᴘᴏsᴀʟ sᴜɴ ᴋᴇ 'ᴄʜᴇᴇ' ʙᴏʟᴀ ᴀᴜʀ ᴄʜᴀʟɪ ɢᴀʏɪ! <tg-emoji emoji-id=\"6332088903176038586\">🤣</tg-emoji></b>",
     "<b>ᴜsɴᴇ ʙᴏʟᴀ 'ᴛᴜᴍ ʙᴏʜᴏᴛ ᴀᴄᴄʜᴇ ʜᴏ, ʙᴀs ᴍᴇʀᴇ ʟɪʏᴇ ɴᴀʜɪ!' <tg-emoji emoji-id=\"6332245643712533982\">🏙</tg-emoji></b>",
     "<b>ᴡᴏ ʙᴏʟɪ 'ᴍᴇʀᴀ ᴅɪʟ ᴘᴇʜʟᴇ sᴇ ɢᴏᴊᴏ sᴀᴛᴏʀᴜ ᴋᴇ ᴘᴀss ʜᴀɪ'! <tg-emoji emoji-id=\"5375464961822695044\">🎬</tg-emoji></b>",
@@ -317,10 +291,8 @@ PROPOSE_REJECT_TEXTS = [
 
 cooldowns = {"dice": {}, "propose": {}}
 
-
 def is_authorized(user_id: int) -> bool:
     return user_id == OWNER_ID or user_id in SUDO_USERS
-
 
 def check_cooldown(user_id: int, cmd: str, seconds: int) -> tuple:
     last = cooldowns[cmd].get(user_id, 0)
@@ -329,10 +301,8 @@ def check_cooldown(user_id: int, cmd: str, seconds: int) -> tuple:
         return False, left
     return True, 0
 
-
 def set_cooldown(user_id: int, cmd: str):
     cooldowns[cmd][user_id] = time.time()
-
 
 async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
     try:
@@ -343,19 +313,11 @@ async def is_user_joined(context: CallbackContext, user_id: int) -> bool:
     except Exception:
         return False
 
-
 # ✅✅✅ FIXED FUNCTION — Repeats allowed, all enabled rarities (old + new) in pool
 async def get_unique_char(user_id: int, rarity_pattern: str = None):
-    """
-    Returns a truly random character from ALL ENABLED rarities (old + new).
-    - Ownership filter REMOVED → repeats are allowed.
-    - When user has all characters, they still get a random character (repeat).
-    - 'No new characters left' error is now impossible.
-    Uses secrets.choice() for cryptographically-strong randomness.
-    """
     try:
-        # -------- Load disabled rarities (canonical keys) --------
-        settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
+        # 🔥 FIXED: Using marry_settings so it doesn't clash with main bot spawn settings
+        settings = await bot_settings_collection.find_one({'_id': 'marry_settings'})
         if settings and 'disabled_rarities' in settings:
             raw_disabled = set(settings['disabled_rarities'])
         else:
@@ -365,16 +327,13 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
             get_base_rarity(d) for d in raw_disabled if get_base_rarity(d) in RARITIES
         }
 
-        # -------- Fetch ALL characters (old + new) --------
         all_chars = await collection.find(
             {"auction_exclusive": {"$ne": True}}
         ).to_list(length=None)
 
-        # -------- Build pool from enabled rarities only (no ownership filter) --------
         available_chars = []
         for char in all_chars:
             char_rarity_key = get_base_rarity(char.get("rarity", ""))
-            # Skip disabled rarities
             if char_rarity_key in normalized_disabled:
                 continue
             available_chars.append(char)
@@ -382,12 +341,10 @@ async def get_unique_char(user_id: int, rarity_pattern: str = None):
         if not available_chars:
             return None
 
-        # 🔥 True randomness — secrets.choice avoids any global seeding issues
         return secrets.choice(available_chars)
     except Exception as e:
         LOGGER.error(f"get_unique_char failed for {user_id}: {e}")
         return None
-
 
 async def add_char_to_user(user_id: int, username: str, first_name: str, char: dict) -> bool:
     try:
@@ -402,7 +359,6 @@ async def add_char_to_user(user_id: int, username: str, first_name: str, char: d
         return True
     except Exception:
         return False
-
 
 async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     user_link = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
@@ -419,13 +375,12 @@ async def send_win_log(context: CallbackContext, user, char: dict, method: str):
     except Exception:
         pass
 
-
 async def prarity_on(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
         return
     if not context.args:
         return await update.message.reply_text(
-            "<b>ᴜsᴀɢᴇ: /prarity_on &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_on ᴘʀᴇᴍɪᴜᴍ</code>",
+            "<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ᴜsᴀɢᴇ: /prarity_on &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_on ᴘʀᴇᴍɪᴜᴍ</code>",
             parse_mode="HTML"
         )
 
@@ -435,24 +390,24 @@ async def prarity_on(update: Update, context: CallbackContext):
     if base_key not in RARITIES:
         return await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ɪɴᴠᴀʟɪᴅ ʀᴀʀɪᴛʏ ɴᴀᴍᴇ! ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴠᴀʟɪᴅ ʀᴀʀɪᴛʏ.</b>", parse_mode="HTML")
 
-    settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
+    # 🔥 Using marry_settings database
+    settings = await bot_settings_collection.find_one({'_id': 'marry_settings'})
     raw_disabled = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
     normalized_disabled = {get_base_rarity(d) for d in raw_disabled if get_base_rarity(d) in RARITIES}
 
     if base_key in normalized_disabled:
         normalized_disabled.remove(base_key)
-        await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
-        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ʀᴀʀɪᴛʏ '{base_key.upper()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await bot_settings_collection.update_one({'_id': 'marry_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ᴘʀᴏᴘᴏsᴇ ʀᴀʀɪᴛʏ '{base_key.upper()}' ʜᴀs ʙᴇᴇɴ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ʀᴀʀɪᴛʏ '{base_key.upper()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
-
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ᴘʀᴏᴘᴏsᴇ ʀᴀʀɪᴛʏ '{base_key.upper()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴇɴᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
 async def prarity_off(update: Update, context: CallbackContext):
     if not is_authorized(update.effective_user.id):
         return
     if not context.args:
         return await update.message.reply_text(
-            "<b>ᴜsᴀɢᴇ: /prarity_off &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_off ᴘʀᴇᴍɪᴜᴍ</code>",
+            "<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ᴜsᴀɢᴇ: /prarity_off &lt;ʀᴀʀɪᴛʏ_ɴᴀᴍᴇ&gt;</b>\n<b>ᴇxᴀᴍᴘʟᴇ:</b> <code>/prarity_off ᴘʀᴇᴍɪᴜᴍ</code>",
             parse_mode="HTML"
         )
 
@@ -462,17 +417,33 @@ async def prarity_off(update: Update, context: CallbackContext):
     if base_key not in RARITIES:
         return await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ɪɴᴠᴀʟɪᴅ ʀᴀʀɪᴛʏ ɴᴀᴍᴇ! ᴘʟᴇᴀsᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴠᴀʟɪᴅ ʀᴀʀɪᴛʏ.</b>", parse_mode="HTML")
 
-    settings = await bot_settings_collection.find_one({'_id': 'game_settings'})
+    # 🔥 Using marry_settings database
+    settings = await bot_settings_collection.find_one({'_id': 'marry_settings'})
     raw_disabled = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
     normalized_disabled = {get_base_rarity(d) for d in raw_disabled if get_base_rarity(d) in RARITIES}
 
     if base_key not in normalized_disabled:
         normalized_disabled.add(base_key)
-        await bot_settings_collection.update_one({'_id': 'game_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
-        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ʀᴀʀɪᴛʏ '{base_key.upper()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await bot_settings_collection.update_one({'_id': 'marry_settings'}, {'$set': {'disabled_rarities': list(normalized_disabled)}}, upsert=True)
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴘʀᴏᴘᴏsᴇ ʀᴀʀɪᴛʏ '{base_key.upper()}' ʜᴀs ʙᴇᴇɴ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
     else:
-        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ʀᴀʀɪᴛʏ '{base_key.upper()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
+        await update.message.reply_text(f"<b><tg-emoji emoji-id=\"6309717264639726942\">⚠️</tg-emoji> ᴘʀᴏᴘᴏsᴇ ʀᴀʀɪᴛʏ '{base_key.upper()}' ɪs ᴀʟʀᴇᴀᴅʏ ᴅɪsᴀʙʟᴇᴅ.</b>", parse_mode="HTML")
 
+# 🔥 NEW COMMAND TO CHECK STATUS FOR MARRY
+async def prarity_status_cmd(update: Update, context: CallbackContext) -> None:
+    if not is_authorized(update.effective_user.id):
+        return
+    settings = await bot_settings_collection.find_one({'_id': 'marry_settings'})
+    raw_disabled = set(settings.get('disabled_rarities', ["premium", "cosmic", "mythic"])) if settings else {"premium", "cosmic", "mythic"}
+    normalized_disabled = {get_base_rarity(d) for d in raw_disabled if get_base_rarity(d) in RARITIES}
+
+    lines = ["<b><tg-emoji emoji-id=\"5256131095094652290\">🎯</tg-emoji> ᴘʀᴏᴘᴏsᴇ/ᴍᴀʀʀʏ ʀᴀʀɪᴛʏ sᴛᴀᴛᴜs</b>\n"]
+    for key, (_, display_emoji, name) in RARITIES.items():
+        is_on = key not in normalized_disabled
+        state = "<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji> ᴏɴ" if is_on else "<tg-emoji emoji-id=\"6093383288108360854\">❌</tg-emoji> ᴏғғ"
+        lines.append(f"{display_emoji} <b>{escape(name)}</b> (<code>{key}</code>) — {state}")
+    lines.append("\n<b>ᴜsᴇ /prarity_on &lt;key&gt; ᴏʀ /prarity_off &lt;key&gt; ᴛᴏ ᴄʜᴀɴɢᴇ.</b>")
+    await update.message.reply_html("\n".join(lines))
 
 async def dice_marry(update: Update, context: CallbackContext):
     if not update.message or not update.effective_user:
@@ -494,7 +465,6 @@ async def dice_marry(update: Update, context: CallbackContext):
 
     set_cooldown(user.id, "dice")
 
-    # 🔥 TASK TRACKER UPDATE: Marry Mission Increment
     today_str = datetime.now(IST).strftime("%Y-%m-%d")
     u_data = await user_tasks_collection.find_one({'user_id': user.id})
     if u_data and u_data.get('last_reset_date') == today_str:
@@ -513,7 +483,6 @@ async def dice_marry(update: Update, context: CallbackContext):
         val = dice_msg.dice.value
         success = val in (5, 6)
 
-        # 🔥 +4% luck bonus: value 4 has a hidden 24% chance (1/6 * 0.24 ≈ 4%)
         if not success and val == DICE_BONUS_VALUE:
             if random.random() < DICE_BONUS_RATE:
                 success = True
@@ -570,7 +539,6 @@ async def dice_marry(update: Update, context: CallbackContext):
         except Exception:
             pass
 
-
 async def propose(update: Update, context: CallbackContext):
     if not update.message or not update.effective_user:
         return
@@ -614,7 +582,6 @@ async def propose(update: Update, context: CallbackContext):
     await eco_collection.update_one({"id": user.id}, {"$inc": {"balance": -PROPOSAL_COST}})
     set_cooldown(user.id, "propose")
 
-    # 🔥 TASK TRACKER UPDATE: Propose Mission Increment
     today_str = datetime.now(IST).strftime("%Y-%m-%d")
     u_data = await user_tasks_collection.find_one({'user_id': user.id})
     if u_data and u_data.get('last_reset_date') == today_str:
@@ -726,7 +693,6 @@ async def propose(update: Update, context: CallbackContext):
 
     await send_win_log(context, user, char, "propose")
 
-
 async def propose_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     if not query:
@@ -743,7 +709,6 @@ async def propose_callback(update: Update, context: CallbackContext):
         except Exception:
             pass
         await context.bot.send_message(chat_id=query.message.chat_id, text=f"<b><tg-emoji emoji-id=\"5472164874886846699\">✨</tg-emoji> ᴛʜᴀɴᴋs ғᴏʀ ᴊᴏɪɴɪɴɢ! ɴᴏᴡ ʏᴏᴜ ᴄᴀɴ ᴜsᴇ /propose ᴀɢᴀɪɴ.</b>", parse_mode="HTML")
-
 
 async def cdm_cmd(update: Update, context: CallbackContext):
     if not update.message or not update.effective_user:
@@ -787,10 +752,10 @@ async def cdm_cmd(update: Update, context: CallbackContext):
         reply_to_message_id=msg_id
     )
 
-
 application.add_handler(CommandHandler(["dice", "marry"], dice_marry, block=False))
 application.add_handler(CommandHandler(["propose"], propose, block=False))
 application.add_handler(CommandHandler(["cool"], cdm_cmd, block=False))
 application.add_handler(CommandHandler(["prarity_on"], prarity_on, block=False))
 application.add_handler(CommandHandler(["prarity_off"], prarity_off, block=False))
+application.add_handler(CommandHandler(["prarity_status"], prarity_status_cmd, block=False))
 application.add_handler(CallbackQueryHandler(propose_callback, pattern=r"^propose_checksub$", block=False))
