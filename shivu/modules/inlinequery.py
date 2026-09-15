@@ -62,11 +62,9 @@ RARITY_ALIASES = {
 }
 
 def get_base_rarity(rarity_str: str) -> str:
-    if not rarity_str or not isinstance(rarity_str, str):
-        return "common"
+    if not rarity_str or not isinstance(rarity_str, str): return "common"
     r_lower = rarity_str.lower().strip()
-    alias = RARITY_ALIASES.get(r_lower)
-    if alias: return alias
+    if alias := RARITY_ALIASES.get(r_lower): return alias
     for key, (_, _, name, _) in RARITIES.items():
         if key == r_lower or name.lower() == r_lower: return key
     for key, (db_emoji, _, name, _) in RARITIES.items():
@@ -74,18 +72,17 @@ def get_base_rarity(rarity_str: str) -> str:
     return "common"
 
 # =========================================================
-# DB Indexes (Optimized for Fast Search)
+# DB Indexes
 # =========================================================
 try:
     collection.create_index([('id', ASCENDING)], unique=True, background=True)
-    # Text index for blazing fast name/anime searches
-    collection.create_index([('name', 'text'), ('anime', 'text')], background=True)
+    collection.create_index([('name', ASCENDING), ('anime', ASCENDING)], background=True)
     user_collection.create_index([('id', ASCENDING)], unique=True, background=True)
 except Exception as e:
     LOGGER.warning(f"Index creation warning: {e}")
 
 # =========================================================
-# Caches (Only for frequent/small queries, NOT whole DB)
+# Caches
 # =========================================================
 user_cache     = TTLCache(maxsize=10000, ttl=300)
 count_cache    = TTLCache(maxsize=10000, ttl=180)
@@ -96,24 +93,21 @@ result_id_map  = TTLCache(maxsize=10000, ttl=1800)
 CAPS = str.maketrans('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ',
                      'ᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢᴀʙᴄᴅᴇғɢʜɪᴊᴋʟᴍɴᴏᴘǫʀsᴛᴜᴠᴡxʏᴢ')
 
-def sc(t: str) -> str:
-    return t.translate(CAPS)
+def sc(t: str) -> str: return t.translate(CAPS)
 
 def parse_rar(r: str) -> Rarity:
     base_key = get_base_rarity(r)
     db_emoji, premium_emoji, name, val = RARITIES[base_key]
     return Rarity(db_emoji, premium_emoji, sc(name), val)
 
-def trunc(t: str, l: int = 22) -> str:
-    return t[:l - 2] + '..' if len(t) > l else t
-
-def _id_key(cid) -> str:
-    return str(cid).strip() if cid is not None else ''
+def trunc(t: str, l: int = 22) -> str: return t[:l - 2] + '..' if len(t) > l else t
+def _id_key(cid) -> str: return str(cid).strip() if cid is not None else ''
 
 # =========================================================
 # Media Detection
 # =========================================================
 _IMG_FIELDS = ('img_url', 'image_url', 'img', 'photo', 'photo_url', 'file_id', 'url')
+_NESTED_KEYS = ('url', 'src', 'link', 'href', 'image', 'img_url', 'image_url', 'photo_url', 'file_id', 'fileId')
 _VIDEO_EXTS = ('.mp4', '.mov', '.webm', '.mkv', '.m4v')
 
 def _extract_media(v) -> Tuple[str, str]:
@@ -123,6 +117,10 @@ def _extract_media(v) -> Tuple[str, str]:
         if len(v) >= 20 and not any(c.isspace() for c in v): return v, 'file_id'
     elif isinstance(v, list) and v:
         return _extract_media(v[0])
+    elif isinstance(v, dict):
+        for kk in _NESTED_KEYS:
+            r, k = _extract_media(v.get(kk))
+            if r: return r, k
     return "", ""
 
 def _media_of(ch: Dict) -> Tuple[str, str]:
@@ -144,7 +142,7 @@ def _rarity_sort_key(c: Dict):
     return (parse_rar(c.get('rarity', '')).value, _id_key(c.get('id')))
 
 # =========================================================
-# Database Queries (DIRECT TO DB, NO RAM BLOAT)
+# Database Queries & Owners System
 # =========================================================
 async def get_user(uid: int) -> dict:
     k = f"u{uid}"
@@ -159,11 +157,38 @@ async def _db_fetch_by_id(cid) -> Optional[Dict]:
             return doc
     return None
 
+async def get_owners(cid: str, lim: int = 100) -> List[Dict]:
+    k = f"o{cid}{lim}"
+    if k in count_cache: return count_cache[k]
+    try:
+        candidates = [cid]
+        if str(cid).isdigit(): candidates.append(int(cid))
+        
+        pipe = [
+            {'$match': {'characters.id': {'$in': candidates}}},
+            {'$project': {
+                'id': 1, 'first_name': 1, 'username': 1,
+                'characters': {'$filter': {
+                    'input': '$characters', 'as': 'c',
+                    'cond': {'$in': ['$$c.id', candidates]}
+                }}
+            }},
+            {'$addFields': {'count': {'$size': '$characters'}}},
+            {'$sort': {'count': -1}},
+            {'$limit': lim},
+            {'$project': {'characters': 0}}
+        ]
+        owners = await user_collection.aggregate(pipe).to_list(length=lim)
+        count_cache[k] = owners
+        return owners
+    except Exception as e:
+        LOGGER.error(f"get_owners error: {e}")
+        return []
+
 async def build_mongo_query(q: str, fm: str, uid: int) -> dict:
     match = {}
     conds = []
     
-    # Text / Search Query
     if q:
         if q.isdigit():
             conds.extend([{'id': q}, {'id': int(q)}])
@@ -178,33 +203,62 @@ async def build_mongo_query(q: str, fm: str, uid: int) -> dict:
             
         match['$or'] = conds
 
-    # Filters applied directly in DB (Lightning Fast)
     if fm == 'rare':
         rare_names = [re.compile(r[2], re.IGNORECASE) for r in RARITIES.values() if r[3] <= 9]
         rare_keys = [re.compile(k, re.IGNORECASE) for k, r in RARITIES.items() if r[3] <= 9]
         match['rarity'] = {'$in': rare_names + rare_keys}
-    
     elif fm in ('owned', 'notowned'):
         usr = await get_user(uid)
         owned = [c.get('id') for c in usr.get('characters', []) if isinstance(c, dict) and c.get('id')]
         match['id'] = {'$in': owned} if fm == 'owned' else {'$nin': owned}
-        
     elif fm == 'wishlist':
         wl = wishlist_cache.get(f'wl_{uid}', set())
         match['id'] = {'$in': list(wl)}
-        
     elif fm == 'video':
         match['$or'] = match.get('$or', []) + [{'is_video': True}, {'type': 'video'}, {'rarity': re.compile('cosmic', re.IGNORECASE)}]
 
     return match
 
 # =========================================================
-# Captions & Keyboards
+# Captions & Keyboards (With Medals & Styling)
 # =========================================================
 def minimal_caption(ch: Dict, fav: bool = False, uid: int = None) -> str:
     cid, nm, an = escape(str(ch.get('id', '??'))), escape(sc(str(ch.get('name', '?')))), escape(sc(str(ch.get('anime', '?'))))
     r = parse_rar(ch.get('rarity', ''))
     return f"<b>{sc('Character Info ')}✨</b>\n\n<b>{an}</b>\n<b>{cid}: {nm}</b>\n({r.premium} <b>{sc('RARITY:')}</b> {r.name})"
+
+def owners_caption(ch: Dict, owners: List[Dict], page: int) -> str:
+    nm = escape(sc(str(ch.get('name', 'Unknown'))))
+    total = sum(o.get('count', 0) for o in owners)
+    cap = f"<b>{nm}</b>\n\n<b>🏆 {len(owners)} {sc('owners')} • {total}× {sc('grabbed')}</b>\n\n"
+    
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    start = page * 10
+    end = start + 10
+    total_pages = max(1, (len(owners) + 9) // 10)
+
+    for i, o in enumerate(owners[start:end], start + 1):
+        medal = medals.get(i, f"<b>{i}.</b>")
+        fn = escape(trunc(str(o.get('first_name', 'User')), 18))
+        cap += f"{medal} <a href=\"tg://user?id={o.get('id')}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
+
+    cap += f"\n✍️ <b>{sc(f'page {page+1}/{total_pages}')}</b>"
+    return cap
+
+def stats_caption(ch: Dict, owners: List[Dict]) -> str:
+    nm = escape(sc(str(ch.get('name', 'Unknown'))))
+    total = sum(o.get('count', 0) for o in owners)
+    avg = round(total / len(owners), 1) if owners else 0
+    cap = f"<b>{nm}</b>\n\n📊 <b>{sc('statistics')}</b>\n🎯 <code>{total}×</code> {sc('grabbed')}\n🏆 <code>{len(owners)}</code> {sc('owners')}\n📈 <code>{avg}×</code> {sc('avg')}\n"
+    
+    if owners:
+        cap += f"\n🏆 <b>{sc('top collectors')}</b>\n"
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        for i, o in enumerate(owners[:3], 1):
+            fn = escape(trunc(str(o.get('first_name', 'User')), 18))
+            medal = medals.get(i, f"<b>{i}.</b>")
+            cap += f"{medal} <a href=\"tg://user?id={o.get('id')}\"><b>{fn}</b></a> • <code>×{o.get('count', 0)}</code>\n"
+    return cap
 
 def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(sc("♔ owners"), callback_data=f"o.{cid}:0"),
@@ -214,7 +268,7 @@ def create_kbd(cid: str, uid: int = None) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 # =========================================================
-# The Core Inline Engine (Pagination + Instant Speed)
+# Inline Search System
 # =========================================================
 async def _build_results(query, off: int, uid: int, qid: str):
     q = query.query.strip()
@@ -222,10 +276,8 @@ async def _build_results(query, off: int, uid: int, qid: str):
     results = []
     
     is_coll = q.startswith('collection.')
-    fm = None
-    sq = q
+    fm, sq = None, q
     
-    # Extract Filter
     if is_coll:
         parts = q.split(' ', 1)
         sq = parts[1].strip() if len(parts) > 1 else ''
@@ -237,7 +289,6 @@ async def _build_results(query, off: int, uid: int, qid: str):
             sq = sq.replace(f"-{m}", "").strip()
             break
 
-    # Extract Anime filter
     anime_filter = None
     if not is_coll:
         am = re.search(r'-anime:(\S+)', sq)
@@ -248,7 +299,6 @@ async def _build_results(query, off: int, uid: int, qid: str):
     all_chars = []
     fav_id = None
     
-    # --- ROUTE 1: User Collection Search ---
     if is_coll and tid.isdigit():
         tuid = int(tid)
         usr = await get_user(tuid)
@@ -262,11 +312,9 @@ async def _build_results(query, off: int, uid: int, qid: str):
         fav = usr.get('favorites')
         fav_id = _id_key(fav.get('id') if isinstance(fav, dict) else fav)
         
-        # Unique chars only
         cd = {_id_key(c.get('id')): c for c in usr.get('characters', []) if isinstance(c, dict) and c.get('id')}
         all_chars = list(cd.values())
         
-        # Python filters for User Collection (since lists are small)
         if sq:
             ql = sq.lower()
             all_chars = [c for c in all_chars if ql in str(c.get('name', '')).lower() or ql in str(c.get('anime', '')).lower() or ql == str(c.get('id'))]
@@ -276,7 +324,6 @@ async def _build_results(query, off: int, uid: int, qid: str):
 
         all_chars.sort(key=_rarity_sort_key)
         
-        # Put Fav first
         if fav_id and not sq and not fm:
             fc = next((c for c in all_chars if _id_key(c.get('id')) == fav_id), None)
             if fc:
@@ -286,29 +333,21 @@ async def _build_results(query, off: int, uid: int, qid: str):
         page_chars = all_chars[off:off + limit]
         has_more = len(all_chars) > off + limit
         
-    # --- ROUTE 2: Global Database Search (SUPER FAST) ---
     else:
         db_query = await build_mongo_query(sq, fm, uid)
         if anime_filter:
             db_query['anime'] = re.compile(re.escape(anime_filter), re.IGNORECASE)
 
         cursor = collection.find(db_query)
-        
-        # Sorting
-        if fm == 'new':
-            cursor = cursor.sort('_id', DESCENDING)
-        elif not sq and not fm:
-            # Default sorting to avoid lag on empty query
+        if fm == 'new' or (not sq and not fm):
             cursor = cursor.sort('_id', DESCENDING)
             
-        # Fetch only what's needed for this page! (Limit + 1 to check if next page exists)
         page_chars = await cursor.skip(off).limit(limit + 1).to_list(length=limit + 1)
         has_more = len(page_chars) > limit
         if has_more: page_chars = page_chars[:limit]
 
     noff = str(off + limit) if has_more else ""
 
-    # --- Build Results Layout ---
     for i, ch in enumerate(page_chars):
         try:
             cid = ch.get('id')
@@ -345,13 +384,12 @@ async def _build_results(query, off: int, uid: int, qid: str):
 
 async def inlinequery(update: Update, context) -> None:
     query = update.inline_query
-    uid = query.from_user.id
-    qid = query.id
+    uid, qid = query.from_user.id, query.id
     off = int(query.offset) if query.offset else 0
 
     try:
-        # Fast query timeout check
-        results, noff = await asyncio.wait_for(_build_results(query, off, uid, qid), timeout=4.0)
+        # Timeout badha diya gaya hai 7s tak taaki Telegram server images properly load kar sake bina "dead" hue
+        results, noff = await asyncio.wait_for(_build_results(query, off, uid, qid), timeout=7.0)
         
         if not results:
             results = [InlineQueryResultArticle(
@@ -374,11 +412,100 @@ async def chosen_inline_result(update: Update, context):
     except: pass
 
 # =========================================================
-# Missing Handlers (Owners / Stats) Note: Keep your old callback functions here if needed.
+# Button Callbacks (Owners, Stats, Back) - 100% Fixed
 # =========================================================
-# Main registration
+async def show_owners(update: Update, context) -> None:
+    q = update.callback_query
+    try:
+        data = q.data.split('.', 1)[1]
+        if ':' in data:
+            cid, page_str = data.split(':', 1)
+            page = int(page_str)
+        else:
+            cid, page = data, 0
+
+        ch = await _db_fetch_by_id(cid)
+        if not ch: return await q.answer(sc("not found"), show_alert=True)
+
+        owners = await get_owners(cid, 100)
+        if not owners: return await q.answer(sc("no owners"), show_alert=True)
+
+        await q.answer()
+        cap = owners_caption(ch, owners, page)
+        total_pages = max(1, (len(owners) + 9) // 10)
+
+        nav = []
+        if page > 0: nav.append(InlineKeyboardButton(sc("⋞ prev"), callback_data=f"o.{cid}:{page-1}"))
+        if page < total_pages - 1: nav.append(InlineKeyboardButton(sc("next ⋟"), callback_data=f"o.{cid}:{page+1}"))
+
+        layout = [nav] if nav else []
+        layout.append([
+            InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"),
+            InlineKeyboardButton(sc("stats ⑆"), callback_data=f"s.{cid}")
+        ])
+        if len(str(cid)) <= 200 and not any(c.isspace() for c in str(cid)):
+            layout.append([InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=str(cid))])
+
+        await q.edit_message_caption(caption=cap, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(layout))
+    except Exception as e:
+        LOGGER.error(f"show_owners error: {e}")
+        try: await q.answer(sc("error"), show_alert=True)
+        except: pass
+
+async def show_stats(update: Update, context) -> None:
+    q = update.callback_query
+    try:
+        cid = q.data.split('.', 1)[1]
+        ch = await _db_fetch_by_id(cid)
+        if not ch: return await q.answer(sc("not found"), show_alert=True)
+
+        owners = await get_owners(cid, 100)
+        await q.answer()
+        
+        layout = [[
+            InlineKeyboardButton(sc("⟲ back"), callback_data=f"b.{cid}"),
+            InlineKeyboardButton(sc("owners ♔"), callback_data=f"o.{cid}:0")
+        ]]
+        if len(str(cid)) <= 200 and not any(c.isspace() for c in str(cid)):
+            layout.append([InlineKeyboardButton(sc("⤿ inline"), switch_inline_query_current_chat=str(cid))])
+
+        await q.edit_message_caption(caption=stats_caption(ch, owners), parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(layout))
+    except Exception as e:
+        LOGGER.error(f"show_stats error: {e}")
+        try: await q.answer(sc("error"), show_alert=True)
+        except: pass
+
+async def back_card(update: Update, context) -> None:
+    q = update.callback_query
+    try:
+        cid = q.data.split('.', 1)[1]
+        ch = await _db_fetch_by_id(cid)
+        if not ch: return await q.answer(sc("not found"), show_alert=True)
+
+        await q.answer()
+        await q.edit_message_caption(
+            caption=minimal_caption(ch, uid=q.from_user.id),
+            parse_mode=ParseMode.HTML,
+            reply_markup=create_kbd(cid, q.from_user.id)
+        )
+    except Exception as e:
+        LOGGER.error(f"back_card error: {e}")
+        try: await q.answer(sc("error"), show_alert=True)
+        except: pass
+
+# =========================================================
+# Handlers Registration & DB Warmup
+# =========================================================
 application.add_handler(InlineQueryHandler(inlinequery))
 application.add_handler(ChosenInlineResultHandler(chosen_inline_result, block=False))
+application.add_handler(CallbackQueryHandler(show_owners, pattern=r'^o\.', block=False))
+application.add_handler(CallbackQueryHandler(back_card, pattern=r'^b\.', block=False))
+application.add_handler(CallbackQueryHandler(show_stats, pattern=r'^s\.', block=False))
 
-# NOTE: Main Callbacks for Stats and Owners are omitted to keep code clean, 
-# you can use your exact old ones for that since they weren't causing the issue.
+# Optional DB Warm-up (Connection jagane ke liye taaki pehla query instantly chale)
+async def _warmup_db():
+    try: await collection.find_one()
+    except: pass
+
+try: asyncio.get_event_loop().create_task(_warmup_db())
+except: pass
