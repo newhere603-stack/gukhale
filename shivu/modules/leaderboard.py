@@ -7,7 +7,8 @@ from telegram.helpers import mention_html
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import BadRequest
 
-from shivu import application, OWNER_ID, user_collection, top_global_groups_collection, group_user_totals_collection
+# 🔥 FIX: Yahan 'collection' import kiya hai taaki asali uploaded characters count ho sakein
+from shivu import application, OWNER_ID, user_collection, top_global_groups_collection, group_user_totals_collection, collection
 from shivu import sudo_users as SUDO_USERS
 
 # 🔥 NAYA IMPORT: Economy data nikalne ke liye
@@ -132,7 +133,7 @@ async def tops_menu(update: Update, context: CallbackContext, edit=False):
     ])
     await send_or_edit(update, context, text, kb, edit)
 
-# ---------- Top by balance (🔥 FIX: Direct Mongo Filter) ----------
+# ---------- Top by balance ----------
 async def fetch_top_balance():
     data = await eco_collection.find({
         "$or": [{"balance": {"$gt": 0}}, {"coins": {"$gt": 0}}]
@@ -184,7 +185,7 @@ async def top_tokens(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗧𝗢𝗞𝗘𝗡 𝗛𝗢𝗟𝗗𝗘𝗥", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_tokens"), edit)
 
-# ---------- Top by characters (🔥 FIX: Ultra Robust MongoDB Aggregation) ----------
+# ---------- Top by characters ----------
 async def fetch_top_characters():
     return await user_collection.aggregate([
         {"$match": {"characters": {"$exists": True, "$type": "array", "$not": {"$size": 0}}}},
@@ -223,7 +224,7 @@ async def top_groups(update: Update, context: CallbackContext, edit=False):
     text = format_custom_header("𝗧𝗢𝗣 𝟭𝟬 𝗚𝗥𝗢𝗨𝗣𝗦", rows)
     await send_or_edit(update, context, text, back_close_buttons("lb_gtop"), edit)
 
-# ---------- My Profile (🔥 FIX: Dual DB Merge & Ranking fix) ----------
+# ---------- My Profile ----------
 async def fetch_total_collectors():
     return await user_collection.count_documents({"characters": {"$exists": True, "$type": "array", "$not": {"$size": 0}}})
 
@@ -302,12 +303,8 @@ async def stats(update: Update, context: CallbackContext, edit=False):
     groups = len(await group_user_totals_collection.distinct('group_id'))
     collectors = await get_cached_data("total_collectors", fetch_total_collectors)
 
-    total_chars_result = await user_collection.aggregate([
-        {"$match": {"characters": {"$exists": True, "$type": "array", "$not": {"$size": 0}}}},
-        {"$project": {"count": {"$size": "$characters"}}},
-        {"$group": {"_id": None, "total": {"$sum": "$count"}}}
-    ]).to_list(1)
-    total_chars = total_chars_result[0]['total'] if total_chars_result else 0
+    # 🔥 FIX: Ab ye saare users ke items sum karne ki jagah direct asali Database me characters count karega!
+    total_chars = await collection.count_documents({})
 
     text = (
         f"<tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji> <b>{sc('system stats')}</b> <tg-emoji emoji-id=\"6093755816391745206\">📊</tg-emoji>\n\n"
