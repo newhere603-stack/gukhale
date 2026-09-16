@@ -19,7 +19,7 @@ from shivu.Database.db import eco_collection
 
 START_VIDEO = "https://gxtusqitetsemwjdtvvq.supabase.co/storage/v1/object/public/photos/1785999431478-sm4ln0.mp4"
 
-# ⚠️ Yahan apne "Leaf Village" ya actual force sub group/channel ka NUMERIC ID daalna
+# ⚠️ Yahan apne group/channel ka NUMERIC ID daalna
 FORCE_SUB_CHAT = -1003087506512
 # ⚠️ Yahan link ke liye bina '@' ke username daalna
 FORCE_SUB_CHAT_USERNAME = "anime_group_hai"
@@ -56,7 +56,7 @@ MAIN_KEYBOARD = InlineKeyboardMarkup([
     ],
 ])
 
-FORCE_SUB_TEXT = "<tg-emoji emoji-id=\"5291873529464122510\">🔓</tg-emoji> <b>ʟᴇᴛ's ɢᴏ ʙᴀʙʏ ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇs ᴛᴏ ᴜsᴇ ᴍᴇ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
+FORCE_SUB_TEXT = "<tg-emoji emoji-id=\"5291873529464122510\">🔓</tg-emoji> <b>ᴊᴏɪɴ ᴏᴜʀ ᴜᴘᴅᴀᴛᴇs ᴄʜᴀɴɴᴇʟ ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅ ɢᴀᴍᴇs! <tg-emoji emoji-id=\"6336870266928371445\">🎯</tg-emoji></b>"
 FORCE_SUB_KEYBOARD = InlineKeyboardMarkup([
     [
         InlineKeyboardButton(
@@ -68,66 +68,32 @@ FORCE_SUB_KEYBOARD = InlineKeyboardMarkup([
 
 PAGE_SIZE = 10
 
+# 🔥 CHANGED: Categories ab completely Word Seek aur Word Grid theme par hain
 CATEGORIES = {
     "basic": (
         "ʙᴀsɪᴄ ᴄᴏᴍᴍᴀɴᴅs",
         [
             ("/start", "ᴛᴏ sᴛᴀʀᴛ ᴛʜᴇ ʙᴏᴛ"),
-            ("/grab", "ᴛᴏ ɢᴜᴇss ᴛʜᴇ ᴡᴀɪғᴜ"),
-            ("/fav", "ᴛᴏ ᴍᴀᴋᴇ ʏᴏᴜʀ ᴏᴡɴᴇᴅ ᴡᴀɪғᴜ ғᴀᴠᴏᴜʀɪᴛᴇ"),
-            ("/claim", "ᴛᴏ ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ ᴄᴏɪɴs"),
-            ("/tasks", "ᴛᴏ ᴇᴀʀɴ ᴍᴏʀᴇ ᴄᴏɪɴꜱ"),
-            ("/bonus", "ᴛᴏ ᴄʟᴀɪᴍ ʏᴏᴜʀ ᴅᴀɪʟʏ/ᴡᴇᴇᴋʟʏ ʙᴏɴᴜs"),
-            ("/top", "ᴛᴏ sᴇᴇ ᴛᴏᴘ ᴘʟᴀʏᴇʀs"),
-            ("/bal", "ᴛᴏ sᴇᴇ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ"),
-            ("/tokens", "ᴛᴏ sᴇᴇ ʏᴏᴜʀ ᴛᴏᴋᴇɴs"),
-            ("/pay", "ᴛᴏ ɢɪᴠᴇ ᴄᴏɪɴs"),
-            ("/tpay", "ᴛᴏ ɢɪᴠᴇ ᴛᴏᴋᴇɴs"),
-            ("/buy", "ᴛᴏ ʙᴜʏ ᴅɪʀᴇᴄᴛʟʏ ᴀʟʟ"),
-            ("/pmarket", "ᴛᴏ ᴏᴘᴇɴ ᴘᴇʀsᴏɴ ᴛᴏ ᴘᴇʀsᴏɴ sʜᴏᴘ"),
-            ("/marketplace", "ᴛᴏ ᴏᴘᴇɴ ᴛʜᴇ ᴍᴀʀᴋᴇᴛ"),
-            ("/gift", "ᴛᴏ ɢɪғᴛ ʏᴏᴜʀ ᴡᴀɪғᴜ"),
-            ("/harem", "ᴛᴏ sᴇᴇ ʏᴏᴜʀ ᴡᴀɪғᴜ"),
-            ("/hmode", "ᴛᴏ ᴄʜᴀɴɢᴇ ʜᴀʀᴇᴍ ᴍᴏᴅᴇ"),
-            ("/check", "ᴛᴏ sᴇᴇ ᴡᴀɪғᴜ ғʀᴏᴍ ʜᴇʀ ɪᴅ"),
-            ("/sprofile", "ᴛᴏ sᴇᴇ ʏᴏᴜʀ's ᴘʀᴏғɪʟᴇ"),
-            ("/swaifu", "ᴛᴏ ᴄʟᴀɪᴍ ʏᴏᴜʀ sᴘᴇᴄɪᴀʟ ᴡᴀɪғᴜs"),
-            ("/redeem", "ᴛᴏ ʀᴇᴅᴇᴇᴍ ᴄᴏɪɴs/ᴛᴏᴋᴇɴs"),
-            ("/sredeem", "ᴛᴏ ʀᴇᴅᴇᴇᴍ ᴡᴀɪғᴜ"),
-            ("/leaderboard", "ᴛᴏ ᴠɪᴇᴡ ᴛʜᴇ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ"),
+            ("/topgrid", "ᴛᴏ sᴇᴇ ɢʀɪᴅ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ"),
+            ("/helpgrid", "ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅ ɢʀɪᴅ"),
+            ("/helpword", "ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅ sᴇᴇᴋ"),
         ],
     ),
     "interactive": (
-        "ɪɴᴛᴇʀᴀᴄᴛɪᴠᴇ ᴄᴏᴍᴍᴀɴᴅs",
+        "ɢᴀᴍᴇ ᴄᴏᴍᴍᴀɴᴅs",
         [
-            ("/mines", "ᴛᴏ ᴘʟᴀʏ ᴍɪɴᴇs"),
-            ("/tic", "ᴛᴏ ᴘʟᴀʏ ᴛɪᴄ-ᴛᴀᴄ-ᴛᴏᴇ"),
-            ("/sbet", "ᴛᴏ ʙᴇᴛ ʏᴏᴜʀ ᴄᴏɪɴs"),
-            ("/games", "ᴘʟᴀʏ ɢᴀᴍᴇs"),
-            ("/roll", "ᴛᴏ ʀᴏʟʟ ᴀ ᴅɪᴄᴇ"),
-            ("/explore", "ᴛᴏ ᴇxᴘʟᴏʀᴇ ᴀɴᴅ ɢᴇᴛ ᴄᴏɪɴs"),
-            ("/marry", "ᴛᴏ ᴍᴀʀʀʏ ᴀ ɴᴇᴡ ᴡᴀɪғᴜ"),
-            ("/propose", "ᴛᴏ ᴘʀᴏᴘᴏsᴇ ᴀ ᴡᴀɪғᴜ"),
-            ("/new", "ᴛᴏ sᴛᴀʀᴛ ᴀ ɴᴇᴡ ɢᴀᴍᴇ"),
-            ("/end", "ᴛᴏ ᴇɴᴅ ᴛʜᴇ ᴄᴜʀʀᴇɴᴛ ɢᴀᴍᴇ"),
-            ("/helpword", "ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅsᴇᴇᴋ"),
             ("/grid", "ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅ ɢʀɪᴅ"),
             ("/grid_easy", "ᴛᴏ ᴘʟᴀʏ ᴇᴀsʏ ᴡᴏʀᴅ ɢʀɪᴅ"),
             ("/grid_hard", "ᴛᴏ ᴘʟᴀʏ ʜᴀʀᴅ ᴡᴏʀᴅ ɢʀɪᴅ"),
-            ("/endgrid", "ᴇɴᴅ ɢʀɪᴅ ɢᴀᴍᴇ"),
-            ("/topgrid", "ᴛᴏ sᴇᴇ ɢʀɪᴅ ʟᴇᴀᴅᴇʀʙᴏᴀʀᴅ"),
-            ("/helpgrid", "ʜᴏᴡ ᴛᴏ ᴘʟᴀʏ ᴡᴏʀᴅɢʀɪᴅ"),
+            ("/endgrid", "ᴇɴᴅ ᴄᴜʀʀᴇɴᴛ ɢʀɪᴅ ɢᴀᴍᴇ"),
         ],
     ),
     "admins": (
         "ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅs",
         [
-            ("/changetime", "ᴛᴏ ᴄʜᴀɴɢᴇ ᴛʜᴇ ᴀᴘᴘᴇᴀʀ ᴛɪᴍᴇ ᴏғ ᴡᴀɪғᴜ [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
-            ("/toggledelete", "ᴛᴏ ᴅᴇʟᴇᴛᴇ ᴡᴏʀᴅsᴇᴇᴋ sᴘᴀᴍ [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
-            ("/togglewordseek", "ᴛᴏ ᴅɪsᴀʙʟᴇ ᴡᴏʀᴅsᴇᴇᴋ ɢᴀᴍᴇ [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
             ("/gridsettings", "ᴛᴏ ᴏᴘᴇɴ ɢʀɪᴅ sᴇᴛᴛɪɴɢs [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
-            ("/grab_delete", "ᴛᴏ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ /ɢʀᴀʙ ᴄᴏᴍᴍᴀɴᴅ ᴍᴇssᴀɢᴇs [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
-            ("/miss_delete", "ᴛᴏ ᴀᴜᴛᴏ ᴅᴇʟᴇᴛᴇ ᴍɪss ᴍᴇssᴀɢᴇs [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
+            ("/togglewordseek", "ᴛᴏ ᴅɪsᴀʙʟᴇ ᴡᴏʀᴅsᴇᴇᴋ ɢᴀᴍᴇ [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
+            ("/toggledelete", "ᴛᴏ ᴅᴇʟᴇᴛᴇ ᴡᴏʀᴅsᴇᴇᴋ sᴘᴀᴍ [ᴀᴅᴍɪɴ ᴏɴʟʏ]"),
         ],
     ),
 }
@@ -136,10 +102,11 @@ def get_main_caption(user_id: int, first_name: str) -> str:
     safe_name = html.escape(first_name)
     user_mention = f'<a href="tg://user?id={user_id}">{safe_name}</a>'
     
+    # 🔥 CHANGED: Waifu theme ko Word Games theme se replace kar diya
     return (
-        f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> Hᴇʏ {user_mention},<tg-emoji emoji-id=\"6093854622114390223\">🎀</tg-emoji>\n"
-        f"ɪ'ᴍ ᴀʟɪꜱᴀ ᴡᴀɪғᴜ ʙᴏᴛ, ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴀɴɪᴍᴇ ᴀᴅᴠᴇɴᴛᴜʀᴇ ᴄᴏᴍᴘᴀɴɪᴏɴ. <tg-emoji emoji-id=\"6066873332618238192\">⛈</tg-emoji></b>\n\n"
-        f"<b>ʟᴇᴛ'ꜱ ᴛʜᴇ ғᴜɴ ʙᴇɢɪɴ ʙᴀʙʏ! <tg-emoji emoji-id=\"6336870266928371445\">💘</tg-emoji></b>"
+        f"<b><tg-emoji emoji-id=\"6093431129749070651\">✨</tg-emoji> Hᴇʏ {user_mention},<tg-emoji emoji-id=\"6093854622114390223\">🧩</tg-emoji>\n"
+        f"ɪ'ᴍ ʏᴏᴜʀ ᴜʟᴛɪᴍᴀᴛᴇ ᴡᴏʀᴅ ɢᴀᴍᴇ ʙᴏᴛ! ɢᴇᴛ ʀᴇᴀᴅʏ ᴛᴏ ᴛᴇsᴛ ʏᴏᴜʀ ʙʀᴀɪɴ ᴡɪᴛʜ ᴡᴏʀᴅ ɢʀɪᴅ & ᴡᴏʀᴅ sᴇᴇᴋ. <tg-emoji emoji-id=\"6066873332618238192\">🧠</tg-emoji></b>\n\n"
+        f"<b>ʟᴇᴛ's ᴘʟᴀʏ ᴀɴᴅ ʜᴀᴠᴇ ғᴜɴ! <tg-emoji emoji-id=\"6336870266928371445\">🎯</tg-emoji></b>"
     )
 
 # 🔥 SMART FORCE SUB CHECK (with positive-result caching for SPEED) 🔥
@@ -196,7 +163,7 @@ def menu_view():
                 "ʙᴀsɪᴄ", callback_data="sxc_cat_basic"
             ),
             InlineKeyboardButton(
-                "ɪɴᴛᴇʀᴀᴄᴛɪᴠᴇ", callback_data="sxc_cat_interactive"
+                "ɢᴀᴍᴇs", callback_data="sxc_cat_interactive"
             ),
         ],
         [InlineKeyboardButton("ᴀᴅᴍɪɴs", callback_data="sxc_cat_admins")],
@@ -288,18 +255,20 @@ async def credits_view(context: ContextTypes.DEFAULT_TYPE):
     kb.append([InlineKeyboardButton("⟲ ʙᴀᴄᴋ", callback_data="sxc_back")])
     return "<b>Sᴜᴅᴏ:<tg-emoji emoji-id=\"6118405866359103466\">✅</tg-emoji></b>", InlineKeyboardMarkup(kb)
 
+# 🔥 CHANGED: Cleaned DB logic. Ab coins aur waifu fields nahi create hongi. Sirf start record hoga.
 async def _ensure_user(user_id, first_name, username):
     try:
-        char_task = user_collection.find_one({"id": user_id}, {"bot_started": 1})
+        user_task = user_collection.find_one({"id": user_id}, {"bot_started": 1})
         eco_task = eco_collection.find_one({"id": user_id}, {"bot_started": 1})
-        char_doc, eco_doc = await asyncio.gather(char_task, eco_task)
+        user_doc, eco_doc = await asyncio.gather(user_task, eco_task)
 
-        is_new_char = not char_doc or not char_doc.get("bot_started")
+        is_new_char = not user_doc or not user_doc.get("bot_started")
         is_new_eco = not eco_doc or not eco_doc.get("bot_started")
         is_new_user = is_new_char or is_new_eco
 
         update_tasks = []
 
+        # Sirf basic details save karega
         update_tasks.append(
             user_collection.update_one(
                 {"id": user_id},
@@ -308,57 +277,25 @@ async def _ensure_user(user_id, first_name, username):
                         "first_name": first_name,
                         "username": username,
                         "bot_started": True
-                    },
-                    "$setOnInsert": {
-                        "characters": [],
-                        "pass_data": {
-                            "tier": "free",
-                            "weekly_claims": 0,
-                            "last_weekly_claim": None,
-                            "streak_count": 0,
-                            "last_streak_claim": None,
-                            "tasks": {"weekly_claims": 0, "grabs": 0},
-                            "mythic_unlocked": False,
-                            "premium_expires": None,
-                            "elite_expires": None,
-                            "pending_elite_payment": None,
-                        }
                     }
                 },
                 upsert=True
             )
         )
 
-        if is_new_user:
-            update_tasks.append(
-                eco_collection.update_one(
-                    {"id": user_id},
-                    {
-                        "$set": {
-                            "first_name": first_name,
-                            "username": username,
-                            "bot_started": True
-                        },
-                        "$inc": {"balance": 5000},
-                        "$setOnInsert": {"tokens": 0}
-                    },
-                    upsert=True
-                )
+        update_tasks.append(
+            eco_collection.update_one(
+                {"id": user_id},
+                {
+                    "$set": {
+                        "first_name": first_name,
+                        "username": username,
+                        "bot_started": True
+                    }
+                },
+                upsert=True
             )
-        else:
-            update_tasks.append(
-                eco_collection.update_one(
-                    {"id": user_id},
-                    {
-                        "$set": {
-                            "first_name": first_name,
-                            "username": username,
-                            "bot_started": True
-                        }
-                    },
-                    upsert=True
-                )
-            )
+        )
 
         await asyncio.gather(*update_tasks)
         return is_new_user
@@ -415,10 +352,9 @@ def _clean_caption(text: str) -> str:
 async def _animate_start_loading(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
     draft_id = random.randint(1, 2_000_000_000)
     
-    # Ye wahi STARTING / LOADING wala original text hai
     frames = [
         "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ...</b>",
-        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ ʙᴏᴛ...</b>",
+        "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> sᴛᴀʀᴛɪɴɢ ᴘᴜᴢᴢʟᴇ ᴇɴɢɪɴᴇ...</b>",
         "<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ʟᴏᴀᴅɪɴɢ ᴍᴇɴᴜ...</b>",
     ]
     try:
@@ -438,12 +374,10 @@ async def _animate_start_loading(context: ContextTypes.DEFAULT_TYPE, chat_id: in
             except asyncio.CancelledError:
                 raise
             except Exception:
-                continue # Ignore and jump to next for smoothness
+                continue 
 
-            # ⚡ 0.04 sleep - EXACTLY balance ke jaisa superfast
             await asyncio.sleep(0.04)
 
-        # Jab tak main task load hoke is task ko cancel na karde tab tak draft ko screen par rakho
         while True:
             await asyncio.sleep(0.5)
             
@@ -533,7 +467,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     _cancel_task(anim_task)
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ!</b>",
+                        text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ ᴛᴏ ᴘʟᴀʏ ɢᴀᴍᴇs!</b>",
                         parse_mode=ParseMode.HTML,
                         reply_markup=InlineKeyboardMarkup([
                             [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ", url=ADMIN_RIGHTS_LINK)]
@@ -566,10 +500,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.application.create_task(safe_track_bot_start(user_id, first_name, username, is_new))
         else:
             asyncio.create_task(safe_track_bot_start(user_id, first_name, username, is_new))
-
-        if context.args and context.args[0] == 'buy_tokens':
-            _cancel_task(anim_task)
-            return
 
         # ── 5. Kill animation, send final menu ──
         _cancel_task(anim_task)
@@ -704,7 +634,7 @@ async def bot_added_to_group_handler(update: Update, context: ContextTypes.DEFAU
         try:
             await context.bot.send_message(
                 chat_id=result.chat.id,
-                text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ!</b>",
+                text="<b><tg-emoji emoji-id=\"6093637923834438402\">✨</tg-emoji> ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ ғɪʀsᴛ ᴛᴏ ᴘʟᴀʏ ɢᴀᴍᴇs!</b>",
                 parse_mode=ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("ᴍᴀᴋᴇ ᴍᴇ ᴀᴅᴍɪɴ", url=ADMIN_RIGHTS_LINK)]
