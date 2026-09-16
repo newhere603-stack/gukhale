@@ -57,7 +57,7 @@ eco_db = eco_client['Character_catcher']
 # 2. GLOBAL CHARACTER DATABASE (New Cluster)
 # ==========================================
 # 🔥 FIX: Yahan tera NAYA database URL update kar diya gaya hai!
-CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://itsmefroxy_db_user:82pRCH3TA0sr17iP@cluster0.7s0o0go.mongodb.net/?appName=Cluster0")
+CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://newhere603_db_user:0nI0LwDqmctiXmi4@cluster0.enqfatp.mongodb.net/?appName=Cluster0")
 
 # 🔥 FIX: Super Fast Connection Pooling for Characters DB
 chara_client = AsyncIOMotorClient(
