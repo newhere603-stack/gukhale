@@ -11,7 +11,7 @@ LOGGER = logging.getLogger(__name__)
 # 1. CHARACTER DATABASE (Super-Charged)
 # ==========================================
 # ⚠️ WARNING: Apna database password yahan hardcode mat rakho, env var (MONGO_URI) use karo!
-CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://newhere603_db_user:0nI0LwDqmctiXmi4@cluster0.enqfatp.mongodb.net/?appName=Cluster0")
+CHARA_MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://itsmefroxy_db_user:82pRCH3TA0sr17iP@cluster0.7s0o0go.mongodb.net/?appName=Cluster0")
 DB_NAME = os.getenv("DB_NAME", "GRABBING_YOUR_WAIFU")
 COLLECTION_NAME = "users"
 
