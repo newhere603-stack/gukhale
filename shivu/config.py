@@ -8,7 +8,7 @@ class Config(object):
     
     # ⚠️ APNA NAYA TOKEN AUR PASSWORD YAHAN DAALNA ⚠️
     TOKEN = "8752444024:AAG5V5HCISMrMEEjF1hTCXxe1EKWAij3YkQ"
-    mongo_url = "mongodb+srv://alisawaifubot_db_user:jxVLyqL2QxfWSZ6Q@cluster0.hdzxkt6.mongodb.net/?appName=Cluster0"
+    mongo_url = "mongodb+srv://newhere603_db_user:0nI0LwDqmctiXmi4@cluster0.enqfatp.mongodb.net/?appName=Cluster0"
     
     PHOTO_URL = ["https://files.catbox.moe/sgo9in.png", "https://files.catbox.moe/kgcrnb.jpeg"]
     SUPPORT_CHAT = "ANIME_GROUP_HAI"
